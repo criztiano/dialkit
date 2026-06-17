@@ -10,6 +10,7 @@ export type { DialPosition, DialMode, DialTheme } from './components/DialRoot';
 export { Slider } from './components/Slider';
 export { Toggle } from './components/Toggle';
 export { Folder } from './components/Folder';
+export { Section } from './components/Section';
 export { ButtonGroup } from './components/ButtonGroup';
 export { SpringControl } from './components/SpringControl';
 export { SpringVisualization } from './components/SpringVisualization';

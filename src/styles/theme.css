@@ -290,6 +290,91 @@
 
 /* Content spacing handled by folder-inner gap */
 
+/* Section — collapsible group with a header enable switch */
+.dialkit-section {
+  border-top: 1px solid var(--dial-surface-subtle);
+  border-bottom: 1px solid var(--dial-surface-subtle);
+  margin: 4px 0;
+}
+
+.dialkit-section + .dialkit-section {
+  margin-top: 0;
+  border-top: none;
+}
+
+.dialkit-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  user-select: none;
+}
+
+.dialkit-section-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.dialkit-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dial-text-section);
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dialkit-section-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--dial-text-label);
+  opacity: 0.6;
+  transition: transform 0.25s ease;
+}
+
+.dialkit-section-icon-collapsed {
+  transform: rotate(-90deg);
+}
+
+.dialkit-section-switch {
+  flex-shrink: 0;
+  width: 84px;
+}
+
+.dialkit-section-content {
+  animation: dialkit-section-fade 0.18s ease;
+}
+
+.dialkit-section-disabled {
+  opacity: 0.45;
+  transition: opacity 0.15s;
+}
+
+.dialkit-section-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 10px;
+}
+
+@keyframes dialkit-section-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 
 /* Slider */
 .dialkit-slider-wrapper {
