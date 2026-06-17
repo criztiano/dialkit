@@ -11,6 +11,8 @@
     min = 0,
     max = 1,
     step = 0.01,
+    origin = undefined,
+    bipolar = false,
     shortcut,
     shortcutActive = false,
   } = $props<{
@@ -21,6 +23,14 @@
     max?: number;
     step?: number;
     unit?: string;
+    /**
+     * Anchor the fill at this value instead of `min`. Bipolar parameters fill
+     * out from the origin in either direction and gain an escapable detent at
+     * the origin while dragging. Defaults to `min`.
+     */
+    origin?: number;
+    /** Convenience for `origin={0}` on a symmetric range. */
+    bipolar?: boolean;
     shortcut?: ShortcutConfig;
     shortcutActive?: boolean;
   }>();
@@ -29,6 +39,13 @@
   const DEAD_ZONE = 32;
   const MAX_CURSOR_RANGE = 200;
   const MAX_STRETCH = 8;
+  /** Half-width of the origin snap zone, in pixels of track travel. */
+  const DETENT_PX = 6;
+  const resolvedOrigin = $derived(
+    Math.min(max, Math.max(min, origin ?? (bipolar ? 0 : min)))
+  );
+  const hasOrigin = $derived(resolvedOrigin > min);
+  const originPercent = $derived(((resolvedOrigin - min) / (max - min)) * 100);
   const HANDLE_BUFFER = 8;
   const LABEL_CSS_LEFT = 10;
   const VALUE_CSS_RIGHT = 10;
@@ -59,6 +76,15 @@
   let hoverTimeout: ReturnType<typeof setTimeout> | null = null;
 
   const percentFromValue = (nextValue: number) => ((nextValue - min) / (max - min)) * 100;
+
+  // Escapable magnetic snap to the origin while dragging.
+  const applyDetent = (v: number) => {
+    if (!hasOrigin || !wrapperRef) return v;
+    const trackWidth = wrapperRef.offsetWidth;
+    if (trackWidth <= 0) return v;
+    const detentValue = (DETENT_PX / trackWidth) * (max - min);
+    return Math.abs(v - resolvedOrigin) <= detentValue ? resolvedOrigin : v;
+  };
 
   const positionToValue = (clientX: number) => {
     if (!wrapperRect || !wrapperRef) return value;
@@ -203,7 +229,7 @@
         }
       }
 
-      const newValue = positionToValue(e.clientX);
+      const newValue = applyDetent(positionToValue(e.clientX));
       fillPercent.set(percentFromValue(newValue), { instant: true });
       onChange(roundValue(newValue, step));
     }
@@ -263,7 +289,11 @@
   const displayValue = $derived(value.toFixed(decimalsForStep(step)));
 
   const trackStyle = $derived(`width:calc(100% + ${Math.abs(rubberStretchPx.current)}px);transform:translateX(${rubberStretchPx.current < 0 ? rubberStretchPx.current : 0}px);`);
-  const fillStyle = $derived(`width:${fillPercent.current}%;`);
+  const fillStyle = $derived(
+    hasOrigin
+      ? `left:${Math.min(fillPercent.current, originPercent)}%;width:${Math.abs(fillPercent.current - originPercent)}%;`
+      : `width:${fillPercent.current}%;`
+  );
   const handleStyle = $derived(`left:max(5px, calc(${fillPercent.current}% - 9px));opacity:${handleOpacityMv.current};transform:translateY(-50%) scaleX(${handleScaleXMv.current}) scaleY(${handleScaleYMv.current});`);
 </script>
 

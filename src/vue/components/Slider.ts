@@ -17,6 +17,14 @@ export const Slider = defineComponent({
     max: { type: Number, required: false },
     step: { type: Number, required: false },
     unit: { type: String, required: false },
+    /**
+     * Anchor the fill at this value instead of `min`. Bipolar parameters fill
+     * out from the origin in either direction and gain an escapable detent at
+     * the origin while dragging. Defaults to `min`.
+     */
+    origin: { type: Number, required: false, default: undefined },
+    /** Convenience for `origin={0}` on a symmetric range. */
+    bipolar: { type: Boolean, default: false },
     shortcut: { type: Object as PropType<ShortcutConfig>, default: undefined },
     shortcutActive: { type: Boolean, default: false },
   },
@@ -25,6 +33,15 @@ export const Slider = defineComponent({
     const min = computed(() => props.min ?? 0);
     const max = computed(() => props.max ?? 1);
     const step = computed(() => props.step ?? 0.01);
+    const resolvedOrigin = computed(() =>
+      Math.min(max.value, Math.max(min.value, props.origin ?? (props.bipolar ? 0 : min.value)))
+    );
+    const hasOrigin = computed(() => resolvedOrigin.value > min.value);
+    const originPercent = computed(
+      () => ((resolvedOrigin.value - min.value) / (max.value - min.value)) * 100
+    );
+    /** Half-width of the origin snap zone, in pixels of track travel. */
+    const DETENT_PX = 6;
 
     const wrapperRef = ref<HTMLElement | null>(null);
     const trackRef = ref<HTMLElement | null>(null);
@@ -64,8 +81,26 @@ export const Slider = defineComponent({
     let handleScaleYAnim: ReturnType<typeof animate> | null = null;
 
     const applyFillStyles = (pct: number) => {
-      if (fillRef.value) fillRef.value.style.width = `${pct}%`;
+      if (fillRef.value) {
+        // Origin-anchored fill spans between origin and handle; without an
+        // origin it reduces to the classic left-anchored fill.
+        fillRef.value.style.left = hasOrigin.value
+          ? `${Math.min(pct, originPercent.value)}%`
+          : '0%';
+        fillRef.value.style.width = hasOrigin.value
+          ? `${Math.abs(pct - originPercent.value)}%`
+          : `${pct}%`;
+      }
       if (handleRef.value) handleRef.value.style.left = `max(5px, calc(${pct}% - 9px))`;
+    };
+
+    // Escapable magnetic snap to the origin while dragging.
+    const applyDetent = (v: number) => {
+      if (!hasOrigin.value || !wrapperRef.value) return v;
+      const trackWidth = wrapperRef.value.offsetWidth;
+      if (trackWidth <= 0) return v;
+      const detentValue = (DETENT_PX / trackWidth) * (max.value - min.value);
+      return Math.abs(v - resolvedOrigin.value) <= detentValue ? resolvedOrigin.value : v;
     };
 
     const applyRubberStyles = (stretch: number) => {
@@ -187,7 +222,7 @@ export const Slider = defineComponent({
           }
         }
 
-        const nextValue = positionToValue(event.clientX);
+        const nextValue = applyDetent(positionToValue(event.clientX));
         const nextPct = percentFromValue(nextValue);
         if (snapAnim) {
           snapAnim.stop();
@@ -382,7 +417,12 @@ export const Slider = defineComponent({
           ref: fillRef,
           class: 'dialkit-slider-fill',
           style: {
-            width: `${fillPercent.get()}%`,
+            left: hasOrigin.value
+              ? `${Math.min(fillPercent.get(), originPercent.value)}%`
+              : '0%',
+            width: hasOrigin.value
+              ? `${Math.abs(fillPercent.get() - originPercent.value)}%`
+              : `${fillPercent.get()}%`,
           },
         }),
         h('div', {

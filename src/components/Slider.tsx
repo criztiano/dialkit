@@ -23,6 +23,16 @@ interface SliderProps {
    * the editable numeric text. Sliders with a `valueIcon` are not editable.
    */
   valueIcon?: ReactNode;
+  /**
+   * Anchor the fill at this value instead of `min`. For bipolar parameters
+   * (e.g. -1..1) the fill grows out from the origin toward the handle in
+   * either direction, and a soft, escapable detent snaps the value to the
+   * origin while dragging. Defaults to `min` (classic left-anchored fill,
+   * no detent — fully backwards compatible).
+   */
+  origin?: number;
+  /** Convenience for `origin={0}` on a symmetric range. */
+  bipolar?: boolean;
   shortcut?: ShortcutConfig;
   shortcutActive?: boolean;
 }
@@ -31,6 +41,8 @@ const CLICK_THRESHOLD = 3;
 const DEAD_ZONE = 32;
 const MAX_CURSOR_RANGE = 200;
 const MAX_STRETCH = 8;
+/** Half-width of the origin snap zone, in pixels of track travel. */
+const DETENT_PX = 6;
 
 export function Slider({
   label,
@@ -42,9 +54,16 @@ export function Slider({
   unit,
   formatValue,
   valueIcon,
+  origin,
+  bipolar,
   shortcut,
   shortcutActive,
 }: SliderProps) {
+  // Resolve the fill anchor. `min` (the default) preserves the classic
+  // left-anchored fill and disables the detent.
+  const resolvedOrigin = Math.min(max, Math.max(min, origin ?? (bipolar ? 0 : min)));
+  const hasOrigin = resolvedOrigin > min;
+  const originPercent = ((resolvedOrigin - min) / (max - min)) * 100;
   const wrapperRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -71,7 +90,15 @@ export function Slider({
 
   // Motion values for imperative animation
   const fillPercent = useMotionValue(percentage);
-  const fillWidth = useTransform(fillPercent, (pct) => `${pct}%`);
+  // Origin-anchored fill: the bar spans between the origin and the handle, so
+  // a centered origin fills left for negative values and right for positive.
+  // Without an origin this reduces exactly to the classic left-anchored fill.
+  const fillWidth = useTransform(fillPercent, (pct) =>
+    hasOrigin ? `${Math.abs(pct - originPercent)}%` : `${pct}%`
+  );
+  const fillLeft = useTransform(fillPercent, (pct) =>
+    hasOrigin ? `${Math.min(pct, originPercent)}%` : '0%'
+  );
   const handleLeft = useTransform(fillPercent, (pct) =>
     `max(5px, calc(${pct}% - 9px))`
   );
@@ -111,6 +138,19 @@ export function Slider({
   const percentFromValue = useCallback(
     (v: number) => ((v - min) / (max - min)) * 100,
     [min, max]
+  );
+
+  // Escapable magnetic snap to the origin: within DETENT_PX of track travel
+  // the value sticks to the origin; drag past the zone and it releases.
+  const applyDetent = useCallback(
+    (v: number) => {
+      if (!hasOrigin) return v;
+      const trackWidth = wrapperRef.current?.offsetWidth ?? 0;
+      if (trackWidth <= 0) return v;
+      const detentValue = (DETENT_PX / trackWidth) * (max - min);
+      return Math.abs(v - resolvedOrigin) <= detentValue ? resolvedOrigin : v;
+    },
+    [hasOrigin, max, min, resolvedOrigin]
   );
 
   const computeRubberStretch = useCallback(
@@ -174,7 +214,7 @@ export function Slider({
           }
         }
 
-        const newValue = positionToValue(e.clientX);
+        const newValue = applyDetent(positionToValue(e.clientX));
         const newPct = percentFromValue(newValue);
         if (animRef.current) {
           animRef.current.stop();
@@ -188,6 +228,7 @@ export function Slider({
       isInteracting,
       positionToValue,
       percentFromValue,
+      applyDetent,
       onChange,
       fillPercent,
       rubberStretchPx,
@@ -384,6 +425,7 @@ export function Slider({
         <motion.div
           className="dialkit-slider-fill"
           style={{
+            left: fillLeft,
             width: fillWidth,
           }}
         />
