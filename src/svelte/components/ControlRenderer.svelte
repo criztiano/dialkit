@@ -1,7 +1,7 @@
 <script lang="ts">
   import { getContext } from 'svelte';
   import { DialStore } from 'dialkit/store';
-  import type { ControlMeta, DialValue, SpringConfig, TransitionConfig } from 'dialkit/store';
+  import type { ControlMeta, DialValue, SpringConfig, TransitionConfig, ListItemValue } from 'dialkit/store';
   import Slider from './Slider.svelte';
   import Toggle from './Toggle.svelte';
   import Folder from './Folder.svelte';
@@ -10,6 +10,10 @@
   import TextControl from './TextControl.svelte';
   import SelectControl from './SelectControl.svelte';
   import ColorControl from './ColorControl.svelte';
+  import FileControl from './FileControl.svelte';
+  import SwatchControl from './SwatchControl.svelte';
+  import ChipsControl from './ChipsControl.svelte';
+  import ListControl from './ListControl.svelte';
   import ControlRenderer from './ControlRenderer.svelte';
   import { SHORTCUT_CTX } from './ShortcutListener.svelte';
   import type { ShortcutContextValue } from './ShortcutListener.svelte';
@@ -88,6 +92,40 @@
     label={control.label}
     value={controlValue as string}
     onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+  />
+{:else if control.type === 'file'}
+  <FileControl
+    label={control.label}
+    value={controlValue as string}
+    accept={control.accept}
+    multiple={control.multiple}
+    onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+    onPick={(files) => DialStore.emitEvent(panelId, control.path, { kind: 'file', files })}
+  />
+{:else if control.type === 'swatch'}
+  <SwatchControl
+    label={control.label}
+    value={controlValue as string}
+    options={control.swatchOptions ?? []}
+    onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+  />
+{:else if control.type === 'chips'}
+  <ChipsControl
+    label={control.label}
+    value={controlValue as string}
+    options={control.chipOptions ?? []}
+    onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+    onRemove={(v) => DialStore.emitEvent(panelId, control.path, { kind: 'remove', value: v })}
+  />
+{:else if control.type === 'list'}
+  <ListControl
+    label={control.label}
+    value={controlValue as ListItemValue[]}
+    itemTypes={control.itemTypes ?? {}}
+    addLabel={control.addLabel}
+    maxItems={control.maxItems}
+    onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+    onEvent={(event) => DialStore.emitEvent(panelId, control.path, event)}
   />
 {:else if control.type === 'action'}
   <button class="dialkit-button" onclick={() => DialStore.triggerAction(panelId, control.path)}>

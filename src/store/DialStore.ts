@@ -39,6 +39,39 @@ export type TextConfig = {
   placeholder?: string;
 };
 
+export type FileConfig = {
+  type: 'file';
+  /** Native input `accept` filter, e.g. 'image/*' or '.svg,image/svg+xml'. */
+  accept?: string;
+  multiple?: boolean;
+};
+
+export type SwatchOption = {
+  value: string;
+  label: string;
+  /** One color renders a chip; many render a thin strip preview. */
+  colors: string[];
+};
+
+export type SwatchConfig = {
+  type: 'swatch';
+  options: SwatchOption[];
+  default?: string;
+};
+
+export type ChipOption = {
+  value: string;
+  label: string;
+  /** Removable chips show an ✕ and emit a `remove` event (curated stay; saved go). */
+  removable?: boolean;
+};
+
+export type ChipsConfig = {
+  type: 'chips';
+  options: ChipOption[];
+  default?: string;
+};
+
 export type GalleryItem = {
   id: string;
   src?: string;
@@ -57,7 +90,62 @@ export type GalleryConfig = {
   columns?: number;
 };
 
-export type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | TextConfig | GalleryConfig;
+/**
+ * One row in a list control — a chosen item type plus its sub-control values.
+ * Stays JSON-serializable: `params` holds only scalars, never live objects.
+ */
+export type ListItemValue = {
+  type: string;
+  params: Record<string, number | boolean | string>;
+};
+
+/**
+ * A sub-control field inside a list item type's schema. Uses the same shorthand
+ * as a panel config, but scalar-only (no nested folders or non-value controls).
+ */
+export type ListItemField =
+  | [number, number, number, number?]
+  | number
+  | boolean
+  | string
+  | SelectConfig
+  | ColorConfig
+  | TextConfig;
+
+export type ListItemType = {
+  /** Shown in the add menu and as the row's title. */
+  label: string;
+  /** Sub-controls for this item type, keyed by param name. */
+  schema: Record<string, ListItemField>;
+};
+
+export type ListConfig = {
+  type: 'list';
+  /** The palette of item types a user can add. */
+  itemTypes: Record<string, ListItemType>;
+  /** Initial rows. Each item's params backfill from its type's schema defaults. */
+  default?: ListItemValue[];
+  /** Optional cap on the number of rows. */
+  max?: number;
+  /** Label for the add affordance. Defaults to 'Add'. */
+  addLabel?: string;
+};
+
+/** A resolved sub-control descriptor for one list-item field. */
+export type ListFieldKind = 'slider' | 'toggle' | 'select' | 'color' | 'text';
+export type ListField = {
+  key: string;
+  label: string;
+  kind: ListFieldKind;
+  min?: number;
+  max?: number;
+  step?: number;
+  options?: (string | { value: string; label: string })[];
+  placeholder?: string;
+  defaultValue: number | boolean | string;
+};
+
+export type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[];
 
 export type DialConfig = {
   [key: string]: DialValue | [number, number, number, number?] | DialConfig;
@@ -78,9 +166,17 @@ export type ResolvedValues<T extends DialConfig> = {
               ? string
               : T[K] extends GalleryConfig
                 ? string
-                : T[K] extends DialConfig
-                  ? ResolvedValues<T[K]>
-                  : T[K];
+                : T[K] extends FileConfig
+                  ? string
+                  : T[K] extends SwatchConfig
+                    ? string
+                    : T[K] extends ChipsConfig
+                      ? string
+                      : T[K] extends ListConfig
+                        ? ListItemValue[]
+                        : T[K] extends DialConfig
+                          ? ResolvedValues<T[K]>
+                          : T[K];
 };
 
 export type ShortcutMode = 'fine' | 'normal' | 'coarse';
@@ -94,7 +190,7 @@ export type ShortcutConfig = {
 };
 
 export type ControlMeta = {
-  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'text' | 'gallery';
+  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'text' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
   path: string;
   label: string;
   min?: number;
@@ -106,6 +202,13 @@ export type ControlMeta = {
   placeholder?: string;
   items?: GalleryItem[];
   columns?: number;
+  accept?: string;
+  multiple?: boolean;
+  swatchOptions?: SwatchOption[];
+  chipOptions?: ChipOption[];
+  itemTypes?: Record<string, ListItemType>;
+  addLabel?: string;
+  maxItems?: number;
   shortcut?: ShortcutConfig;
 };
 
@@ -119,6 +222,18 @@ export type PanelConfig = {
 
 type Listener = () => void;
 type ActionListener = (action: string) => void;
+
+/**
+ * Non-value events emitted by controls (file picked, chip removed, list mutated).
+ * Delivered through the generic `onEvent(path, event)` channel so the value layer
+ * stays JSON-serializable (a File is never stored — it rides on a file event).
+ */
+export type DialEvent =
+  | { kind: 'file'; files: FileList }
+  | { kind: 'remove'; value: string }
+  | { kind: 'list'; op: 'add' | 'remove' | 'move' | 'set'; index?: number; from?: number; to?: number; itemType?: string };
+
+type EventListener = (path: string, event: DialEvent) => void;
 
 export type Preset = {
   id: string;
@@ -135,6 +250,7 @@ class DialStoreClass {
   private globalListeners: Set<Listener> = new Set();
   private snapshots: Map<string, Record<string, DialValue>> = new Map();
   private actionListeners: Map<string, Set<ActionListener>> = new Map();
+  private eventListeners: Map<string, Set<EventListener>> = new Map();
   private presets: Map<string, Preset[]> = new Map();
   private activePreset: Map<string, string | null> = new Map();
   private baseValues: Map<string, Record<string, DialValue>> = new Map();
@@ -218,6 +334,7 @@ class DialStoreClass {
     this.listeners.delete(id);
     this.snapshots.delete(id);
     this.actionListeners.delete(id);
+    this.eventListeners.delete(id);
     this.baseValues.delete(id);
     this.notifyGlobal();
   }
@@ -317,6 +434,22 @@ class DialStoreClass {
 
   triggerAction(panelId: string, path: string): void {
     this.actionListeners.get(panelId)?.forEach(fn => fn(path));
+  }
+
+  // Generic non-value event channel (file picked, chip removed, list mutated).
+  subscribeEvents(panelId: string, listener: EventListener): () => void {
+    if (!this.eventListeners.has(panelId)) {
+      this.eventListeners.set(panelId, new Set());
+    }
+    this.eventListeners.get(panelId)!.add(listener);
+
+    return () => {
+      this.eventListeners.get(panelId)?.delete(listener);
+    };
+  }
+
+  emitEvent(panelId: string, path: string, event: DialEvent): void {
+    this.eventListeners.get(panelId)?.forEach(fn => fn(path, event));
   }
 
   savePreset(panelId: string, name: string): string {
@@ -463,7 +596,7 @@ class DialStoreClass {
         const hasPhysics = value.stiffness !== undefined || value.damping !== undefined || value.mass !== undefined;
         const hasTime = value.visualDuration !== undefined || value.bounce !== undefined;
         values[`${path}.__mode`] = hasPhysics && !hasTime ? 'advanced' : 'simple';
-      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isColorConfig(value) && !this.isTextConfig(value)) {
+      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isColorConfig(value) && !this.isTextConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isListConfig(value)) {
         this.initTransitionModes(value as DialConfig, path, values);
       }
     }
@@ -479,14 +612,16 @@ class DialStoreClass {
       const shortcut = shortcuts?.[path];
 
       if (Array.isArray(value) && value.length <= 4 && typeof value[0] === 'number') {
-        // Range tuple: [default, min, max]
+        // Range tuple: [default, min, max]. The numeric-first guard rules out a
+        // ListItemValue[] at runtime; assert the tuple shape so TS narrows too.
+        const tuple = value as [number, number, number, number?];
         controls.push({
           type: 'slider',
           path,
           label,
-          min: value[1],
-          max: value[2],
-          step: value[3] ?? this.inferStep(value[1], value[2]),
+          min: tuple[1],
+          max: tuple[2],
+          step: tuple[3] ?? this.inferStep(tuple[1], tuple[2]),
           shortcut,
         });
       } else if (typeof value === 'number') {
@@ -507,6 +642,14 @@ class DialStoreClass {
         controls.push({ type: 'text', path, label, placeholder: value.placeholder });
       } else if (this.isGalleryConfig(value)) {
         controls.push({ type: 'gallery', path, label, items: value.items, columns: value.columns });
+      } else if (this.isFileConfig(value)) {
+        controls.push({ type: 'file', path, label, accept: value.accept, multiple: value.multiple });
+      } else if (this.isSwatchConfig(value)) {
+        controls.push({ type: 'swatch', path, label, swatchOptions: value.options });
+      } else if (this.isChipsConfig(value)) {
+        controls.push({ type: 'chips', path, label, chipOptions: value.options });
+      } else if (this.isListConfig(value)) {
+        controls.push({ type: 'list', path, label, itemTypes: value.itemTypes, addLabel: value.addLabel, maxItems: value.max });
       } else if (typeof value === 'string') {
         // Auto-detect: hex color vs text
         if (this.isHexColor(value)) {
@@ -559,6 +702,15 @@ class DialStoreClass {
       } else if (this.isGalleryConfig(value)) {
         // Resolve to the selected item id — default, else the first item.
         values[path] = value.default ?? value.items[0]?.id ?? '';
+      } else if (this.isFileConfig(value)) {
+        // The File itself rides on the event channel; only the filename is stored.
+        values[path] = '';
+      } else if (this.isSwatchConfig(value)) {
+        values[path] = value.default ?? value.options[0]?.value ?? '';
+      } else if (this.isChipsConfig(value)) {
+        values[path] = value.default ?? value.options[0]?.value ?? '';
+      } else if (this.isListConfig(value)) {
+        values[path] = normalizeListItems(value);
       } else if (typeof value === 'object' && value !== null) {
         Object.assign(values, this.flattenValues(value as DialConfig, path));
       }
@@ -634,6 +786,48 @@ class DialStoreClass {
     );
   }
 
+  private isFileConfig(value: unknown): value is FileConfig {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'type' in value &&
+      (value as FileConfig).type === 'file'
+    );
+  }
+
+  private isSwatchConfig(value: unknown): value is SwatchConfig {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'type' in value &&
+      (value as SwatchConfig).type === 'swatch' &&
+      'options' in value &&
+      Array.isArray((value as SwatchConfig).options)
+    );
+  }
+
+  private isChipsConfig(value: unknown): value is ChipsConfig {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'type' in value &&
+      (value as ChipsConfig).type === 'chips' &&
+      'options' in value &&
+      Array.isArray((value as ChipsConfig).options)
+    );
+  }
+
+  private isListConfig(value: unknown): value is ListConfig {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'type' in value &&
+      (value as ListConfig).type === 'list' &&
+      'itemTypes' in value &&
+      typeof (value as ListConfig).itemTypes === 'object'
+    );
+  }
+
   private isHexColor(value: string): boolean {
     return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(value);
   }
@@ -705,9 +899,28 @@ class DialStoreClass {
         const validValues = new Set(options.map((option) => (typeof option === 'string' ? option : option.value)));
         return validValues.has(existingValue) ? existingValue : defaultValue;
       }
+      case 'swatch': {
+        if (typeof existingValue !== 'string') {
+          return defaultValue;
+        }
+        const validValues = new Set((control.swatchOptions ?? []).map((option) => option.value));
+        return validValues.has(existingValue) ? existingValue : defaultValue;
+      }
+      case 'chips': {
+        if (typeof existingValue !== 'string') {
+          return defaultValue;
+        }
+        const validValues = new Set((control.chipOptions ?? []).map((option) => option.value));
+        return validValues.has(existingValue) ? existingValue : defaultValue;
+      }
       case 'color':
       case 'text':
+      case 'file':
         return typeof existingValue === 'string' ? existingValue : defaultValue;
+      case 'list':
+        // Items are self-validating ({type, params}); preserve the user's array
+        // across config edits, falling back to the default when shape is lost.
+        return Array.isArray(existingValue) ? existingValue : defaultValue;
       case 'gallery': {
         if (typeof existingValue !== 'string') {
           return defaultValue;
@@ -761,6 +974,95 @@ class DialStoreClass {
     return map;
   }
 
+}
+
+// ── List item helpers ──────────────────────────────────────────────────────
+// Pure, framework-agnostic so every adapter (React/Svelte/…) renders list-item
+// sub-controls identically. The inference below mirrors the panel-level parsing
+// in DialStoreClass, scoped to the scalar field kinds a list item can hold.
+
+function listHasType(value: unknown, type: string): boolean {
+  return typeof value === 'object' && value !== null && 'type' in value && (value as { type: string }).type === type;
+}
+
+function listFormatLabel(key: string): string {
+  return key
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, (str) => str.toUpperCase())
+    .trim();
+}
+
+function listIsHexColor(value: string): boolean {
+  return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(value);
+}
+
+function listInferStep(min: number, max: number): number {
+  const range = max - min;
+  if (range <= 1) return 0.01;
+  if (range <= 10) return 0.1;
+  if (range <= 100) return 1;
+  return 10;
+}
+
+function listInferRange(value: number): { min: number; max: number; step: number } {
+  if (value >= 0 && value <= 1) return { min: 0, max: 1, step: 0.01 };
+  if (value >= 0 && value <= 10) return { min: 0, max: value * 3 || 10, step: 0.1 };
+  if (value >= 0 && value <= 100) return { min: 0, max: value * 3 || 100, step: 1 };
+  if (value >= 0) return { min: 0, max: value * 3 || 1000, step: 10 };
+  return { min: value * 3, max: -value * 3, step: 1 };
+}
+
+/** Resolve a list item type's schema shorthand into renderable field descriptors. */
+export function parseListItemSchema(schema: Record<string, ListItemField>): ListField[] {
+  const fields: ListField[] = [];
+
+  for (const [key, def] of Object.entries(schema)) {
+    const label = listFormatLabel(key);
+
+    if (Array.isArray(def) && def.length <= 4 && typeof def[0] === 'number') {
+      const [d, min, max, step] = def;
+      fields.push({ key, label, kind: 'slider', min, max, step: step ?? listInferStep(min, max), defaultValue: d });
+    } else if (typeof def === 'number') {
+      const { min, max, step } = listInferRange(def);
+      fields.push({ key, label, kind: 'slider', min, max, step, defaultValue: def });
+    } else if (typeof def === 'boolean') {
+      fields.push({ key, label, kind: 'toggle', defaultValue: def });
+    } else if (listHasType(def, 'select') && Array.isArray((def as SelectConfig).options)) {
+      const select = def as SelectConfig;
+      const first = select.options[0];
+      const firstValue = typeof first === 'string' ? first : first?.value ?? '';
+      fields.push({ key, label, kind: 'select', options: select.options, defaultValue: select.default ?? firstValue });
+    } else if (listHasType(def, 'color')) {
+      fields.push({ key, label, kind: 'color', defaultValue: (def as ColorConfig).default ?? '#000000' });
+    } else if (listHasType(def, 'text')) {
+      const text = def as TextConfig;
+      fields.push({ key, label, kind: 'text', placeholder: text.placeholder, defaultValue: text.default ?? '' });
+    } else if (typeof def === 'string') {
+      fields.push({ key, label, kind: listIsHexColor(def) ? 'color' : 'text', defaultValue: def });
+    }
+  }
+
+  return fields;
+}
+
+/** The default params object for a freshly-added item of the given schema. */
+export function defaultListItemParams(schema: Record<string, ListItemField>): Record<string, number | boolean | string> {
+  const params: Record<string, number | boolean | string> = {};
+  for (const field of parseListItemSchema(schema)) {
+    params[field.key] = field.defaultValue;
+  }
+  return params;
+}
+
+/** Materialize a list config's initial rows: drop unknown types, backfill params. */
+export function normalizeListItems(config: ListConfig): ListItemValue[] {
+  const items = config.default ?? [];
+  return items
+    .filter((item) => item && typeof item.type === 'string' && config.itemTypes[item.type])
+    .map((item) => ({
+      type: item.type,
+      params: { ...defaultListItemParams(config.itemTypes[item.type].schema), ...(item.params ?? {}) },
+    }));
 }
 
 // Singleton instance

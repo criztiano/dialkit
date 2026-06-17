@@ -1,8 +1,10 @@
 import { useEffect, useId, useSyncExternalStore, useRef } from 'react';
-import { DialStore, DialConfig, DialValue, ResolvedValues, SpringConfig, EasingConfig, SelectConfig, ColorConfig, TextConfig, GalleryConfig, ActionConfig, ShortcutConfig } from '../store/DialStore';
+import { DialStore, DialConfig, DialValue, DialEvent, ResolvedValues, SpringConfig, EasingConfig, SelectConfig, ColorConfig, TextConfig, GalleryConfig, FileConfig, SwatchConfig, ChipsConfig, ListConfig, ActionConfig, ShortcutConfig, normalizeListItems } from '../store/DialStore';
 
 export interface UseDialOptions {
   onAction?: (action: string) => void;
+  /** Non-value events: file picked, chip removed, list mutated. */
+  onEvent?: (path: string, event: DialEvent) => void;
   shortcuts?: Record<string, ShortcutConfig>;
 }
 
@@ -18,6 +20,8 @@ export function useDialKit<T extends DialConfig>(
   configRef.current = config;
   const onActionRef = useRef(options?.onAction);
   onActionRef.current = options?.onAction;
+  const onEventRef = useRef(options?.onEvent);
+  onEventRef.current = options?.onEvent;
   const shortcutsRef = useRef(options?.shortcuts);
   shortcutsRef.current = options?.shortcuts;
   const serializedShortcuts = JSON.stringify(options?.shortcuts);
@@ -43,6 +47,13 @@ export function useDialKit<T extends DialConfig>(
   useEffect(() => {
     return DialStore.subscribeActions(panelId, (action) => {
       onActionRef.current?.(action);
+    });
+  }, [panelId]);
+
+  // Subscribe to non-value events (file/chip/list)
+  useEffect(() => {
+    return DialStore.subscribeEvents(panelId, (path, event) => {
+      onEventRef.current?.(path, event);
     });
   }, [panelId]);
 
@@ -92,6 +103,16 @@ function buildResolvedValues(
       // Gallery config resolves to the selected item id
       const defaultValue = configValue.default ?? configValue.items[0]?.id ?? '';
       result[key] = flatValues[path] ?? defaultValue;
+    } else if (isFileConfig(configValue)) {
+      // File config resolves to the chosen filename (the File rides the event channel)
+      result[key] = flatValues[path] ?? '';
+    } else if (isSwatchConfig(configValue)) {
+      result[key] = flatValues[path] ?? configValue.default ?? configValue.options[0]?.value ?? '';
+    } else if (isChipsConfig(configValue)) {
+      result[key] = flatValues[path] ?? configValue.default ?? configValue.options[0]?.value ?? '';
+    } else if (isListConfig(configValue)) {
+      // List resolves to its array of {type, params} rows.
+      result[key] = flatValues[path] ?? normalizeListItems(configValue);
     } else if (typeof configValue === 'object' && configValue !== null) {
       // Nested object
       result[key] = buildResolvedValues(configValue as DialConfig, flatValues, path);
@@ -131,6 +152,22 @@ function isTextConfig(value: unknown): value is TextConfig {
 
 function isGalleryConfig(value: unknown): value is GalleryConfig {
   return hasType(value, 'gallery') && 'items' in (value as object) && Array.isArray((value as GalleryConfig).items);
+}
+
+function isFileConfig(value: unknown): value is FileConfig {
+  return hasType(value, 'file');
+}
+
+function isSwatchConfig(value: unknown): value is SwatchConfig {
+  return hasType(value, 'swatch') && 'options' in (value as object) && Array.isArray((value as SwatchConfig).options);
+}
+
+function isChipsConfig(value: unknown): value is ChipsConfig {
+  return hasType(value, 'chips') && 'options' in (value as object) && Array.isArray((value as ChipsConfig).options);
+}
+
+function isListConfig(value: unknown): value is ListConfig {
+  return hasType(value, 'list') && 'itemTypes' in (value as object) && typeof (value as ListConfig).itemTypes === 'object';
 }
 
 function getFirstOptionValue(options: (string | { value: string; label: string })[]): string {

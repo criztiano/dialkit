@@ -25,10 +25,14 @@ export { default as EasingVisualization } from './components/EasingVisualization
 export { default as TextControl } from './components/TextControl.svelte';
 export { default as SelectControl } from './components/SelectControl.svelte';
 export { default as ColorControl } from './components/ColorControl.svelte';
+export { default as FileControl } from './components/FileControl.svelte';
+export { default as SwatchControl } from './components/SwatchControl.svelte';
+export { default as ChipsControl } from './components/ChipsControl.svelte';
+export { default as ListControl } from './components/ListControl.svelte';
 export { default as PresetManager } from './components/PresetManager.svelte';
 
 // Store exports (via dialkit/store subpath — svelte-package doesn't bundle, so relative paths to src/store would break in dist)
-export { DialStore } from 'dialkit/store';
+export { DialStore, parseListItemSchema, defaultListItemParams, normalizeListItems } from 'dialkit/store';
 export type {
   SpringConfig,
   EasingConfig,
@@ -37,9 +41,21 @@ export type {
   SelectConfig,
   ColorConfig,
   TextConfig,
+  FileConfig,
+  SwatchConfig,
+  SwatchOption,
+  ChipsConfig,
+  ChipOption,
+  ListConfig,
+  ListItemValue,
+  ListItemField,
+  ListItemType,
+  ListField,
+  ListFieldKind,
   ShortcutConfig,
   Preset,
   DialValue,
+  DialEvent,
   DialConfig,
   ResolvedValues,
   ControlMeta,

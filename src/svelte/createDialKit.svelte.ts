@@ -1,19 +1,26 @@
-import { DialStore } from 'dialkit/store';
+import { DialStore, normalizeListItems } from 'dialkit/store';
 import type {
   ActionConfig,
+  ChipsConfig,
   ColorConfig,
   DialConfig,
+  DialEvent,
   DialValue,
   EasingConfig,
+  FileConfig,
+  ListConfig,
   ResolvedValues,
   SelectConfig,
   ShortcutConfig,
   SpringConfig,
+  SwatchConfig,
   TextConfig,
 } from 'dialkit/store';
 
 export interface CreateDialOptions {
   onAction?: (action: string) => void;
+  /** Non-value events: file picked, chip removed, list mutated. */
+  onEvent?: (path: string, event: DialEvent) => void;
   shortcuts?: Record<string, ShortcutConfig>;
 }
 
@@ -43,9 +50,14 @@ export function createDialKit<T extends DialConfig>(
       ? DialStore.subscribeActions(panelId, options.onAction)
       : undefined;
 
+    const unsubEvents = options?.onEvent
+      ? DialStore.subscribeEvents(panelId, options.onEvent)
+      : undefined;
+
     return () => {
       unsubValues();
       unsubActions?.();
+      unsubEvents?.();
       DialStore.unregisterPanel(panelId);
     };
   });
@@ -79,6 +91,14 @@ function buildResolvedValues(
       result[key] = flatValues[path] ?? configValue.default ?? '#000000';
     } else if (isTextConfig(configValue)) {
       result[key] = flatValues[path] ?? configValue.default ?? '';
+    } else if (isFileConfig(configValue)) {
+      result[key] = flatValues[path] ?? '';
+    } else if (isSwatchConfig(configValue)) {
+      result[key] = flatValues[path] ?? configValue.default ?? configValue.options[0]?.value ?? '';
+    } else if (isChipsConfig(configValue)) {
+      result[key] = flatValues[path] ?? configValue.default ?? configValue.options[0]?.value ?? '';
+    } else if (isListConfig(configValue)) {
+      result[key] = flatValues[path] ?? normalizeListItems(configValue);
     } else if (typeof configValue === 'object' && configValue !== null) {
       result[key] = buildResolvedValues(configValue as DialConfig, flatValues, path);
     }
@@ -113,6 +133,22 @@ function isColorConfig(value: unknown): value is ColorConfig {
 
 function isTextConfig(value: unknown): value is TextConfig {
   return hasType(value, 'text');
+}
+
+function isFileConfig(value: unknown): value is FileConfig {
+  return hasType(value, 'file');
+}
+
+function isSwatchConfig(value: unknown): value is SwatchConfig {
+  return hasType(value, 'swatch') && 'options' in (value as object) && Array.isArray((value as SwatchConfig).options);
+}
+
+function isChipsConfig(value: unknown): value is ChipsConfig {
+  return hasType(value, 'chips') && 'options' in (value as object) && Array.isArray((value as ChipsConfig).options);
+}
+
+function isListConfig(value: unknown): value is ListConfig {
+  return hasType(value, 'list') && 'itemTypes' in (value as object) && typeof (value as ListConfig).itemTypes === 'object';
 }
 
 function getFirstOptionValue(options: (string | { value: string; label: string })[]): string {

@@ -1,6 +1,6 @@
 import { useState, useContext, useSyncExternalStore } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { DialStore, ControlMeta, PanelConfig, SpringConfig, TransitionConfig } from '../store/DialStore';
+import { DialStore, ControlMeta, PanelConfig, SpringConfig, TransitionConfig, ListItemValue } from '../store/DialStore';
 import { ShortcutContext } from './ShortcutListener';
 import { ShortcutsMenu } from './ShortcutsMenu';
 import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../icons';
@@ -13,6 +13,10 @@ import { TextControl } from './TextControl';
 import { SelectControl } from './SelectControl';
 import { ColorControl } from './ColorControl';
 import { GalleryControl } from './GalleryControl';
+import { FileControl } from './FileControl';
+import { SwatchControl } from './SwatchControl';
+import { ChipsControl } from './ChipsControl';
+import { ListControl } from './ListControl';
 import { PresetManager } from './PresetManager';
 
 interface PanelProps {
@@ -161,6 +165,56 @@ Apply these values as the new defaults in the useDialKit call.`;
             items={control.items ?? []}
             columns={control.columns}
             onChange={(v) => DialStore.updateValue(panel.id, control.path, v)}
+          />
+        );
+
+      case 'file':
+        return (
+          <FileControl
+            key={control.path}
+            label={control.label}
+            value={value as string}
+            accept={control.accept}
+            multiple={control.multiple}
+            onChange={(v) => DialStore.updateValue(panel.id, control.path, v)}
+            onPick={(files) => DialStore.emitEvent(panel.id, control.path, { kind: 'file', files })}
+          />
+        );
+
+      case 'swatch':
+        return (
+          <SwatchControl
+            key={control.path}
+            label={control.label}
+            value={value as string}
+            options={control.swatchOptions ?? []}
+            onChange={(v) => DialStore.updateValue(panel.id, control.path, v)}
+          />
+        );
+
+      case 'chips':
+        return (
+          <ChipsControl
+            key={control.path}
+            label={control.label}
+            value={value as string}
+            options={control.chipOptions ?? []}
+            onChange={(v) => DialStore.updateValue(panel.id, control.path, v)}
+            onRemove={(v) => DialStore.emitEvent(panel.id, control.path, { kind: 'remove', value: v })}
+          />
+        );
+
+      case 'list':
+        return (
+          <ListControl
+            key={control.path}
+            label={control.label}
+            value={value as ListItemValue[]}
+            itemTypes={control.itemTypes ?? {}}
+            addLabel={control.addLabel}
+            maxItems={control.maxItems}
+            onChange={(v) => DialStore.updateValue(panel.id, control.path, v)}
+            onEvent={(event) => DialStore.emitEvent(panel.id, control.path, event)}
           />
         );
 
