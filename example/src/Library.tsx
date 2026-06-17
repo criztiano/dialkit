@@ -272,7 +272,7 @@ export function Library() {
               <Toggle label="enabled" checked={folderShadow} onChange={setFolderShadow} />
             </Folder>
           </Card>
-          <Card title="Module" desc="A group whose header carries an enable switch. Turn it off and the body collapses away with a smooth height transition; the chevron also collapses it manually." code="<Module enabled onEnabledChange />">
+          <Card title="Module" desc="A group whose header carries an enable switch. The switch is the expand control: turn it off and the body collapses away with a smooth height transition, on reveals it again." code="<Module enabled onEnabledChange />">
             <DialModule title="reverb" enabled={reverbEnabled} onEnabledChange={setReverbEnabled}>
               <Slider label="mix" value={reverbMix} onChange={setReverbMix} min={0} max={100} step={1} unit="%" />
               <Slider label="decay" value={reverbDecay} onChange={setReverbDecay} min={0.1} max={10} step={0.1} formatValue={(v) => `${v.toFixed(1)}s`} />

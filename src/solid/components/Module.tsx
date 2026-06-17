@@ -1,5 +1,4 @@
-import { createSignal, Show, JSX } from 'solid-js';
-import { ICON_CHEVRON } from '../../icons';
+import { JSX } from 'solid-js';
 import { SegmentedControl } from './SegmentedControl';
 
 interface ModuleProps {
@@ -7,8 +6,6 @@ interface ModuleProps {
   enabled: boolean;
   onEnabledChange: (enabled: boolean) => void;
   children?: JSX.Element;
-  defaultOpen?: boolean;
-  collapsible?: boolean;
 }
 
 const ENABLE_OPTIONS = [
@@ -18,50 +15,24 @@ const ENABLE_OPTIONS = [
 
 /**
  * A titled module whose header carries an enable switch — for parameter
- * blocks that turn on/off as a unit. When disabled the body collapses away
- * with a smooth height transition; the right-aligned chevron also collapses
- * it manually while enabled.
+ * blocks that turn on/off as a unit. The switch doubles as the expand
+ * control: disabling collapses the body away with a smooth height transition.
  */
 export function Module(props: ModuleProps) {
-  const collapsible = () => props.collapsible ?? true;
-  const [isOpen, setIsOpen] = createSignal(props.defaultOpen ?? true);
-  const expanded = () => (collapsible() ? isOpen() : true);
-  const visible = () => props.enabled && expanded();
-  const toggleOpen = () => {
-    if (collapsible()) setIsOpen((o) => !o);
-  };
-
   return (
     <div class="dialkit-module">
-      <div
-        class="dialkit-module-header"
-        onClick={toggleOpen}
-        style={{ cursor: collapsible() ? 'pointer' : 'default' }}
-      >
+      <div class="dialkit-module-header">
         <span class="dialkit-module-title">{props.title}</span>
-        <div class="dialkit-module-switch" onClick={(e) => e.stopPropagation()}>
+        <div class="dialkit-module-switch">
           <SegmentedControl
             options={ENABLE_OPTIONS}
             value={props.enabled ? 'on' : 'off'}
             onChange={(v) => props.onEnabledChange(v === 'on')}
           />
         </div>
-        <Show when={collapsible()}>
-          <svg
-            class={`dialkit-module-icon${visible() ? '' : ' dialkit-module-icon-collapsed'}`}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d={ICON_CHEVRON} />
-          </svg>
-        </Show>
       </div>
 
-      <div class="dialkit-module-collapse" data-open={visible()}>
+      <div class="dialkit-module-collapse" data-open={props.enabled}>
         <div class="dialkit-module-collapse-clip">
           <div class="dialkit-module-inner">{props.children}</div>
         </div>

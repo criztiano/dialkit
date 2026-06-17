@@ -247,7 +247,7 @@ shadow: {
 
 ### Module
 
-A standalone component (advanced usage): a titled group whose header carries an **enable switch**. Use it for parameter blocks that turn on or off as a unit — synth layers, effect sends, optional feature groups — where a plain folder doesn't capture the "this whole block is on/off" state. When disabled, the body collapses away with a smooth height transition (so off modules don't take up space); a right-aligned chevron also collapses it manually while enabled.
+A standalone component (advanced usage): a titled group whose header carries an **enable switch**. Use it for parameter blocks that turn on or off as a unit — synth layers, effect sends, optional feature groups — where a plain folder doesn't capture the "this whole block is on/off" state. The switch doubles as the expand control: when off, the body collapses away with a smooth height transition (so off modules don't take up space) and reveals again when on.
 
 ```tsx
 import { Module, Slider } from 'dialkit';
@@ -271,8 +271,6 @@ function ImpactControls({ layer, onChange }) {
 | `title` | `string` | — | Module heading. |
 | `enabled` | `boolean` | — | Drives the header switch; when off, the body collapses away. |
 | `onEnabledChange` | `(enabled: boolean) => void` | — | Fired when the switch is toggled. |
-| `defaultOpen` | `boolean` | `true` | Start expanded. |
-| `collapsible` | `boolean` | `true` | Show the right-aligned chevron and allow manual collapse. |
 
 Available in all four frameworks. In Svelte the body is the default slot/snippet; in Vue, the default slot.
 
