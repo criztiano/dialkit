@@ -113,6 +113,27 @@ A single number auto-infers a reasonable min, max, and step:
 
 Sliders support click-to-snap (with spring animation), drag with rubber-band overflow, and direct text editing (hover the value for 800ms, then click to type).
 
+#### Bipolar sliders (`origin` / `bipolar`)
+
+For bipolar parameters — an envelope amount, a detune, a pan — anchor the fill at a value other than `min` so it grows out from the center in either direction:
+
+```tsx
+import { Slider } from 'dialkit';
+
+// fill grows left for negatives, right for positives, from 0
+<Slider label="Amount" value={amount} min={-1} max={1} bipolar onChange={setAmount} />
+
+// arbitrary anchor
+<Slider label="Trim" value={trim} min={-12} max={12} origin={0} onChange={setTrim} />
+```
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `origin` | `number` | Value the fill is anchored at (default `min`). The fill spans between the origin and the handle. |
+| `bipolar` | `boolean` | Convenience for `origin={0}`. |
+
+When an origin is set, dragging gains a soft, **escapable** detent at the origin — the value sticks to it within a few pixels of travel and releases when you drag past. Omit both props and the slider is unchanged (classic left-anchored fill, no detent). These props apply to the standalone `Slider` component (advanced usage).
+
 ### Toggle
 
 ```tsx
