@@ -9,6 +9,7 @@ import {
   GalleryControl,
   ButtonGroup,
   Folder,
+  Section as DialSection,
   SpringControl,
   SpringVisualization,
   TransitionControl,
@@ -102,6 +103,11 @@ export function Library() {
   // Standalone Folder demo state
   const [folderBlur, setFolderBlur] = useState(14);
   const [folderShadow, setFolderShadow] = useState(true);
+
+  // Standalone Section demo state (enable switch in the header)
+  const [reverbEnabled, setReverbEnabled] = useState(true);
+  const [reverbMix, setReverbMix] = useState(35);
+  const [reverbDecay, setReverbDecay] = useState(2.4);
 
   // Store-coupled building blocks (wired to the live panel below)
   const [springVal, setSpringVal] = useState<SpringConfig>({ type: 'spring', visualDuration: 0.5, bounce: 0.25 });
@@ -247,7 +253,7 @@ export function Library() {
           </Card>
         </Section>
 
-        <Section index="06" title="Actions & Structure" count={4} hint="Action buttons fire callbacks; folders group controls; visualizations preview motion.">
+        <Section index="06" title="Actions & Structure" count={5} hint="Action buttons fire callbacks; folders group controls; visualizations preview motion.">
           <Card title="Action button" desc="A single { type: 'action' } fires a callback with no stored value." code="shuffle: { type: 'action' }">
             <ButtonGroup buttons={[{ label: 'Shuffle', onClick: () => setLastAction('shuffle') }]} />
             <ActionLog value={lastAction} />
@@ -265,6 +271,12 @@ export function Library() {
               <Slider label="blur" value={folderBlur} onChange={setFolderBlur} min={0} max={60} step={1} />
               <Toggle label="enabled" checked={folderShadow} onChange={setFolderShadow} />
             </Folder>
+          </Card>
+          <Card title="Section" desc="A collapsible group whose header carries an enable switch. The body dims when off but stays interactive, so a muted block is still tunable." code="<Section enabled onEnabledChange />">
+            <DialSection title="reverb" enabled={reverbEnabled} onEnabledChange={setReverbEnabled}>
+              <Slider label="mix" value={reverbMix} onChange={setReverbMix} min={0} max={100} step={1} unit="%" />
+              <Slider label="decay" value={reverbDecay} onChange={setReverbDecay} min={0.1} max={10} step={0.1} formatValue={(v) => `${v.toFixed(1)}s`} />
+            </DialSection>
           </Card>
           <Card title="Easing curve" desc="EasingVisualization plots a cubic-bézier curve, overshoot included." code="{ type: 'easing', ease: […] }">
             <div className="lib-viz"><EasingVisualization easing={easingPreview} /></div>
