@@ -6,7 +6,7 @@ import {
   SelectControl,
   Toggle,
   TextControl,
-  ColorControl,
+  GalleryControl,
   ButtonGroup,
   Folder,
   SpringControl,
@@ -18,34 +18,10 @@ import {
   DialStore,
   useDialKit,
 } from 'dialkit';
-import type { ShortcutConfig, SpringConfig, TransitionConfig, EasingConfig } from 'dialkit';
+import type { SpringConfig, TransitionConfig, EasingConfig, GalleryItem } from 'dialkit';
 import 'dialkit/styles.css';
 
 type Theme = 'dark' | 'light';
-
-/* Mirrors DialStore.inferRange so "auto-inferred" cards match useDialKit exactly. */
-function inferRange(value: number): { min: number; max: number; step: number } {
-  if (value >= 0 && value <= 1) return { min: 0, max: 1, step: 0.01 };
-  if (value >= 0 && value <= 10) return { min: 0, max: value * 3 || 10, step: 0.1 };
-  if (value >= 0 && value <= 100) return { min: 0, max: value * 3 || 100, step: 1 };
-  if (value >= 0) return { min: 0, max: value * 3 || 1000, step: 10 };
-  return { min: value * 3, max: -value * 3, step: 1 };
-}
-
-// ── Slider variants ───────────────────────────────────────────────
-type SliderVariant = {
-  id: string; title: string; desc: string; code: string;
-  label: string; value: number; min: number; max: number; step: number;
-  shortcut?: ShortcutConfig; shortcutActive?: boolean;
-  unit?: string;
-  formatValue?: (value: number) => string;
-  renderIcon?: (value: number) => ReactNode;
-};
-
-const auto = (label: string, value: number): Omit<SliderVariant, 'id' | 'title' | 'desc' | 'code'> => {
-  const { min, max, step } = inferRange(value);
-  return { label, value, min, max, step };
-};
 
 /** A volume glyph whose wave count tracks the value — demonstrates `valueIcon`. */
 const volumeIcon = (v: number): ReactNode => {
@@ -60,56 +36,43 @@ const volumeIcon = (v: number): ReactNode => {
   );
 };
 
-const SLIDER_VARIANTS: SliderVariant[] = [
-  { id: 'range', title: 'Continuous range', desc: 'Explicit [default, min, max]. Step is inferred from the range.', code: 'blur: [24, 0, 100]', label: 'blur', value: 24, min: 0, max: 100, step: 1 },
-  { id: 'range-step', title: 'Range with step', desc: 'A fourth value sets an explicit step. Drag snaps in increments.', code: 'gap: [40, 0, 100, 5]', label: 'gap', value: 40, min: 0, max: 100, step: 5 },
-  { id: 'bipolar', title: 'Bipolar range', desc: 'Negative min, positive max — the fill grows from the left edge.', code: 'offsetX: [0, -200, 200]', label: 'offsetX', value: 0, min: -200, max: 200, step: 10 },
-  { id: 'discrete', title: 'Discrete steps', desc: 'Ten or fewer steps render hashmarks and click-to-snap.', code: 'sides: [3, 1, 8, 1]', label: 'sides', value: 3, min: 1, max: 8, step: 1 },
-  { id: 'stepped', title: 'Coarse steps', desc: 'Large steps across a wide range — great for weights or counts.', code: 'weight: [400, 100, 900, 100]', label: 'weight', value: 400, min: 100, max: 900, step: 100 },
-  { id: 'auto-fraction', title: 'Auto · fractional', desc: 'A bare number in 0–1 infers a 0→1 range with 0.01 steps.', code: 'opacity: 0.6   // → [0, 1], step 0.01', ...auto('opacity', 0.6) },
-  { id: 'auto-small', title: 'Auto · small', desc: 'Values up to 10 infer 0 → value × 3 with 0.1 steps.', code: 'scale: 1.2   // → [0, 3.6], step 0.1', ...auto('scale', 1.2) },
-  { id: 'auto-mid', title: 'Auto · medium', desc: 'Values up to 100 infer 0 → value × 3 with whole-number steps.', code: 'rotate: 45   // → [0, 135], step 1', ...auto('rotate', 45) },
-  { id: 'auto-large', title: 'Auto · large', desc: 'Values over 100 infer 0 → value × 3 with steps of 10.', code: 'width: 320   // → [0, 960], step 10', ...auto('width', 320) },
-  { id: 'shortcut', title: 'Shortcut pill', desc: 'A keyboard shortcut adds a pill showing key + interaction.', code: "radius: { key: 'b', mode: 'fine' }", label: 'radius', value: 16, min: 0, max: 64, step: 1, shortcut: { key: 'b', interaction: 'scroll', mode: 'fine' } },
-  { id: 'shortcut-active', title: 'Shortcut · active', desc: 'The pill highlights while its key is held. Try S + drag.', code: "speed: { key: 's', interaction: 'drag' }", label: 'speed', value: 1.5, min: 0, max: 3, step: 0.1, shortcut: { key: 's', interaction: 'drag', mode: 'coarse' }, shortcutActive: true },
-  { id: 'unit-percent', title: 'Unit · percent', desc: 'A `unit` string is appended after the value as a muted suffix.', code: "opacity: [70, 0, 100], unit: '%'", label: 'opacity', value: 70, min: 0, max: 100, step: 1, unit: '%' },
-  { id: 'unit-seconds', title: 'Unit · seconds', desc: 'Units pair with any range — here a fractional duration in seconds.', code: "duration: [3.6, 0, 10, 0.1], unit: 's'", label: 'duration', value: 3.6, min: 0, max: 10, step: 0.1, unit: 's' },
-  { id: 'unit-pixels', title: 'Unit · pixels', desc: 'Pixel suffixes read naturally for sizes, radii and offsets.', code: "radius: [16, 0, 64], unit: 'px'", label: 'radius', value: 16, min: 0, max: 64, step: 1, unit: 'px' },
-  { id: 'format-custom', title: 'Custom format', desc: 'A `formatValue` callback owns the full label — here a multiplier.', code: "formatValue: (v) => `${v.toFixed(1)}×`", label: 'zoom', value: 1.5, min: 0.5, max: 4, step: 0.1, formatValue: (v) => `${v.toFixed(1)}×` },
-  { id: 'format-degrees', title: 'Format · degrees', desc: 'Formatters can round and add any glyph the unit prop can’t express.', code: "formatValue: (v) => `${Math.round(v)}°`", label: 'angle', value: 45, min: 0, max: 360, step: 1, formatValue: (v) => `${Math.round(v)}°` },
-  { id: 'icon-value', title: 'Icon value', desc: 'A `valueIcon` node replaces the text — it reacts to the value and is not editable.', code: 'valueIcon: <VolumeGlyph value={v} />', label: 'volume', value: 65, min: 0, max: 100, step: 1, renderIcon: volumeIcon },
+// ── Slider tabs: the main value types, one shown at a time ─────────
+type SliderTab = {
+  id: string; tab: string; title: string; desc: string; code: string;
+  label: string; value: number; min: number; max: number; step: number;
+  unit?: string;
+  formatValue?: (value: number) => string;
+  renderIcon?: (value: number) => ReactNode;
+};
+
+const SLIDER_TABS: SliderTab[] = [
+  { id: 'numeric', tab: 'Numeric', title: 'Numeric range', desc: 'Explicit [default, min, max] — the everyday slider. Step is inferred from the range.', code: 'blur: [24, 0, 100]', label: 'blur', value: 24, min: 0, max: 100, step: 1 },
+  { id: 'unit', tab: 'Unit', title: 'Unit suffix', desc: 'A `unit` string is appended after the value as a muted suffix.', code: "opacity: [70, 0, 100], unit: '%'", label: 'opacity', value: 70, min: 0, max: 100, step: 1, unit: '%' },
+  { id: 'custom', tab: 'Custom', title: 'Custom format', desc: 'A `formatValue` callback owns the full label — here a multiplier.', code: "formatValue: (v) => `${v.toFixed(1)}×`", label: 'zoom', value: 1.5, min: 0.5, max: 4, step: 0.1, formatValue: (v) => `${v.toFixed(1)}×` },
+  { id: 'icon', tab: 'Icon', title: 'Icon value', desc: 'A `valueIcon` node replaces the text — it reacts to the value and is not editable.', code: 'valueIcon: <VolumeGlyph value={v} />', label: 'volume', value: 65, min: 0, max: 100, step: 1, renderIcon: volumeIcon },
 ];
 
-// ── Select variants ───────────────────────────────────────────────
-type SelectOption = string | { value: string; label: string };
-type SelectVariant = { id: string; title: string; desc: string; code: string; label: string; value: string; options: SelectOption[] };
+// ── Gallery items: custom gradient tiles with varied aspects for a rich masonry ──
+const swatch = (background: string) => () => (
+  <div style={{ width: '100%', height: '100%', background, borderRadius: 'inherit' }} />
+);
 
-const SELECT_VARIANTS: SelectVariant[] = [
-  { id: 'strings', title: 'String options', desc: 'Plain strings are auto Title-Cased for display.', code: "options: ['stack', 'fan', 'grid']", label: 'layout', value: 'stack', options: ['stack', 'fan', 'grid'] },
-  { id: 'labels', title: 'Custom labels', desc: '{ value, label } pairs decouple the stored value from its display text.', code: "{ value: 'sq', label: 'Square' }", label: 'shape', value: 'portrait', options: [{ value: 'portrait', label: 'Portrait' }, { value: 'sq', label: 'Square' }, { value: 'landscape', label: 'Landscape' }] },
-  { id: 'binary', title: 'Binary choice', desc: 'Two options work as a compact A / B switch.', code: "options: ['light', 'dark']", label: 'theme', value: 'dark', options: ['light', 'dark'] },
-  { id: 'many', title: 'Many options', desc: 'Long lists flip above the trigger when space runs out.', code: "options: ['jan', … 'dec']", label: 'month', value: 'jun', options: ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'] },
-  { id: 'long', title: 'Long labels', desc: 'Overflowing values truncate with an ellipsis in the trigger.', code: "label: 'Ease In Out (Cubic)'", label: 'easing', value: 'in-out', options: [{ value: 'linear', label: 'Linear' }, { value: 'in', label: 'Ease In (Quad)' }, { value: 'out', label: 'Ease Out (Quad)' }, { value: 'in-out', label: 'Ease In Out (Cubic)' }] },
+// A mix of real photos (which show the skeleton → blur-fade load) and custom
+// gradient tiles (instant) — enough items that the grid scrolls (rubber-band).
+const PHOTO_ASPECT = 750 / 1124;
+const GALLERY_ITEMS: GalleryItem[] = [
+  { id: 'ember', aspect: 3 / 4, render: swatch('linear-gradient(160deg, #ff5a3c, #ffb38a)') },
+  { id: 'fuji', src: '/photos/one.avif', alt: 'Mount Fuji', aspect: PHOTO_ASPECT },
+  { id: 'dusk', aspect: 1, render: swatch('linear-gradient(150deg, #6366f1, #a855f7)') },
+  { id: 'temple', src: '/photos/three.avif', alt: 'Temple in autumn', aspect: PHOTO_ASPECT },
+  { id: 'mint', aspect: 4 / 5, render: swatch('linear-gradient(160deg, #10b981, #6ee7b7)') },
+  { id: 'gold', aspect: 3 / 4, render: swatch('linear-gradient(160deg, #f59e0b, #fde68a)') },
+  { id: 'street', src: '/photos/four.avif', alt: 'City street', aspect: PHOTO_ASPECT },
+  { id: 'rose', aspect: 4 / 3, render: swatch('linear-gradient(150deg, #f43f5e, #fb7185)') },
+  { id: 'dusk-photo', src: '/photos/two.avif', alt: 'Dusk', aspect: PHOTO_ASPECT },
+  { id: 'ocean', aspect: 3 / 4, render: swatch('linear-gradient(160deg, #0ea5e9, #67e8f9)') },
+  { id: 'plum', aspect: 1, render: swatch('linear-gradient(150deg, #7c3aed, #c084fc)') },
 ];
-
-// ── Toggle / Text / Color variants ────────────────────────────────
-type ToggleVariant = { id: string; title: string; desc: string; code: string; label: string; value: boolean; shortcut?: ShortcutConfig };
-const TOGGLE_VARIANTS: ToggleVariant[] = [
-  { id: 'off', title: 'Off state', desc: 'A boolean renders an Off / On segmented control.', code: 'visible: false', label: 'visible', value: false },
-  { id: 'on', title: 'On state', desc: 'The active segment animates with a spring-driven pill.', code: 'darkMode: true', label: 'darkMode', value: true },
-  { id: 'toggle-shortcut', title: 'With shortcut', desc: 'Toggles accept a key shortcut — shown as a pill on the label.', code: "grid: { key: 'g' }", label: 'grid', value: true, shortcut: { key: 'g' } },
-];
-
-const TEXT_VARIANTS = [
-  { id: 'text-value', title: 'With value', desc: 'Non-hex strings auto-detect as text inputs.', code: "title: 'Japan'", label: 'title', value: 'Japan', placeholder: undefined as string | undefined },
-  { id: 'text-placeholder', title: 'With placeholder', desc: 'The explicit form adds a placeholder and default.', code: "{ type: 'text', placeholder: '…' }", label: 'subtitle', value: '', placeholder: 'Enter subtitle…' },
-] as const;
-
-const COLOR_VARIANTS = [
-  { id: 'hex6', title: 'Six-digit hex', desc: 'Hex strings auto-detect as color pickers with a live swatch.', code: "accent: '#c41e3a'", label: 'accent', value: '#c41e3a' },
-  { id: 'hex3', title: 'Shorthand hex', desc: 'Three-digit hex is expanded for the native picker.', code: "ink: '#09f'", label: 'ink', value: '#09f' },
-  { id: 'hex8', title: 'With alpha', desc: 'Eight-digit hex carries an alpha channel.', code: "tint: '#00000080'", label: 'tint', value: '#00000080' },
-] as const;
 
 /** Finds a registered panel's id by name — needed to wire the store-coupled
  *  components (SpringControl, TransitionControl, ShortcutsMenu) to a live panel. */
@@ -128,11 +91,12 @@ const LIVE_PANEL = 'Playground';
 export function Library() {
   const [theme, setTheme] = useState<Theme>('dark');
 
-  const [numbers, setNumbers] = useState<Record<string, number>>(() => Object.fromEntries(SLIDER_VARIANTS.map((v) => [v.id, v.value])));
-  const [selects, setSelects] = useState<Record<string, string>>(() => Object.fromEntries(SELECT_VARIANTS.map((v) => [v.id, v.value])));
-  const [toggles, setToggles] = useState<Record<string, boolean>>(() => Object.fromEntries(TOGGLE_VARIANTS.map((v) => [v.id, v.value])));
-  const [texts, setTexts] = useState<Record<string, string>>(() => Object.fromEntries(TEXT_VARIANTS.map((v) => [v.id, v.value])));
-  const [colors, setColors] = useState<Record<string, string>>(() => Object.fromEntries(COLOR_VARIANTS.map((v) => [v.id, v.value])));
+  const [sliderTab, setSliderTab] = useState<string>(SLIDER_TABS[0].id);
+  const [sliderValues, setSliderValues] = useState<Record<string, number>>(() => Object.fromEntries(SLIDER_TABS.map((t) => [t.id, t.value])));
+  const [selectValue, setSelectValue] = useState('stack');
+  const [toggleValue, setToggleValue] = useState(true);
+  const [textValue, setTextValue] = useState('Japan');
+  const [galleryValue, setGalleryValue] = useState('ember');
   const [lastAction, setLastAction] = useState('—');
 
   // Standalone Folder demo state
@@ -161,17 +125,18 @@ export function Library() {
     shortcuts: {
       size: { key: 's', mode: 'coarse' },
       glow: { key: 'g' },
-      radius: { interaction: 'scroll-only' },
+      // Key-gated (not 'scroll-only'): a scroll-only shortcut hijacks every wheel
+      // event on the window, which would make this scrollable library page impossible
+      // to scroll. Key+scroll only intercepts while R is held.
+      radius: { key: 'r', mode: 'fine' },
     },
   });
 
   const liveId = useLivePanelId(LIVE_PANEL);
 
-  const setNumber = (id: string, v: number) => setNumbers((s) => ({ ...s, [id]: v }));
-  const setSelect = (id: string, v: string) => setSelects((s) => ({ ...s, [id]: v }));
-  const setToggle = (id: string, v: boolean) => setToggles((s) => ({ ...s, [id]: v }));
-  const setText = (id: string, v: string) => setTexts((s) => ({ ...s, [id]: v }));
-  const setColor = (id: string, v: string) => setColors((s) => ({ ...s, [id]: v }));
+  const setSliderValue = (id: string, v: number) => setSliderValues((s) => ({ ...s, [id]: v }));
+
+  const activeSlider = SLIDER_TABS.find((t) => t.id === sliderTab) ?? SLIDER_TABS[0];
 
   // Live preview styling derived from the panel values
   const previewStyle = (() => {
@@ -214,50 +179,72 @@ export function Library() {
         <h1 className="lib-title">The Whole Kit</h1>
         <p className="lib-lead">
           Every control DialKit ships with, live and interactive — sliders, selectors, toggles,
-          text, color, actions, structure, motion, and the real panel itself. One eagle-eye view
+          text, gallery, actions, structure, motion, and the real panel itself. One eagle-eye view
           of everything you compose with <code>useDialKit</code>.
         </p>
       </header>
 
       <main className="lib-main">
-        <Section index="01" title="Sliders" count={SLIDER_VARIANTS.length} hint="Drag to set · click to snap · hover the value 800ms then click to type.">
-          {SLIDER_VARIANTS.map((v) => (
-            <Card key={v.id} title={v.title} desc={v.desc} code={v.code}>
-              <Slider label={v.label} value={numbers[v.id]} onChange={(val) => setNumber(v.id, val)} min={v.min} max={v.max} step={v.step} shortcut={v.shortcut} shortcutActive={v.shortcutActive} unit={v.unit} formatValue={v.formatValue} valueIcon={v.renderIcon?.(numbers[v.id])} />
-            </Card>
-          ))}
+        <Section
+          index="01"
+          title="Sliders"
+          hint="Drag to set · click to snap · hover the value 800ms then click to type."
+          single
+          headExtra={
+            <div className="lib-tabs" role="tablist" aria-label="Slider types">
+              {SLIDER_TABS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={sliderTab === t.id}
+                  className="lib-tab"
+                  data-active={String(sliderTab === t.id)}
+                  onClick={() => setSliderTab(t.id)}
+                >
+                  {t.tab}
+                </button>
+              ))}
+            </div>
+          }
+        >
+          <Card title={activeSlider.title} desc={activeSlider.desc} code={activeSlider.code}>
+            <Slider
+              label={activeSlider.label}
+              value={sliderValues[activeSlider.id]}
+              onChange={(val) => setSliderValue(activeSlider.id, val)}
+              min={activeSlider.min}
+              max={activeSlider.max}
+              step={activeSlider.step}
+              unit={activeSlider.unit}
+              formatValue={activeSlider.formatValue}
+              valueIcon={activeSlider.renderIcon?.(sliderValues[activeSlider.id])}
+            />
+          </Card>
         </Section>
 
-        <Section index="02" title="Selectors" count={SELECT_VARIANTS.length} hint="Click a row to open its dropdown — it repositions to stay on screen.">
-          {SELECT_VARIANTS.map((v) => (
-            <Card key={v.id} title={v.title} desc={v.desc} code={v.code}>
-              <SelectControl label={v.label} value={selects[v.id]} options={v.options} onChange={(val) => setSelect(v.id, val)} />
-            </Card>
-          ))}
+        <Section index="02" title="Selector" hint="Click the row to open its dropdown — it repositions to stay on screen." single>
+          <Card title="String options" desc="Plain strings are auto Title-Cased for display." code="options: ['stack', 'fan', 'grid']">
+            <SelectControl label="layout" value={selectValue} options={['stack', 'fan', 'grid']} onChange={setSelectValue} />
+          </Card>
         </Section>
 
-        <Section index="03" title="Toggles" count={TOGGLE_VARIANTS.length} hint="A boolean becomes an Off / On segmented control with a spring pill.">
-          {TOGGLE_VARIANTS.map((v) => (
-            <Card key={v.id} title={v.title} desc={v.desc} code={v.code}>
-              <Toggle label={v.label} checked={toggles[v.id]} onChange={(val) => setToggle(v.id, val)} shortcut={v.shortcut} />
-            </Card>
-          ))}
+        <Section index="03" title="Toggle" hint="A boolean becomes an Off / On segmented control with a spring pill." single>
+          <Card title="On state" desc="The active segment animates with a spring-driven pill." code="darkMode: true">
+            <Toggle label="darkMode" checked={toggleValue} onChange={setToggleValue} />
+          </Card>
         </Section>
 
-        <Section index="04" title="Text" count={TEXT_VARIANTS.length} hint="Inline text inputs — click to edit, with optional placeholder.">
-          {TEXT_VARIANTS.map((v) => (
-            <Card key={v.id} title={v.title} desc={v.desc} code={v.code}>
-              <TextControl label={v.label} value={texts[v.id]} onChange={(val) => setText(v.id, val)} placeholder={v.placeholder} />
-            </Card>
-          ))}
+        <Section index="04" title="Text" hint="Inline text input — click to edit, with optional placeholder." single>
+          <Card title="With value" desc="Non-hex strings auto-detect as text inputs." code="title: 'Japan'">
+            <TextControl label="title" value={textValue} onChange={setTextValue} />
+          </Card>
         </Section>
 
-        <Section index="05" title="Color" count={COLOR_VARIANTS.length} hint="Click the hex to type, or the swatch to open the native picker.">
-          {COLOR_VARIANTS.map((v) => (
-            <Card key={v.id} title={v.title} desc={v.desc} code={v.code}>
-              <ColorControl label={v.label} value={colors[v.id]} onChange={(val) => setColor(v.id, val)} />
-            </Card>
-          ))}
+        <Section index="05" title="Gallery" hint="Tap the trigger to reveal a masonry grid; scroll it (the edges rubber-band). Pick a tile to select it; tap the trigger again to close." single>
+          <Card title="Masonry picker" desc="A trigger expands a 3:4 surface of masonry items and stays lit while open. Scrolling overshoots and springs at the edges; images load through a shimmer skeleton then blur-fade in. Mixes real photos with custom gradient tiles." code="cover: { type: 'gallery', items, default }">
+            <GalleryControl label="cover" value={galleryValue} items={GALLERY_ITEMS} onChange={setGalleryValue} columns={3} />
+          </Card>
         </Section>
 
         <Section index="06" title="Actions & Structure" count={4} hint="Action buttons fire callbacks; folders group controls; visualizations preview motion.">
@@ -343,18 +330,18 @@ function ActionLog({ value }: { value: string }) {
   return <div className="lib-action-log">last action ▸ <span>{value}</span></div>;
 }
 
-function Section({ index, title, count, hint, children }: { index: string; title: string; count: number; hint: string; children: React.ReactNode }) {
+function Section({ index, title, count, hint, children, single, headExtra }: { index: string; title: string; count?: number; hint: string; children: React.ReactNode; single?: boolean; headExtra?: React.ReactNode }) {
   return (
     <section className="lib-section">
       <div className="lib-section-head">
         <div className="lib-section-headline">
           <span className="lib-section-index">{index}</span>
           <h2 className="lib-section-title">{title}</h2>
-          <span className="lib-section-count">{count}</span>
+          {headExtra ?? (count != null && <span className="lib-section-count">{count}</span>)}
         </div>
         <p className="lib-section-hint">{hint}</p>
       </div>
-      <div className="lib-grid">{children}</div>
+      <div className={single ? 'lib-single' : 'lib-grid'}>{children}</div>
     </section>
   );
 }
@@ -430,10 +417,18 @@ const CSS = `
 .lib-section-count { font-family: 'Geist Mono', monospace; font-size: 12px; font-weight: 500; color: var(--dial-text-tertiary); padding: 2px 8px; border-radius: 999px; background: var(--dial-surface); }
 .lib-section-hint { margin: 10px 0 0; font-size: 13.5px; color: var(--dial-text-tertiary); }
 
+/* Tab bar for the slider type switcher — mirrors the theme switch pill group */
+.lib-tabs { display: inline-flex; align-self: center; margin-left: auto; padding: 3px; gap: 2px; background: var(--dial-surface); border: 1px solid var(--dial-border); border-radius: 999px; }
+.lib-tab { font-family: inherit; font-size: 12px; font-weight: 600; padding: 5px 12px; border: none; border-radius: 999px; background: transparent; color: var(--dial-text-label); cursor: pointer; transition: background 0.18s, color 0.18s; }
+.lib-tab:hover { color: var(--dial-text-root); }
+.lib-tab[data-active="true"] { background: var(--dial-surface-active); color: var(--dial-text-root); }
+
 /* Surface the ShortcutsMenu trigger (normally inside a panel) on the section head */
 .lib-section-headline .dialkit-shortcuts-trigger { margin-left: auto; align-self: center; }
 
 .lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+/* Single-control sections show one card at a comfortable, contained width */
+.lib-single { max-width: 460px; }
 
 .lib-card { display: flex; flex-direction: column; background: var(--dial-glass-bg); border: 1px solid var(--dial-border); border-radius: 16px; padding: 14px; transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease; }
 .lib-card:hover { transform: translateY(-2px); border-color: var(--dial-border-hover); box-shadow: var(--dial-shadow); }
@@ -475,5 +470,5 @@ const CSS = `
   .lib-live { grid-template-columns: 1fr; }
   .lib-window { height: 480px; }
 }
-@media (max-width: 520px) { .lib-grid { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .lib-grid { grid-template-columns: 1fr; } .lib-tabs { margin-left: 0; } }
 `;

@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useDialKit } from 'dialkit';
+import { useDialKit, DialStore } from 'dialkit';
+
+const PANEL_NAME = 'Photo Stack';
 
 const PHOTOS = [
-  { id: 1, src: '/photos/one.avif', color: '#c41e3a' },
-  { id: 2, src: '/photos/two.avif', color: '#1a1a2e' },
-  { id: 3, src: '/photos/three.avif', color: '#e8d5b7' },
-  { id: 4, src: '/photos/four.avif', color: '#2d5a27' },
+  { id: 1, key: 'one', src: '/photos/one.avif', color: '#c41e3a' },
+  { id: 2, key: 'two', src: '/photos/two.avif', color: '#1a1a2e' },
+  { id: 3, key: 'three', src: '/photos/three.avif', color: '#e8d5b7' },
+  { id: 4, key: 'four', src: '/photos/four.avif', color: '#2d5a27' },
 ];
 
 export function PhotoStack() {
@@ -17,7 +19,7 @@ export function PhotoStack() {
     setStep((s) => s + 1);
   };
 
-  const params = useDialKit('Photo Stack', {
+  const params = useDialKit(PANEL_NAME, {
     title: 'Japan',
     subtitle: { type: 'text' as const, default: 'December 2025', placeholder: 'Enter subtitle...' },
     shadowTint: '#000000',
@@ -29,6 +31,13 @@ export function PhotoStack() {
         { value: 'landscape', label: 'Landscape' },
       ],
       default: 'portrait',
+    },
+    cover: {
+      type: 'gallery' as const,
+      default: 'one',
+      // aspect reserves each tile's space so the skeleton sizes correctly and the
+      // masonry doesn't reflow as photos load (all four are 750×1124).
+      items: PHOTOS.map((photo) => ({ id: photo.key, src: photo.src, alt: `Photo ${photo.key}`, aspect: 750 / 1124 })),
     },
     backPhoto: {
       _collapsed: true,
@@ -60,6 +69,35 @@ export function PhotoStack() {
       if (action === 'next') next();
     },
   });
+
+  // Resolve this panel's id so the gallery selection can be written back in sync.
+  const [panelId, setPanelId] = useState<string | null>(null);
+  useEffect(() => {
+    const sync = () => setPanelId(DialStore.getPanels().find((p) => p.name === PANEL_NAME)?.id ?? null);
+    sync();
+    return DialStore.subscribeGlobal(sync);
+  }, []);
+
+  // Keep the "cover" gallery and the photo on top of the stack as one selection, so
+  // the gallery's checkmark always matches the front photo — whichever drives it.
+
+  // Stack → cover: reflect the current front photo as the selected cover.
+  useEffect(() => {
+    if (!panelId) return;
+    const frontKey = PHOTOS[currentIndex].key;
+    if (params.cover !== frontKey) DialStore.updateValue(panelId, 'cover', frontKey);
+    // Only react to the stack moving (not the pick itself), so this can't clobber a
+    // fresh selection before `step` has advanced to it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex, panelId]);
+
+  // Cover → stack: advance forward to the picked photo. Forward-only keeps `step`
+  // monotonic so the entrance-animation keys (which use the lap count) stay stable.
+  useEffect(() => {
+    const coverIndex = PHOTOS.findIndex((photo) => photo.key === params.cover);
+    if (coverIndex < 0) return;
+    setStep((s) => s + ((coverIndex - (s % PHOTOS.length) + PHOTOS.length) % PHOTOS.length));
+  }, [params.cover]);
 
   const visibleCount = 2;
   const visiblePhotos = [];
