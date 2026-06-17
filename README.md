@@ -266,6 +266,35 @@ shadow: {
 }
 ```
 
+### Module
+
+A standalone component (advanced usage): a titled group whose header carries an **enable switch**. Use it for parameter blocks that turn on or off as a unit — synth layers, effect sends, optional feature groups — where a plain folder doesn't capture the "this whole block is on/off" state. The switch doubles as the expand control: when off, the body collapses away with a smooth height transition (so off modules don't take up space) and reveals again when on.
+
+```tsx
+import { Module, Slider } from 'dialkit';
+
+function ImpactControls({ layer, onChange }) {
+  return (
+    <Module
+      title="Impact"
+      enabled={layer.enabled}
+      onEnabledChange={(enabled) => onChange({ ...layer, enabled })}
+    >
+      <Slider label="Hardness" value={layer.hardness} min={0} max={1} onChange={...} />
+      <Slider label="Length" value={layer.length} min={0.5} max={10} onChange={...} />
+    </Module>
+  );
+}
+```
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | — | Module heading. |
+| `enabled` | `boolean` | — | Drives the header switch; when off, the body collapses away. |
+| `onEnabledChange` | `(enabled: boolean) => void` | — | Fired when the switch is toggled. |
+
+Available in all four frameworks. In Svelte the body is the default slot/snippet; in Vue, the default slot.
+
 DialKit also supports dynamic config updates. If your config shape, defaults, options, or labels change over time, the panel updates while preserving current values where paths still exist.
 
 Dynamic configs work with both inline objects and memoized configs — no special consumer action needed:

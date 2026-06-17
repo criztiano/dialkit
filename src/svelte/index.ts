@@ -16,6 +16,7 @@ export { default as ShortcutsMenu } from './components/ShortcutsMenu.svelte';
 export { default as Slider } from './components/Slider.svelte';
 export { default as Toggle } from './components/Toggle.svelte';
 export { default as Folder } from './components/Folder.svelte';
+export { default as Module } from './components/Module.svelte';
 export { default as ButtonGroup } from './components/ButtonGroup.svelte';
 export { default as SpringControl } from './components/SpringControl.svelte';
 export { default as SpringVisualization } from './components/SpringVisualization.svelte';
