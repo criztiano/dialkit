@@ -19,11 +19,15 @@ export { TextControl } from './components/TextControl';
 export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';
 export { GalleryControl } from './components/GalleryControl';
+export { FileControl } from './components/FileControl';
+export { SwatchControl } from './components/SwatchControl';
+export { ChipsControl } from './components/ChipsControl';
+export { ListControl } from './components/ListControl';
 export { PresetManager } from './components/PresetManager';
 export { ShortcutsMenu } from './components/ShortcutsMenu';
 
 // Store (for advanced usage)
-export { DialStore } from './store/DialStore';
+export { DialStore, parseListItemSchema, defaultListItemParams, normalizeListItems } from './store/DialStore';
 export type {
   SpringConfig,
   EasingConfig,
@@ -34,11 +38,23 @@ export type {
   TextConfig,
   GalleryConfig,
   GalleryItem,
+  FileConfig,
+  SwatchConfig,
+  SwatchOption,
+  ChipsConfig,
+  ChipOption,
+  ListConfig,
+  ListItemValue,
+  ListItemField,
+  ListItemType,
+  ListField,
+  ListFieldKind,
   ShortcutConfig,
   ShortcutMode,
   ShortcutInteraction,
   Preset,
   DialValue,
+  DialEvent,
   DialConfig,
   ResolvedValues,
   ControlMeta,

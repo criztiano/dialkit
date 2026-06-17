@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDialKit, DialStore } from 'dialkit';
+import type { ChipOption, ListItemType } from 'dialkit';
 
 const PANEL_NAME = 'Photo Stack';
 
@@ -11,9 +12,38 @@ const PHOTOS = [
   { id: 4, key: 'four', src: '/photos/four.avif', color: '#2d5a27' },
 ];
 
+// Demo data for the new Svelte-ported controls (swatch + chips).
+const PALETTES = [
+  { value: 'sunset', label: 'Sunset', colors: ['#ff5a3c', '#ffb38a', '#6366f1'] },
+  { value: 'forest', label: 'Forest', colors: ['#10b981', '#6ee7b7'] },
+  { value: 'ocean', label: 'Ocean', colors: ['#0ea5e9', '#67e8f9'] },
+  { value: 'mono', label: 'Mono', colors: ['#1a1a1a'] },
+];
+
+const INITIAL_LOOKS: ChipOption[] = [
+  { value: 'calm', label: 'Calm' },
+  { value: 'bold', label: 'Bold' },
+  { value: 'warm', label: 'Warm', removable: true },
+  { value: 'cool', label: 'Cool', removable: true },
+];
+
+// Effect-stack item types for the `list` control — each composes into the front
+// photo's live CSS filter (or a tint overlay), the way a layer stack would.
+const EFFECT_TYPES: Record<string, ListItemType> = {
+  blur: { label: 'Blur', schema: { radius: [4, 0, 24] } },
+  brightness: { label: 'Brightness', schema: { amount: [1.15, 0.2, 2, 0.05] } },
+  saturate: { label: 'Saturate', schema: { amount: [1.5, 0, 3, 0.05] } },
+  hueRotate: { label: 'Hue Rotate', schema: { angle: [0, 0, 360, 1] } },
+  tint: { label: 'Tint', schema: { color: '#ff5a3c', strength: [0.35, 0, 1, 0.01] } },
+};
+
 export function PhotoStack() {
   const [step, setStep] = useState(0);
   const currentIndex = step % PHOTOS.length;
+
+  // State for the new controls' events (file pick, chip removal).
+  const [textureUrl, setTextureUrl] = useState<string | null>(null);
+  const [looks, setLooks] = useState<ChipOption[]>(INITIAL_LOOKS);
 
   const next = () => {
     setStep((s) => s + 1);
@@ -31,6 +61,18 @@ export function PhotoStack() {
         { value: 'landscape', label: 'Landscape' },
       ],
       default: 'portrait',
+    },
+    texture: { type: 'file' as const, accept: 'image/*' },
+    palette: { type: 'swatch' as const, default: 'sunset', options: PALETTES },
+    look: { type: 'chips' as const, default: 'calm', options: looks },
+    effects: {
+      type: 'list' as const,
+      addLabel: 'Add effect',
+      itemTypes: EFFECT_TYPES,
+      default: [
+        { type: 'brightness', params: { amount: 1.1 } },
+        { type: 'saturate', params: { amount: 1.5 } },
+      ],
     },
     cover: {
       type: 'gallery' as const,
@@ -68,7 +110,23 @@ export function PhotoStack() {
     onAction: (action) => {
       if (action === 'next') next();
     },
+    onEvent: (_path, event) => {
+      if (event.kind === 'file' && event.files[0]) {
+        setTextureUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return URL.createObjectURL(event.files[0]);
+        });
+      } else if (event.kind === 'remove') {
+        setLooks((ls) => ls.filter((l) => l.value !== event.value));
+      }
+    },
   });
+
+  // Picking a cover springs the stack so that photo sits on top.
+  useEffect(() => {
+    const coverIndex = PHOTOS.findIndex((photo) => photo.key === params.cover);
+    if (coverIndex >= 0) setStep(coverIndex);
+  }, [params.cover]);
 
   // Resolve this panel's id so the gallery selection can be written back in sync.
   const [panelId, setPanelId] = useState<string | null>(null);
@@ -118,6 +176,28 @@ export function PhotoStack() {
   const textColor = params.darkMode ? '#ffffff' : '#1a1a1a';
   const subtextColor = params.darkMode ? '#666' : '#888';
 
+  // Visible wiring for the new controls so they can be tested at a glance.
+  const palette = PALETTES.find((p) => p.value === params.palette);
+  const titleAccent = palette?.colors[0] ?? textColor;
+  const activeLook = looks.find((l) => l.value === params.look)?.label ?? params.look;
+
+  // Compose the effect stack into a live CSS filter + tint overlays for the front photo.
+  const effects = params.effects;
+  const photoFilter = effects
+    .map((fx) => {
+      const p = fx.params;
+      switch (fx.type) {
+        case 'blur': return `blur(${p.radius}px)`;
+        case 'brightness': return `brightness(${p.amount})`;
+        case 'saturate': return `saturate(${p.amount})`;
+        case 'hueRotate': return `hue-rotate(${p.angle}deg)`;
+        default: return '';
+      }
+    })
+    .filter(Boolean)
+    .join(' ');
+  const tints = effects.filter((fx) => fx.type === 'tint');
+
   useEffect(() => {
     document.documentElement.style.background = bgColor;
     document.body.style.background = bgColor;
@@ -143,7 +223,7 @@ export function PhotoStack() {
         <h1 style={{
           fontSize: 48,
           fontWeight: 600,
-          color: textColor,
+          color: titleAccent,
           margin: 0,
           letterSpacing: '-0.02em',
           fontFamily: 'system-ui, -apple-system, sans-serif',
@@ -160,6 +240,32 @@ export function PhotoStack() {
         }}>
           {params.subtitle}
         </p>
+        {/* Readouts so the new controls are testable at a glance */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          marginTop: 12,
+          fontSize: 13,
+          color: subtextColor,
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+        }}>
+          <span>palette <strong style={{ color: titleAccent }}>{palette?.label ?? params.palette}</strong></span>
+          <span>·</span>
+          <span>look <strong style={{ color: textColor }}>{activeLook}</strong></span>
+          <span>·</span>
+          <span>fx <strong style={{ color: textColor }}>{effects.length}</strong></span>
+          {textureUrl && (
+            <>
+              <span>·</span>
+              <img
+                src={textureUrl}
+                alt="texture"
+                style={{ width: 28, height: 28, objectFit: 'cover', borderRadius: 6, border: `1px solid ${subtextColor}` }}
+              />
+            </>
+          )}
+        </div>
       </div>
 
       <div style={{
@@ -284,8 +390,21 @@ export function PhotoStack() {
                     <img
                       src={photo.src}
                       alt=""
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', filter: isTop && photoFilter ? photoFilter : undefined }}
                     />
+                    {isTop && tints.map((fx, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          background: String(fx.params.color),
+                          opacity: Number(fx.params.strength),
+                          mixBlendMode: 'color',
+                          pointerEvents: 'none',
+                        }}
+                      />
+                    ))}
                     <motion.div
                       initial={false}
                       animate={{ opacity: overlayOpacity }}
