@@ -39,7 +39,25 @@ export type TextConfig = {
   placeholder?: string;
 };
 
-export type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | TextConfig;
+export type GalleryItem = {
+  id: string;
+  src?: string;
+  alt?: string;
+  /** Width / height hint used to size custom (non-image) content in the masonry. */
+  aspect?: number;
+  // reason: a framework-specific node (ReactNode, etc.) — the store carries it
+  // through to the renderer but never invokes it, so it stays framework-agnostic.
+  render?: () => unknown;
+};
+
+export type GalleryConfig = {
+  type: 'gallery';
+  items: GalleryItem[];
+  default?: string;
+  columns?: number;
+};
+
+export type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | TextConfig | GalleryConfig;
 
 export type DialConfig = {
   [key: string]: DialValue | [number, number, number, number?] | DialConfig;
@@ -58,9 +76,11 @@ export type ResolvedValues<T extends DialConfig> = {
             ? string
             : T[K] extends TextConfig
               ? string
-              : T[K] extends DialConfig
-                ? ResolvedValues<T[K]>
-                : T[K];
+              : T[K] extends GalleryConfig
+                ? string
+                : T[K] extends DialConfig
+                  ? ResolvedValues<T[K]>
+                  : T[K];
 };
 
 export type ShortcutMode = 'fine' | 'normal' | 'coarse';
@@ -74,7 +94,7 @@ export type ShortcutConfig = {
 };
 
 export type ControlMeta = {
-  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'text';
+  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'text' | 'gallery';
   path: string;
   label: string;
   min?: number;
@@ -84,6 +104,8 @@ export type ControlMeta = {
   defaultOpen?: boolean;
   options?: (string | { value: string; label: string })[];
   placeholder?: string;
+  items?: GalleryItem[];
+  columns?: number;
   shortcut?: ShortcutConfig;
 };
 
@@ -483,6 +505,8 @@ class DialStoreClass {
         controls.push({ type: 'color', path, label });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: 'text', path, label, placeholder: value.placeholder });
+      } else if (this.isGalleryConfig(value)) {
+        controls.push({ type: 'gallery', path, label, items: value.items, columns: value.columns });
       } else if (typeof value === 'string') {
         // Auto-detect: hex color vs text
         if (this.isHexColor(value)) {
@@ -532,6 +556,9 @@ class DialStoreClass {
         values[path] = value.default ?? '#000000';
       } else if (this.isTextConfig(value)) {
         values[path] = value.default ?? '';
+      } else if (this.isGalleryConfig(value)) {
+        // Resolve to the selected item id — default, else the first item.
+        values[path] = value.default ?? value.items[0]?.id ?? '';
       } else if (typeof value === 'object' && value !== null) {
         Object.assign(values, this.flattenValues(value as DialConfig, path));
       }
@@ -593,6 +620,17 @@ class DialStoreClass {
       value !== null &&
       'type' in value &&
       (value as TextConfig).type === 'text'
+    );
+  }
+
+  private isGalleryConfig(value: unknown): value is GalleryConfig {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'type' in value &&
+      (value as GalleryConfig).type === 'gallery' &&
+      'items' in value &&
+      Array.isArray((value as GalleryConfig).items)
     );
   }
 
@@ -670,6 +708,13 @@ class DialStoreClass {
       case 'color':
       case 'text':
         return typeof existingValue === 'string' ? existingValue : defaultValue;
+      case 'gallery': {
+        if (typeof existingValue !== 'string') {
+          return defaultValue;
+        }
+        const validIds = new Set((control.items ?? []).map((item) => item.id));
+        return validIds.has(existingValue) ? existingValue : defaultValue;
+      }
       case 'transition':
         if (this.isSpringConfig(defaultValue)) {
           return this.isSpringConfig(existingValue) ? existingValue : defaultValue;

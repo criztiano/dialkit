@@ -18,6 +18,7 @@ export { EasingVisualization } from './components/EasingVisualization';
 export { TextControl } from './components/TextControl';
 export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';
+export { GalleryControl } from './components/GalleryControl';
 export { PresetManager } from './components/PresetManager';
 export { ShortcutsMenu } from './components/ShortcutsMenu';
 
@@ -31,6 +32,8 @@ export type {
   SelectConfig,
   ColorConfig,
   TextConfig,
+  GalleryConfig,
+  GalleryItem,
   ShortcutConfig,
   ShortcutMode,
   ShortcutInteraction,

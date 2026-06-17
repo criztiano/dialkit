@@ -12,6 +12,7 @@ import { TransitionControl } from './TransitionControl';
 import { TextControl } from './TextControl';
 import { SelectControl } from './SelectControl';
 import { ColorControl } from './ColorControl';
+import { GalleryControl } from './GalleryControl';
 import { PresetManager } from './PresetManager';
 
 interface PanelProps {
@@ -147,6 +148,18 @@ Apply these values as the new defaults in the useDialKit call.`;
             key={control.path}
             label={control.label}
             value={value as string}
+            onChange={(v) => DialStore.updateValue(panel.id, control.path, v)}
+          />
+        );
+
+      case 'gallery':
+        return (
+          <GalleryControl
+            key={control.path}
+            label={control.label}
+            value={value as string}
+            items={control.items ?? []}
+            columns={control.columns}
             onChange={(v) => DialStore.updateValue(panel.id, control.path, v)}
           />
         );

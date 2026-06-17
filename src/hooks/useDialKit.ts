@@ -1,5 +1,5 @@
 import { useEffect, useId, useSyncExternalStore, useRef } from 'react';
-import { DialStore, DialConfig, DialValue, ResolvedValues, SpringConfig, EasingConfig, SelectConfig, ColorConfig, TextConfig, ActionConfig, ShortcutConfig } from '../store/DialStore';
+import { DialStore, DialConfig, DialValue, ResolvedValues, SpringConfig, EasingConfig, SelectConfig, ColorConfig, TextConfig, GalleryConfig, ActionConfig, ShortcutConfig } from '../store/DialStore';
 
 export interface UseDialOptions {
   onAction?: (action: string) => void;
@@ -88,6 +88,10 @@ function buildResolvedValues(
     } else if (isTextConfig(configValue)) {
       // Text config resolves to string value
       result[key] = flatValues[path] ?? configValue.default ?? '';
+    } else if (isGalleryConfig(configValue)) {
+      // Gallery config resolves to the selected item id
+      const defaultValue = configValue.default ?? configValue.items[0]?.id ?? '';
+      result[key] = flatValues[path] ?? defaultValue;
     } else if (typeof configValue === 'object' && configValue !== null) {
       // Nested object
       result[key] = buildResolvedValues(configValue as DialConfig, flatValues, path);
@@ -123,6 +127,10 @@ function isColorConfig(value: unknown): value is ColorConfig {
 
 function isTextConfig(value: unknown): value is TextConfig {
   return hasType(value, 'text');
+}
+
+function isGalleryConfig(value: unknown): value is GalleryConfig {
+  return hasType(value, 'gallery') && 'items' in (value as object) && Array.isArray((value as GalleryConfig).items);
 }
 
 function getFirstOptionValue(options: (string | { value: string; label: string })[]): string {
