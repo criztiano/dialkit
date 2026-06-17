@@ -1,8 +1,7 @@
 # Dependencies
 node_modules/
 
-# Build output (regenerated on install)
-dist/
+# Build output — dist/ is committed so `github:` installs work without a build step
 .svelte-kit/
 
 # Generated artifacts from svelte-package

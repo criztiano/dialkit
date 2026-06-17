@@ -1,17 +1,11 @@
 // Core API
 export { createDialKit } from './createDialKit.svelte';
-export type { CreateDialOptions, DialKitValues } from './createDialKit.svelte';
-
 // Root component
 export { default as DialRoot } from './components/DialRoot.svelte';
-export type { DialPosition, DialMode, DialTheme } from './components/DialRoot.svelte';
-
 // Shortcut components
 export { default as ShortcutListener } from './components/ShortcutListener.svelte';
 export { SHORTCUT_CTX } from './components/ShortcutListener.svelte';
-export type { ShortcutContextValue } from './components/ShortcutListener.svelte';
 export { default as ShortcutsMenu } from './components/ShortcutsMenu.svelte';
-
 // Component exports
 export { default as Slider } from './components/Slider.svelte';
 export { default as Toggle } from './components/Toggle.svelte';
@@ -31,34 +25,5 @@ export { default as SwatchControl } from './components/SwatchControl.svelte';
 export { default as ChipsControl } from './components/ChipsControl.svelte';
 export { default as ListControl } from './components/ListControl.svelte';
 export { default as PresetManager } from './components/PresetManager.svelte';
-
 // Store exports (via dialkit/store subpath — svelte-package doesn't bundle, so relative paths to src/store would break in dist)
 export { DialStore, parseListItemSchema, defaultListItemParams, normalizeListItems } from 'dialkit/store';
-export type {
-  SpringConfig,
-  EasingConfig,
-  TransitionConfig,
-  ActionConfig,
-  SelectConfig,
-  ColorConfig,
-  TextConfig,
-  FileConfig,
-  SwatchConfig,
-  SwatchOption,
-  ChipsConfig,
-  ChipOption,
-  ListConfig,
-  ListItemValue,
-  ListItemField,
-  ListItemType,
-  ListField,
-  ListFieldKind,
-  ShortcutConfig,
-  Preset,
-  DialValue,
-  DialEvent,
-  DialConfig,
-  ResolvedValues,
-  ControlMeta,
-  PanelConfig,
-} from 'dialkit/store';
