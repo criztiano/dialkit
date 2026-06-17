@@ -13,7 +13,7 @@ export { ShortcutsMenu } from './components/ShortcutsMenu';
 export { Slider } from './components/Slider';
 export { Toggle } from './components/Toggle';
 export { Folder } from './components/Folder';
-export { Section } from './components/Section';
+export { Module } from './components/Module';
 export { ButtonGroup } from './components/ButtonGroup';
 export { SpringControl } from './components/SpringControl';
 export { SpringVisualization } from './components/SpringVisualization';

@@ -245,35 +245,34 @@ shadow: {
 }
 ```
 
-### Section
+### Module
 
-A standalone component (advanced usage): a titled, collapsible group whose header carries an **enable switch**. Use it for parameter blocks that can be turned on or off as a unit — synth layers, effect sends, optional feature groups — where a plain folder doesn't capture the "this whole block is on/off" state.
+A standalone component (advanced usage): a titled group whose header carries an **enable switch**. Use it for parameter blocks that turn on or off as a unit — synth layers, effect sends, optional feature groups — where a plain folder doesn't capture the "this whole block is on/off" state. When disabled, the body collapses away with a smooth height transition (so off modules don't take up space); a right-aligned chevron also collapses it manually while enabled.
 
 ```tsx
-import { Section, Slider } from 'dialkit';
+import { Module, Slider } from 'dialkit';
 
 function ImpactControls({ layer, onChange }) {
   return (
-    <Section
+    <Module
       title="Impact"
       enabled={layer.enabled}
       onEnabledChange={(enabled) => onChange({ ...layer, enabled })}
     >
       <Slider label="Hardness" value={layer.hardness} min={0} max={1} onChange={...} />
       <Slider label="Length" value={layer.length} min={0.5} max={10} onChange={...} />
-    </Section>
+    </Module>
   );
 }
 ```
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `title` | `string` | — | Section heading. |
-| `enabled` | `boolean` | — | Drives the header switch and the body dim. |
+| `title` | `string` | — | Module heading. |
+| `enabled` | `boolean` | — | Drives the header switch; when off, the body collapses away. |
 | `onEnabledChange` | `(enabled: boolean) => void` | — | Fired when the switch is toggled. |
 | `defaultOpen` | `boolean` | `true` | Start expanded. |
-| `collapsible` | `boolean` | `true` | Show the chevron and allow collapsing. |
-| `dimWhenDisabled` | `boolean` | `true` | Dim the body while disabled. The body stays **interactive** so a muted layer can still be tuned. |
+| `collapsible` | `boolean` | `true` | Show the right-aligned chevron and allow manual collapse. |
 
 Available in all four frameworks. In Svelte the body is the default slot/snippet; in Vue, the default slot.
 

@@ -290,38 +290,29 @@
 
 /* Content spacing handled by folder-inner gap */
 
-/* Section — collapsible group with a header enable switch */
-.dialkit-section {
+/* Module — group with a header enable switch; body collapses when off */
+.dialkit-module {
   border-top: 1px solid var(--dial-surface-subtle);
   border-bottom: 1px solid var(--dial-surface-subtle);
   margin: 4px 0;
 }
 
-.dialkit-section + .dialkit-section {
+.dialkit-module + .dialkit-module {
   margin-top: 0;
   border-top: none;
 }
 
-.dialkit-section-header {
+.dialkit-module-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   padding: 8px 0;
   user-select: none;
 }
 
-.dialkit-section-title-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.dialkit-module-title {
   flex: 1;
   min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-.dialkit-section-title {
   font-size: 13px;
   font-weight: 600;
   color: var(--dial-text-section);
@@ -330,7 +321,14 @@
   text-overflow: ellipsis;
 }
 
-.dialkit-section-icon {
+.dialkit-module-switch {
+  flex-shrink: 0;
+  width: 84px;
+}
+
+/* Chevron sits at the far right of the header (after the switch) and points
+   down when the body is shown, rotating up when it's collapsed. */
+.dialkit-module-icon {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
@@ -339,40 +337,32 @@
   transition: transform 0.25s ease;
 }
 
-.dialkit-section-icon-collapsed {
+.dialkit-module-icon-collapsed {
   transform: rotate(-90deg);
 }
 
-.dialkit-section-switch {
-  flex-shrink: 0;
-  width: 84px;
+/* Smooth height collapse via the grid-rows 0fr↔1fr trick — animates the
+   real content height with no JS measurement, body stays in the DOM. */
+.dialkit-module-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.25s ease;
 }
 
-.dialkit-section-content {
-  animation: dialkit-section-fade 0.18s ease;
+.dialkit-module-collapse[data-open='true'] {
+  grid-template-rows: 1fr;
 }
 
-.dialkit-section-disabled {
-  opacity: 0.45;
-  transition: opacity 0.15s;
+.dialkit-module-collapse-clip {
+  overflow: hidden;
+  min-height: 0;
 }
 
-.dialkit-section-inner {
+.dialkit-module-inner {
   display: flex;
   flex-direction: column;
   gap: 6px;
   padding-bottom: 10px;
-}
-
-@keyframes dialkit-section-fade {
-  from {
-    opacity: 0;
-    transform: translateY(-2px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 
 

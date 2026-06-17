@@ -9,7 +9,7 @@ import {
   GalleryControl,
   ButtonGroup,
   Folder,
-  Section as DialSection,
+  Module as DialModule,
   SpringControl,
   SpringVisualization,
   TransitionControl,
@@ -104,7 +104,7 @@ export function Library() {
   const [folderBlur, setFolderBlur] = useState(14);
   const [folderShadow, setFolderShadow] = useState(true);
 
-  // Standalone Section demo state (enable switch in the header)
+  // Standalone Module demo state (enable switch in the header)
   const [reverbEnabled, setReverbEnabled] = useState(true);
   const [reverbMix, setReverbMix] = useState(35);
   const [reverbDecay, setReverbDecay] = useState(2.4);
@@ -272,11 +272,11 @@ export function Library() {
               <Toggle label="enabled" checked={folderShadow} onChange={setFolderShadow} />
             </Folder>
           </Card>
-          <Card title="Section" desc="A collapsible group whose header carries an enable switch. The body dims when off but stays interactive, so a muted block is still tunable." code="<Section enabled onEnabledChange />">
-            <DialSection title="reverb" enabled={reverbEnabled} onEnabledChange={setReverbEnabled}>
+          <Card title="Module" desc="A group whose header carries an enable switch. Turn it off and the body collapses away with a smooth height transition; the chevron also collapses it manually." code="<Module enabled onEnabledChange />">
+            <DialModule title="reverb" enabled={reverbEnabled} onEnabledChange={setReverbEnabled}>
               <Slider label="mix" value={reverbMix} onChange={setReverbMix} min={0} max={100} step={1} unit="%" />
               <Slider label="decay" value={reverbDecay} onChange={setReverbDecay} min={0.1} max={10} step={0.1} formatValue={(v) => `${v.toFixed(1)}s`} />
-            </DialSection>
+            </DialModule>
           </Card>
           <Card title="Easing curve" desc="EasingVisualization plots a cubic-bézier curve, overshoot included." code="{ type: 'easing', ease: […] }">
             <div className="lib-viz"><EasingVisualization easing={easingPreview} /></div>
