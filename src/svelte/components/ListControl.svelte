@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { ICON_CHEVRON, ICON_PLUS, ICON_TRASH } from '../../icons';
+  import { ICON_GRIP, ICON_PLUS, ICON_TRASH } from '../../icons';
   import { parseListItemSchema, defaultListItemParams } from 'dialkit/store';
   import type { ListItemValue, ListItemType, DialEvent } from 'dialkit/store';
+  import Folder from './Folder.svelte';
   import Slider from './Slider.svelte';
   import Toggle from './Toggle.svelte';
   import SelectControl from './SelectControl.svelte';
@@ -20,6 +21,12 @@
 
   let picking = $state(false);
 
+  // Drag-to-reorder. `armed` is set on handle mousedown and checked at dragstart
+  // so dragging a slider never starts a reorder.
+  let armed = -1;
+  let dragIndex = $state<number | null>(null);
+  let over = $state<{ index: number; after: boolean } | null>(null);
+
   const typeEntries = $derived(Object.entries(itemTypes) as [string, ListItemType][]);
   const atCapacity = $derived(maxItems != null && value.length >= maxItems);
 
@@ -35,7 +42,7 @@
   }
 
   function moveItem(from: number, to: number) {
-    if (to < 0 || to >= value.length) return;
+    if (from === to || to < 0 || to >= value.length) return;
     const next = value.slice();
     const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved);
@@ -56,44 +63,73 @@
     if (typeEntries.length === 1) addItem(typeEntries[0][0]);
     else picking = !picking;
   }
+
+  function onDragStart(e: DragEvent, index: number) {
+    if (armed !== index) { e.preventDefault(); return; }
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(index));
+    }
+    dragIndex = index;
+  }
+
+  function onDragOver(e: DragEvent, index: number) {
+    if (dragIndex === null) return;
+    e.preventDefault();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const after = e.clientY > rect.top + rect.height / 2;
+    if (!(over?.index === index && over.after === after)) over = { index, after };
+  }
+
+  function onDrop() {
+    if (dragIndex !== null && over !== null) {
+      let to = over.after ? over.index + 1 : over.index;
+      if (dragIndex < to) to -= 1;
+      moveItem(dragIndex, to);
+    }
+    armed = -1;
+    dragIndex = null;
+    over = null;
+  }
+
+  function onDragEnd() {
+    armed = -1;
+    dragIndex = null;
+    over = null;
+  }
 </script>
 
-<div class="dialkit-list">
-  {#if label}
-    <span class="dialkit-list-label">{label}</span>
-  {/if}
+<svelte:window onmouseup={() => (armed = -1)} />
 
-  <div class="dialkit-list-items">
-    <!-- Index keys are safe here: motion-free, and every sub-control is fully
-         prop-controlled, so rows always reflect the correct item. -->
+<Folder title={label} defaultOpen>
+  <div class="dialkit-list-items" ondragover={(e) => e.preventDefault()} ondrop={onDrop} role="list">
     {#each value as item, index (index)}
       {@const type = itemTypes[item.type]}
       {#if type}
         {@const fields = parseListItemSchema(type.schema)}
-        <div class="dialkit-list-item">
+        <div
+          class="dialkit-list-item"
+          draggable="true"
+          role="listitem"
+          data-dragging={dragIndex === index ? 'true' : undefined}
+          data-over={over?.index === index ? (over.after ? 'after' : 'before') : undefined}
+          ondragstart={(e) => onDragStart(e, index)}
+          ondragover={(e) => onDragOver(e, index)}
+          ondragend={onDragEnd}
+        >
           <div class="dialkit-list-item-head">
             <span class="dialkit-list-item-title">{type.label}</span>
             <div class="dialkit-list-item-actions">
               <button
                 type="button"
-                class="dialkit-list-icon-btn"
-                onclick={() => moveItem(index, index - 1)}
-                disabled={index === 0}
-                aria-label="Move up"
+                class="dialkit-list-drag"
+                aria-label="Drag to reorder"
+                onmousedown={() => (armed = index)}
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(180deg)">
-                  <path d={ICON_CHEVRON} />
-                </svg>
-              </button>
-              <button
-                type="button"
-                class="dialkit-list-icon-btn"
-                onclick={() => moveItem(index, index + 1)}
-                disabled={index === value.length - 1}
-                aria-label="Move down"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d={ICON_CHEVRON} />
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  {#each ICON_GRIP as c}
+                    <circle cx={c.cx} cy={c.cy} r="1.5" />
+                  {/each}
                 </svg>
               </button>
               <button
@@ -188,4 +224,4 @@
       {/if}
     </div>
   {/if}
-</div>
+</Folder>

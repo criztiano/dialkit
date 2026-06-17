@@ -1061,19 +1061,6 @@
 }
 
 /* List Control — a stack of reorderable item rows, each with its own sub-controls */
-.dialkit-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.dialkit-list-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--dial-text-label);
-  padding-left: 2px;
-}
-
 .dialkit-list-items {
   display: flex;
   flex-direction: column;
@@ -1081,14 +1068,33 @@
 }
 
 .dialkit-list-item {
+  position: relative;
   background: var(--dial-surface);
   border-radius: 10px;
   padding: 8px 8px 10px;
-  box-shadow: inset 0 0 0 1px var(--dial-border);
   /* Pure-CSS entrance — plays once per new row, no rAF dependency (robust where
      JS animation loops can stall, e.g. headless/background tabs). */
   animation: dialkit-list-in 0.2s ease;
 }
+
+.dialkit-list-item[data-dragging="true"] {
+  opacity: 0.4;
+}
+
+/* Drop indicator — a line on the edge where the dragged row will land */
+.dialkit-list-item[data-over="before"]::before,
+.dialkit-list-item[data-over="after"]::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--dial-text-section);
+}
+
+.dialkit-list-item[data-over="before"]::before { top: -4px; }
+.dialkit-list-item[data-over="after"]::after { bottom: -4px; }
 
 @keyframes dialkit-list-in {
   from { opacity: 0; transform: translateY(-4px); }
@@ -1135,12 +1141,6 @@
   color: var(--dial-text-root);
 }
 
-.dialkit-list-icon-btn:disabled {
-  opacity: 0.25;
-  cursor: default;
-  pointer-events: none;
-}
-
 .dialkit-list-icon-btn svg {
   width: 13px;
   height: 13px;
@@ -1151,13 +1151,41 @@
   height: 14px;
 }
 
+/* Drag handle */
+.dialkit-list-drag {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--dial-text-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: grab;
+  touch-action: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.dialkit-list-drag:hover {
+  background: var(--dial-surface-hover);
+  color: var(--dial-text-label);
+}
+
+.dialkit-list-drag:active {
+  cursor: grabbing;
+}
+
+.dialkit-list-drag svg {
+  width: 15px;
+  height: 15px;
+}
+
 .dialkit-list-item-fields {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--dial-surface-subtle);
+  margin-top: 6px;
 }
 
 .dialkit-list-empty {

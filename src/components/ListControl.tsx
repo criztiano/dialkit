@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
-import { ICON_CHEVRON, ICON_PLUS, ICON_TRASH } from '../icons';
+import { useRef, useState, useEffect } from 'react';
+import { ICON_GRIP, ICON_PLUS, ICON_TRASH } from '../icons';
+import { Folder } from './Folder';
 import { Slider } from './Slider';
 import { Toggle } from './Toggle';
 import { SelectControl } from './SelectControl';
@@ -48,16 +49,29 @@ function FieldControl({ field, value, onChange }: { field: ListField; value: Sca
 export function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, onEvent }: ListControlProps) {
   const idCounter = useRef(0);
   const mkId = () => `li-${idCounter.current++}`;
-  // One stable key per row so reorder/remove animate (and React reconciles) by
-  // identity, not index. Handlers keep `ids` in lockstep with `value`.
+  // One stable key per row so the right node animates/reconciles on remove and
+  // reorder. Handlers keep `ids` in lockstep with `value`.
   const [ids, setIds] = useState<string[]>(() => value.map(mkId));
   const [picking, setPicking] = useState(false);
+
+  // Drag-to-reorder. The row is only draggable once a drag starts from the
+  // handle (armedRef), so dragging a slider never reorders the list.
+  const armedRef = useRef<number | null>(null);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [over, setOver] = useState<{ index: number; after: boolean } | null>(null);
 
   // Reconcile only when the array length changes outside our handlers (preset
   // load / reset). The guard converges, so React's adjust-state-on-render is safe.
   if (ids.length !== value.length) {
     setIds((cur) => value.map((_, i) => cur[i] ?? mkId()));
   }
+
+  // A press on the handle that doesn't become a drag must disarm the row.
+  useEffect(() => {
+    const disarm = () => { armedRef.current = null; };
+    window.addEventListener('mouseup', disarm);
+    return () => window.removeEventListener('mouseup', disarm);
+  }, []);
 
   const typeEntries = Object.entries(itemTypes);
   const atCapacity = maxItems != null && value.length >= maxItems;
@@ -77,7 +91,7 @@ export function ListControl({ label, value, itemTypes, addLabel, maxItems, onCha
   };
 
   const moveItem = (from: number, to: number) => {
-    if (to < 0 || to >= value.length) return;
+    if (from === to || to < 0 || to >= value.length) return;
     const reorder = <T,>(arr: T[]): T[] => {
       const out = arr.slice();
       const [moved] = out.splice(from, 1);
@@ -99,66 +113,84 @@ export function ListControl({ label, value, itemTypes, addLabel, maxItems, onCha
     else setPicking((p) => !p);
   };
 
-  return (
-    <div className="dialkit-list">
-      {label && <span className="dialkit-list-label">{label}</span>}
+  const onDrop = () => {
+    if (dragIndex !== null && over !== null) {
+      let to = over.after ? over.index + 1 : over.index;
+      if (dragIndex < to) to -= 1; // account for the dragged row being removed first
+      moveItem(dragIndex, to);
+    }
+    armedRef.current = null;
+    setDragIndex(null);
+    setOver(null);
+  };
 
-      <div className="dialkit-list-items">
+  return (
+    <Folder title={label} defaultOpen>
+      <div className="dialkit-list-items" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
         {value.map((item, index) => {
           const type = itemTypes[item.type];
           if (!type) return null;
           const fields = parseListItemSchema(type.schema);
+          const overState = over?.index === index ? (over.after ? 'after' : 'before') : undefined;
           return (
-            <div key={ids[index]} className="dialkit-list-item">
-                <div className="dialkit-list-item-head">
-                  <span className="dialkit-list-item-title">{type.label}</span>
-                  <div className="dialkit-list-item-actions">
-                    <button
-                      type="button"
-                      className="dialkit-list-icon-btn"
-                      onClick={() => moveItem(index, index - 1)}
-                      disabled={index === 0}
-                      aria-label="Move up"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'rotate(180deg)' }}>
-                        <path d={ICON_CHEVRON} />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      className="dialkit-list-icon-btn"
-                      onClick={() => moveItem(index, index + 1)}
-                      disabled={index === value.length - 1}
-                      aria-label="Move down"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d={ICON_CHEVRON} />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      className="dialkit-list-icon-btn dialkit-list-remove"
-                      onClick={() => removeItem(index)}
-                      aria-label={`Remove ${type.label}`}
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                        {ICON_TRASH.map((d, i) => <path key={i} d={d} />)}
-                      </svg>
-                    </button>
-                  </div>
+            <div
+              key={ids[index]}
+              className="dialkit-list-item"
+              draggable
+              data-dragging={dragIndex === index ? 'true' : undefined}
+              data-over={overState}
+              onDragStart={(e) => {
+                if (armedRef.current !== index) { e.preventDefault(); return; }
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', String(index)); // Firefox needs payload
+                setDragIndex(index);
+              }}
+              onDragOver={(e) => {
+                if (dragIndex === null) return;
+                e.preventDefault();
+                const rect = e.currentTarget.getBoundingClientRect();
+                const after = e.clientY > rect.top + rect.height / 2;
+                setOver((o) => (o?.index === index && o.after === after ? o : { index, after }));
+              }}
+              onDragEnd={() => { armedRef.current = null; setDragIndex(null); setOver(null); }}
+            >
+              <div className="dialkit-list-item-head">
+                <span className="dialkit-list-item-title">{type.label}</span>
+                <div className="dialkit-list-item-actions">
+                  <button
+                    type="button"
+                    className="dialkit-list-drag"
+                    aria-label="Drag to reorder"
+                    onMouseDown={() => { armedRef.current = index; }}
+                  >
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      {ICON_GRIP.map((c, i) => <circle key={i} cx={c.cx} cy={c.cy} r="1.5" />)}
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    className="dialkit-list-icon-btn dialkit-list-remove"
+                    onClick={() => removeItem(index)}
+                    aria-label={`Remove ${type.label}`}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      {ICON_TRASH.map((d, i) => <path key={i} d={d} />)}
+                    </svg>
+                  </button>
                 </div>
-                {fields.length > 0 && (
-                  <div className="dialkit-list-item-fields">
-                    {fields.map((field) => (
-                      <FieldControl
-                        key={field.key}
-                        field={field}
-                        value={item.params[field.key]}
-                        onChange={(v) => setParam(index, field.key, v)}
-                      />
-                    ))}
-                  </div>
-                )}
+              </div>
+              {fields.length > 0 && (
+                <div className="dialkit-list-item-fields">
+                  {fields.map((field) => (
+                    <FieldControl
+                      key={field.key}
+                      field={field}
+                      value={item.params[field.key]}
+                      onChange={(v) => setParam(index, field.key, v)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
@@ -193,6 +225,6 @@ export function ListControl({ label, value, itemTypes, addLabel, maxItems, onCha
           )}
         </div>
       )}
-    </div>
+    </Folder>
   );
 }

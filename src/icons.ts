@@ -8,6 +8,12 @@ export const ICON_CLOSE = 'M6 6L18 18M6 18L18 6';
 
 export const ICON_PLUS = 'M12 5V19M5 12H19';
 
+// Drag handle — two columns of dots (rendered as <circle> elements).
+export const ICON_GRIP = [
+  { cx: '9', cy: '6' }, { cx: '9', cy: '12' }, { cx: '9', cy: '18' },
+  { cx: '15', cy: '6' }, { cx: '15', cy: '12' }, { cx: '15', cy: '18' },
+];
+
 export const ICON_FILE = 'M13 3H7C5.89543 3 5 3.89543 5 5V19C5 20.1046 5.89543 21 7 21H17C18.1046 21 19 20.1046 19 19V9M13 3L19 9M13 3V8C13 8.55228 13.4477 9 14 9H19';
 
 export const ICON_CLIPBOARD = {
