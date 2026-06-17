@@ -43,6 +43,8 @@ type SliderTab = {
   unit?: string;
   formatValue?: (value: number) => string;
   renderIcon?: (value: number) => ReactNode;
+  origin?: number;
+  bipolar?: boolean;
 };
 
 const SLIDER_TABS: SliderTab[] = [
@@ -50,6 +52,7 @@ const SLIDER_TABS: SliderTab[] = [
   { id: 'unit', tab: 'Unit', title: 'Unit suffix', desc: 'A `unit` string is appended after the value as a muted suffix.', code: "opacity: [70, 0, 100], unit: '%'", label: 'opacity', value: 70, min: 0, max: 100, step: 1, unit: '%' },
   { id: 'custom', tab: 'Custom', title: 'Custom format', desc: 'A `formatValue` callback owns the full label — here a multiplier.', code: "formatValue: (v) => `${v.toFixed(1)}×`", label: 'zoom', value: 1.5, min: 0.5, max: 4, step: 0.1, formatValue: (v) => `${v.toFixed(1)}×` },
   { id: 'icon', tab: 'Icon', title: 'Icon value', desc: 'A `valueIcon` node replaces the text — it reacts to the value and is not editable.', code: 'valueIcon: <VolumeGlyph value={v} />', label: 'volume', value: 65, min: 0, max: 100, step: 1, renderIcon: volumeIcon },
+  { id: 'bipolar', tab: 'Bipolar', title: 'Bipolar / origin', desc: 'A `bipolar` (or `origin`) slider fills out from the center in either direction, with a soft, escapable detent at the origin. Drag past it to release.', code: 'min: -1, max: 1, bipolar: true', label: 'amount', value: 0, min: -1, max: 1, step: 0.01, bipolar: true, formatValue: (v) => `${v > 0 ? '+' : ''}${v.toFixed(2)}` },
 ];
 
 // ── Gallery items: custom gradient tiles with varied aspects for a rich masonry ──
@@ -219,6 +222,8 @@ export function Library() {
               unit={activeSlider.unit}
               formatValue={activeSlider.formatValue}
               valueIcon={activeSlider.renderIcon?.(sliderValues[activeSlider.id])}
+              origin={activeSlider.origin}
+              bipolar={activeSlider.bipolar}
             />
           </Card>
         </Section>
