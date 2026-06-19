@@ -62,7 +62,7 @@ Apply these values as the new defaults in the useDialKit call.`;
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const renderControl = (control: ControlMeta) => {
+  const renderControlNode = (control: ControlMeta) => {
     const value = values[control.path];
 
     switch (control.type) {
@@ -232,6 +232,18 @@ Apply these values as the new defaults in the useDialKit call.`;
       default:
         return null;
     }
+  };
+
+  // Wrap leaf controls with a native tooltip showing their config path — a quick
+  // dev reference for which key a control maps to. Folders manage their own rows.
+  const renderControl = (control: ControlMeta) => {
+    const node = renderControlNode(control);
+    if (control.type === 'folder') return node;
+    return (
+      <div key={control.path} className="dialkit-control-tip" title={control.path}>
+        {node}
+      </div>
+    );
   };
 
   const renderControls = () => {

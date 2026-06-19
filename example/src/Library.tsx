@@ -20,6 +20,7 @@ import {
   useDialKit,
 } from 'dialkit';
 import type { SpringConfig, TransitionConfig, EasingConfig, GalleryItem } from 'dialkit';
+import { WaveformShowcase } from './WaveformShowcase';
 import 'dialkit/styles.css';
 
 type Theme = 'dark' | 'light';
@@ -303,10 +304,16 @@ export function Library() {
           )}
         </Section>
 
+        <Section index="08" title="Waveform" hint="A real-time audio waveform on canvas at the display's full refresh rate. Press Play, then toggle smooth / pixelated and the 3-band EQ split." single>
+          <Card title="WaveformVisualization" desc="Taps a Web Audio node with its own analysers. Smooth is an anti-aliased oscilloscope line; pixelated is crisp per-pixel min/max columns. EQ bands splits the signal into low/mid/high traces." code="<WaveformVisualization source mode bands />">
+            <WaveformShowcase />
+          </Card>
+        </Section>
+
         <section className="lib-section">
           <div className="lib-section-head">
             <div className="lib-section-headline">
-              <span className="lib-section-index">08</span>
+              <span className="lib-section-index">09</span>
               <h2 className="lib-section-title">Live panel</h2>
               {liveId && <ShortcutsMenu panelId={liveId} />}
             </div>

@@ -692,6 +692,15 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
   aspect-ratio: 256 / 140;
 }
 
+/* Waveform Visualization — canvas trace, themed via \`color\` (read per frame) */
+.dialkit-waveform-viz {
+  display: block;
+  width: 100%;
+  border-radius: var(--dial-radius);
+  background: var(--dial-surface);
+  color: var(--dial-text-root);
+}
+
 /* Panel Wrapper (contains panel + toolbar) */
 .dialkit-panel-wrapper {
   display: inline-flex;

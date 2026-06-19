@@ -17,6 +17,8 @@ export { SpringControl } from './components/SpringControl';
 export { SpringVisualization } from './components/SpringVisualization';
 export { TransitionControl } from './components/TransitionControl';
 export { EasingVisualization } from './components/EasingVisualization';
+export { WaveformVisualization } from './components/WaveformVisualization';
+export type { WaveformMode } from './components/WaveformVisualization';
 export { TextControl } from './components/TextControl';
 export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';

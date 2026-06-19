@@ -43,6 +43,7 @@ __export(index_exports, {
   TextControl: () => TextControl,
   Toggle: () => Toggle,
   TransitionControl: () => TransitionControl,
+  WaveformVisualization: () => WaveformVisualization,
   defaultListItemParams: () => defaultListItemParams,
   normalizeListItems: () => normalizeListItems,
   parseListItemSchema: () => parseListItemSchema,
@@ -2950,7 +2951,7 @@ Apply these values as the new defaults in the useDialKit call.`;
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
-  const renderControl = (control) => {
+  const renderControlNode = (control) => {
     const value = values[control.path];
     switch (control.type) {
       case "slider":
@@ -3113,6 +3114,11 @@ Apply these values as the new defaults in the useDialKit call.`;
       default:
         return null;
     }
+  };
+  const renderControl = (control) => {
+    const node = renderControlNode(control);
+    if (control.type === "folder") return node;
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "dialkit-control-tip", title: control.path, children: node }, control.path);
   };
   const renderControls = () => {
     return panel.controls.map(renderControl);
@@ -3344,11 +3350,145 @@ function ButtonGroup({ buttons }) {
   )) });
 }
 
-// src/components/ShortcutsMenu.tsx
+// src/components/WaveformVisualization.tsx
 var import_react23 = require("react");
-var import_react_dom5 = require("react-dom");
-var import_react24 = require("motion/react");
 var import_jsx_runtime23 = require("react/jsx-runtime");
+var BANDS = [
+  { type: "lowpass", freq: 250 },
+  { type: "bandpass", freq: 1100, q: 0.6 },
+  { type: "highpass", freq: 4200 }
+];
+var BAND_ALPHA = [0.62, 0.42, 0.26];
+function WaveformVisualization({
+  source = null,
+  mode = "smooth",
+  bands = false,
+  fftSize = 2048,
+  width = 256,
+  height = 140
+}) {
+  const canvasRef = (0, import_react23.useRef)(null);
+  const modeRef = (0, import_react23.useRef)(mode);
+  modeRef.current = mode;
+  (0, import_react23.useEffect)(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    const dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), 3);
+    const W = canvas.width = Math.round(width * dpr);
+    const H = canvas.height = Math.round(height * dpr);
+    const cy = H / 2;
+    const amp = H * 0.4;
+    const audioCtx = source?.context ?? null;
+    const created = [];
+    let analysers = [];
+    let buffers = [];
+    if (source && audioCtx) {
+      if (bands) {
+        analysers = BANDS.map(({ type, freq, q }) => {
+          const filter = audioCtx.createBiquadFilter();
+          filter.type = type;
+          filter.frequency.value = freq;
+          if (q != null) filter.Q.value = q;
+          const a = audioCtx.createAnalyser();
+          a.fftSize = fftSize;
+          source.connect(filter);
+          filter.connect(a);
+          created.push(filter, a);
+          return a;
+        });
+      } else {
+        const a = audioCtx.createAnalyser();
+        a.fftSize = fftSize;
+        source.connect(a);
+        created.push(a);
+        analysers = [a];
+      }
+      buffers = analysers.map((a) => new Float32Array(a.fftSize));
+    }
+    const stroke = (base, alpha, lw, x1, y1, x2, y2) => {
+      ctx.strokeStyle = base;
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth = lw;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    };
+    const drawSmooth = (buf, base, alpha) => {
+      ctx.strokeStyle = base;
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth = 2 * dpr;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      const n = buf.length;
+      for (let x = 0; x <= W; x++) {
+        const idx = Math.min(n - 1, Math.floor(x / W * (n - 1)));
+        const y = cy - buf[idx] * amp;
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    };
+    const drawPixelated = (buf, base, alpha) => {
+      ctx.fillStyle = base;
+      ctx.globalAlpha = alpha;
+      const n = buf.length;
+      const step = n / W;
+      for (let x = 0; x < W; x++) {
+        const s = Math.floor(x * step);
+        const e = Math.max(s + 1, Math.floor((x + 1) * step));
+        let mn = 1;
+        let mx = -1;
+        for (let i = s; i < e && i < n; i++) {
+          const v = buf[i];
+          if (v < mn) mn = v;
+          if (v > mx) mx = v;
+        }
+        const yTop = Math.round(cy - mx * amp);
+        const yBot = Math.round(cy - mn * amp);
+        ctx.fillRect(x, yTop, 1, Math.max(1, yBot - yTop));
+      }
+    };
+    let raf = 0;
+    const frame = () => {
+      raf = requestAnimationFrame(frame);
+      const base = getComputedStyle(canvas).color || "rgb(255,255,255)";
+      ctx.globalAlpha = 1;
+      ctx.clearRect(0, 0, W, H);
+      ctx.imageSmoothingEnabled = modeRef.current === "smooth";
+      for (let i = 1; i < 4; i++) {
+        const gx = Math.round(W / 4 * i) + 0.5;
+        stroke(base, 0.06, dpr, gx, 0, gx, H);
+      }
+      stroke(base, 0.15, dpr, 0, Math.round(cy) + 0.5, W, Math.round(cy) + 0.5);
+      const draw = modeRef.current === "pixelated" ? drawPixelated : drawSmooth;
+      for (let i = 0; i < analysers.length; i++) {
+        analysers[i].getFloatTimeDomainData(buffers[i]);
+        draw(buffers[i], base, analysers.length === 3 ? BAND_ALPHA[i] : 0.6);
+      }
+      ctx.globalAlpha = 1;
+    };
+    frame();
+    return () => {
+      cancelAnimationFrame(raf);
+      created.forEach((node) => {
+        try {
+          node.disconnect();
+        } catch {
+        }
+      });
+    };
+  }, [source, bands, fftSize, width, height]);
+  return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("canvas", { ref: canvasRef, className: "dialkit-waveform-viz", style: { width, height } });
+}
+
+// src/components/ShortcutsMenu.tsx
+var import_react24 = require("react");
+var import_react_dom5 = require("react-dom");
+var import_react25 = require("motion/react");
+var import_jsx_runtime24 = require("react/jsx-runtime");
 function formatShortcutKey(sc) {
   if (!sc.key) return "\u2014";
   const mod = sc.modifier === "alt" ? "\u2325" : sc.modifier === "shift" ? "\u21E7" : sc.modifier === "meta" ? "\u2318" : "";
@@ -3368,23 +3508,23 @@ function formatInteraction(sc) {
   }
 }
 function ShortcutsMenu({ panelId }) {
-  const [isOpen, setIsOpen] = (0, import_react23.useState)(false);
-  const triggerRef = (0, import_react23.useRef)(null);
-  const dropdownRef = (0, import_react23.useRef)(null);
-  const [pos, setPos] = (0, import_react23.useState)({ top: 0, right: 0 });
-  const open = (0, import_react23.useCallback)(() => {
+  const [isOpen, setIsOpen] = (0, import_react24.useState)(false);
+  const triggerRef = (0, import_react24.useRef)(null);
+  const dropdownRef = (0, import_react24.useRef)(null);
+  const [pos, setPos] = (0, import_react24.useState)({ top: 0, right: 0 });
+  const open = (0, import_react24.useCallback)(() => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
       setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
     }
     setIsOpen(true);
   }, []);
-  const close = (0, import_react23.useCallback)(() => setIsOpen(false), []);
-  const toggle = (0, import_react23.useCallback)(() => {
+  const close = (0, import_react24.useCallback)(() => setIsOpen(false), []);
+  const toggle = (0, import_react24.useCallback)(() => {
     if (isOpen) close();
     else open();
   }, [isOpen, open, close]);
-  (0, import_react23.useEffect)(() => {
+  (0, import_react24.useEffect)(() => {
     if (!isOpen) return;
     const handler = (e) => {
       const target = e.target;
@@ -3415,9 +3555,9 @@ function ShortcutsMenu({ panelId }) {
       label: findLabel(panel.controls)
     };
   });
-  return /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(import_jsx_runtime23.Fragment, { children: [
-    /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
-      import_react24.motion.button,
+  return /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(import_jsx_runtime24.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+      import_react25.motion.button,
       {
         ref: triggerRef,
         className: "dialkit-shortcuts-trigger",
@@ -3425,19 +3565,19 @@ function ShortcutsMenu({ panelId }) {
         title: "Keyboard shortcuts",
         whileTap: { scale: 0.9 },
         transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-        children: /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("path", { d: "M6 10H6.01" }),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("path", { d: "M10 10H10.01" }),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("path", { d: "M14 10H14.01" }),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("path", { d: "M18 10H18.01" }),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("path", { d: "M8 14H16" })
+        children: /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("path", { d: "M6 10H6.01" }),
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("path", { d: "M10 10H10.01" }),
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("path", { d: "M14 10H14.01" }),
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("path", { d: "M18 10H18.01" }),
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("path", { d: "M8 14H16" })
         ] })
       }
     ),
     (0, import_react_dom5.createPortal)(
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(import_react24.AnimatePresence, { children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(
-        import_react24.motion.div,
+      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(import_react25.AnimatePresence, { children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(
+        import_react25.motion.div,
         {
           ref: dropdownRef,
           className: "dialkit-root dialkit-shortcuts-dropdown",
@@ -3447,13 +3587,13 @@ function ShortcutsMenu({ panelId }) {
           exit: { opacity: 0, y: 4, scale: 0.97, pointerEvents: "none" },
           transition: { type: "spring", visualDuration: 0.15, bounce: 0 },
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("div", { className: "dialkit-shortcuts-title", children: "Keyboard Shortcuts" }),
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("div", { className: "dialkit-shortcuts-list", children: rows.map((row) => /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "dialkit-shortcuts-row", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "dialkit-shortcuts-row-key", children: formatShortcutKey(row.shortcut) }),
-              /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "dialkit-shortcuts-row-label", children: row.label }),
-              /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "dialkit-shortcuts-row-mode", children: formatInteraction(row.shortcut) })
+            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { className: "dialkit-shortcuts-title", children: "Keyboard Shortcuts" }),
+            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { className: "dialkit-shortcuts-list", children: rows.map((row) => /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "dialkit-shortcuts-row", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "dialkit-shortcuts-row-key", children: formatShortcutKey(row.shortcut) }),
+              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "dialkit-shortcuts-row-label", children: row.label }),
+              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "dialkit-shortcuts-row-mode", children: formatInteraction(row.shortcut) })
             ] }, row.path)) }),
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("div", { className: "dialkit-shortcuts-hint", children: "See pill badges on controls for keys" })
+            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { className: "dialkit-shortcuts-hint", children: "See pill badges on controls for keys" })
           ]
         }
       ) }),
@@ -3485,6 +3625,7 @@ function ShortcutsMenu({ panelId }) {
   TextControl,
   Toggle,
   TransitionControl,
+  WaveformVisualization,
   defaultListItemParams,
   normalizeListItems,
   parseListItemSchema,
