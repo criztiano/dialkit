@@ -417,25 +417,26 @@ declare function EasingVisualization({ easing }: EasingVisualizationProps): reac
 
 type WaveformMode = 'smooth' | 'pixelated';
 interface WaveformVisualizationProps {
+    /** Decoded audio sample. Its full waveform is drawn once (fixed). */
+    buffer?: AudioBuffer | null;
+    /** Playhead position, 0..1. */
+    progress?: number;
     /**
-     * Audio node to visualize. The component taps it with its own analyser(s) and
-     * never connects anything to the destination, so it stays silent. Pass `null`
-     * to render an idle baseline.
+     * Polled every frame for a buttery playhead without re-rendering the parent.
+     * Overrides `progress` when provided — return the current play position (0..1).
      */
-    source?: AudioNode | null;
+    getProgress?: () => number;
     /**
-     * 'smooth' — anti-aliased oscilloscope line.
+     * 'smooth' — anti-aliased min/max envelope.
      * 'pixelated' — crisp, high-resolution per-pixel min/max columns (no AA).
      */
     mode?: WaveformMode;
-    /** Split the signal into low / mid / high bands and draw three traces. */
+    /** Split the sample into low / mid / high bands and draw three overlaid waveforms. */
     bands?: boolean;
-    /** Time-domain sample count (power of two). Higher = more horizontal detail. */
-    fftSize?: number;
     width?: number;
     height?: number;
 }
-declare function WaveformVisualization({ source, mode, bands, fftSize, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
+declare function WaveformVisualization({ buffer, progress, getProgress, mode, bands, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
 
 interface TextControlProps {
     label: string;

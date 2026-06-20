@@ -3,47 +3,101 @@ import { useRef, useEffect } from 'react';
 export type WaveformMode = 'smooth' | 'pixelated';
 
 interface WaveformVisualizationProps {
+  /** Decoded audio sample. Its full waveform is drawn once (fixed). */
+  buffer?: AudioBuffer | null;
+  /** Playhead position, 0..1. */
+  progress?: number;
   /**
-   * Audio node to visualize. The component taps it with its own analyser(s) and
-   * never connects anything to the destination, so it stays silent. Pass `null`
-   * to render an idle baseline.
+   * Polled every frame for a buttery playhead without re-rendering the parent.
+   * Overrides `progress` when provided — return the current play position (0..1).
    */
-  source?: AudioNode | null;
+  getProgress?: () => number;
   /**
-   * 'smooth' — anti-aliased oscilloscope line.
+   * 'smooth' — anti-aliased min/max envelope.
    * 'pixelated' — crisp, high-resolution per-pixel min/max columns (no AA).
    */
   mode?: WaveformMode;
-  /** Split the signal into low / mid / high bands and draw three traces. */
+  /** Split the sample into low / mid / high bands and draw three overlaid waveforms. */
   bands?: boolean;
-  /** Time-domain sample count (power of two). Higher = more horizontal detail. */
-  fftSize?: number;
   width?: number;
   height?: number;
 }
 
-// Crossover filters for the optional 3-band EQ split.
+// Crossover filters for the optional 3-band EQ split (applied offline to the sample).
 const BANDS: { type: BiquadFilterType; freq: number; q?: number }[] = [
   { type: 'lowpass', freq: 250 },
   { type: 'bandpass', freq: 1100, q: 0.6 },
   { type: 'highpass', freq: 4200 },
 ];
-// Low band most prominent → high band faintest, so the three traces read apart.
-const BAND_ALPHA = [0.62, 0.42, 0.26];
+const BAND_ALPHA = [0.6, 0.42, 0.28];
+
+type Peaks = { min: Float32Array; max: Float32Array };
+
+function mixToMono(buffer: AudioBuffer): Float32Array {
+  if (buffer.numberOfChannels === 1) return buffer.getChannelData(0);
+  const len = buffer.length;
+  const out = new Float32Array(len);
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const data = buffer.getChannelData(c);
+    for (let i = 0; i < len; i++) out[i] += data[i] / buffer.numberOfChannels;
+  }
+  return out;
+}
+
+// Min/max amplitude per pixel column — the whole sample condensed to the canvas width.
+function computePeaks(data: Float32Array, cols: number): Peaks {
+  const min = new Float32Array(cols);
+  const max = new Float32Array(cols);
+  const step = data.length / cols;
+  for (let x = 0; x < cols; x++) {
+    const start = Math.floor(x * step);
+    const end = Math.max(start + 1, Math.min(data.length, Math.floor((x + 1) * step)));
+    let mn = 1;
+    let mx = -1;
+    for (let i = start; i < end; i++) {
+      const v = data[i];
+      if (v < mn) mn = v;
+      if (v > mx) mx = v;
+    }
+    min[x] = mn;
+    max[x] = mx;
+  }
+  return { min, max };
+}
+
+// Render the sample through one band filter offline, returning the filtered buffer.
+async function filterBuffer(buffer: AudioBuffer, band: (typeof BANDS)[number]): Promise<AudioBuffer> {
+  const off = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
+  const src = off.createBufferSource();
+  src.buffer = buffer;
+  const filter = off.createBiquadFilter();
+  filter.type = band.type;
+  filter.frequency.value = band.freq;
+  if (band.q != null) filter.Q.value = band.q;
+  src.connect(filter);
+  filter.connect(off.destination);
+  src.start();
+  return off.startRendering();
+}
 
 export function WaveformVisualization({
-  source = null,
+  buffer = null,
+  progress = 0,
+  getProgress,
   mode = 'smooth',
   bands = false,
-  fftSize = 2048,
   width = 256,
   height = 140,
 }: WaveformVisualizationProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  // Mode only changes how we draw, not the audio graph — keep it in a ref so the
-  // render loop reads the latest value without tearing down the analysers.
+  // Mode/playhead change rendering only — keep them in refs so the loop reads the
+  // latest values without recomputing the (expensive) peaks.
   const modeRef = useRef(mode);
   modeRef.current = mode;
+  const progressRef = useRef(progress);
+  progressRef.current = progress;
+  const getProgressRef = useRef(getProgress);
+  getProgressRef.current = getProgress;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -54,124 +108,93 @@ export function WaveformVisualization({
     const W = (canvas.width = Math.round(width * dpr));
     const H = (canvas.height = Math.round(height * dpr));
     const cy = H / 2;
-    const amp = H * 0.4; // trace fills the middle 80%
+    const amp = H * 0.42;
 
-    // Tap the source with our own analyser(s). Nothing reaches the destination.
-    const audioCtx = (source?.context ?? null) as AudioContext | null;
-    const created: AudioNode[] = [];
-    let analysers: AnalyserNode[] = [];
-    // Float32Array<ArrayBuffer> (not ArrayBufferLike) — what getFloatTimeDomainData expects.
-    let buffers: Float32Array<ArrayBuffer>[] = [];
+    let cancelled = false;
+    let peaks: Peaks[] = [];
 
-    if (source && audioCtx) {
+    // Compute peaks once per buffer/bands/size — the expensive part (EQ offline-filters).
+    (async () => {
+      if (!buffer) return;
       if (bands) {
-        analysers = BANDS.map(({ type, freq, q }) => {
-          const filter = audioCtx.createBiquadFilter();
-          filter.type = type;
-          filter.frequency.value = freq;
-          if (q != null) filter.Q.value = q;
-          const a = audioCtx.createAnalyser();
-          a.fftSize = fftSize;
-          source.connect(filter);
-          filter.connect(a);
-          created.push(filter, a);
-          return a;
-        });
+        const filtered = await Promise.all(BANDS.map((b) => filterBuffer(buffer, b)));
+        if (cancelled) return;
+        peaks = filtered.map((fb) => computePeaks(mixToMono(fb), W));
       } else {
-        const a = audioCtx.createAnalyser();
-        a.fftSize = fftSize;
-        source.connect(a);
-        created.push(a);
-        analysers = [a];
+        peaks = [computePeaks(mixToMono(buffer), W)];
       }
-      buffers = analysers.map((a) => new Float32Array(a.fftSize));
-    }
+    })();
 
-    const stroke = (base: string, alpha: number, lw: number, x1: number, y1: number, x2: number, y2: number) => {
-      ctx.strokeStyle = base;
+    // Draw one envelope between [x0, x1) at a given alpha, in the active mode.
+    const drawRange = (p: Peaks, base: string, alpha: number, x0: number, x1: number) => {
+      if (x1 <= x0) return;
       ctx.globalAlpha = alpha;
-      ctx.lineWidth = lw;
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.stroke();
-    };
-
-    const drawSmooth = (buf: Float32Array, base: string, alpha: number) => {
-      ctx.strokeStyle = base;
-      ctx.globalAlpha = alpha;
-      ctx.lineWidth = 2 * dpr;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.beginPath();
-      const n = buf.length;
-      for (let x = 0; x <= W; x++) {
-        const idx = Math.min(n - 1, Math.floor((x / W) * (n - 1)));
-        const y = cy - buf[idx] * amp;
-        if (x === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-    };
-
-    const drawPixelated = (buf: Float32Array, base: string, alpha: number) => {
-      ctx.fillStyle = base;
-      ctx.globalAlpha = alpha;
-      const n = buf.length;
-      const step = n / W;
-      for (let x = 0; x < W; x++) {
-        const s = Math.floor(x * step);
-        const e = Math.max(s + 1, Math.floor((x + 1) * step));
-        let mn = 1;
-        let mx = -1;
-        for (let i = s; i < e && i < n; i++) {
-          const v = buf[i];
-          if (v < mn) mn = v;
-          if (v > mx) mx = v;
+      if (modeRef.current === 'pixelated') {
+        ctx.fillStyle = base;
+        for (let x = x0; x < x1; x++) {
+          const yTop = Math.round(cy - p.max[x] * amp);
+          const yBot = Math.round(cy - p.min[x] * amp);
+          ctx.fillRect(x, yTop, 1, Math.max(1, yBot - yTop));
         }
-        const yTop = Math.round(cy - mx * amp);
-        const yBot = Math.round(cy - mn * amp);
-        ctx.fillRect(x, yTop, 1, Math.max(1, yBot - yTop));
+      } else {
+        ctx.fillStyle = base;
+        ctx.beginPath();
+        ctx.moveTo(x0, cy - p.max[x0] * amp);
+        for (let x = x0; x < x1; x++) ctx.lineTo(x, cy - p.max[x] * amp);
+        for (let x = x1 - 1; x >= x0; x--) ctx.lineTo(x, cy - p.min[x] * amp);
+        ctx.closePath();
+        ctx.fill();
       }
     };
 
     let raf = 0;
     const frame = () => {
       raf = requestAnimationFrame(frame);
-      // Read the trace color from CSS each frame so it tracks light/dark theme.
       const base = getComputedStyle(canvas).color || 'rgb(255,255,255)';
       ctx.globalAlpha = 1;
       ctx.clearRect(0, 0, W, H);
       ctx.imageSmoothingEnabled = modeRef.current === 'smooth';
 
-      // Reference grid: faint vertical quarters + a center baseline.
-      for (let i = 1; i < 4; i++) {
-        const gx = Math.round((W / 4) * i) + 0.5;
-        stroke(base, 0.06, dpr, gx, 0, gx, H);
-      }
-      stroke(base, 0.15, dpr, 0, Math.round(cy) + 0.5, W, Math.round(cy) + 0.5);
+      // center baseline
+      ctx.strokeStyle = base;
+      ctx.globalAlpha = 0.15;
+      ctx.lineWidth = dpr;
+      ctx.beginPath();
+      ctx.moveTo(0, Math.round(cy) + 0.5);
+      ctx.lineTo(W, Math.round(cy) + 0.5);
+      ctx.stroke();
 
-      const draw = modeRef.current === 'pixelated' ? drawPixelated : drawSmooth;
-      for (let i = 0; i < analysers.length; i++) {
-        analysers[i].getFloatTimeDomainData(buffers[i]);
-        draw(buffers[i], base, analysers.length === 3 ? BAND_ALPHA[i] : 0.6);
+      const prog = getProgressRef.current ? getProgressRef.current() : progressRef.current;
+      const playX = Math.max(0, Math.min(1, prog || 0)) * W;
+      const split = Math.max(0, Math.min(W, Math.floor(playX)));
+
+      // Fixed waveform(s): played portion at full alpha, unplayed dimmer.
+      for (let i = 0; i < peaks.length; i++) {
+        const alpha = peaks.length === 3 ? BAND_ALPHA[i] : 0.6;
+        drawRange(peaks[i], base, alpha, 0, split);
+        drawRange(peaks[i], base, alpha * 0.45, split, W);
+      }
+
+      // Playhead
+      if (peaks.length) {
+        ctx.globalAlpha = 0.9;
+        ctx.strokeStyle = base;
+        ctx.lineWidth = 1.5 * dpr;
+        const px = Math.round(playX) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(px, 0);
+        ctx.lineTo(px, H);
+        ctx.stroke();
       }
       ctx.globalAlpha = 1;
     };
     frame();
 
     return () => {
+      cancelled = true;
       cancelAnimationFrame(raf);
-      created.forEach((node) => {
-        // A node may already be disconnected if the context was closed.
-        try {
-          node.disconnect();
-        } catch {
-          /* noop */
-        }
-      });
     };
-  }, [source, bands, fftSize, width, height]);
+  }, [buffer, bands, width, height]);
 
   return <canvas ref={canvasRef} className="dialkit-waveform-viz" style={{ width, height }} />;
 }

@@ -2,91 +2,76 @@ import { useState, useRef, useEffect } from 'react';
 import { WaveformVisualization } from 'dialkit';
 import type { WaveformMode } from 'dialkit';
 
+const DURATION = 3; // seconds
+
 /**
- * Synthesize a lively, evolving signal: two oscillators + filtered noise, with
- * LFOs nudging amplitude and pitch so the trace keeps moving. Never connected to
- * the destination, so it's silent — the visualizer just taps it.
+ * Render a short sample offline: a low drone plus several enveloped "hits", so the
+ * waveform has visible dynamics. OfflineAudioContext needs no user gesture.
  */
-function createSynth(ctx: AudioContext): AudioNode {
-  const out = ctx.createGain();
-  out.gain.value = 0.9;
+async function renderSample(): Promise<AudioBuffer> {
+  const sr = 44100;
+  const off = new OfflineAudioContext(1, Math.floor(sr * DURATION), sr);
 
-  const o1 = ctx.createOscillator();
-  o1.type = 'sawtooth';
-  o1.frequency.value = 110;
-  const o2 = ctx.createOscillator();
-  o2.type = 'square';
-  o2.frequency.value = 165;
-  o2.detune.value = 7;
+  const drone = off.createOscillator();
+  drone.type = 'sawtooth';
+  drone.frequency.value = 55;
+  const droneGain = off.createGain();
+  droneGain.gain.value = 0.1;
+  drone.connect(droneGain);
+  droneGain.connect(off.destination);
+  drone.start(0);
+  drone.stop(DURATION);
 
-  const len = Math.floor(ctx.sampleRate * 2);
-  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-  const data = buf.getChannelData(0);
-  for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
-  const noise = ctx.createBufferSource();
-  noise.buffer = buf;
-  noise.loop = true;
-  const noiseGain = ctx.createGain();
-  noiseGain.gain.value = 0.13;
+  const freqs = [110, 220, 90, 330, 160, 70];
+  freqs.forEach((f, i) => {
+    const t = 0.15 + (i * (DURATION - 0.3)) / freqs.length;
+    const o = off.createOscillator();
+    o.type = i % 2 ? 'square' : 'sine';
+    o.frequency.value = f;
+    const g = off.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.9, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0008, t + 0.35);
+    o.connect(g);
+    g.connect(off.destination);
+    o.start(t);
+    o.stop(t + 0.4);
+  });
 
-  const amp = ctx.createOscillator();
-  amp.frequency.value = 0.35;
-  const ampGain = ctx.createGain();
-  ampGain.gain.value = 0.35;
-  amp.connect(ampGain);
-  ampGain.connect(out.gain);
-
-  const drift = ctx.createOscillator();
-  drift.frequency.value = 0.13;
-  const driftGain = ctx.createGain();
-  driftGain.gain.value = 35;
-  drift.connect(driftGain);
-  driftGain.connect(o1.frequency);
-
-  o1.connect(out);
-  o2.connect(out);
-  noise.connect(noiseGain);
-  noiseGain.connect(out);
-
-  o1.start();
-  o2.start();
-  noise.start();
-  amp.start();
-  drift.start();
-  return out;
+  return off.startRendering();
 }
 
 export function WaveformShowcase() {
-  const [source, setSource] = useState<AudioNode | null>(null);
-  const [running, setRunning] = useState(false);
+  const [buffer, setBuffer] = useState<AudioBuffer | null>(null);
+  const [playing, setPlaying] = useState(false);
   const [mode, setMode] = useState<WaveformMode>('smooth');
   const [bands, setBands] = useState(false);
-  const ctxRef = useRef<AudioContext | null>(null);
 
-  const toggleRun = async () => {
-    if (!ctxRef.current) {
-      const ctx = new AudioContext();
-      ctxRef.current = ctx;
-      setSource(createSynth(ctx));
-    }
-    const ctx = ctxRef.current;
-    if (ctx.state === 'running') {
-      await ctx.suspend();
-      setRunning(false);
+  // Virtual transport: a clock-driven playhead (no audio output needed to demo it).
+  const elapsedRef = useRef(0);
+  const lastRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    renderSample().then(setBuffer).catch(() => {});
+  }, []);
+
+  const getProgress = () => {
+    const now = performance.now();
+    if (playing) {
+      if (lastRef.current != null) elapsedRef.current += (now - lastRef.current) / 1000;
+      lastRef.current = now;
     } else {
-      await ctx.resume();
-      setRunning(true);
+      lastRef.current = null;
     }
+    return (elapsedRef.current % DURATION) / DURATION;
   };
-
-  useEffect(() => () => { ctxRef.current?.close().catch(() => {}); }, []);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <WaveformVisualization source={source} mode={mode} bands={bands} />
+      <WaveformVisualization buffer={buffer} getProgress={getProgress} mode={mode} bands={bands} />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button type="button" className="lib-tab" data-active={String(running)} onClick={toggleRun}>
-          {running ? '❚❚ Pause' : '▶ Play'}
+        <button type="button" className="lib-tab" data-active={String(playing)} onClick={() => setPlaying((p) => !p)}>
+          {playing ? '❚❚ Pause' : '▶ Play'}
         </button>
         <div className="lib-tabs">
           {(['smooth', 'pixelated'] as const).map((m) => (

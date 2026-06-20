@@ -3358,18 +3358,65 @@ var BANDS = [
   { type: "bandpass", freq: 1100, q: 0.6 },
   { type: "highpass", freq: 4200 }
 ];
-var BAND_ALPHA = [0.62, 0.42, 0.26];
+var BAND_ALPHA = [0.6, 0.42, 0.28];
+function mixToMono(buffer) {
+  if (buffer.numberOfChannels === 1) return buffer.getChannelData(0);
+  const len = buffer.length;
+  const out = new Float32Array(len);
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const data = buffer.getChannelData(c);
+    for (let i = 0; i < len; i++) out[i] += data[i] / buffer.numberOfChannels;
+  }
+  return out;
+}
+function computePeaks(data, cols) {
+  const min = new Float32Array(cols);
+  const max = new Float32Array(cols);
+  const step = data.length / cols;
+  for (let x = 0; x < cols; x++) {
+    const start = Math.floor(x * step);
+    const end = Math.max(start + 1, Math.min(data.length, Math.floor((x + 1) * step)));
+    let mn = 1;
+    let mx = -1;
+    for (let i = start; i < end; i++) {
+      const v = data[i];
+      if (v < mn) mn = v;
+      if (v > mx) mx = v;
+    }
+    min[x] = mn;
+    max[x] = mx;
+  }
+  return { min, max };
+}
+async function filterBuffer(buffer, band) {
+  const off = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
+  const src = off.createBufferSource();
+  src.buffer = buffer;
+  const filter = off.createBiquadFilter();
+  filter.type = band.type;
+  filter.frequency.value = band.freq;
+  if (band.q != null) filter.Q.value = band.q;
+  src.connect(filter);
+  filter.connect(off.destination);
+  src.start();
+  return off.startRendering();
+}
 function WaveformVisualization({
-  source = null,
+  buffer = null,
+  progress = 0,
+  getProgress,
   mode = "smooth",
   bands = false,
-  fftSize = 2048,
   width = 256,
   height = 140
 }) {
   const canvasRef = (0, import_react23.useRef)(null);
   const modeRef = (0, import_react23.useRef)(mode);
   modeRef.current = mode;
+  const progressRef = (0, import_react23.useRef)(progress);
+  progressRef.current = progress;
+  const getProgressRef = (0, import_react23.useRef)(getProgress);
+  getProgressRef.current = getProgress;
   (0, import_react23.useEffect)(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
@@ -3378,77 +3425,37 @@ function WaveformVisualization({
     const W = canvas.width = Math.round(width * dpr);
     const H = canvas.height = Math.round(height * dpr);
     const cy = H / 2;
-    const amp = H * 0.4;
-    const audioCtx = source?.context ?? null;
-    const created = [];
-    let analysers = [];
-    let buffers = [];
-    if (source && audioCtx) {
+    const amp = H * 0.42;
+    let cancelled = false;
+    let peaks = [];
+    (async () => {
+      if (!buffer) return;
       if (bands) {
-        analysers = BANDS.map(({ type, freq, q }) => {
-          const filter = audioCtx.createBiquadFilter();
-          filter.type = type;
-          filter.frequency.value = freq;
-          if (q != null) filter.Q.value = q;
-          const a = audioCtx.createAnalyser();
-          a.fftSize = fftSize;
-          source.connect(filter);
-          filter.connect(a);
-          created.push(filter, a);
-          return a;
-        });
+        const filtered = await Promise.all(BANDS.map((b) => filterBuffer(buffer, b)));
+        if (cancelled) return;
+        peaks = filtered.map((fb) => computePeaks(mixToMono(fb), W));
       } else {
-        const a = audioCtx.createAnalyser();
-        a.fftSize = fftSize;
-        source.connect(a);
-        created.push(a);
-        analysers = [a];
+        peaks = [computePeaks(mixToMono(buffer), W)];
       }
-      buffers = analysers.map((a) => new Float32Array(a.fftSize));
-    }
-    const stroke = (base, alpha, lw, x1, y1, x2, y2) => {
-      ctx.strokeStyle = base;
+    })();
+    const drawRange = (p, base, alpha, x0, x1) => {
+      if (x1 <= x0) return;
       ctx.globalAlpha = alpha;
-      ctx.lineWidth = lw;
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.stroke();
-    };
-    const drawSmooth = (buf, base, alpha) => {
-      ctx.strokeStyle = base;
-      ctx.globalAlpha = alpha;
-      ctx.lineWidth = 2 * dpr;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.beginPath();
-      const n = buf.length;
-      for (let x = 0; x <= W; x++) {
-        const idx = Math.min(n - 1, Math.floor(x / W * (n - 1)));
-        const y = cy - buf[idx] * amp;
-        if (x === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-    };
-    const drawPixelated = (buf, base, alpha) => {
-      ctx.fillStyle = base;
-      ctx.globalAlpha = alpha;
-      const n = buf.length;
-      const step = n / W;
-      for (let x = 0; x < W; x++) {
-        const s = Math.floor(x * step);
-        const e = Math.max(s + 1, Math.floor((x + 1) * step));
-        let mn = 1;
-        let mx = -1;
-        for (let i = s; i < e && i < n; i++) {
-          const v = buf[i];
-          if (v < mn) mn = v;
-          if (v > mx) mx = v;
+      if (modeRef.current === "pixelated") {
+        ctx.fillStyle = base;
+        for (let x = x0; x < x1; x++) {
+          const yTop = Math.round(cy - p.max[x] * amp);
+          const yBot = Math.round(cy - p.min[x] * amp);
+          ctx.fillRect(x, yTop, 1, Math.max(1, yBot - yTop));
         }
-        const yTop = Math.round(cy - mx * amp);
-        const yBot = Math.round(cy - mn * amp);
-        ctx.fillRect(x, yTop, 1, Math.max(1, yBot - yTop));
+      } else {
+        ctx.fillStyle = base;
+        ctx.beginPath();
+        ctx.moveTo(x0, cy - p.max[x0] * amp);
+        for (let x = x0; x < x1; x++) ctx.lineTo(x, cy - p.max[x] * amp);
+        for (let x = x1 - 1; x >= x0; x--) ctx.lineTo(x, cy - p.min[x] * amp);
+        ctx.closePath();
+        ctx.fill();
       }
     };
     let raf = 0;
@@ -3458,29 +3465,39 @@ function WaveformVisualization({
       ctx.globalAlpha = 1;
       ctx.clearRect(0, 0, W, H);
       ctx.imageSmoothingEnabled = modeRef.current === "smooth";
-      for (let i = 1; i < 4; i++) {
-        const gx = Math.round(W / 4 * i) + 0.5;
-        stroke(base, 0.06, dpr, gx, 0, gx, H);
+      ctx.strokeStyle = base;
+      ctx.globalAlpha = 0.15;
+      ctx.lineWidth = dpr;
+      ctx.beginPath();
+      ctx.moveTo(0, Math.round(cy) + 0.5);
+      ctx.lineTo(W, Math.round(cy) + 0.5);
+      ctx.stroke();
+      const prog = getProgressRef.current ? getProgressRef.current() : progressRef.current;
+      const playX = Math.max(0, Math.min(1, prog || 0)) * W;
+      const split = Math.max(0, Math.min(W, Math.floor(playX)));
+      for (let i = 0; i < peaks.length; i++) {
+        const alpha = peaks.length === 3 ? BAND_ALPHA[i] : 0.6;
+        drawRange(peaks[i], base, alpha, 0, split);
+        drawRange(peaks[i], base, alpha * 0.45, split, W);
       }
-      stroke(base, 0.15, dpr, 0, Math.round(cy) + 0.5, W, Math.round(cy) + 0.5);
-      const draw = modeRef.current === "pixelated" ? drawPixelated : drawSmooth;
-      for (let i = 0; i < analysers.length; i++) {
-        analysers[i].getFloatTimeDomainData(buffers[i]);
-        draw(buffers[i], base, analysers.length === 3 ? BAND_ALPHA[i] : 0.6);
+      if (peaks.length) {
+        ctx.globalAlpha = 0.9;
+        ctx.strokeStyle = base;
+        ctx.lineWidth = 1.5 * dpr;
+        const px = Math.round(playX) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(px, 0);
+        ctx.lineTo(px, H);
+        ctx.stroke();
       }
       ctx.globalAlpha = 1;
     };
     frame();
     return () => {
+      cancelled = true;
       cancelAnimationFrame(raf);
-      created.forEach((node) => {
-        try {
-          node.disconnect();
-        } catch {
-        }
-      });
     };
-  }, [source, bands, fftSize, width, height]);
+  }, [buffer, bands, width, height]);
   return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("canvas", { ref: canvasRef, className: "dialkit-waveform-viz", style: { width, height } });
 }
 

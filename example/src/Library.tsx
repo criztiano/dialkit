@@ -304,8 +304,8 @@ export function Library() {
           )}
         </Section>
 
-        <Section index="08" title="Waveform" hint="A real-time audio waveform on canvas at the display's full refresh rate. Press Play, then toggle smooth / pixelated and the 3-band EQ split." single>
-          <Card title="WaveformVisualization" desc="Taps a Web Audio node with its own analysers. Smooth is an anti-aliased oscilloscope line; pixelated is crisp per-pixel min/max columns. EQ bands splits the signal into low/mid/high traces." code="<WaveformVisualization source mode bands />">
+        <Section index="08" title="Waveform" hint="The whole waveform of a sample, drawn once and fixed — a playhead sweeps across it at the display's refresh rate. Press Play, then toggle smooth / pixelated and the 3-band EQ split." single>
+          <Card title="WaveformVisualization" desc="Renders a decoded AudioBuffer's entire waveform (fixed); the playhead marks the play position. Smooth is an anti-aliased min/max envelope, pixelated is crisp per-pixel columns. EQ bands splits the sample into low/mid/high." code="<WaveformVisualization buffer getProgress mode bands />">
             <WaveformShowcase />
           </Card>
         </Section>
