@@ -3394,6 +3394,9 @@ function WaveformVisualization({
   onSeek,
   loop = null,
   onLoopChange,
+  waveColor,
+  playheadColor,
+  autoZoomOnLoop = false,
   width = 256,
   height = 140
 }) {
@@ -3421,6 +3424,12 @@ function WaveformVisualization({
   onSeekRef.current = onSeek;
   const onLoopChangeRef = useRef16(onLoopChange);
   onLoopChangeRef.current = onLoopChange;
+  const waveColorRef = useRef16(waveColor);
+  waveColorRef.current = waveColor;
+  const playheadColorRef = useRef16(playheadColor);
+  playheadColorRef.current = playheadColor;
+  const autoZoomRef = useRef16(autoZoomOnLoop);
+  autoZoomRef.current = autoZoomOnLoop;
   const windowRef = useRef16({ start: 0, win: 1 });
   const dragRef = useRef16(null);
   const interactive = !!(onSeek || onLoopChange);
@@ -3500,18 +3509,18 @@ function WaveformVisualization({
       ctx.stroke();
       ctx.globalAlpha = 1;
     };
-    const drawRegion = (a, b, start, win, base) => {
+    const drawRegion = (a, b, start, win, color) => {
       const x0 = (a - start) / win * W;
       const x1 = (b - start) / win * W;
       const cx0 = Math.max(0, x0);
       const cx1 = Math.min(W, x1);
       if (cx1 <= cx0) return;
-      ctx.fillStyle = base;
+      ctx.fillStyle = color;
       ctx.globalAlpha = 0.14;
       ctx.fillRect(cx0, 0, cx1 - cx0, H);
       ctx.globalAlpha = 0.55;
       ctx.lineWidth = dpr;
-      ctx.strokeStyle = base;
+      ctx.strokeStyle = color;
       ctx.beginPath();
       if (x0 >= 0 && x0 <= W) {
         const xe = Math.round(x0) + 0.5;
@@ -3542,10 +3551,20 @@ function WaveformVisualization({
       ctx.lineTo(W, Math.round(cy) + 0.5);
       ctx.stroke();
       ctx.globalAlpha = 1;
+      const wave = waveColorRef.current || base;
+      const ph = playheadColorRef.current || base;
       const prog = Math.max(0, Math.min(1, (getProgressRef.current ? getProgressRef.current() : progressRef.current) || 0));
-      const zoomLvl = Math.max(1, zoomRef.current);
-      const win = 1 / zoomLvl;
-      let start = prog - win / 2;
+      let win;
+      let start;
+      const activeLoop = autoZoomRef.current ? loopRef.current : null;
+      if (activeLoop) {
+        const span = Math.max(1e-4, activeLoop.end - activeLoop.start);
+        win = Math.min(1, Math.max(1 / MAX_ZOOM, span * 1.2));
+        start = (activeLoop.start + activeLoop.end) / 2 - win / 2;
+      } else {
+        win = 1 / Math.max(1, zoomRef.current);
+        start = prog - win / 2;
+      }
       if (start < 0) start = 0;
       else if (start > 1 - win) start = 1 - win;
       const end = start + win;
@@ -3558,21 +3577,21 @@ function WaveformVisualization({
           const s1 = Math.min(mono.length, Math.ceil(end * mono.length));
           const slice = s1 > s0 ? mono.subarray(s0, s1) : mono;
           fillPeaks(slice, W, pk.min, pk.max);
-          const color = count === 3 ? BAND_COLORS[i] : base;
+          const color = count === 3 ? BAND_COLORS[i] : wave;
           if (modeRef.current === "pixelated") drawColumns(pk, color);
           else drawSimplified(envelope(pk, W, SIMPLE_POINTS), color, borderRef.current);
         }
       }
       const drag = dragRef.current;
       if (drag && drag.moved) {
-        drawRegion(Math.min(drag.startProg, drag.curProg), Math.max(drag.startProg, drag.curProg), start, win, base);
+        drawRegion(Math.min(drag.startProg, drag.curProg), Math.max(drag.startProg, drag.curProg), start, win, ph);
       } else if (loopRef.current) {
-        drawRegion(loopRef.current.start, loopRef.current.end, start, win, base);
+        drawRegion(loopRef.current.start, loopRef.current.end, start, win, ph);
       }
       if (count) {
         const playX = (prog - start) / win * W;
         ctx.globalAlpha = 1;
-        ctx.strokeStyle = base;
+        ctx.strokeStyle = ph;
         ctx.lineWidth = 1.5 * dpr;
         const px = Math.round(Math.max(0, Math.min(W, playX))) + 0.5;
         ctx.beginPath();
@@ -3630,6 +3649,7 @@ function WaveformVisualization({
     }
   };
   const atMaxZoom = zoom >= MAX_ZOOM;
+  const framingLoop = autoZoomOnLoop && !!loop;
   return /* @__PURE__ */ jsxs20("div", { className: "dialkit-waveform-viz-wrap", style: { width }, children: [
     /* @__PURE__ */ jsx23(
       "canvas",
@@ -3645,7 +3665,7 @@ function WaveformVisualization({
         } : void 0
       }
     ),
-    /* @__PURE__ */ jsxs20("div", { className: "dialkit-waveform-zoom", children: [
+    !framingLoop && /* @__PURE__ */ jsxs20("div", { className: "dialkit-waveform-zoom", children: [
       zoom > 1 && /* @__PURE__ */ jsx23("button", { type: "button", "aria-label": "Zoom out", onClick: () => setZoom((z) => Math.max(1, z / 2)), children: /* @__PURE__ */ jsx23("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ jsx23("path", { d: "M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) }) }),
       /* @__PURE__ */ jsx23(
         "button",

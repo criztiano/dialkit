@@ -48,6 +48,12 @@ interface WaveformVisualizationProps {
    * region; clicking reports null (loop cleared — recreate it by dragging again).
    */
   onLoopChange?: (loop: WaveformLoop | null) => void;
+  /** Waveform color (single waveform only; bands keep their fixed colors). Defaults to the theme color. */
+  waveColor?: string;
+  /** Playhead color; the loop band derives from it at a lower opacity. Defaults to the theme color. */
+  playheadColor?: string;
+  /** When true, selecting a loop auto-zooms to frame it (manual zoom resumes once the loop is cleared). */
+  autoZoomOnLoop?: boolean;
   width?: number;
   height?: number;
 }
@@ -166,6 +172,9 @@ export function WaveformVisualization({
   onSeek,
   loop = null,
   onLoopChange,
+  waveColor,
+  playheadColor,
+  autoZoomOnLoop = false,
   width = 256,
   height = 140,
 }: WaveformVisualizationProps) {
@@ -195,6 +204,12 @@ export function WaveformVisualization({
   onSeekRef.current = onSeek;
   const onLoopChangeRef = useRef(onLoopChange);
   onLoopChangeRef.current = onLoopChange;
+  const waveColorRef = useRef(waveColor);
+  waveColorRef.current = waveColor;
+  const playheadColorRef = useRef(playheadColor);
+  playheadColorRef.current = playheadColor;
+  const autoZoomRef = useRef(autoZoomOnLoop);
+  autoZoomRef.current = autoZoomOnLoop;
 
   // The window currently shown (updated each frame) — used to map pointer x → progress.
   const windowRef = useRef({ start: 0, win: 1 });
@@ -298,19 +313,19 @@ export function WaveformVisualization({
     };
 
     // Translucent loop / selection band between two 0..1 positions, mapped into the
-    // current window (`start`,`win`).
-    const drawRegion = (a: number, b: number, start: number, win: number, base: string) => {
+    // current window (`start`,`win`). Tinted with the playhead color at low opacity.
+    const drawRegion = (a: number, b: number, start: number, win: number, color: string) => {
       const x0 = ((a - start) / win) * W;
       const x1 = ((b - start) / win) * W;
       const cx0 = Math.max(0, x0);
       const cx1 = Math.min(W, x1);
       if (cx1 <= cx0) return;
-      ctx.fillStyle = base;
+      ctx.fillStyle = color;
       ctx.globalAlpha = 0.14;
       ctx.fillRect(cx0, 0, cx1 - cx0, H);
       ctx.globalAlpha = 0.55;
       ctx.lineWidth = dpr;
-      ctx.strokeStyle = base;
+      ctx.strokeStyle = color;
       ctx.beginPath();
       if (x0 >= 0 && x0 <= W) {
         const xe = Math.round(x0) + 0.5;
@@ -346,12 +361,24 @@ export function WaveformVisualization({
       ctx.stroke();
       ctx.globalAlpha = 1;
 
-      // Zoomed window centered on the playhead, clamped to the sample edges so the
-      // playhead is always on screen. Stored for pointer → progress mapping.
+      const wave = waveColorRef.current || base;
+      const ph = playheadColorRef.current || base;
+
       const prog = Math.max(0, Math.min(1, (getProgressRef.current ? getProgressRef.current() : progressRef.current) || 0));
-      const zoomLvl = Math.max(1, zoomRef.current);
-      const win = 1 / zoomLvl;
-      let start = prog - win / 2;
+      // The visible window. With auto-zoom on and a loop set, frame the loop
+      // (centered, capped at MAX_ZOOM); otherwise zoom by `zoom`, centered on the
+      // playhead and clamped to the sample edges so it's always on screen.
+      let win: number;
+      let start: number;
+      const activeLoop = autoZoomRef.current ? loopRef.current : null;
+      if (activeLoop) {
+        const span = Math.max(0.0001, activeLoop.end - activeLoop.start);
+        win = Math.min(1, Math.max(1 / MAX_ZOOM, span * 1.2));
+        start = (activeLoop.start + activeLoop.end) / 2 - win / 2;
+      } else {
+        win = 1 / Math.max(1, zoomRef.current);
+        start = prog - win / 2;
+      }
       if (start < 0) start = 0;
       else if (start > 1 - win) start = 1 - win;
       const end = start + win;
@@ -366,25 +393,25 @@ export function WaveformVisualization({
           const s1 = Math.min(mono.length, Math.ceil(end * mono.length));
           const slice = s1 > s0 ? mono.subarray(s0, s1) : mono;
           fillPeaks(slice, W, pk.min, pk.max);
-          const color = count === 3 ? BAND_COLORS[i] : base;
+          const color = count === 3 ? BAND_COLORS[i] : wave;
           if (modeRef.current === 'pixelated') drawColumns(pk, color);
           else drawSimplified(envelope(pk, W, SIMPLE_POINTS), color, borderRef.current);
         }
       }
 
-      // Loop / live drag selection on top of the waveform.
+      // Loop / live drag selection on top of the waveform, derived from the playhead color.
       const drag = dragRef.current;
       if (drag && drag.moved) {
-        drawRegion(Math.min(drag.startProg, drag.curProg), Math.max(drag.startProg, drag.curProg), start, win, base);
+        drawRegion(Math.min(drag.startProg, drag.curProg), Math.max(drag.startProg, drag.curProg), start, win, ph);
       } else if (loopRef.current) {
-        drawRegion(loopRef.current.start, loopRef.current.end, start, win, base);
+        drawRegion(loopRef.current.start, loopRef.current.end, start, win, ph);
       }
 
       if (count) {
         // playhead — mapped into the (possibly zoomed) window so it stays visible
         const playX = ((prog - start) / win) * W;
         ctx.globalAlpha = 1;
-        ctx.strokeStyle = base;
+        ctx.strokeStyle = ph;
         ctx.lineWidth = 1.5 * dpr;
         const px = Math.round(Math.max(0, Math.min(W, playX))) + 0.5;
         ctx.beginPath();
@@ -454,6 +481,8 @@ export function WaveformVisualization({
   };
 
   const atMaxZoom = zoom >= MAX_ZOOM;
+  // While auto-zoom frames a loop, manual zoom is suspended — hide its controls.
+  const framingLoop = autoZoomOnLoop && !!loop;
 
   return (
     <div className="dialkit-waveform-viz-wrap" style={{ width }}>
@@ -466,25 +495,27 @@ export function WaveformVisualization({
         onPointerUp={interactive ? handlePointerUp : undefined}
         onPointerCancel={interactive ? () => { dragRef.current = null; } : undefined}
       />
-      <div className="dialkit-waveform-zoom">
-        {zoom > 1 && (
-          <button type="button" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(1, z / 2))}>
+      {!framingLoop && (
+        <div className="dialkit-waveform-zoom">
+          {zoom > 1 && (
+            <button type="button" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(1, z / 2))}>
+              <svg viewBox="0 0 16 16" fill="none">
+                <path d="M3.5 8h9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+              </svg>
+            </button>
+          )}
+          <button
+            type="button"
+            aria-label="Zoom in"
+            disabled={atMaxZoom}
+            onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z * 2))}
+          >
             <svg viewBox="0 0 16 16" fill="none">
-              <path d="M3.5 8h9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+              <path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
             </svg>
           </button>
-        )}
-        <button
-          type="button"
-          aria-label="Zoom in"
-          disabled={atMaxZoom}
-          onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z * 2))}
-        >
-          <svg viewBox="0 0 16 16" fill="none">
-            <path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-          </svg>
-        </button>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

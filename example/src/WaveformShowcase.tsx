@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { WaveformVisualization, Slider } from 'dialkit';
+import { WaveformVisualization, Slider, ColorControl } from 'dialkit';
 import type { WaveformMode, WaveformLoop } from 'dialkit';
 
 const DURATION = 3; // seconds
@@ -51,6 +51,9 @@ export function WaveformShowcase() {
   const [grid, setGrid] = useState(false);
   const [pixelIdx, setPixelIdx] = useState(0);
   const [loop, setLoop] = useState<WaveformLoop | null>(null);
+  const [waveColor, setWaveColor] = useState('#ffffff');
+  const [playheadColor, setPlayheadColor] = useState('#6366f1');
+  const [autoZoom, setAutoZoom] = useState(false);
 
   // Virtual transport: a clock-driven playhead (no audio output needed to demo it).
   const elapsedRef = useRef(0);
@@ -102,6 +105,9 @@ export function WaveformShowcase() {
         loop={loop}
         onSeek={handleSeek}
         onLoopChange={handleLoopChange}
+        waveColor={waveColor}
+        playheadColor={playheadColor}
+        autoZoomOnLoop={autoZoom}
       />
       <div style={{ fontSize: 12, color: 'var(--dial-text-secondary)' }}>
         {loop
@@ -128,6 +134,9 @@ export function WaveformShowcase() {
         <button type="button" className="lib-tab" data-active={String(grid)} onClick={() => setGrid((g) => !g)}>
           grid: {grid ? 'on' : 'off'}
         </button>
+        <button type="button" className="lib-tab" data-active={String(autoZoom)} onClick={() => setAutoZoom((a) => !a)}>
+          auto-zoom: {autoZoom ? 'on' : 'off'}
+        </button>
       </div>
       <Slider
         label="pixel res"
@@ -138,6 +147,8 @@ export function WaveformShowcase() {
         formatValue={(v) => (PIXEL_SIZES[v] === 1 ? 'default' : `${PIXEL_SIZES[v]}×`)}
         onChange={setPixelIdx}
       />
+      <ColorControl label="wave color" value={waveColor} onChange={setWaveColor} />
+      <ColorControl label="playhead" value={playheadColor} onChange={setPlayheadColor} />
     </div>
   );
 }

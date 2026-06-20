@@ -465,10 +465,16 @@ interface WaveformVisualizationProps {
      * region; clicking reports null (loop cleared — recreate it by dragging again).
      */
     onLoopChange?: (loop: WaveformLoop | null) => void;
+    /** Waveform color (single waveform only; bands keep their fixed colors). Defaults to the theme color. */
+    waveColor?: string;
+    /** Playhead color; the loop band derives from it at a lower opacity. Defaults to the theme color. */
+    playheadColor?: string;
+    /** When true, selecting a loop auto-zooms to frame it (manual zoom resumes once the loop is cleared). */
+    autoZoomOnLoop?: boolean;
     width?: number;
     height?: number;
 }
-declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, pixelSize, grid, gridSubdivisions, onSeek, loop, onLoopChange, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
+declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, pixelSize, grid, gridSubdivisions, onSeek, loop, onLoopChange, waveColor, playheadColor, autoZoomOnLoop, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
 
 interface TextControlProps {
     label: string;
