@@ -439,10 +439,15 @@ interface WaveformVisualizationProps {
     border?: boolean;
     /** Split the sample into low / mid / high bands (three color-coded shapes). */
     bands?: boolean;
+    /**
+     * Pixelated mode only: block-size multiplier. 1 (default) ≈ one CSS pixel per
+     * column; 2 / 4 / 8 make progressively chunkier, lower-resolution columns.
+     */
+    pixelSize?: number;
     width?: number;
     height?: number;
 }
-declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
+declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, pixelSize, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
 
 interface TextControlProps {
     label: string;

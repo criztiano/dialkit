@@ -25,6 +25,11 @@ interface WaveformVisualizationProps {
   border?: boolean;
   /** Split the sample into low / mid / high bands (three color-coded shapes). */
   bands?: boolean;
+  /**
+   * Pixelated mode only: block-size multiplier. 1 (default) ≈ one CSS pixel per
+   * column; 2 / 4 / 8 make progressively chunkier, lower-resolution columns.
+   */
+  pixelSize?: number;
   width?: number;
   height?: number;
 }
@@ -134,6 +139,7 @@ export function WaveformVisualization({
   mode = 'smooth',
   border = false,
   bands = false,
+  pixelSize = 1,
   width = 256,
   height = 140,
 }: WaveformVisualizationProps) {
@@ -142,6 +148,8 @@ export function WaveformVisualization({
   modeRef.current = mode;
   const borderRef = useRef(border);
   borderRef.current = border;
+  const pixelSizeRef = useRef(pixelSize);
+  pixelSizeRef.current = pixelSize;
   const progressRef = useRef(progress);
   progressRef.current = progress;
   const getProgressRef = useRef(getProgress);
@@ -157,8 +165,9 @@ export function WaveformVisualization({
     const H = (canvas.height = Math.round(height * dpr));
     const cy = H / 2;
     const amp = H * 0.42;
-    // Pixel columns span ~one CSS pixel (two device pixels on retina) — chunkier.
-    const colW = Math.max(1, Math.round(dpr));
+    // One CSS pixel per column (two device pixels on retina), times the pixelSize
+    // multiplier — chunkier blocks at 2/4/8. Read per call so the slider is live.
+    const columnWidth = () => Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSizeRef.current)));
 
     let cancelled = false;
     let peaks: Peaks[] = [];
@@ -175,6 +184,7 @@ export function WaveformVisualization({
 
     // Chunky, full-opacity min/max columns.
     const drawColumns = (p: Peaks, color: string) => {
+      const colW = columnWidth();
       ctx.fillStyle = color;
       ctx.globalAlpha = 1;
       for (let x = 0; x < W; x += colW) {

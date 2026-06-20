@@ -3441,6 +3441,7 @@ function WaveformVisualization({
   mode = "smooth",
   border = false,
   bands = false,
+  pixelSize = 1,
   width = 256,
   height = 140
 }) {
@@ -3449,6 +3450,8 @@ function WaveformVisualization({
   modeRef.current = mode;
   const borderRef = (0, import_react23.useRef)(border);
   borderRef.current = border;
+  const pixelSizeRef = (0, import_react23.useRef)(pixelSize);
+  pixelSizeRef.current = pixelSize;
   const progressRef = (0, import_react23.useRef)(progress);
   progressRef.current = progress;
   const getProgressRef = (0, import_react23.useRef)(getProgress);
@@ -3462,7 +3465,7 @@ function WaveformVisualization({
     const H = canvas.height = Math.round(height * dpr);
     const cy = H / 2;
     const amp = H * 0.42;
-    const colW = Math.max(1, Math.round(dpr));
+    const columnWidth = () => Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSizeRef.current)));
     let cancelled = false;
     let peaks = [];
     let envs = [];
@@ -3474,6 +3477,7 @@ function WaveformVisualization({
       envs = peaks.map((p) => envelope(p, W, SIMPLE_POINTS));
     })();
     const drawColumns = (p, color) => {
+      const colW = columnWidth();
       ctx.fillStyle = color;
       ctx.globalAlpha = 1;
       for (let x = 0; x < W; x += colW) {

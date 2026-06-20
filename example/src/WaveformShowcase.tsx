@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { WaveformVisualization } from 'dialkit';
+import { WaveformVisualization, Slider } from 'dialkit';
 import type { WaveformMode } from 'dialkit';
 
 const DURATION = 3; // seconds
+const PIXEL_SIZES = [1, 2, 4, 8]; // pixelated block-size multipliers
 
 /**
  * Render a short sample offline: a low drone plus several enveloped "hits", so the
@@ -47,6 +48,7 @@ export function WaveformShowcase() {
   const [mode, setMode] = useState<WaveformMode>('smooth');
   const [bands, setBands] = useState(false);
   const [border, setBorder] = useState(false);
+  const [pixelIdx, setPixelIdx] = useState(0);
 
   // Virtual transport: a clock-driven playhead (no audio output needed to demo it).
   const elapsedRef = useRef(0);
@@ -69,7 +71,7 @@ export function WaveformShowcase() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <WaveformVisualization buffer={buffer} getProgress={getProgress} mode={mode} bands={bands} border={border} />
+      <WaveformVisualization buffer={buffer} getProgress={getProgress} mode={mode} bands={bands} border={border} pixelSize={PIXEL_SIZES[pixelIdx]} />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <button type="button" className="lib-tab" data-active={String(playing)} onClick={() => setPlaying((p) => !p)}>
           {playing ? '❚❚ Pause' : '▶ Play'}
@@ -88,6 +90,15 @@ export function WaveformShowcase() {
           border: {border ? 'on' : 'off'}
         </button>
       </div>
+      <Slider
+        label="pixel res"
+        value={pixelIdx}
+        min={0}
+        max={3}
+        step={1}
+        formatValue={(v) => (PIXEL_SIZES[v] === 1 ? 'default' : `${PIXEL_SIZES[v]}×`)}
+        onChange={setPixelIdx}
+      />
     </div>
   );
 }
