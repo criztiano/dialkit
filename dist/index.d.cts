@@ -427,11 +427,12 @@ interface WaveformVisualizationProps {
      */
     getProgress?: () => number;
     /**
-     * 'smooth' — anti-aliased min/max envelope.
-     * 'pixelated' — crisp, high-resolution per-pixel min/max columns (no AA).
+     * 'smooth' — a simplified, SVG-like envelope: few points, Catmull-Rom
+     * interpolation, translucent fill (the gist of the sample's dynamics).
+     * 'pixelated' — crisp, high-resolution per-pixel min/max columns.
      */
     mode?: WaveformMode;
-    /** Split the sample into low / mid / high bands and draw three overlaid waveforms. */
+    /** Split the sample into low / mid / high bands (three color-coded shapes). */
     bands?: boolean;
     width?: number;
     height?: number;

@@ -13,11 +13,12 @@ interface WaveformVisualizationProps {
    */
   getProgress?: () => number;
   /**
-   * 'smooth' — anti-aliased min/max envelope.
-   * 'pixelated' — crisp, high-resolution per-pixel min/max columns (no AA).
+   * 'smooth' — a simplified, SVG-like envelope: few points, Catmull-Rom
+   * interpolation, translucent fill (the gist of the sample's dynamics).
+   * 'pixelated' — crisp, high-resolution per-pixel min/max columns.
    */
   mode?: WaveformMode;
-  /** Split the sample into low / mid / high bands and draw three overlaid waveforms. */
+  /** Split the sample into low / mid / high bands (three color-coded shapes). */
   bands?: boolean;
   width?: number;
   height?: number;
@@ -29,9 +30,16 @@ const BANDS: { type: BiquadFilterType; freq: number; q?: number }[] = [
   { type: 'bandpass', freq: 1100, q: 0.6 },
   { type: 'highpass', freq: 4200 },
 ];
-const BAND_ALPHA = [0.6, 0.42, 0.28];
+// Low / mid / high — purple, cyan, lime.
+const BAND_COLORS = ['#a855f7', '#22d3ee', '#a3e635'];
+
+// Smooth mode: how many points the envelope is simplified to, and its alphas.
+const SIMPLE_POINTS = 46;
+const FILL_ALPHA = 0.22;
+const STROKE_ALPHA = 0.8;
 
 type Peaks = { min: Float32Array; max: Float32Array };
+type Pt = { x: number; y: number };
 
 function mixToMono(buffer: AudioBuffer): Float32Array {
   if (buffer.numberOfChannels === 1) return buffer.getChannelData(0);
@@ -65,7 +73,41 @@ function computePeaks(data: Float32Array, cols: number): Peaks {
   return { min, max };
 }
 
-// Render the sample through one band filter offline, returning the filtered buffer.
+// Simplified symmetric envelope: peak amplitude over each of `n` evenly-spaced segments.
+function envelope(p: Peaks, cols: number, n: number): number[] {
+  const out = new Array<number>(n);
+  const seg = cols / n;
+  for (let k = 0; k < n; k++) {
+    const start = Math.floor(k * seg);
+    const end = Math.max(start + 1, Math.min(cols, Math.floor((k + 1) * seg)));
+    let a = 0;
+    for (let x = start; x < end; x++) {
+      const m = Math.max(Math.abs(p.min[x]), Math.abs(p.max[x]));
+      if (m > a) a = m;
+    }
+    out[k] = a;
+  }
+  return out;
+}
+
+// Catmull-Rom → cubic bezier: a smooth curve through `pts` (path already at pts[0]).
+function smoothThrough(ctx: CanvasRenderingContext2D, pts: Pt[]) {
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    ctx.bezierCurveTo(
+      p1.x + (p2.x - p0.x) / 6,
+      p1.y + (p2.y - p0.y) / 6,
+      p2.x - (p3.x - p1.x) / 6,
+      p2.y - (p3.y - p1.y) / 6,
+      p2.x,
+      p2.y
+    );
+  }
+}
+
 async function filterBuffer(buffer: AudioBuffer, band: (typeof BANDS)[number]): Promise<AudioBuffer> {
   const off = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
   const src = off.createBufferSource();
@@ -90,8 +132,6 @@ export function WaveformVisualization({
   height = 140,
 }: WaveformVisualizationProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  // Mode/playhead change rendering only — keep them in refs so the loop reads the
-  // latest values without recomputing the (expensive) peaks.
   const modeRef = useRef(mode);
   modeRef.current = mode;
   const progressRef = useRef(progress);
@@ -112,38 +152,71 @@ export function WaveformVisualization({
 
     let cancelled = false;
     let peaks: Peaks[] = [];
+    let envs: number[][] = [];
 
     // Compute peaks once per buffer/bands/size — the expensive part (EQ offline-filters).
     (async () => {
       if (!buffer) return;
-      if (bands) {
-        const filtered = await Promise.all(BANDS.map((b) => filterBuffer(buffer, b)));
-        if (cancelled) return;
-        peaks = filtered.map((fb) => computePeaks(mixToMono(fb), W));
-      } else {
-        peaks = [computePeaks(mixToMono(buffer), W)];
-      }
+      const bufs = bands ? await Promise.all(BANDS.map((b) => filterBuffer(buffer, b))) : [buffer];
+      if (cancelled) return;
+      peaks = bufs.map((b) => computePeaks(mixToMono(b), W));
+      envs = peaks.map((p) => envelope(p, W, SIMPLE_POINTS));
     })();
 
-    // Draw one envelope between [x0, x1) at a given alpha, in the active mode.
-    const drawRange = (p: Peaks, base: string, alpha: number, x0: number, x1: number) => {
+    // Crisp per-pixel min/max columns between [x0, x1).
+    const drawColumns = (p: Peaks, color: string, x0: number, x1: number, alpha: number) => {
       if (x1 <= x0) return;
+      ctx.fillStyle = color;
       ctx.globalAlpha = alpha;
-      if (modeRef.current === 'pixelated') {
-        ctx.fillStyle = base;
-        for (let x = x0; x < x1; x++) {
-          const yTop = Math.round(cy - p.max[x] * amp);
-          const yBot = Math.round(cy - p.min[x] * amp);
-          ctx.fillRect(x, yTop, 1, Math.max(1, yBot - yTop));
-        }
-      } else {
-        ctx.fillStyle = base;
+      for (let x = x0; x < x1; x++) {
+        const yTop = Math.round(cy - p.max[x] * amp);
+        const yBot = Math.round(cy - p.min[x] * amp);
+        ctx.fillRect(x, yTop, 1, Math.max(1, yBot - yTop));
+      }
+    };
+
+    // Simplified, smoothly-interpolated translucent envelope; played portion brighter.
+    const drawSimplified = (env: number[], color: string, playX: number) => {
+      const n = env.length;
+      if (n < 2) return;
+      const px = (k: number) => (k / (n - 1)) * W;
+      const top: Pt[] = env.map((a, k) => ({ x: px(k), y: cy - a * amp }));
+      const bot: Pt[] = [];
+      for (let k = n - 1; k >= 0; k--) bot.push({ x: px(k), y: cy + env[k] * amp });
+
+      const path = () => {
         ctx.beginPath();
-        ctx.moveTo(x0, cy - p.max[x0] * amp);
-        for (let x = x0; x < x1; x++) ctx.lineTo(x, cy - p.max[x] * amp);
-        for (let x = x1 - 1; x >= x0; x--) ctx.lineTo(x, cy - p.min[x] * amp);
+        ctx.moveTo(top[0].x, top[0].y);
+        smoothThrough(ctx, top);
+        ctx.lineTo(bot[0].x, bot[0].y);
+        smoothThrough(ctx, bot);
         ctx.closePath();
+      };
+
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = 1.6 * dpr;
+      ctx.fillStyle = color;
+      ctx.strokeStyle = color;
+
+      // whole shape, dim (unplayed level)
+      path();
+      ctx.globalAlpha = FILL_ALPHA * 0.4;
+      ctx.fill();
+      ctx.globalAlpha = STROKE_ALPHA * 0.45;
+      ctx.stroke();
+
+      // played portion, full, clipped to the left of the playhead
+      if (playX > 0.5) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, 0, playX, H);
+        ctx.clip();
+        path();
+        ctx.globalAlpha = FILL_ALPHA;
         ctx.fill();
+        ctx.globalAlpha = STROKE_ALPHA;
+        ctx.stroke();
+        ctx.restore();
       }
     };
 
@@ -168,15 +241,19 @@ export function WaveformVisualization({
       const playX = Math.max(0, Math.min(1, prog || 0)) * W;
       const split = Math.max(0, Math.min(W, Math.floor(playX)));
 
-      // Fixed waveform(s): played portion at full alpha, unplayed dimmer.
-      for (let i = 0; i < peaks.length; i++) {
-        const alpha = peaks.length === 3 ? BAND_ALPHA[i] : 0.6;
-        drawRange(peaks[i], base, alpha, 0, split);
-        drawRange(peaks[i], base, alpha * 0.45, split, W);
+      const count = peaks.length;
+      for (let i = 0; i < count; i++) {
+        const color = count === 3 ? BAND_COLORS[i] : base;
+        if (modeRef.current === 'pixelated') {
+          drawColumns(peaks[i], color, 0, split, 0.62);
+          drawColumns(peaks[i], color, split, W, 0.28);
+        } else {
+          drawSimplified(envs[i], color, playX);
+        }
       }
 
-      // Playhead
-      if (peaks.length) {
+      // playhead
+      if (count) {
         ctx.globalAlpha = 0.9;
         ctx.strokeStyle = base;
         ctx.lineWidth = 1.5 * dpr;

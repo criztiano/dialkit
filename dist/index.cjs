@@ -3358,7 +3358,10 @@ var BANDS = [
   { type: "bandpass", freq: 1100, q: 0.6 },
   { type: "highpass", freq: 4200 }
 ];
-var BAND_ALPHA = [0.6, 0.42, 0.28];
+var BAND_COLORS = ["#a855f7", "#22d3ee", "#a3e635"];
+var SIMPLE_POINTS = 46;
+var FILL_ALPHA = 0.22;
+var STROKE_ALPHA = 0.8;
 function mixToMono(buffer) {
   if (buffer.numberOfChannels === 1) return buffer.getChannelData(0);
   const len = buffer.length;
@@ -3387,6 +3390,37 @@ function computePeaks(data, cols) {
     max[x] = mx;
   }
   return { min, max };
+}
+function envelope(p, cols, n) {
+  const out = new Array(n);
+  const seg = cols / n;
+  for (let k = 0; k < n; k++) {
+    const start = Math.floor(k * seg);
+    const end = Math.max(start + 1, Math.min(cols, Math.floor((k + 1) * seg)));
+    let a = 0;
+    for (let x = start; x < end; x++) {
+      const m = Math.max(Math.abs(p.min[x]), Math.abs(p.max[x]));
+      if (m > a) a = m;
+    }
+    out[k] = a;
+  }
+  return out;
+}
+function smoothThrough(ctx, pts) {
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    ctx.bezierCurveTo(
+      p1.x + (p2.x - p0.x) / 6,
+      p1.y + (p2.y - p0.y) / 6,
+      p2.x - (p3.x - p1.x) / 6,
+      p2.y - (p3.y - p1.y) / 6,
+      p2.x,
+      p2.y
+    );
+  }
 }
 async function filterBuffer(buffer, band) {
   const off = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
@@ -3428,34 +3462,59 @@ function WaveformVisualization({
     const amp = H * 0.42;
     let cancelled = false;
     let peaks = [];
+    let envs = [];
     (async () => {
       if (!buffer) return;
-      if (bands) {
-        const filtered = await Promise.all(BANDS.map((b) => filterBuffer(buffer, b)));
-        if (cancelled) return;
-        peaks = filtered.map((fb) => computePeaks(mixToMono(fb), W));
-      } else {
-        peaks = [computePeaks(mixToMono(buffer), W)];
-      }
+      const bufs = bands ? await Promise.all(BANDS.map((b) => filterBuffer(buffer, b))) : [buffer];
+      if (cancelled) return;
+      peaks = bufs.map((b) => computePeaks(mixToMono(b), W));
+      envs = peaks.map((p) => envelope(p, W, SIMPLE_POINTS));
     })();
-    const drawRange = (p, base, alpha, x0, x1) => {
+    const drawColumns = (p, color, x0, x1, alpha) => {
       if (x1 <= x0) return;
+      ctx.fillStyle = color;
       ctx.globalAlpha = alpha;
-      if (modeRef.current === "pixelated") {
-        ctx.fillStyle = base;
-        for (let x = x0; x < x1; x++) {
-          const yTop = Math.round(cy - p.max[x] * amp);
-          const yBot = Math.round(cy - p.min[x] * amp);
-          ctx.fillRect(x, yTop, 1, Math.max(1, yBot - yTop));
-        }
-      } else {
-        ctx.fillStyle = base;
+      for (let x = x0; x < x1; x++) {
+        const yTop = Math.round(cy - p.max[x] * amp);
+        const yBot = Math.round(cy - p.min[x] * amp);
+        ctx.fillRect(x, yTop, 1, Math.max(1, yBot - yTop));
+      }
+    };
+    const drawSimplified = (env, color, playX) => {
+      const n = env.length;
+      if (n < 2) return;
+      const px = (k) => k / (n - 1) * W;
+      const top = env.map((a, k) => ({ x: px(k), y: cy - a * amp }));
+      const bot = [];
+      for (let k = n - 1; k >= 0; k--) bot.push({ x: px(k), y: cy + env[k] * amp });
+      const path = () => {
         ctx.beginPath();
-        ctx.moveTo(x0, cy - p.max[x0] * amp);
-        for (let x = x0; x < x1; x++) ctx.lineTo(x, cy - p.max[x] * amp);
-        for (let x = x1 - 1; x >= x0; x--) ctx.lineTo(x, cy - p.min[x] * amp);
+        ctx.moveTo(top[0].x, top[0].y);
+        smoothThrough(ctx, top);
+        ctx.lineTo(bot[0].x, bot[0].y);
+        smoothThrough(ctx, bot);
         ctx.closePath();
+      };
+      ctx.lineJoin = "round";
+      ctx.lineWidth = 1.6 * dpr;
+      ctx.fillStyle = color;
+      ctx.strokeStyle = color;
+      path();
+      ctx.globalAlpha = FILL_ALPHA * 0.4;
+      ctx.fill();
+      ctx.globalAlpha = STROKE_ALPHA * 0.45;
+      ctx.stroke();
+      if (playX > 0.5) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, 0, playX, H);
+        ctx.clip();
+        path();
+        ctx.globalAlpha = FILL_ALPHA;
         ctx.fill();
+        ctx.globalAlpha = STROKE_ALPHA;
+        ctx.stroke();
+        ctx.restore();
       }
     };
     let raf = 0;
@@ -3475,12 +3534,17 @@ function WaveformVisualization({
       const prog = getProgressRef.current ? getProgressRef.current() : progressRef.current;
       const playX = Math.max(0, Math.min(1, prog || 0)) * W;
       const split = Math.max(0, Math.min(W, Math.floor(playX)));
-      for (let i = 0; i < peaks.length; i++) {
-        const alpha = peaks.length === 3 ? BAND_ALPHA[i] : 0.6;
-        drawRange(peaks[i], base, alpha, 0, split);
-        drawRange(peaks[i], base, alpha * 0.45, split, W);
+      const count = peaks.length;
+      for (let i = 0; i < count; i++) {
+        const color = count === 3 ? BAND_COLORS[i] : base;
+        if (modeRef.current === "pixelated") {
+          drawColumns(peaks[i], color, 0, split, 0.62);
+          drawColumns(peaks[i], color, split, W, 0.28);
+        } else {
+          drawSimplified(envs[i], color, playX);
+        }
       }
-      if (peaks.length) {
+      if (count) {
         ctx.globalAlpha = 0.9;
         ctx.strokeStyle = base;
         ctx.lineWidth = 1.5 * dpr;
