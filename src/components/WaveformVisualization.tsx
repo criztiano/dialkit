@@ -14,10 +14,15 @@ interface WaveformVisualizationProps {
   getProgress?: () => number;
   /**
    * 'smooth' — a simplified, SVG-like envelope: few points, Catmull-Rom
-   * interpolation, translucent fill (the gist of the sample's dynamics).
-   * 'pixelated' — crisp, high-resolution per-pixel min/max columns.
+   * interpolation, solid fill (the gist of the sample's dynamics).
+   * 'pixelated' — crisp, chunky per-column min/max bars.
    */
   mode?: WaveformMode;
+  /**
+   * Smooth mode only. When false (default) the shape is a solid fill; when true
+   * it becomes a translucent fill with a crisp outline.
+   */
+  border?: boolean;
   /** Split the sample into low / mid / high bands (three color-coded shapes). */
   bands?: boolean;
   width?: number;
@@ -33,10 +38,10 @@ const BANDS: { type: BiquadFilterType; freq: number; q?: number }[] = [
 // Low / mid / high — purple, cyan, lime.
 const BAND_COLORS = ['#a855f7', '#22d3ee', '#a3e635'];
 
-// Smooth mode: how many points the envelope is simplified to, and its alphas.
+// Smooth mode: how many points the envelope is simplified to.
 const SIMPLE_POINTS = 46;
-const FILL_ALPHA = 0.22;
-const STROKE_ALPHA = 0.8;
+// Fill opacity used only for the bordered (outlined) variant.
+const BORDER_FILL_ALPHA = 0.2;
 
 type Peaks = { min: Float32Array; max: Float32Array };
 type Pt = { x: number; y: number };
@@ -127,6 +132,7 @@ export function WaveformVisualization({
   progress = 0,
   getProgress,
   mode = 'smooth',
+  border = false,
   bands = false,
   width = 256,
   height = 140,
@@ -134,6 +140,8 @@ export function WaveformVisualization({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const modeRef = useRef(mode);
   modeRef.current = mode;
+  const borderRef = useRef(border);
+  borderRef.current = border;
   const progressRef = useRef(progress);
   progressRef.current = progress;
   const getProgressRef = useRef(getProgress);
@@ -149,6 +157,8 @@ export function WaveformVisualization({
     const H = (canvas.height = Math.round(height * dpr));
     const cy = H / 2;
     const amp = H * 0.42;
+    // Pixel columns span ~one CSS pixel (two device pixels on retina) — chunkier.
+    const colW = Math.max(1, Math.round(dpr));
 
     let cancelled = false;
     let peaks: Peaks[] = [];
@@ -163,20 +173,25 @@ export function WaveformVisualization({
       envs = peaks.map((p) => envelope(p, W, SIMPLE_POINTS));
     })();
 
-    // Crisp per-pixel min/max columns between [x0, x1).
-    const drawColumns = (p: Peaks, color: string, x0: number, x1: number, alpha: number) => {
-      if (x1 <= x0) return;
+    // Chunky, full-opacity min/max columns.
+    const drawColumns = (p: Peaks, color: string) => {
       ctx.fillStyle = color;
-      ctx.globalAlpha = alpha;
-      for (let x = x0; x < x1; x++) {
-        const yTop = Math.round(cy - p.max[x] * amp);
-        const yBot = Math.round(cy - p.min[x] * amp);
-        ctx.fillRect(x, yTop, 1, Math.max(1, yBot - yTop));
+      ctx.globalAlpha = 1;
+      for (let x = 0; x < W; x += colW) {
+        let mn = 1;
+        let mx = -1;
+        for (let i = x; i < x + colW && i < W; i++) {
+          if (p.min[i] < mn) mn = p.min[i];
+          if (p.max[i] > mx) mx = p.max[i];
+        }
+        const yTop = Math.round(cy - mx * amp);
+        const yBot = Math.round(cy - mn * amp);
+        ctx.fillRect(x, yTop, colW, Math.max(1, yBot - yTop));
       }
     };
 
-    // Simplified, smoothly-interpolated translucent envelope; played portion brighter.
-    const drawSimplified = (env: number[], color: string, playX: number) => {
+    // Simplified, smoothly-interpolated envelope: solid fill, or translucent + outline.
+    const drawSimplified = (env: number[], color: string, outline: boolean) => {
       const n = env.length;
       if (n < 2) return;
       const px = (k: number) => (k / (n - 1)) * W;
@@ -184,39 +199,25 @@ export function WaveformVisualization({
       const bot: Pt[] = [];
       for (let k = n - 1; k >= 0; k--) bot.push({ x: px(k), y: cy + env[k] * amp });
 
-      const path = () => {
-        ctx.beginPath();
-        ctx.moveTo(top[0].x, top[0].y);
-        smoothThrough(ctx, top);
-        ctx.lineTo(bot[0].x, bot[0].y);
-        smoothThrough(ctx, bot);
-        ctx.closePath();
-      };
+      ctx.beginPath();
+      ctx.moveTo(top[0].x, top[0].y);
+      smoothThrough(ctx, top);
+      ctx.lineTo(bot[0].x, bot[0].y);
+      smoothThrough(ctx, bot);
+      ctx.closePath();
 
-      ctx.lineJoin = 'round';
-      ctx.lineWidth = 1.6 * dpr;
       ctx.fillStyle = color;
-      ctx.strokeStyle = color;
-
-      // whole shape, dim (unplayed level)
-      path();
-      ctx.globalAlpha = FILL_ALPHA * 0.4;
-      ctx.fill();
-      ctx.globalAlpha = STROKE_ALPHA * 0.45;
-      ctx.stroke();
-
-      // played portion, full, clipped to the left of the playhead
-      if (playX > 0.5) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(0, 0, playX, H);
-        ctx.clip();
-        path();
-        ctx.globalAlpha = FILL_ALPHA;
+      if (outline) {
+        ctx.globalAlpha = BORDER_FILL_ALPHA;
         ctx.fill();
-        ctx.globalAlpha = STROKE_ALPHA;
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.6 * dpr;
+        ctx.lineJoin = 'round';
         ctx.stroke();
-        ctx.restore();
+      } else {
+        ctx.globalAlpha = 1;
+        ctx.fill();
       }
     };
 
@@ -237,24 +238,19 @@ export function WaveformVisualization({
       ctx.lineTo(W, Math.round(cy) + 0.5);
       ctx.stroke();
 
-      const prog = getProgressRef.current ? getProgressRef.current() : progressRef.current;
-      const playX = Math.max(0, Math.min(1, prog || 0)) * W;
-      const split = Math.max(0, Math.min(W, Math.floor(playX)));
-
+      // Bands drawn low → high so the spikier high band reads on top.
       const count = peaks.length;
       for (let i = 0; i < count; i++) {
         const color = count === 3 ? BAND_COLORS[i] : base;
-        if (modeRef.current === 'pixelated') {
-          drawColumns(peaks[i], color, 0, split, 0.62);
-          drawColumns(peaks[i], color, split, W, 0.28);
-        } else {
-          drawSimplified(envs[i], color, playX);
-        }
+        if (modeRef.current === 'pixelated') drawColumns(peaks[i], color);
+        else drawSimplified(envs[i], color, borderRef.current);
       }
 
       // playhead
       if (count) {
-        ctx.globalAlpha = 0.9;
+        const prog = getProgressRef.current ? getProgressRef.current() : progressRef.current;
+        const playX = Math.max(0, Math.min(1, prog || 0)) * W;
+        ctx.globalAlpha = 1;
         ctx.strokeStyle = base;
         ctx.lineWidth = 1.5 * dpr;
         const px = Math.round(playX) + 0.5;

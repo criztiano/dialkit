@@ -46,6 +46,7 @@ export function WaveformShowcase() {
   const [playing, setPlaying] = useState(false);
   const [mode, setMode] = useState<WaveformMode>('smooth');
   const [bands, setBands] = useState(false);
+  const [border, setBorder] = useState(false);
 
   // Virtual transport: a clock-driven playhead (no audio output needed to demo it).
   const elapsedRef = useRef(0);
@@ -68,7 +69,7 @@ export function WaveformShowcase() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <WaveformVisualization buffer={buffer} getProgress={getProgress} mode={mode} bands={bands} />
+      <WaveformVisualization buffer={buffer} getProgress={getProgress} mode={mode} bands={bands} border={border} />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <button type="button" className="lib-tab" data-active={String(playing)} onClick={() => setPlaying((p) => !p)}>
           {playing ? '❚❚ Pause' : '▶ Play'}
@@ -82,6 +83,9 @@ export function WaveformShowcase() {
         </div>
         <button type="button" className="lib-tab" data-active={String(bands)} onClick={() => setBands((b) => !b)}>
           EQ bands: {bands ? 'on' : 'off'}
+        </button>
+        <button type="button" className="lib-tab" data-active={String(border)} onClick={() => setBorder((b) => !b)}>
+          border: {border ? 'on' : 'off'}
         </button>
       </div>
     </div>

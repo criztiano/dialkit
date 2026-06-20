@@ -428,16 +428,21 @@ interface WaveformVisualizationProps {
     getProgress?: () => number;
     /**
      * 'smooth' — a simplified, SVG-like envelope: few points, Catmull-Rom
-     * interpolation, translucent fill (the gist of the sample's dynamics).
-     * 'pixelated' — crisp, high-resolution per-pixel min/max columns.
+     * interpolation, solid fill (the gist of the sample's dynamics).
+     * 'pixelated' — crisp, chunky per-column min/max bars.
      */
     mode?: WaveformMode;
+    /**
+     * Smooth mode only. When false (default) the shape is a solid fill; when true
+     * it becomes a translucent fill with a crisp outline.
+     */
+    border?: boolean;
     /** Split the sample into low / mid / high bands (three color-coded shapes). */
     bands?: boolean;
     width?: number;
     height?: number;
 }
-declare function WaveformVisualization({ buffer, progress, getProgress, mode, bands, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
+declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
 
 interface TextControlProps {
     label: string;

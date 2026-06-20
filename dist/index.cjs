@@ -3360,8 +3360,7 @@ var BANDS = [
 ];
 var BAND_COLORS = ["#a855f7", "#22d3ee", "#a3e635"];
 var SIMPLE_POINTS = 46;
-var FILL_ALPHA = 0.22;
-var STROKE_ALPHA = 0.8;
+var BORDER_FILL_ALPHA = 0.2;
 function mixToMono(buffer) {
   if (buffer.numberOfChannels === 1) return buffer.getChannelData(0);
   const len = buffer.length;
@@ -3440,6 +3439,7 @@ function WaveformVisualization({
   progress = 0,
   getProgress,
   mode = "smooth",
+  border = false,
   bands = false,
   width = 256,
   height = 140
@@ -3447,6 +3447,8 @@ function WaveformVisualization({
   const canvasRef = (0, import_react23.useRef)(null);
   const modeRef = (0, import_react23.useRef)(mode);
   modeRef.current = mode;
+  const borderRef = (0, import_react23.useRef)(border);
+  borderRef.current = border;
   const progressRef = (0, import_react23.useRef)(progress);
   progressRef.current = progress;
   const getProgressRef = (0, import_react23.useRef)(getProgress);
@@ -3460,6 +3462,7 @@ function WaveformVisualization({
     const H = canvas.height = Math.round(height * dpr);
     const cy = H / 2;
     const amp = H * 0.42;
+    const colW = Math.max(1, Math.round(dpr));
     let cancelled = false;
     let peaks = [];
     let envs = [];
@@ -3470,51 +3473,46 @@ function WaveformVisualization({
       peaks = bufs.map((b) => computePeaks(mixToMono(b), W));
       envs = peaks.map((p) => envelope(p, W, SIMPLE_POINTS));
     })();
-    const drawColumns = (p, color, x0, x1, alpha) => {
-      if (x1 <= x0) return;
+    const drawColumns = (p, color) => {
       ctx.fillStyle = color;
-      ctx.globalAlpha = alpha;
-      for (let x = x0; x < x1; x++) {
-        const yTop = Math.round(cy - p.max[x] * amp);
-        const yBot = Math.round(cy - p.min[x] * amp);
-        ctx.fillRect(x, yTop, 1, Math.max(1, yBot - yTop));
+      ctx.globalAlpha = 1;
+      for (let x = 0; x < W; x += colW) {
+        let mn = 1;
+        let mx = -1;
+        for (let i = x; i < x + colW && i < W; i++) {
+          if (p.min[i] < mn) mn = p.min[i];
+          if (p.max[i] > mx) mx = p.max[i];
+        }
+        const yTop = Math.round(cy - mx * amp);
+        const yBot = Math.round(cy - mn * amp);
+        ctx.fillRect(x, yTop, colW, Math.max(1, yBot - yTop));
       }
     };
-    const drawSimplified = (env, color, playX) => {
+    const drawSimplified = (env, color, outline) => {
       const n = env.length;
       if (n < 2) return;
       const px = (k) => k / (n - 1) * W;
       const top = env.map((a, k) => ({ x: px(k), y: cy - a * amp }));
       const bot = [];
       for (let k = n - 1; k >= 0; k--) bot.push({ x: px(k), y: cy + env[k] * amp });
-      const path = () => {
-        ctx.beginPath();
-        ctx.moveTo(top[0].x, top[0].y);
-        smoothThrough(ctx, top);
-        ctx.lineTo(bot[0].x, bot[0].y);
-        smoothThrough(ctx, bot);
-        ctx.closePath();
-      };
-      ctx.lineJoin = "round";
-      ctx.lineWidth = 1.6 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(top[0].x, top[0].y);
+      smoothThrough(ctx, top);
+      ctx.lineTo(bot[0].x, bot[0].y);
+      smoothThrough(ctx, bot);
+      ctx.closePath();
       ctx.fillStyle = color;
-      ctx.strokeStyle = color;
-      path();
-      ctx.globalAlpha = FILL_ALPHA * 0.4;
-      ctx.fill();
-      ctx.globalAlpha = STROKE_ALPHA * 0.45;
-      ctx.stroke();
-      if (playX > 0.5) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(0, 0, playX, H);
-        ctx.clip();
-        path();
-        ctx.globalAlpha = FILL_ALPHA;
+      if (outline) {
+        ctx.globalAlpha = BORDER_FILL_ALPHA;
         ctx.fill();
-        ctx.globalAlpha = STROKE_ALPHA;
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.6 * dpr;
+        ctx.lineJoin = "round";
         ctx.stroke();
-        ctx.restore();
+      } else {
+        ctx.globalAlpha = 1;
+        ctx.fill();
       }
     };
     let raf = 0;
@@ -3531,21 +3529,16 @@ function WaveformVisualization({
       ctx.moveTo(0, Math.round(cy) + 0.5);
       ctx.lineTo(W, Math.round(cy) + 0.5);
       ctx.stroke();
-      const prog = getProgressRef.current ? getProgressRef.current() : progressRef.current;
-      const playX = Math.max(0, Math.min(1, prog || 0)) * W;
-      const split = Math.max(0, Math.min(W, Math.floor(playX)));
       const count = peaks.length;
       for (let i = 0; i < count; i++) {
         const color = count === 3 ? BAND_COLORS[i] : base;
-        if (modeRef.current === "pixelated") {
-          drawColumns(peaks[i], color, 0, split, 0.62);
-          drawColumns(peaks[i], color, split, W, 0.28);
-        } else {
-          drawSimplified(envs[i], color, playX);
-        }
+        if (modeRef.current === "pixelated") drawColumns(peaks[i], color);
+        else drawSimplified(envs[i], color, borderRef.current);
       }
       if (count) {
-        ctx.globalAlpha = 0.9;
+        const prog = getProgressRef.current ? getProgressRef.current() : progressRef.current;
+        const playX = Math.max(0, Math.min(1, prog || 0)) * W;
+        ctx.globalAlpha = 1;
         ctx.strokeStyle = base;
         ctx.lineWidth = 1.5 * dpr;
         const px = Math.round(playX) + 0.5;
