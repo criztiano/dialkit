@@ -3362,7 +3362,7 @@ var BAND_COLORS = ["#a855f7", "#22d3ee", "#a3e635"];
 var SIMPLE_POINTS = 46;
 var BORDER_FILL_ALPHA = 0.2;
 var MAX_ZOOM = 8;
-var GRID_ROWS = 4;
+var DRAG_THRESHOLD = 3;
 function mixToMono(buffer) {
   if (buffer.numberOfChannels === 1) return buffer.getChannelData(0);
   const len = buffer.length;
@@ -3443,6 +3443,9 @@ function WaveformVisualization({
   pixelSize = 1,
   grid = false,
   gridSubdivisions = 8,
+  onSeek,
+  loop = null,
+  onLoopChange,
   width = 256,
   height = 140
 }) {
@@ -3464,6 +3467,15 @@ function WaveformVisualization({
   progressRef.current = progress;
   const getProgressRef = (0, import_react23.useRef)(getProgress);
   getProgressRef.current = getProgress;
+  const loopRef = (0, import_react23.useRef)(loop);
+  loopRef.current = loop;
+  const onSeekRef = (0, import_react23.useRef)(onSeek);
+  onSeekRef.current = onSeek;
+  const onLoopChangeRef = (0, import_react23.useRef)(onLoopChange);
+  onLoopChangeRef.current = onLoopChange;
+  const windowRef = (0, import_react23.useRef)({ start: 0, win: 1 });
+  const dragRef = (0, import_react23.useRef)(null);
+  const interactive = !!(onSeek || onLoopChange);
   (0, import_react23.useEffect)(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
@@ -3537,10 +3549,31 @@ function WaveformVisualization({
         ctx.moveTo(x, 0);
         ctx.lineTo(x, H);
       }
-      for (let r = 1; r < GRID_ROWS; r++) {
-        const y = Math.round(r / GRID_ROWS * H) + 0.5;
-        ctx.moveTo(0, y);
-        ctx.lineTo(W, y);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    };
+    const drawRegion = (a, b, start, win, base) => {
+      const x0 = (a - start) / win * W;
+      const x1 = (b - start) / win * W;
+      const cx0 = Math.max(0, x0);
+      const cx1 = Math.min(W, x1);
+      if (cx1 <= cx0) return;
+      ctx.fillStyle = base;
+      ctx.globalAlpha = 0.14;
+      ctx.fillRect(cx0, 0, cx1 - cx0, H);
+      ctx.globalAlpha = 0.55;
+      ctx.lineWidth = dpr;
+      ctx.strokeStyle = base;
+      ctx.beginPath();
+      if (x0 >= 0 && x0 <= W) {
+        const xe = Math.round(x0) + 0.5;
+        ctx.moveTo(xe, 0);
+        ctx.lineTo(xe, H);
+      }
+      if (x1 >= 0 && x1 <= W) {
+        const xe = Math.round(x1) + 0.5;
+        ctx.moveTo(xe, 0);
+        ctx.lineTo(xe, H);
       }
       ctx.stroke();
       ctx.globalAlpha = 1;
@@ -3561,15 +3594,16 @@ function WaveformVisualization({
       ctx.lineTo(W, Math.round(cy) + 0.5);
       ctx.stroke();
       ctx.globalAlpha = 1;
+      const prog = Math.max(0, Math.min(1, (getProgressRef.current ? getProgressRef.current() : progressRef.current) || 0));
+      const zoomLvl = Math.max(1, zoomRef.current);
+      const win = 1 / zoomLvl;
+      let start = prog - win / 2;
+      if (start < 0) start = 0;
+      else if (start > 1 - win) start = 1 - win;
+      const end = start + win;
+      windowRef.current = { start, win };
       const count = monos.length;
       if (count) {
-        const prog = Math.max(0, Math.min(1, (getProgressRef.current ? getProgressRef.current() : progressRef.current) || 0));
-        const zoomLvl = Math.max(1, zoomRef.current);
-        const win = 1 / zoomLvl;
-        let start = prog - win / 2;
-        if (start < 0) start = 0;
-        else if (start > 1 - win) start = 1 - win;
-        const end = start + win;
         for (let i = 0; i < count; i++) {
           const mono = monos[i];
           const s0 = Math.max(0, Math.floor(start * mono.length));
@@ -3580,6 +3614,14 @@ function WaveformVisualization({
           if (modeRef.current === "pixelated") drawColumns(pk, color);
           else drawSimplified(envelope(pk, W, SIMPLE_POINTS), color, borderRef.current);
         }
+      }
+      const drag = dragRef.current;
+      if (drag && drag.moved) {
+        drawRegion(Math.min(drag.startProg, drag.curProg), Math.max(drag.startProg, drag.curProg), start, win, base);
+      } else if (loopRef.current) {
+        drawRegion(loopRef.current.start, loopRef.current.end, start, win, base);
+      }
+      if (count) {
         const playX = (prog - start) / win * W;
         ctx.globalAlpha = 1;
         ctx.strokeStyle = base;
@@ -3598,11 +3640,75 @@ function WaveformVisualization({
       cancelAnimationFrame(raf);
     };
   }, [buffer, bands, width, height]);
+  const xToProgress = (clientX) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return 0;
+    const rect = canvas.getBoundingClientRect();
+    const fx = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const { start, win } = windowRef.current;
+    return Math.min(1, Math.max(0, start + fx * win));
+  };
+  const handlePointerDown = (e) => {
+    if (!onSeekRef.current && !onLoopChangeRef.current) return;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+    }
+    const p = xToProgress(e.clientX);
+    dragRef.current = { startProg: p, curProg: p, startX: e.clientX, moved: false };
+  };
+  const handlePointerMove = (e) => {
+    const d = dragRef.current;
+    if (!d) return;
+    d.curProg = xToProgress(e.clientX);
+    if (Math.abs(e.clientX - d.startX) > DRAG_THRESHOLD) d.moved = true;
+  };
+  const handlePointerUp = (e) => {
+    const d = dragRef.current;
+    dragRef.current = null;
+    if (!d) return;
+    try {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+    }
+    if (d.moved) {
+      const a = Math.min(d.startProg, d.curProg);
+      const b = Math.max(d.startProg, d.curProg);
+      if (onLoopChangeRef.current) onLoopChangeRef.current({ start: a, end: b });
+      else onSeekRef.current?.(d.curProg);
+    } else {
+      onSeekRef.current?.(d.startProg);
+      if (loopRef.current && onLoopChangeRef.current) onLoopChangeRef.current(null);
+    }
+  };
+  const atMaxZoom = zoom >= MAX_ZOOM;
   return /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "dialkit-waveform-viz-wrap", style: { width }, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("canvas", { ref: canvasRef, className: "dialkit-waveform-viz", style: { width, height } }),
+    /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+      "canvas",
+      {
+        ref: canvasRef,
+        className: "dialkit-waveform-viz",
+        style: { width, height, ...interactive ? { cursor: "crosshair", touchAction: "none" } : null },
+        onPointerDown: interactive ? handlePointerDown : void 0,
+        onPointerMove: interactive ? handlePointerMove : void 0,
+        onPointerUp: interactive ? handlePointerUp : void 0,
+        onPointerCancel: interactive ? () => {
+          dragRef.current = null;
+        } : void 0
+      }
+    ),
     /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "dialkit-waveform-zoom", children: [
       zoom > 1 && /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", "aria-label": "Zoom out", onClick: () => setZoom((z) => Math.max(1, z / 2)), children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("path", { d: "M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) }) }),
-      zoom < MAX_ZOOM && /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", "aria-label": "Zoom in", onClick: () => setZoom((z) => Math.min(MAX_ZOOM, z * 2)), children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) }) })
+      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+        "button",
+        {
+          type: "button",
+          "aria-label": "Zoom in",
+          disabled: atMaxZoom,
+          onClick: () => setZoom((z) => Math.min(MAX_ZOOM, z * 2)),
+          children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) })
+        }
+      )
     ] })
   ] });
 }

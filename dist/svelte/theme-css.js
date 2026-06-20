@@ -733,9 +733,14 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.dialkit-waveform-zoom button:hover {
+.dialkit-waveform-zoom button:hover:not(:disabled) {
   background: var(--dial-surface-hover);
   border-color: var(--dial-border-hover);
+}
+
+.dialkit-waveform-zoom button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .dialkit-waveform-zoom svg {

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { WaveformVisualization, Slider } from 'dialkit';
-import type { WaveformMode } from 'dialkit';
+import type { WaveformMode, WaveformLoop } from 'dialkit';
 
 const DURATION = 3; // seconds
 const PIXEL_SIZES = [1, 2, 4, 6]; // pixelated block-size multipliers
@@ -50,6 +50,7 @@ export function WaveformShowcase() {
   const [border, setBorder] = useState(false);
   const [grid, setGrid] = useState(false);
   const [pixelIdx, setPixelIdx] = useState(0);
+  const [loop, setLoop] = useState<WaveformLoop | null>(null);
 
   // Virtual transport: a clock-driven playhead (no audio output needed to demo it).
   const elapsedRef = useRef(0);
@@ -67,12 +68,46 @@ export function WaveformShowcase() {
     } else {
       lastRef.current = null;
     }
+    // Inside a loop, wrap the transport within its bounds.
+    if (loop) {
+      const a = loop.start * DURATION;
+      const span = Math.max(0.001, (loop.end - loop.start) * DURATION);
+      const t = a + (((elapsedRef.current - a) % span) + span) % span;
+      elapsedRef.current = t;
+      return t / DURATION;
+    }
     return (elapsedRef.current % DURATION) / DURATION;
+  };
+
+  // Click reports a new play position; drag reports a loop (jump the transport to its start).
+  const handleSeek = (p: number) => {
+    elapsedRef.current = p * DURATION;
+  };
+  const handleLoopChange = (l: WaveformLoop | null) => {
+    setLoop(l);
+    if (l) elapsedRef.current = l.start * DURATION;
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <WaveformVisualization buffer={buffer} getProgress={getProgress} mode={mode} bands={bands} border={border} grid={grid} gridSubdivisions={16} pixelSize={PIXEL_SIZES[pixelIdx]} />
+      <WaveformVisualization
+        buffer={buffer}
+        getProgress={getProgress}
+        mode={mode}
+        bands={bands}
+        border={border}
+        grid={grid}
+        gridSubdivisions={16}
+        pixelSize={PIXEL_SIZES[pixelIdx]}
+        loop={loop}
+        onSeek={handleSeek}
+        onLoopChange={handleLoopChange}
+      />
+      <div style={{ fontSize: 12, color: 'var(--dial-text-secondary)' }}>
+        {loop
+          ? `loop ${Math.round(loop.start * 100)}–${Math.round(loop.end * 100)}% · click to clear`
+          : 'click to set playhead · drag to loop'}
+      </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <button type="button" className="lib-tab" data-active={String(playing)} onClick={() => setPlaying((p) => !p)}>
           {playing ? '❚❚ Pause' : '▶ Play'}

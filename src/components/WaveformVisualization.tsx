@@ -1,6 +1,8 @@
 import { useRef, useEffect, useState } from 'react';
 
 export type WaveformMode = 'smooth' | 'pixelated';
+/** A loop region over the sample, as normalized 0..1 positions. */
+export type WaveformLoop = { start: number; end: number };
 
 interface WaveformVisualizationProps {
   /** Decoded audio sample. Its full waveform is drawn once (fixed). */
@@ -30,10 +32,22 @@ interface WaveformVisualizationProps {
    * column; 2 / 4 / 6 make progressively chunkier, lower-resolution columns.
    */
   pixelSize?: number;
-  /** Overlay a faint reference grid behind the waveform. */
+  /** Overlay a faint reference grid (vertical time-divisions) behind the waveform. */
   grid?: boolean;
   /** Vertical time-divisions in the grid when `grid` is on (default 8). */
   gridSubdivisions?: number;
+  /**
+   * Click-to-seek. When provided, clicking the waveform reports the new play
+   * position (0..1); a click also clears any active loop.
+   */
+  onSeek?: (progress: number) => void;
+  /** The active loop region to render (controlled), or null for none. */
+  loop?: WaveformLoop | null;
+  /**
+   * Drag-to-loop. When provided, dragging across the waveform reports a loop
+   * region; clicking reports null (loop cleared — recreate it by dragging again).
+   */
+  onLoopChange?: (loop: WaveformLoop | null) => void;
   width?: number;
   height?: number;
 }
@@ -53,11 +67,12 @@ const SIMPLE_POINTS = 46;
 const BORDER_FILL_ALPHA = 0.2;
 // Each "+" doubles magnification; window = 1 / zoom of the sample's duration.
 const MAX_ZOOM = 8;
-// Horizontal (amplitude) divisions of the grid; vertical count is `gridSubdivisions`.
-const GRID_ROWS = 4;
+// Pointer travel (CSS px) past which a press becomes a loop-drag rather than a click.
+const DRAG_THRESHOLD = 3;
 
 type Peaks = { min: Float32Array; max: Float32Array };
 type Pt = { x: number; y: number };
+type Drag = { startProg: number; curProg: number; startX: number; moved: boolean };
 
 function mixToMono(buffer: AudioBuffer): Float32Array {
   if (buffer.numberOfChannels === 1) return buffer.getChannelData(0);
@@ -148,6 +163,9 @@ export function WaveformVisualization({
   pixelSize = 1,
   grid = false,
   gridSubdivisions = 8,
+  onSeek,
+  loop = null,
+  onLoopChange,
   width = 256,
   height = 140,
 }: WaveformVisualizationProps) {
@@ -171,6 +189,19 @@ export function WaveformVisualization({
   progressRef.current = progress;
   const getProgressRef = useRef(getProgress);
   getProgressRef.current = getProgress;
+  const loopRef = useRef(loop);
+  loopRef.current = loop;
+  const onSeekRef = useRef(onSeek);
+  onSeekRef.current = onSeek;
+  const onLoopChangeRef = useRef(onLoopChange);
+  onLoopChangeRef.current = onLoopChange;
+
+  // The window currently shown (updated each frame) — used to map pointer x → progress.
+  const windowRef = useRef({ start: 0, win: 1 });
+  // The in-progress loop drag, if any.
+  const dragRef = useRef<Drag | null>(null);
+
+  const interactive = !!(onSeek || onLoopChange);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -250,7 +281,7 @@ export function WaveformVisualization({
       }
     };
 
-    // Faint reference grid: `gridSubdivisions` vertical lines + GRID_ROWS horizontal.
+    // Faint reference grid: `gridSubdivisions` vertical (time) lines.
     const drawGrid = (base: string) => {
       const subs = Math.max(1, Math.round(gridSubsRef.current));
       ctx.strokeStyle = base;
@@ -262,10 +293,34 @@ export function WaveformVisualization({
         ctx.moveTo(x, 0);
         ctx.lineTo(x, H);
       }
-      for (let r = 1; r < GRID_ROWS; r++) {
-        const y = Math.round((r / GRID_ROWS) * H) + 0.5;
-        ctx.moveTo(0, y);
-        ctx.lineTo(W, y);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    };
+
+    // Translucent loop / selection band between two 0..1 positions, mapped into the
+    // current window (`start`,`win`).
+    const drawRegion = (a: number, b: number, start: number, win: number, base: string) => {
+      const x0 = ((a - start) / win) * W;
+      const x1 = ((b - start) / win) * W;
+      const cx0 = Math.max(0, x0);
+      const cx1 = Math.min(W, x1);
+      if (cx1 <= cx0) return;
+      ctx.fillStyle = base;
+      ctx.globalAlpha = 0.14;
+      ctx.fillRect(cx0, 0, cx1 - cx0, H);
+      ctx.globalAlpha = 0.55;
+      ctx.lineWidth = dpr;
+      ctx.strokeStyle = base;
+      ctx.beginPath();
+      if (x0 >= 0 && x0 <= W) {
+        const xe = Math.round(x0) + 0.5;
+        ctx.moveTo(xe, 0);
+        ctx.lineTo(xe, H);
+      }
+      if (x1 >= 0 && x1 <= W) {
+        const xe = Math.round(x1) + 0.5;
+        ctx.moveTo(xe, 0);
+        ctx.lineTo(xe, H);
       }
       ctx.stroke();
       ctx.globalAlpha = 1;
@@ -291,18 +346,19 @@ export function WaveformVisualization({
       ctx.stroke();
       ctx.globalAlpha = 1;
 
+      // Zoomed window centered on the playhead, clamped to the sample edges so the
+      // playhead is always on screen. Stored for pointer → progress mapping.
+      const prog = Math.max(0, Math.min(1, (getProgressRef.current ? getProgressRef.current() : progressRef.current) || 0));
+      const zoomLvl = Math.max(1, zoomRef.current);
+      const win = 1 / zoomLvl;
+      let start = prog - win / 2;
+      if (start < 0) start = 0;
+      else if (start > 1 - win) start = 1 - win;
+      const end = start + win;
+      windowRef.current = { start, win };
+
       const count = monos.length;
       if (count) {
-        const prog = Math.max(0, Math.min(1, (getProgressRef.current ? getProgressRef.current() : progressRef.current) || 0));
-        // Zoomed window centered on the playhead, clamped to the sample edges so the
-        // playhead is always on screen.
-        const zoomLvl = Math.max(1, zoomRef.current);
-        const win = 1 / zoomLvl;
-        let start = prog - win / 2;
-        if (start < 0) start = 0;
-        else if (start > 1 - win) start = 1 - win;
-        const end = start + win;
-
         // Bands drawn low → high so the spikier high band reads on top.
         for (let i = 0; i < count; i++) {
           const mono = monos[i];
@@ -314,7 +370,17 @@ export function WaveformVisualization({
           if (modeRef.current === 'pixelated') drawColumns(pk, color);
           else drawSimplified(envelope(pk, W, SIMPLE_POINTS), color, borderRef.current);
         }
+      }
 
+      // Loop / live drag selection on top of the waveform.
+      const drag = dragRef.current;
+      if (drag && drag.moved) {
+        drawRegion(Math.min(drag.startProg, drag.curProg), Math.max(drag.startProg, drag.curProg), start, win, base);
+      } else if (loopRef.current) {
+        drawRegion(loopRef.current.start, loopRef.current.end, start, win, base);
+      }
+
+      if (count) {
         // playhead — mapped into the (possibly zoomed) window so it stays visible
         const playX = ((prog - start) / win) * W;
         ctx.globalAlpha = 1;
@@ -336,9 +402,70 @@ export function WaveformVisualization({
     };
   }, [buffer, bands, width, height]);
 
+  // Map a clientX to a 0..1 sample position using the window currently displayed.
+  const xToProgress = (clientX: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return 0;
+    const rect = canvas.getBoundingClientRect();
+    const fx = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const { start, win } = windowRef.current;
+    return Math.min(1, Math.max(0, start + fx * win));
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!onSeekRef.current && !onLoopChangeRef.current) return;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // No active pointer (e.g. synthetic event) — capture is a nicety, not required.
+    }
+    const p = xToProgress(e.clientX);
+    dragRef.current = { startProg: p, curProg: p, startX: e.clientX, moved: false };
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const d = dragRef.current;
+    if (!d) return;
+    d.curProg = xToProgress(e.clientX);
+    if (Math.abs(e.clientX - d.startX) > DRAG_THRESHOLD) d.moved = true;
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const d = dragRef.current;
+    dragRef.current = null;
+    if (!d) return;
+    try {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      // Capture may not be held (e.g. synthetic event) — ignore.
+    }
+
+    if (d.moved) {
+      // Drag → define a loop (or scrub-seek to the release point if loops aren't wired).
+      const a = Math.min(d.startProg, d.curProg);
+      const b = Math.max(d.startProg, d.curProg);
+      if (onLoopChangeRef.current) onLoopChangeRef.current({ start: a, end: b });
+      else onSeekRef.current?.(d.curProg);
+    } else {
+      // Click → seek, and clear any active loop (recreate it by dragging again).
+      onSeekRef.current?.(d.startProg);
+      if (loopRef.current && onLoopChangeRef.current) onLoopChangeRef.current(null);
+    }
+  };
+
+  const atMaxZoom = zoom >= MAX_ZOOM;
+
   return (
     <div className="dialkit-waveform-viz-wrap" style={{ width }}>
-      <canvas ref={canvasRef} className="dialkit-waveform-viz" style={{ width, height }} />
+      <canvas
+        ref={canvasRef}
+        className="dialkit-waveform-viz"
+        style={{ width, height, ...(interactive ? { cursor: 'crosshair', touchAction: 'none' } : null) }}
+        onPointerDown={interactive ? handlePointerDown : undefined}
+        onPointerMove={interactive ? handlePointerMove : undefined}
+        onPointerUp={interactive ? handlePointerUp : undefined}
+        onPointerCancel={interactive ? () => { dragRef.current = null; } : undefined}
+      />
       <div className="dialkit-waveform-zoom">
         {zoom > 1 && (
           <button type="button" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(1, z / 2))}>
@@ -347,13 +474,16 @@ export function WaveformVisualization({
             </svg>
           </button>
         )}
-        {zoom < MAX_ZOOM && (
-          <button type="button" aria-label="Zoom in" onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z * 2))}>
-            <svg viewBox="0 0 16 16" fill="none">
-              <path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-            </svg>
-          </button>
-        )}
+        <button
+          type="button"
+          aria-label="Zoom in"
+          disabled={atMaxZoom}
+          onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z * 2))}
+        >
+          <svg viewBox="0 0 16 16" fill="none">
+            <path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
+        </button>
       </div>
     </div>
   );

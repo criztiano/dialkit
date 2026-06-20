@@ -416,6 +416,11 @@ interface EasingVisualizationProps {
 declare function EasingVisualization({ easing }: EasingVisualizationProps): react_jsx_runtime.JSX.Element;
 
 type WaveformMode = 'smooth' | 'pixelated';
+/** A loop region over the sample, as normalized 0..1 positions. */
+type WaveformLoop = {
+    start: number;
+    end: number;
+};
 interface WaveformVisualizationProps {
     /** Decoded audio sample. Its full waveform is drawn once (fixed). */
     buffer?: AudioBuffer | null;
@@ -444,14 +449,26 @@ interface WaveformVisualizationProps {
      * column; 2 / 4 / 6 make progressively chunkier, lower-resolution columns.
      */
     pixelSize?: number;
-    /** Overlay a faint reference grid behind the waveform. */
+    /** Overlay a faint reference grid (vertical time-divisions) behind the waveform. */
     grid?: boolean;
     /** Vertical time-divisions in the grid when `grid` is on (default 8). */
     gridSubdivisions?: number;
+    /**
+     * Click-to-seek. When provided, clicking the waveform reports the new play
+     * position (0..1); a click also clears any active loop.
+     */
+    onSeek?: (progress: number) => void;
+    /** The active loop region to render (controlled), or null for none. */
+    loop?: WaveformLoop | null;
+    /**
+     * Drag-to-loop. When provided, dragging across the waveform reports a loop
+     * region; clicking reports null (loop cleared — recreate it by dragging again).
+     */
+    onLoopChange?: (loop: WaveformLoop | null) => void;
     width?: number;
     height?: number;
 }
-declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, pixelSize, grid, gridSubdivisions, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
+declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, pixelSize, grid, gridSubdivisions, onSeek, loop, onLoopChange, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
 
 interface TextControlProps {
     label: string;
@@ -542,4 +559,4 @@ interface ShortcutsMenuProps {
 }
 declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react_jsx_runtime.JSX.Element | null;
 
-export { type ActionConfig, ButtonGroup, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ControlMeta, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformMode, WaveformVisualization, defaultListItemParams, normalizeListItems, parseListItemSchema, useDialKit };
+export { type ActionConfig, ButtonGroup, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ControlMeta, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, defaultListItemParams, normalizeListItems, parseListItemSchema, useDialKit };
