@@ -304,8 +304,8 @@ export function Library() {
           )}
         </Section>
 
-        <Section index="08" title="Waveform" hint="The whole waveform of a sample, drawn once and fixed — a playhead sweeps across it at the display's refresh rate. Press Play, then toggle smooth / pixelated and the 3-band EQ split." single>
-          <Card title="WaveformVisualization" desc="Renders a decoded AudioBuffer's entire waveform (fixed); the playhead marks the play position. Smooth is a simplified, interpolated solid fill (or translucent + outline via the border prop); pixelated is chunky per-column bars. EQ bands splits into low/mid/high, color-coded purple/cyan/lime." code="<WaveformVisualization buffer getProgress mode border bands />">
+        <Section index="08" title="Waveform" hint="The whole waveform of a sample, drawn once and fixed — a playhead sweeps across it at the display's refresh rate. Press Play, then toggle smooth / pixelated, the 3-band EQ split, the grid, and zoom in (top-right) to follow the playhead." single>
+          <Card title="WaveformVisualization" desc="Renders a decoded AudioBuffer's entire waveform (fixed); the playhead marks the play position. Smooth is a simplified, interpolated solid fill (or translucent + outline via the border prop); pixelated is chunky per-column bars. EQ bands splits into low/mid/high, color-coded purple/cyan/lime. The top-right + / − buttons zoom the time axis (the window follows the playhead); grid overlays gridSubdivisions time-divisions." code="<WaveformVisualization buffer getProgress mode border bands grid gridSubdivisions={16} />">
             <WaveformShowcase />
           </Card>
         </Section>

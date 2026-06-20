@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 
 export type WaveformMode = 'smooth' | 'pixelated';
 
@@ -27,9 +27,13 @@ interface WaveformVisualizationProps {
   bands?: boolean;
   /**
    * Pixelated mode only: block-size multiplier. 1 (default) ≈ one CSS pixel per
-   * column; 2 / 4 / 8 make progressively chunkier, lower-resolution columns.
+   * column; 2 / 4 / 6 make progressively chunkier, lower-resolution columns.
    */
   pixelSize?: number;
+  /** Overlay a faint reference grid behind the waveform. */
+  grid?: boolean;
+  /** Vertical time-divisions in the grid when `grid` is on (default 8). */
+  gridSubdivisions?: number;
   width?: number;
   height?: number;
 }
@@ -47,6 +51,10 @@ const BAND_COLORS = ['#a855f7', '#22d3ee', '#a3e635'];
 const SIMPLE_POINTS = 46;
 // Fill opacity used only for the bordered (outlined) variant.
 const BORDER_FILL_ALPHA = 0.2;
+// Each "+" doubles magnification; window = 1 / zoom of the sample's duration.
+const MAX_ZOOM = 8;
+// Horizontal (amplitude) divisions of the grid; vertical count is `gridSubdivisions`.
+const GRID_ROWS = 4;
 
 type Peaks = { min: Float32Array; max: Float32Array };
 type Pt = { x: number; y: number };
@@ -62,10 +70,9 @@ function mixToMono(buffer: AudioBuffer): Float32Array {
   return out;
 }
 
-// Min/max amplitude per pixel column — the whole sample condensed to the canvas width.
-function computePeaks(data: Float32Array, cols: number): Peaks {
-  const min = new Float32Array(cols);
-  const max = new Float32Array(cols);
+// Fill min/max amplitude for `cols` columns spanning `data` into the given arrays
+// (reused every frame, so no per-frame allocation).
+function fillPeaks(data: Float32Array, cols: number, min: Float32Array, max: Float32Array) {
   const step = data.length / cols;
   for (let x = 0; x < cols; x++) {
     const start = Math.floor(x * step);
@@ -80,7 +87,6 @@ function computePeaks(data: Float32Array, cols: number): Peaks {
     min[x] = mn;
     max[x] = mx;
   }
-  return { min, max };
 }
 
 // Simplified symmetric envelope: peak amplitude over each of `n` evenly-spaced segments.
@@ -140,16 +146,27 @@ export function WaveformVisualization({
   border = false,
   bands = false,
   pixelSize = 1,
+  grid = false,
+  gridSubdivisions = 8,
   width = 256,
   height = 140,
 }: WaveformVisualizationProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [zoom, setZoom] = useState(1);
+
+  // Live values read inside the rAF loop, so changing them never restarts the effect.
   const modeRef = useRef(mode);
   modeRef.current = mode;
   const borderRef = useRef(border);
   borderRef.current = border;
   const pixelSizeRef = useRef(pixelSize);
   pixelSizeRef.current = pixelSize;
+  const gridRef = useRef(grid);
+  gridRef.current = grid;
+  const gridSubsRef = useRef(gridSubdivisions);
+  gridSubsRef.current = gridSubdivisions;
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
   const progressRef = useRef(progress);
   progressRef.current = progress;
   const getProgressRef = useRef(getProgress);
@@ -166,21 +183,23 @@ export function WaveformVisualization({
     const cy = H / 2;
     const amp = H * 0.42;
     // One CSS pixel per column (two device pixels on retina), times the pixelSize
-    // multiplier — chunkier blocks at 2/4/8. Read per call so the slider is live.
+    // multiplier — chunkier blocks at 2/4/6. Read per call so the slider is live.
     const columnWidth = () => Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSizeRef.current)));
 
     let cancelled = false;
-    let peaks: Peaks[] = [];
-    let envs: number[][] = [];
+    // Mono sample data per band (or one entry, bands off). Peaks are recomputed per
+    // frame from the visible window so zoom reveals real detail, not stretched pixels.
+    let monos: Float32Array[] = [];
 
-    // Compute peaks once per buffer/bands/size — the expensive part (EQ offline-filters).
     (async () => {
       if (!buffer) return;
       const bufs = bands ? await Promise.all(BANDS.map((b) => filterBuffer(buffer, b))) : [buffer];
       if (cancelled) return;
-      peaks = bufs.map((b) => computePeaks(mixToMono(b), W));
-      envs = peaks.map((p) => envelope(p, W, SIMPLE_POINTS));
+      monos = bufs.map((b) => mixToMono(b));
     })();
+
+    // Scratch peak arrays reused every frame/band — no per-frame allocation.
+    const pk: Peaks = { min: new Float32Array(W), max: new Float32Array(W) };
 
     // Chunky, full-opacity min/max columns.
     const drawColumns = (p: Peaks, color: string) => {
@@ -231,6 +250,27 @@ export function WaveformVisualization({
       }
     };
 
+    // Faint reference grid: `gridSubdivisions` vertical lines + GRID_ROWS horizontal.
+    const drawGrid = (base: string) => {
+      const subs = Math.max(1, Math.round(gridSubsRef.current));
+      ctx.strokeStyle = base;
+      ctx.globalAlpha = 0.1;
+      ctx.lineWidth = dpr;
+      ctx.beginPath();
+      for (let i = 1; i < subs; i++) {
+        const x = Math.round((i / subs) * W) + 0.5;
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, H);
+      }
+      for (let r = 1; r < GRID_ROWS; r++) {
+        const y = Math.round((r / GRID_ROWS) * H) + 0.5;
+        ctx.moveTo(0, y);
+        ctx.lineTo(W, y);
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    };
+
     let raf = 0;
     const frame = () => {
       raf = requestAnimationFrame(frame);
@@ -238,6 +278,8 @@ export function WaveformVisualization({
       ctx.globalAlpha = 1;
       ctx.clearRect(0, 0, W, H);
       ctx.imageSmoothingEnabled = modeRef.current === 'smooth';
+
+      if (gridRef.current) drawGrid(base);
 
       // center baseline
       ctx.strokeStyle = base;
@@ -247,23 +289,38 @@ export function WaveformVisualization({
       ctx.moveTo(0, Math.round(cy) + 0.5);
       ctx.lineTo(W, Math.round(cy) + 0.5);
       ctx.stroke();
+      ctx.globalAlpha = 1;
 
-      // Bands drawn low → high so the spikier high band reads on top.
-      const count = peaks.length;
-      for (let i = 0; i < count; i++) {
-        const color = count === 3 ? BAND_COLORS[i] : base;
-        if (modeRef.current === 'pixelated') drawColumns(peaks[i], color);
-        else drawSimplified(envs[i], color, borderRef.current);
-      }
-
-      // playhead
+      const count = monos.length;
       if (count) {
-        const prog = getProgressRef.current ? getProgressRef.current() : progressRef.current;
-        const playX = Math.max(0, Math.min(1, prog || 0)) * W;
+        const prog = Math.max(0, Math.min(1, (getProgressRef.current ? getProgressRef.current() : progressRef.current) || 0));
+        // Zoomed window centered on the playhead, clamped to the sample edges so the
+        // playhead is always on screen.
+        const zoomLvl = Math.max(1, zoomRef.current);
+        const win = 1 / zoomLvl;
+        let start = prog - win / 2;
+        if (start < 0) start = 0;
+        else if (start > 1 - win) start = 1 - win;
+        const end = start + win;
+
+        // Bands drawn low → high so the spikier high band reads on top.
+        for (let i = 0; i < count; i++) {
+          const mono = monos[i];
+          const s0 = Math.max(0, Math.floor(start * mono.length));
+          const s1 = Math.min(mono.length, Math.ceil(end * mono.length));
+          const slice = s1 > s0 ? mono.subarray(s0, s1) : mono;
+          fillPeaks(slice, W, pk.min, pk.max);
+          const color = count === 3 ? BAND_COLORS[i] : base;
+          if (modeRef.current === 'pixelated') drawColumns(pk, color);
+          else drawSimplified(envelope(pk, W, SIMPLE_POINTS), color, borderRef.current);
+        }
+
+        // playhead — mapped into the (possibly zoomed) window so it stays visible
+        const playX = ((prog - start) / win) * W;
         ctx.globalAlpha = 1;
         ctx.strokeStyle = base;
         ctx.lineWidth = 1.5 * dpr;
-        const px = Math.round(playX) + 0.5;
+        const px = Math.round(Math.max(0, Math.min(W, playX))) + 0.5;
         ctx.beginPath();
         ctx.moveTo(px, 0);
         ctx.lineTo(px, H);
@@ -279,5 +336,25 @@ export function WaveformVisualization({
     };
   }, [buffer, bands, width, height]);
 
-  return <canvas ref={canvasRef} className="dialkit-waveform-viz" style={{ width, height }} />;
+  return (
+    <div className="dialkit-waveform-viz-wrap" style={{ width }}>
+      <canvas ref={canvasRef} className="dialkit-waveform-viz" style={{ width, height }} />
+      <div className="dialkit-waveform-zoom">
+        {zoom > 1 && (
+          <button type="button" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(1, z / 2))}>
+            <svg viewBox="0 0 16 16" fill="none">
+              <path d="M3.5 8h9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
+        {zoom < MAX_ZOOM && (
+          <button type="button" aria-label="Zoom in" onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z * 2))}>
+            <svg viewBox="0 0 16 16" fill="none">
+              <path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }

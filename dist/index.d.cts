@@ -441,13 +441,17 @@ interface WaveformVisualizationProps {
     bands?: boolean;
     /**
      * Pixelated mode only: block-size multiplier. 1 (default) ≈ one CSS pixel per
-     * column; 2 / 4 / 8 make progressively chunkier, lower-resolution columns.
+     * column; 2 / 4 / 6 make progressively chunkier, lower-resolution columns.
      */
     pixelSize?: number;
+    /** Overlay a faint reference grid behind the waveform. */
+    grid?: boolean;
+    /** Vertical time-divisions in the grid when `grid` is on (default 8). */
+    gridSubdivisions?: number;
     width?: number;
     height?: number;
 }
-declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, pixelSize, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
+declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, pixelSize, grid, gridSubdivisions, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
 
 interface TextControlProps {
     label: string;

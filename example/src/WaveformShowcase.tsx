@@ -3,7 +3,7 @@ import { WaveformVisualization, Slider } from 'dialkit';
 import type { WaveformMode } from 'dialkit';
 
 const DURATION = 3; // seconds
-const PIXEL_SIZES = [1, 2, 4, 8]; // pixelated block-size multipliers
+const PIXEL_SIZES = [1, 2, 4, 6]; // pixelated block-size multipliers
 
 /**
  * Render a short sample offline: a low drone plus several enveloped "hits", so the
@@ -48,6 +48,7 @@ export function WaveformShowcase() {
   const [mode, setMode] = useState<WaveformMode>('smooth');
   const [bands, setBands] = useState(false);
   const [border, setBorder] = useState(false);
+  const [grid, setGrid] = useState(false);
   const [pixelIdx, setPixelIdx] = useState(0);
 
   // Virtual transport: a clock-driven playhead (no audio output needed to demo it).
@@ -71,7 +72,7 @@ export function WaveformShowcase() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <WaveformVisualization buffer={buffer} getProgress={getProgress} mode={mode} bands={bands} border={border} pixelSize={PIXEL_SIZES[pixelIdx]} />
+      <WaveformVisualization buffer={buffer} getProgress={getProgress} mode={mode} bands={bands} border={border} grid={grid} gridSubdivisions={16} pixelSize={PIXEL_SIZES[pixelIdx]} />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <button type="button" className="lib-tab" data-active={String(playing)} onClick={() => setPlaying((p) => !p)}>
           {playing ? '❚❚ Pause' : '▶ Play'}
@@ -88,6 +89,9 @@ export function WaveformShowcase() {
         </button>
         <button type="button" className="lib-tab" data-active={String(border)} onClick={() => setBorder((b) => !b)}>
           border: {border ? 'on' : 'off'}
+        </button>
+        <button type="button" className="lib-tab" data-active={String(grid)} onClick={() => setGrid((g) => !g)}>
+          grid: {grid ? 'on' : 'off'}
         </button>
       </div>
       <Slider

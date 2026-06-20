@@ -3361,6 +3361,8 @@ var BANDS = [
 var BAND_COLORS = ["#a855f7", "#22d3ee", "#a3e635"];
 var SIMPLE_POINTS = 46;
 var BORDER_FILL_ALPHA = 0.2;
+var MAX_ZOOM = 8;
+var GRID_ROWS = 4;
 function mixToMono(buffer) {
   if (buffer.numberOfChannels === 1) return buffer.getChannelData(0);
   const len = buffer.length;
@@ -3371,9 +3373,7 @@ function mixToMono(buffer) {
   }
   return out;
 }
-function computePeaks(data, cols) {
-  const min = new Float32Array(cols);
-  const max = new Float32Array(cols);
+function fillPeaks(data, cols, min, max) {
   const step = data.length / cols;
   for (let x = 0; x < cols; x++) {
     const start = Math.floor(x * step);
@@ -3388,7 +3388,6 @@ function computePeaks(data, cols) {
     min[x] = mn;
     max[x] = mx;
   }
-  return { min, max };
 }
 function envelope(p, cols, n) {
   const out = new Array(n);
@@ -3442,16 +3441,25 @@ function WaveformVisualization({
   border = false,
   bands = false,
   pixelSize = 1,
+  grid = false,
+  gridSubdivisions = 8,
   width = 256,
   height = 140
 }) {
   const canvasRef = (0, import_react23.useRef)(null);
+  const [zoom, setZoom] = (0, import_react23.useState)(1);
   const modeRef = (0, import_react23.useRef)(mode);
   modeRef.current = mode;
   const borderRef = (0, import_react23.useRef)(border);
   borderRef.current = border;
   const pixelSizeRef = (0, import_react23.useRef)(pixelSize);
   pixelSizeRef.current = pixelSize;
+  const gridRef = (0, import_react23.useRef)(grid);
+  gridRef.current = grid;
+  const gridSubsRef = (0, import_react23.useRef)(gridSubdivisions);
+  gridSubsRef.current = gridSubdivisions;
+  const zoomRef = (0, import_react23.useRef)(zoom);
+  zoomRef.current = zoom;
   const progressRef = (0, import_react23.useRef)(progress);
   progressRef.current = progress;
   const getProgressRef = (0, import_react23.useRef)(getProgress);
@@ -3467,15 +3475,14 @@ function WaveformVisualization({
     const amp = H * 0.42;
     const columnWidth = () => Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSizeRef.current)));
     let cancelled = false;
-    let peaks = [];
-    let envs = [];
+    let monos = [];
     (async () => {
       if (!buffer) return;
       const bufs = bands ? await Promise.all(BANDS.map((b) => filterBuffer(buffer, b))) : [buffer];
       if (cancelled) return;
-      peaks = bufs.map((b) => computePeaks(mixToMono(b), W));
-      envs = peaks.map((p) => envelope(p, W, SIMPLE_POINTS));
+      monos = bufs.map((b) => mixToMono(b));
     })();
+    const pk = { min: new Float32Array(W), max: new Float32Array(W) };
     const drawColumns = (p, color) => {
       const colW = columnWidth();
       ctx.fillStyle = color;
@@ -3519,6 +3526,25 @@ function WaveformVisualization({
         ctx.fill();
       }
     };
+    const drawGrid = (base) => {
+      const subs = Math.max(1, Math.round(gridSubsRef.current));
+      ctx.strokeStyle = base;
+      ctx.globalAlpha = 0.1;
+      ctx.lineWidth = dpr;
+      ctx.beginPath();
+      for (let i = 1; i < subs; i++) {
+        const x = Math.round(i / subs * W) + 0.5;
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, H);
+      }
+      for (let r = 1; r < GRID_ROWS; r++) {
+        const y = Math.round(r / GRID_ROWS * H) + 0.5;
+        ctx.moveTo(0, y);
+        ctx.lineTo(W, y);
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    };
     let raf = 0;
     const frame = () => {
       raf = requestAnimationFrame(frame);
@@ -3526,6 +3552,7 @@ function WaveformVisualization({
       ctx.globalAlpha = 1;
       ctx.clearRect(0, 0, W, H);
       ctx.imageSmoothingEnabled = modeRef.current === "smooth";
+      if (gridRef.current) drawGrid(base);
       ctx.strokeStyle = base;
       ctx.globalAlpha = 0.15;
       ctx.lineWidth = dpr;
@@ -3533,19 +3560,31 @@ function WaveformVisualization({
       ctx.moveTo(0, Math.round(cy) + 0.5);
       ctx.lineTo(W, Math.round(cy) + 0.5);
       ctx.stroke();
-      const count = peaks.length;
-      for (let i = 0; i < count; i++) {
-        const color = count === 3 ? BAND_COLORS[i] : base;
-        if (modeRef.current === "pixelated") drawColumns(peaks[i], color);
-        else drawSimplified(envs[i], color, borderRef.current);
-      }
+      ctx.globalAlpha = 1;
+      const count = monos.length;
       if (count) {
-        const prog = getProgressRef.current ? getProgressRef.current() : progressRef.current;
-        const playX = Math.max(0, Math.min(1, prog || 0)) * W;
+        const prog = Math.max(0, Math.min(1, (getProgressRef.current ? getProgressRef.current() : progressRef.current) || 0));
+        const zoomLvl = Math.max(1, zoomRef.current);
+        const win = 1 / zoomLvl;
+        let start = prog - win / 2;
+        if (start < 0) start = 0;
+        else if (start > 1 - win) start = 1 - win;
+        const end = start + win;
+        for (let i = 0; i < count; i++) {
+          const mono = monos[i];
+          const s0 = Math.max(0, Math.floor(start * mono.length));
+          const s1 = Math.min(mono.length, Math.ceil(end * mono.length));
+          const slice = s1 > s0 ? mono.subarray(s0, s1) : mono;
+          fillPeaks(slice, W, pk.min, pk.max);
+          const color = count === 3 ? BAND_COLORS[i] : base;
+          if (modeRef.current === "pixelated") drawColumns(pk, color);
+          else drawSimplified(envelope(pk, W, SIMPLE_POINTS), color, borderRef.current);
+        }
+        const playX = (prog - start) / win * W;
         ctx.globalAlpha = 1;
         ctx.strokeStyle = base;
         ctx.lineWidth = 1.5 * dpr;
-        const px = Math.round(playX) + 0.5;
+        const px = Math.round(Math.max(0, Math.min(W, playX))) + 0.5;
         ctx.beginPath();
         ctx.moveTo(px, 0);
         ctx.lineTo(px, H);
@@ -3559,7 +3598,13 @@ function WaveformVisualization({
       cancelAnimationFrame(raf);
     };
   }, [buffer, bands, width, height]);
-  return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("canvas", { ref: canvasRef, className: "dialkit-waveform-viz", style: { width, height } });
+  return /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "dialkit-waveform-viz-wrap", style: { width }, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("canvas", { ref: canvasRef, className: "dialkit-waveform-viz", style: { width, height } }),
+    /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "dialkit-waveform-zoom", children: [
+      zoom > 1 && /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", "aria-label": "Zoom out", onClick: () => setZoom((z) => Math.max(1, z / 2)), children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("path", { d: "M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) }) }),
+      zoom < MAX_ZOOM && /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", "aria-label": "Zoom in", onClick: () => setZoom((z) => Math.min(MAX_ZOOM, z * 2)), children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) }) })
+    ] })
+  ] });
 }
 
 // src/components/ShortcutsMenu.tsx
