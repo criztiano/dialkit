@@ -362,6 +362,34 @@ interface SpringVisualizationProps {
 }
 declare function SpringVisualization(props: SpringVisualizationProps): solid_js.JSX.Element;
 
+type WaveformMode = 'smooth' | 'pixelated';
+/** A loop region over the sample, as normalized 0..1 positions. */
+type WaveformLoop = {
+    start: number;
+    end: number;
+};
+
+interface WaveformVisualizationProps {
+    buffer?: AudioBuffer | null;
+    progress?: number;
+    getProgress?: () => number;
+    mode?: WaveformMode;
+    border?: boolean;
+    bands?: boolean;
+    pixelSize?: number;
+    grid?: boolean;
+    gridSubdivisions?: number;
+    onSeek?: (progress: number) => void;
+    loop?: WaveformLoop | null;
+    onLoopChange?: (loop: WaveformLoop | null) => void;
+    waveColor?: string;
+    playheadColor?: string;
+    autoZoomOnLoop?: boolean;
+    width?: number;
+    height?: number;
+}
+declare function WaveformVisualization(props: WaveformVisualizationProps): solid_js.JSX.Element;
+
 interface TextControlProps {
     label: string;
     value: string;
@@ -397,4 +425,4 @@ interface PresetManagerProps {
 }
 declare function PresetManager(props: PresetManagerProps): solid_js.JSX.Element;
 
-export { type ActionConfig, ButtonGroup, type ColorConfig, ColorControl, type ControlMeta, type CreateDialOptions, type DialConfig, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, Folder, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, createDialKit };
+export { type ActionConfig, ButtonGroup, type ColorConfig, ColorControl, type ControlMeta, type CreateDialOptions, type DialConfig, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, Folder, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type WaveformLoop, type WaveformMode, WaveformVisualization, createDialKit };

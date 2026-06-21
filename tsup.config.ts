@@ -61,7 +61,11 @@ export default defineConfig([
   // shortcut-utils references the DialStore singleton — externalize it to the shared
   // dist/store rather than inlining a second, desynced store instance.
   {
-    entry: { icons: 'src/icons.ts', 'shortcut-utils': 'src/shortcut-utils.ts' },
+    entry: {
+      icons: 'src/icons.ts',
+      'shortcut-utils': 'src/shortcut-utils.ts',
+      'waveform-engine': 'src/waveform-engine.ts',
+    },
     outDir: 'dist',
     format: ['esm'],
     dts: true,

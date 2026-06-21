@@ -23,6 +23,8 @@ export { default as SpringControl } from './components/SpringControl.svelte';
 export { default as SpringVisualization } from './components/SpringVisualization.svelte';
 export { default as TransitionControl } from './components/TransitionControl.svelte';
 export { default as EasingVisualization } from './components/EasingVisualization.svelte';
+export { default as WaveformVisualization } from './components/WaveformVisualization.svelte';
+export type { WaveformMode, WaveformLoop } from '../waveform-engine';
 export { default as TextControl } from './components/TextControl.svelte';
 export { default as SelectControl } from './components/SelectControl.svelte';
 export { default as ColorControl } from './components/ColorControl.svelte';

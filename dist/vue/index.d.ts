@@ -754,6 +754,173 @@ declare const EasingVisualization: vue.DefineComponent<vue.ExtractPropTypes<{
     };
 }>> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
+type WaveformMode = 'smooth' | 'pixelated';
+/** A loop region over the sample, as normalized 0..1 positions. */
+type WaveformLoop = {
+    start: number;
+    end: number;
+};
+
+declare const WaveformVisualization: vue.DefineComponent<vue.ExtractPropTypes<{
+    buffer: {
+        type: PropType<AudioBuffer | null>;
+        default: null;
+    };
+    progress: {
+        type: NumberConstructor;
+        default: number;
+    };
+    getProgress: {
+        type: PropType<() => number>;
+        default: undefined;
+    };
+    mode: {
+        type: PropType<WaveformMode>;
+        default: string;
+    };
+    border: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    bands: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    pixelSize: {
+        type: NumberConstructor;
+        default: number;
+    };
+    grid: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    gridSubdivisions: {
+        type: NumberConstructor;
+        default: number;
+    };
+    onSeek: {
+        type: PropType<(progress: number) => void>;
+        default: undefined;
+    };
+    loop: {
+        type: PropType<WaveformLoop | null>;
+        default: null;
+    };
+    onLoopChange: {
+        type: PropType<(loop: WaveformLoop | null) => void>;
+        default: undefined;
+    };
+    waveColor: {
+        type: StringConstructor;
+        default: undefined;
+    };
+    playheadColor: {
+        type: StringConstructor;
+        default: undefined;
+    };
+    autoZoomOnLoop: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    width: {
+        type: NumberConstructor;
+        default: number;
+    };
+    height: {
+        type: NumberConstructor;
+        default: number;
+    };
+}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    buffer: {
+        type: PropType<AudioBuffer | null>;
+        default: null;
+    };
+    progress: {
+        type: NumberConstructor;
+        default: number;
+    };
+    getProgress: {
+        type: PropType<() => number>;
+        default: undefined;
+    };
+    mode: {
+        type: PropType<WaveformMode>;
+        default: string;
+    };
+    border: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    bands: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    pixelSize: {
+        type: NumberConstructor;
+        default: number;
+    };
+    grid: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    gridSubdivisions: {
+        type: NumberConstructor;
+        default: number;
+    };
+    onSeek: {
+        type: PropType<(progress: number) => void>;
+        default: undefined;
+    };
+    loop: {
+        type: PropType<WaveformLoop | null>;
+        default: null;
+    };
+    onLoopChange: {
+        type: PropType<(loop: WaveformLoop | null) => void>;
+        default: undefined;
+    };
+    waveColor: {
+        type: StringConstructor;
+        default: undefined;
+    };
+    playheadColor: {
+        type: StringConstructor;
+        default: undefined;
+    };
+    autoZoomOnLoop: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    width: {
+        type: NumberConstructor;
+        default: number;
+    };
+    height: {
+        type: NumberConstructor;
+        default: number;
+    };
+}>> & Readonly<{}>, {
+    mode: WaveformMode;
+    progress: number;
+    height: number;
+    width: number;
+    border: boolean;
+    grid: boolean;
+    buffer: AudioBuffer | null;
+    getProgress: () => number;
+    bands: boolean;
+    pixelSize: number;
+    gridSubdivisions: number;
+    onSeek: (progress: number) => void;
+    loop: WaveformLoop | null;
+    onLoopChange: (loop: WaveformLoop | null) => void;
+    waveColor: string;
+    playheadColor: string;
+    autoZoomOnLoop: boolean;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
 declare const TextControl: vue.DefineComponent<vue.ExtractPropTypes<{
     label: {
         type: StringConstructor;
@@ -880,4 +1047,4 @@ declare const PresetManager: vue.DefineComponent<vue.ExtractPropTypes<{
     activePresetId: string | null;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
-export { type ActionConfig, ButtonGroup, type ColorConfig, ColorControl, type ControlMeta, type DialConfig, type DialKitDirectiveOptions, type DialKitDirectiveValue, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type EasingConfig, EasingVisualization, Folder, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, ShortcutKey, ShortcutListener, type ShortcutState, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, useDialKit, useShortcutContext, vDialKit };
+export { type ActionConfig, ButtonGroup, type ColorConfig, ColorControl, type ControlMeta, type DialConfig, type DialKitDirectiveOptions, type DialKitDirectiveValue, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type EasingConfig, EasingVisualization, Folder, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, ShortcutKey, ShortcutListener, type ShortcutState, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, useDialKit, useShortcutContext, vDialKit };

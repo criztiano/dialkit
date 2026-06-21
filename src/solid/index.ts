@@ -15,6 +15,8 @@ export { SegmentedControl } from './components/SegmentedControl';
 export { ButtonGroup } from './components/ButtonGroup';
 export { SpringControl } from './components/SpringControl';
 export { SpringVisualization } from './components/SpringVisualization';
+export { WaveformVisualization } from './components/WaveformVisualization';
+export type { WaveformMode, WaveformLoop } from './components/WaveformVisualization';
 export { TextControl } from './components/TextControl';
 export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';

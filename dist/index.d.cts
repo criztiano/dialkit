@@ -421,6 +421,7 @@ type WaveformLoop = {
     start: number;
     end: number;
 };
+
 interface WaveformVisualizationProps {
     /** Decoded audio sample. Its full waveform is drawn once (fixed). */
     buffer?: AudioBuffer | null;
@@ -462,7 +463,7 @@ interface WaveformVisualizationProps {
     loop?: WaveformLoop | null;
     /**
      * Drag-to-loop. When provided, dragging across the waveform reports a loop
-     * region; clicking reports null (loop cleared — recreate it by dragging again).
+     * region; drag either edge to resize it; clicking reports null (loop cleared).
      */
     onLoopChange?: (loop: WaveformLoop | null) => void;
     /** Waveform color (single waveform only; bands keep their fixed colors). Defaults to the theme color. */
