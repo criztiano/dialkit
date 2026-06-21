@@ -88,7 +88,12 @@ export function WaveformShowcase() {
   };
   const handleLoopChange = (l: WaveformLoop | null) => {
     setLoop(l);
-    if (l) elapsedRef.current = l.start * DURATION;
+    // Keep the transport inside the loop (created or resized) without yanking it to the start.
+    if (l) {
+      const a = l.start * DURATION;
+      const b = l.end * DURATION;
+      elapsedRef.current = Math.min(Math.max(elapsedRef.current, a), b);
+    }
   };
 
   return (
@@ -111,7 +116,7 @@ export function WaveformShowcase() {
       />
       <div style={{ fontSize: 12, color: 'var(--dial-text-secondary)' }}>
         {loop
-          ? `loop ${Math.round(loop.start * 100)}–${Math.round(loop.end * 100)}% · click to clear`
+          ? `loop ${Math.round(loop.start * 100)}–${Math.round(loop.end * 100)}% · drag edges to resize · click clears`
           : 'click to set playhead · drag to loop'}
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>

@@ -3311,6 +3311,7 @@ var SIMPLE_POINTS = 46;
 var BORDER_FILL_ALPHA = 0.2;
 var MAX_ZOOM = 8;
 var DRAG_THRESHOLD = 3;
+var EDGE_HIT = 6;
 function mixToMono(buffer) {
   if (buffer.numberOfChannels === 1) return buffer.getChannelData(0);
   const len = buffer.length;
@@ -3584,7 +3585,7 @@ function WaveformVisualization({
       }
       const drag = dragRef.current;
       if (drag && drag.moved) {
-        drawRegion(Math.min(drag.startProg, drag.curProg), Math.max(drag.startProg, drag.curProg), start, win, ph);
+        drawRegion(Math.min(drag.anchor, drag.curProg), Math.max(drag.anchor, drag.curProg), start, win, ph);
       } else if (loopRef.current) {
         drawRegion(loopRef.current.start, loopRef.current.end, start, win, ph);
       }
@@ -3615,6 +3616,28 @@ function WaveformVisualization({
     const { start, win } = windowRef.current;
     return Math.min(1, Math.max(0, start + fx * win));
   };
+  const edgeAt = (clientX) => {
+    const loop2 = loopRef.current;
+    const canvas = canvasRef.current;
+    if (!loop2 || !onLoopChangeRef.current || !canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const { start, win } = windowRef.current;
+    const xOf = (t) => (t - start) / win * rect.width;
+    const px = clientX - rect.left;
+    const sx = xOf(loop2.start);
+    const ex = xOf(loop2.end);
+    const dS = Math.abs(px - sx);
+    const dE = Math.abs(px - ex);
+    if (dS <= EDGE_HIT && dS <= dE && sx >= 0 && sx <= rect.width) return "start";
+    if (dE <= EDGE_HIT && ex >= 0 && ex <= rect.width) return "end";
+    return null;
+  };
+  const setCursor = (c) => {
+    if (canvasRef.current) canvasRef.current.style.cursor = c;
+  };
+  useEffect12(() => {
+    if (canvasRef.current) canvasRef.current.style.cursor = interactive ? "crosshair" : "";
+  }, [interactive]);
   const handlePointerDown = (e) => {
     if (!onSeekRef.current && !onLoopChangeRef.current) return;
     try {
@@ -3622,11 +3645,22 @@ function WaveformVisualization({
     } catch {
     }
     const p = xToProgress(e.clientX);
-    dragRef.current = { startProg: p, curProg: p, startX: e.clientX, moved: false };
+    const edge = edgeAt(e.clientX);
+    if (edge) {
+      const loop2 = loopRef.current;
+      const anchor = edge === "start" ? loop2.end : loop2.start;
+      dragRef.current = { mode: "resize", anchor, curProg: p, startX: e.clientX, moved: false };
+      setCursor("ew-resize");
+    } else {
+      dragRef.current = { mode: "create", anchor: p, curProg: p, startX: e.clientX, moved: false };
+    }
   };
   const handlePointerMove = (e) => {
     const d = dragRef.current;
-    if (!d) return;
+    if (!d) {
+      setCursor(edgeAt(e.clientX) ? "ew-resize" : "crosshair");
+      return;
+    }
     d.curProg = xToProgress(e.clientX);
     if (Math.abs(e.clientX - d.startX) > DRAG_THRESHOLD) d.moved = true;
   };
@@ -3638,13 +3672,16 @@ function WaveformVisualization({
       if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
     } catch {
     }
-    if (d.moved) {
-      const a = Math.min(d.startProg, d.curProg);
-      const b = Math.max(d.startProg, d.curProg);
+    setCursor("crosshair");
+    const a = Math.min(d.anchor, d.curProg);
+    const b = Math.max(d.anchor, d.curProg);
+    if (d.mode === "resize") {
+      if (d.moved) onLoopChangeRef.current?.({ start: a, end: b });
+    } else if (d.moved) {
       if (onLoopChangeRef.current) onLoopChangeRef.current({ start: a, end: b });
       else onSeekRef.current?.(d.curProg);
     } else {
-      onSeekRef.current?.(d.startProg);
+      onSeekRef.current?.(d.anchor);
       if (loopRef.current && onLoopChangeRef.current) onLoopChangeRef.current(null);
     }
   };
@@ -3656,7 +3693,7 @@ function WaveformVisualization({
       {
         ref: canvasRef,
         className: "dialkit-waveform-viz",
-        style: { width, height, ...interactive ? { cursor: "crosshair", touchAction: "none" } : null },
+        style: { width, height, ...interactive ? { touchAction: "none" } : null },
         onPointerDown: interactive ? handlePointerDown : void 0,
         onPointerMove: interactive ? handlePointerMove : void 0,
         onPointerUp: interactive ? handlePointerUp : void 0,

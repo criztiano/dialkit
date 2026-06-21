@@ -75,10 +75,15 @@ const BORDER_FILL_ALPHA = 0.2;
 const MAX_ZOOM = 8;
 // Pointer travel (CSS px) past which a press becomes a loop-drag rather than a click.
 const DRAG_THRESHOLD = 3;
+// How close (CSS px) a press must be to a loop edge to grab it for resizing.
+const EDGE_HIT = 6;
 
 type Peaks = { min: Float32Array; max: Float32Array };
 type Pt = { x: number; y: number };
-type Drag = { startProg: number; curProg: number; startX: number; moved: boolean };
+// A drag in progress: 'create' draws a fresh selection from `anchor`; 'resize'
+// drags one loop edge while `anchor` holds the opposite (fixed) edge. In both,
+// the region is [min(anchor,cur), max(anchor,cur)].
+type Drag = { mode: 'create' | 'resize'; anchor: number; curProg: number; startX: number; moved: boolean };
 
 function mixToMono(buffer: AudioBuffer): Float32Array {
   if (buffer.numberOfChannels === 1) return buffer.getChannelData(0);
@@ -402,7 +407,7 @@ export function WaveformVisualization({
       // Loop / live drag selection on top of the waveform, derived from the playhead color.
       const drag = dragRef.current;
       if (drag && drag.moved) {
-        drawRegion(Math.min(drag.startProg, drag.curProg), Math.max(drag.startProg, drag.curProg), start, win, ph);
+        drawRegion(Math.min(drag.anchor, drag.curProg), Math.max(drag.anchor, drag.curProg), start, win, ph);
       } else if (loopRef.current) {
         drawRegion(loopRef.current.start, loopRef.current.end, start, win, ph);
       }
@@ -439,6 +444,33 @@ export function WaveformVisualization({
     return Math.min(1, Math.max(0, start + fx * win));
   };
 
+  // Which loop edge (if any) a clientX is grabbing — only when a resizable loop is on screen.
+  const edgeAt = (clientX: number): 'start' | 'end' | null => {
+    const loop = loopRef.current;
+    const canvas = canvasRef.current;
+    if (!loop || !onLoopChangeRef.current || !canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const { start, win } = windowRef.current;
+    const xOf = (t: number) => ((t - start) / win) * rect.width;
+    const px = clientX - rect.left;
+    const sx = xOf(loop.start);
+    const ex = xOf(loop.end);
+    const dS = Math.abs(px - sx);
+    const dE = Math.abs(px - ex);
+    if (dS <= EDGE_HIT && dS <= dE && sx >= 0 && sx <= rect.width) return 'start';
+    if (dE <= EDGE_HIT && ex >= 0 && ex <= rect.width) return 'end';
+    return null;
+  };
+
+  const setCursor = (c: string) => {
+    if (canvasRef.current) canvasRef.current.style.cursor = c;
+  };
+
+  // Base cursor for interactive mode (resize cursor is applied imperatively on edge hover).
+  useEffect(() => {
+    if (canvasRef.current) canvasRef.current.style.cursor = interactive ? 'crosshair' : '';
+  }, [interactive]);
+
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!onSeekRef.current && !onLoopChangeRef.current) return;
     try {
@@ -447,12 +479,25 @@ export function WaveformVisualization({
       // No active pointer (e.g. synthetic event) — capture is a nicety, not required.
     }
     const p = xToProgress(e.clientX);
-    dragRef.current = { startProg: p, curProg: p, startX: e.clientX, moved: false };
+    const edge = edgeAt(e.clientX);
+    if (edge) {
+      // Grab the opposite edge as the fixed anchor; this edge follows the pointer.
+      const loop = loopRef.current!;
+      const anchor = edge === 'start' ? loop.end : loop.start;
+      dragRef.current = { mode: 'resize', anchor, curProg: p, startX: e.clientX, moved: false };
+      setCursor('ew-resize');
+    } else {
+      dragRef.current = { mode: 'create', anchor: p, curProg: p, startX: e.clientX, moved: false };
+    }
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const d = dragRef.current;
-    if (!d) return;
+    if (!d) {
+      // Hover affordance: a resize cursor when over a loop edge.
+      setCursor(edgeAt(e.clientX) ? 'ew-resize' : 'crosshair');
+      return;
+    }
     d.curProg = xToProgress(e.clientX);
     if (Math.abs(e.clientX - d.startX) > DRAG_THRESHOLD) d.moved = true;
   };
@@ -466,16 +511,20 @@ export function WaveformVisualization({
     } catch {
       // Capture may not be held (e.g. synthetic event) — ignore.
     }
+    setCursor('crosshair');
 
-    if (d.moved) {
+    const a = Math.min(d.anchor, d.curProg);
+    const b = Math.max(d.anchor, d.curProg);
+    if (d.mode === 'resize') {
+      // Commit the resized loop; a press without a drag leaves it untouched.
+      if (d.moved) onLoopChangeRef.current?.({ start: a, end: b });
+    } else if (d.moved) {
       // Drag → define a loop (or scrub-seek to the release point if loops aren't wired).
-      const a = Math.min(d.startProg, d.curProg);
-      const b = Math.max(d.startProg, d.curProg);
       if (onLoopChangeRef.current) onLoopChangeRef.current({ start: a, end: b });
       else onSeekRef.current?.(d.curProg);
     } else {
       // Click → seek, and clear any active loop (recreate it by dragging again).
-      onSeekRef.current?.(d.startProg);
+      onSeekRef.current?.(d.anchor);
       if (loopRef.current && onLoopChangeRef.current) onLoopChangeRef.current(null);
     }
   };
@@ -489,7 +538,7 @@ export function WaveformVisualization({
       <canvas
         ref={canvasRef}
         className="dialkit-waveform-viz"
-        style={{ width, height, ...(interactive ? { cursor: 'crosshair', touchAction: 'none' } : null) }}
+        style={{ width, height, ...(interactive ? { touchAction: 'none' } : null) }}
         onPointerDown={interactive ? handlePointerDown : undefined}
         onPointerMove={interactive ? handlePointerMove : undefined}
         onPointerUp={interactive ? handlePointerUp : undefined}
