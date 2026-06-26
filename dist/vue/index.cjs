@@ -3254,6 +3254,7 @@ var SIMPLE_POINTS = 46;
 var BORDER_FILL_ALPHA = 0.2;
 var DRAG_THRESHOLD = 3;
 var EDGE_HIT = 6;
+var MIN_LOOP = 1e-3;
 function mixToMono(buffer) {
   if (buffer.numberOfChannels === 1) return buffer.getChannelData(0);
   const len = buffer.length;
@@ -3328,13 +3329,15 @@ function createWaveformEngine(canvas, get) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return { destroy() {
   } };
-  const dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), 3);
+  const readDpr = () => Math.min(Math.max(window.devicePixelRatio || 1, 1), 3);
+  let dpr = readDpr();
   let W = 0;
   let H = 0;
   let cy = 0;
   let amp = 0;
   let pk = { min: new Float32Array(1), max: new Float32Array(1) };
   const syncSize = (width, height) => {
+    dpr = readDpr();
     const nw = Math.round(width * dpr);
     const nh = Math.round(height * dpr);
     if (nw === W && nh === H) return;
@@ -3353,12 +3356,21 @@ function createWaveformEngine(canvas, get) {
     lastBuffer = buffer;
     lastBands = bands;
     const token = ++monoToken;
-    monos = [];
-    if (!buffer) return;
+    if (!buffer) {
+      monos = [];
+      return;
+    }
+    if (!bands) {
+      monos = [mixToMono(buffer)];
+      return;
+    }
     (async () => {
-      const bufs = bands ? await Promise.all(BANDS.map((b) => filterBuffer(buffer, b))) : [buffer];
-      if (token !== monoToken) return;
-      monos = bufs.map((b) => mixToMono(b));
+      try {
+        const bufs = await Promise.all(BANDS.map((b) => filterBuffer(buffer, b)));
+        if (token !== monoToken) return;
+        monos = bufs.map((b) => mixToMono(b));
+      } catch {
+      }
     })();
   };
   const columnWidth = (pixelSize) => Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSize)));
@@ -3580,9 +3592,10 @@ function createWaveformEngine(canvas, get) {
     const rt = get();
     const a = Math.min(d.anchor, d.curProg);
     const b = Math.max(d.anchor, d.curProg);
+    const wide = b - a >= MIN_LOOP;
     if (d.mode === "resize") {
-      if (d.moved) rt.onLoopChange?.({ start: a, end: b });
-    } else if (d.moved) {
+      if (d.moved && wide) rt.onLoopChange?.({ start: a, end: b });
+    } else if (d.moved && wide) {
       if (rt.onLoopChange) rt.onLoopChange({ start: a, end: b });
       else rt.onSeek?.(d.curProg);
     } else {
@@ -3597,6 +3610,7 @@ function createWaveformEngine(canvas, get) {
   canvas.addEventListener("pointermove", onPointerMove);
   canvas.addEventListener("pointerup", onPointerUp);
   canvas.addEventListener("pointercancel", onPointerCancel);
+  canvas.addEventListener("lostpointercapture", onPointerCancel);
   const rt0 = get();
   if (rt0.onSeek || rt0.onLoopChange) {
     canvas.style.cursor = "crosshair";
@@ -3611,6 +3625,7 @@ function createWaveformEngine(canvas, get) {
       canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerup", onPointerUp);
       canvas.removeEventListener("pointercancel", onPointerCancel);
+      canvas.removeEventListener("lostpointercapture", onPointerCancel);
     }
   };
 }

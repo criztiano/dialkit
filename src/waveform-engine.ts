@@ -55,6 +55,8 @@ const BORDER_FILL_ALPHA = 0.2;
 const DRAG_THRESHOLD = 3;
 // How close (CSS px) a press must be to a loop edge to grab it for resizing.
 const EDGE_HIT = 6;
+// Minimum loop span (0..1) below which a selection is treated as a click, not a loop.
+const MIN_LOOP = 0.001;
 
 type Peaks = { min: Float32Array; max: Float32Array };
 type Pt = { x: number; y: number };
@@ -150,9 +152,12 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
   const ctx = canvas.getContext('2d');
   if (!ctx) return { destroy() {} };
 
-  const dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), 3);
+  const readDpr = () => Math.min(Math.max(window.devicePixelRatio || 1, 1), 3);
+  // Re-read per frame so moving the window to a different-density display keeps the
+  // backing-store resolution and the pointer→progress mapping in sync.
+  let dpr = readDpr();
 
-  // Size-dependent state, (re)allocated by syncSize when width/height change.
+  // Size-dependent state, (re)allocated by syncSize when width/height/dpr change.
   let W = 0;
   let H = 0;
   let cy = 0;
@@ -160,6 +165,7 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
   let pk: Peaks = { min: new Float32Array(1), max: new Float32Array(1) };
 
   const syncSize = (width: number, height: number) => {
+    dpr = readDpr();
     const nw = Math.round(width * dpr);
     const nh = Math.round(height * dpr);
     if (nw === W && nh === H) return;
@@ -182,12 +188,25 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
     lastBuffer = buffer;
     lastBands = bands;
     const token = ++monoToken;
-    monos = [];
-    if (!buffer) return;
+    if (!buffer) {
+      monos = [];
+      return;
+    }
+    if (!bands) {
+      // No EQ split — derive the single mono synchronously (no blank frame).
+      monos = [mixToMono(buffer)];
+      return;
+    }
+    // Band split renders offline; keep the previous waveform on screen until it
+    // resolves rather than blanking, and never leave a permanent hole on failure.
     (async () => {
-      const bufs = bands ? await Promise.all(BANDS.map((b) => filterBuffer(buffer, b))) : [buffer];
-      if (token !== monoToken) return;
-      monos = bufs.map((b) => mixToMono(b));
+      try {
+        const bufs = await Promise.all(BANDS.map((b) => filterBuffer(buffer, b)));
+        if (token !== monoToken) return;
+        monos = bufs.map((b) => mixToMono(b));
+      } catch {
+        // Offline render failed (e.g. memory pressure) — keep the prior waveform.
+      }
     })();
   };
 
@@ -457,20 +476,24 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
     const rt = get();
     const a = Math.min(d.anchor, d.curProg);
     const b = Math.max(d.anchor, d.curProg);
+    // A real selection must span at least MIN_LOOP; a collapsed drag is treated as a click.
+    const wide = b - a >= MIN_LOOP;
     if (d.mode === 'resize') {
-      // Commit the resized loop; a press without a drag leaves it untouched.
-      if (d.moved) rt.onLoopChange?.({ start: a, end: b });
-    } else if (d.moved) {
+      // Commit the resized loop; a press without a real drag leaves it untouched.
+      if (d.moved && wide) rt.onLoopChange?.({ start: a, end: b });
+    } else if (d.moved && wide) {
       // Drag → define a loop (or scrub-seek to the release point if loops aren't wired).
       if (rt.onLoopChange) rt.onLoopChange({ start: a, end: b });
       else rt.onSeek?.(d.curProg);
     } else {
-      // Click → seek, and clear any active loop (recreate it by dragging again).
+      // Click (or a degenerate drag) → seek, and clear any active loop.
       rt.onSeek?.(d.anchor);
       if (rt.loop && rt.onLoopChange) rt.onLoopChange(null);
     }
   };
 
+  // Pointer capture can be lost without a pointerup (browser steals it, element
+  // reflows) — drop the in-progress drag so it can't get stuck rubber-banding.
   const onPointerCancel = () => {
     drag = null;
   };
@@ -479,6 +502,7 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
   canvas.addEventListener('pointermove', onPointerMove);
   canvas.addEventListener('pointerup', onPointerUp);
   canvas.addEventListener('pointercancel', onPointerCancel);
+  canvas.addEventListener('lostpointercapture', onPointerCancel);
 
   // Interactive affordances (base cursor + no touch-scroll) when seek/loop are wired.
   const rt0 = get();
@@ -497,6 +521,7 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointercancel', onPointerCancel);
+      canvas.removeEventListener('lostpointercapture', onPointerCancel);
     },
   };
 }

@@ -57,30 +57,36 @@ export function WaveformShowcase() {
 
   // Virtual transport: a clock-driven playhead (no audio output needed to demo it).
   const elapsedRef = useRef(0);
-  const lastRef = useRef<number | null>(null);
 
   useEffect(() => {
     renderSample().then(setBuffer).catch(() => {});
   }, []);
 
-  const getProgress = () => {
-    const now = performance.now();
-    if (playing) {
-      if (lastRef.current != null) elapsedRef.current += (now - lastRef.current) / 1000;
-      lastRef.current = now;
-    } else {
-      lastRef.current = null;
-    }
-    // Inside a loop, wrap the transport within its bounds.
-    if (loop) {
-      const a = loop.start * DURATION;
-      const span = Math.max(0.001, (loop.end - loop.start) * DURATION);
-      const t = a + (((elapsedRef.current - a) % span) + span) % span;
-      elapsedRef.current = t;
-      return t / DURATION;
-    }
-    return (elapsedRef.current % DURATION) / DURATION;
-  };
+  // A single integrator advances the transport; getProgress below stays a pure read,
+  // so polling it from more than one place can never double-count elapsed time.
+  useEffect(() => {
+    let raf = 0;
+    let last: number | null = null;
+    const tick = (now: number) => {
+      raf = requestAnimationFrame(tick);
+      if (!playing) {
+        last = null;
+        return;
+      }
+      if (last != null) elapsedRef.current += (now - last) / 1000;
+      last = now;
+      // Inside a loop, wrap the transport within its bounds.
+      if (loop) {
+        const a = loop.start * DURATION;
+        const span = Math.max(0.001, (loop.end - loop.start) * DURATION);
+        elapsedRef.current = a + (((elapsedRef.current - a) % span) + span) % span;
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing, loop]);
+
+  const getProgress = () => (elapsedRef.current % DURATION) / DURATION;
 
   // Click reports a new play position; drag reports a loop (jump the transport to its start).
   const handleSeek = (p: number) => {
