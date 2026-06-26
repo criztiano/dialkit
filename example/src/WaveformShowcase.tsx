@@ -87,11 +87,17 @@ export function WaveformShowcase() {
     elapsedRef.current = p * DURATION;
   };
   const handleLoopChange = (l: WaveformLoop | null) => {
+    const prev = loop;
     setLoop(l);
-    // Keep the transport inside the loop (created or resized) without yanking it to the start.
-    if (l) {
-      const a = l.start * DURATION;
-      const b = l.end * DURATION;
+    if (!l) return;
+    const a = l.start * DURATION;
+    const b = l.end * DURATION;
+    // Enlarging the loop leftward (dragging the start edge out) restarts the
+    // transport from the new start so the newly-included head plays immediately;
+    // otherwise just keep the transport within the loop.
+    if (prev && l.start < prev.start) {
+      elapsedRef.current = a;
+    } else {
       elapsedRef.current = Math.min(Math.max(elapsedRef.current, a), b);
     }
   };
