@@ -200,24 +200,26 @@ function readComposition(comp, u, s) {
   return { inputPhase, warpedPhase, value, segIndex, localT };
 }
 var DEFAULT_TRIGGER_STEPS = 5;
-function triggerPhases(steps) {
+function triggerLevels(steps) {
   const n = Math.max(2, Math.floor(steps));
   const out = [];
-  for (let k = 0; k < n - 1; k++) out.push(k / (n - 1));
+  for (let k = 0; k < n; k++) out.push(k / (n - 1));
   return out;
 }
-function triggersCrossed(prev, cur, steps) {
+function triggersCrossed(prevValue, curValue, steps) {
   const n = Math.max(2, Math.floor(steps));
-  const distinct = n - 1;
-  const seg = 1 / distinct;
-  const p = clamp01(prev);
-  let c = clamp01(cur);
-  if (c < p) c += 1;
-  const EPS = 1e-9;
-  const startK = Math.floor(p / seg + EPS) + 1;
-  const endK = Math.floor(c / seg + EPS);
+  const seg = 1 / (n - 1);
+  const p = clamp01(prevValue);
+  const c = clamp01(curValue);
   const fired = [];
-  for (let k = startK; k <= endK; k++) fired.push((k % distinct + distinct) % distinct);
+  if (c > p) {
+    const EPS = 1e-9;
+    const startK = Math.floor(p / seg + EPS) + 1;
+    const endK = Math.floor(c / seg + EPS);
+    for (let k = startK; k <= endK; k++) if (k >= 1 && k <= n - 2) fired.push(k);
+  } else if (p - c > seg) {
+    fired.push(n - 1);
+  }
   return fired;
 }
 function defaultComposition() {
@@ -257,7 +259,7 @@ export {
   setSegmentCurvature,
   splitSegment,
   totalWeight,
-  triggerPhases,
+  triggerLevels,
   triggersCrossed
 };
 //# sourceMappingURL=curve-composer-core.js.map

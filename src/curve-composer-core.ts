@@ -338,44 +338,53 @@ export function readComposition(comp: CurveComposition, u: number, s: Compositio
   return { inputPhase, warpedPhase, value, segIndex, localT };
 }
 
-// --- trigger series (an alternative, discrete read of the transport) ---
+// --- trigger series (an alternative, discrete read of the SIGNAL) ---
 
 /** Default trigger count for a trigger series. */
 export const DEFAULT_TRIGGER_STEPS = 5;
 
 /**
- * The distinct firing phases of a `steps`-trigger series. The first trigger sits at 0
- * and the conceptual last at 1, but on a loop 0 and 1 are the same instant, so they
- * fold into a single boundary trigger. A `steps`-series therefore has `steps - 1`
- * firing phases in [0, 1), spaced 1/(steps - 1) apart — e.g. steps=5 → [0, .25, .5, .75],
- * with the .75→0 wrap closing the loop. This fold is what prevents a double fire at the edge.
+ * The evenly-spaced trigger levels in VALUE (signal) space — not time. The first sits at
+ * 0 and the last at 1, e.g. steps=5 → [0, .25, .5, .75, 1]. Triggers fire when the composed
+ * value crosses these levels, so a non-linear curve (which reaches each level at an uneven
+ * pace) fires them unevenly in time — that pacing is the whole point. Use these to draw the
+ * horizontal level lines a trigger series rides.
  */
-export function triggerPhases(steps: number): number[] {
+export function triggerLevels(steps: number): number[] {
   const n = Math.max(2, Math.floor(steps));
   const out: number[] = [];
-  for (let k = 0; k < n - 1; k++) out.push(k / (n - 1));
+  for (let k = 0; k < n; k++) out.push(k / (n - 1));
   return out;
 }
 
 /**
- * Indices (into `triggerPhases`) crossed as the loop phase advances `prev` → `cur`,
- * exclusive of `prev` and inclusive of `cur`. Handles the 0→1 wrap (so the boundary
- * trigger fires once per loop, not twice) and a frame that skips several triggers at once.
- * `cur`/`prev` are raw transport phases in 0..1; detection ignores the driver/direction
- * warp so the grid stays evenly timed.
+ * Level indices (into `triggerLevels`) fired as the composed value moves `prevValue` →
+ * `curValue`. Pass the composed `value` (post driver/direction) frame to frame:
+ *
+ * - Climbing: the INTERIOR levels (strictly between 0 and 1) crossed upward fire — the
+ *   curve sets how fast the value reaches each, so non-linear curves fire them unevenly.
+ * - The TOP level (1) fires on walk completion — a single-frame value drop larger than one
+ *   level, i.e. the per-segment / loop reset. (The looping transport reaches ~0.999 but
+ *   never exactly 1, so the peak must be caught at the reset, not by an upward crossing.)
+ * - The floor level 0 never fires; it is the start of a walk, folded onto the prior top so
+ *   the edge never double-triggers.
+ *
+ * Values are clamped to [0, 1] so spring overshoot can't perturb the top.
  */
-export function triggersCrossed(prev: number, cur: number, steps: number): number[] {
+export function triggersCrossed(prevValue: number, curValue: number, steps: number): number[] {
   const n = Math.max(2, Math.floor(steps));
-  const distinct = n - 1; // firing phases at k/(n-1) for k = 0..n-2; k = n-1 folds onto 0
-  const seg = 1 / distinct;
-  const p = clamp01(prev);
-  let c = clamp01(cur);
-  if (c < p) c += 1; // unwrap a loop-boundary crossing into a monotonic interval
-  const EPS = 1e-9;
-  const startK = Math.floor(p / seg + EPS) + 1; // first trigger strictly past `prev`
-  const endK = Math.floor(c / seg + EPS); // last trigger at or before `cur`
+  const seg = 1 / (n - 1); // value spacing between adjacent levels
+  const p = clamp01(prevValue);
+  const c = clamp01(curValue);
   const fired: number[] = [];
-  for (let k = startK; k <= endK; k++) fired.push(((k % distinct) + distinct) % distinct);
+  if (c > p) {
+    const EPS = 1e-9;
+    const startK = Math.floor(p / seg + EPS) + 1; // first level strictly above prevValue
+    const endK = Math.floor(c / seg + EPS); // last level at or below curValue
+    for (let k = startK; k <= endK; k++) if (k >= 1 && k <= n - 2) fired.push(k); // interior only
+  } else if (p - c > seg) {
+    fired.push(n - 1); // a walk reset → the walk peaked: fire the top level
+  }
   return fired;
 }
 

@@ -2237,16 +2237,17 @@
 
 .dialkit-cc-trigger {
   stroke: currentColor;
-  stroke-opacity: 0.3;
-  stroke-width: 2;
-  stroke-linecap: round;
+  stroke-opacity: 0.22;
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
   pointer-events: none;
   transition: stroke-opacity 0.12s ease, stroke-width 0.12s ease;
 }
 
 .dialkit-cc-trigger[data-firing='true'] {
-  stroke-opacity: 1;
-  stroke-width: 3;
+  stroke-opacity: 0.95;
+  stroke-width: 2;
+  stroke-dasharray: none;
 }
 
 .dialkit-cc-label {

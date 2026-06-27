@@ -19,7 +19,7 @@ import {
   cycleDriverType,
   setDriverCurvature,
   readComposition,
-  triggerPhases,
+  triggerLevels,
   triggersCrossed,
   DEFAULT_TRIGGER_STEPS,
   DRAG_THRESHOLD,
@@ -51,13 +51,13 @@ interface CurveComposerProps {
   phase?: number;
   /**
    * Output mode. 'continuous' (default) reads the composed value each frame; 'trigger'
-   * emits a discrete signal (via `onTrigger`) when the transport crosses one of the
-   * evenly-spaced trigger phases and draws those ticks instead of the value dot.
+   * emits a discrete signal (via `onTrigger`) when the composed value crosses one of the
+   * evenly-spaced trigger levels, and draws those levels as horizontal lines that flash.
    */
   mode?: 'continuous' | 'trigger';
-  /** Number of triggers in trigger mode (first at 0, last at 1, evenly spaced). Default 5. */
+  /** Number of trigger levels in trigger mode (first at 0, last at 1, evenly spaced in value). Default 5. */
   triggerSteps?: number;
-  /** Fired in trigger mode when a trigger phase is crossed; `index` is into `triggerPhases`. */
+  /** Fired in trigger mode when the value crosses a trigger level; `index` is into `triggerLevels`. */
   onTrigger?: (index: number) => void;
   /** Curve stroke color. Defaults to the theme text color. */
   curveColor?: string;
@@ -126,10 +126,10 @@ export function CurveComposer({
   const seriesPlayheadRef = useRef<SVGLineElement>(null);
   const seriesDotRef = useRef<SVGCircleElement>(null);
   const driverPlayheadRef = useRef<SVGLineElement>(null);
-  // Trigger ticks + per-tick flash timers; prevTrigPhase tracks crossings across frames.
+  // Trigger level lines + per-level flash timers; prevTrigValue tracks value crossings.
   const tickRefs = useRef<(SVGLineElement | null)[]>([]);
   const tickTimers = useRef<number[]>([]);
-  const prevTrigPhase = useRef<number>(Number.NaN);
+  const prevTrigValue = useRef<number>(Number.NaN);
 
   const [drag, setDrag] = useState<Drag | null>(null);
   const [hover, setHover] = useState<{ kind: 'boundary' | 'segment' | 'driver'; index: number } | null>(null);
@@ -168,12 +168,13 @@ export function CurveComposer({
         driverPlayheadRef.current.setAttribute('x1', String(dx));
         driverPlayheadRef.current.setAttribute('x2', String(dx));
       }
-      // Trigger mode: detect crossings on the raw transport phase (evenly timed, ignores
-      // the driver warp) and flash each crossed tick, emitting onTrigger.
+      // Trigger mode: fire when the composed VALUE crosses an evenly-spaced level. The
+      // curve sets how fast the value reaches each level, so non-linear curves fire
+      // unevenly in time. Flash the crossed level line and emit onTrigger.
       if (md === 'trigger') {
-        const prev = prevTrigPhase.current;
+        const prev = prevTrigValue.current;
         if (!Number.isNaN(prev)) {
-          for (const idx of triggersCrossed(prev, u, ts)) {
+          for (const idx of triggersCrossed(prev, read.value, ts)) {
             onTriggerRef.current?.(idx);
             const el = tickRefs.current[idx];
             if (el) {
@@ -183,9 +184,9 @@ export function CurveComposer({
             }
           }
         }
-        prevTrigPhase.current = u;
+        prevTrigValue.current = read.value;
       } else {
-        prevTrigPhase.current = Number.NaN;
+        prevTrigValue.current = Number.NaN;
       }
     };
     raf = requestAnimationFrame(tick);
@@ -428,10 +429,11 @@ export function CurveComposer({
           />
         ))}
 
-        {/* trigger ticks (trigger mode): evenly-spaced markers that flash when crossed */}
+        {/* trigger level lines (trigger mode): evenly spaced in VALUE, not time — they flash
+            as the value dot crosses them, so non-linear curves fire them unevenly. */}
         {mode === 'trigger' &&
-          triggerPhases(triggerSteps).map((px, i) => {
-            const tx = Math.max(1, Math.min(W - 1, px * W));
+          triggerLevels(triggerSteps).map((lv, i) => {
+            const ly = mapY(mainRect, lv);
             return (
               <line
                 key={`trig-${i}`}
@@ -440,20 +442,18 @@ export function CurveComposer({
                 }}
                 className="dialkit-cc-trigger"
                 data-firing="false"
-                x1={tx}
-                y1={mainRect.y + mainRect.h - 12}
-                x2={tx}
-                y2={mainRect.y + mainRect.h - 2}
+                x1={0}
+                y1={ly}
+                x2={W}
+                y2={ly}
                 style={{ stroke: playheadColor }}
               />
             );
           })}
 
-        {/* series playhead + dot (the value dot is meaningless in trigger mode) */}
+        {/* series playhead + value dot (rides the curve; in trigger mode it crosses the levels) */}
         <line ref={seriesPlayheadRef} className="dialkit-cc-playhead" x1={0} y1={mainRect.y} x2={0} y2={mainRect.y + mainRect.h} style={{ stroke: playheadColor }} />
-        {mode !== 'trigger' && (
-          <circle ref={seriesDotRef} className="dialkit-cc-dot" cx={0} cy={mapY(mainRect, 0)} r={3} style={{ fill: playheadColor }} />
-        )}
+        <circle ref={seriesDotRef} className="dialkit-cc-dot" cx={0} cy={mapY(mainRect, 0)} r={3} style={{ fill: playheadColor }} />
 
         {/* driver lane */}
         {driverRect && (

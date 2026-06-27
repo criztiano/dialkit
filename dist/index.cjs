@@ -63,7 +63,7 @@ __export(index_exports, {
   setDriverCurvature: () => setDriverCurvature,
   setSegmentCurvature: () => setSegmentCurvature,
   splitSegment: () => splitSegment,
-  triggerPhases: () => triggerPhases,
+  triggerLevels: () => triggerLevels,
   triggersCrossed: () => triggersCrossed,
   useDialKit: () => useDialKit
 });
@@ -4033,24 +4033,26 @@ function readComposition(comp, u, s) {
   return { inputPhase, warpedPhase, value, segIndex, localT };
 }
 var DEFAULT_TRIGGER_STEPS = 5;
-function triggerPhases(steps) {
+function triggerLevels(steps) {
   const n = Math.max(2, Math.floor(steps));
   const out = [];
-  for (let k = 0; k < n - 1; k++) out.push(k / (n - 1));
+  for (let k = 0; k < n; k++) out.push(k / (n - 1));
   return out;
 }
-function triggersCrossed(prev, cur, steps) {
+function triggersCrossed(prevValue, curValue, steps) {
   const n = Math.max(2, Math.floor(steps));
-  const distinct = n - 1;
-  const seg = 1 / distinct;
-  const p = clamp01(prev);
-  let c = clamp01(cur);
-  if (c < p) c += 1;
-  const EPS = 1e-9;
-  const startK = Math.floor(p / seg + EPS) + 1;
-  const endK = Math.floor(c / seg + EPS);
+  const seg = 1 / (n - 1);
+  const p = clamp01(prevValue);
+  const c = clamp01(curValue);
   const fired = [];
-  for (let k = startK; k <= endK; k++) fired.push((k % distinct + distinct) % distinct);
+  if (c > p) {
+    const EPS = 1e-9;
+    const startK = Math.floor(p / seg + EPS) + 1;
+    const endK = Math.floor(c / seg + EPS);
+    for (let k = startK; k <= endK; k++) if (k >= 1 && k <= n - 2) fired.push(k);
+  } else if (p - c > seg) {
+    fired.push(n - 1);
+  }
   return fired;
 }
 function defaultComposition() {
@@ -4108,7 +4110,7 @@ function CurveComposer({
   const driverPlayheadRef = (0, import_react24.useRef)(null);
   const tickRefs = (0, import_react24.useRef)([]);
   const tickTimers = (0, import_react24.useRef)([]);
-  const prevTrigPhase = (0, import_react24.useRef)(Number.NaN);
+  const prevTrigValue = (0, import_react24.useRef)(Number.NaN);
   const [drag, setDrag] = (0, import_react24.useState)(null);
   const [hover, setHover] = (0, import_react24.useState)(null);
   const dragRef = (0, import_react24.useRef)(null);
@@ -4141,9 +4143,9 @@ function CurveComposer({
         driverPlayheadRef.current.setAttribute("x2", String(dx));
       }
       if (md === "trigger") {
-        const prev = prevTrigPhase.current;
+        const prev = prevTrigValue.current;
         if (!Number.isNaN(prev)) {
-          for (const idx of triggersCrossed(prev, u, ts)) {
+          for (const idx of triggersCrossed(prev, read.value, ts)) {
             onTriggerRef.current?.(idx);
             const el = tickRefs.current[idx];
             if (el) {
@@ -4153,9 +4155,9 @@ function CurveComposer({
             }
           }
         }
-        prevTrigPhase.current = u;
+        prevTrigValue.current = read.value;
       } else {
-        prevTrigPhase.current = Number.NaN;
+        prevTrigValue.current = Number.NaN;
       }
     };
     raf = requestAnimationFrame(tick);
@@ -4351,8 +4353,8 @@ function CurveComposer({
           },
           `b-${i}`
         )),
-        mode === "trigger" && triggerPhases(triggerSteps).map((px, i) => {
-          const tx = Math.max(1, Math.min(W - 1, px * W));
+        mode === "trigger" && triggerLevels(triggerSteps).map((lv, i) => {
+          const ly = mapY(mainRect, lv);
           return /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
             "line",
             {
@@ -4361,17 +4363,17 @@ function CurveComposer({
               },
               className: "dialkit-cc-trigger",
               "data-firing": "false",
-              x1: tx,
-              y1: mainRect.y + mainRect.h - 12,
-              x2: tx,
-              y2: mainRect.y + mainRect.h - 2,
+              x1: 0,
+              y1: ly,
+              x2: W,
+              y2: ly,
               style: { stroke: playheadColor }
             },
             `trig-${i}`
           );
         }),
         /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("line", { ref: seriesPlayheadRef, className: "dialkit-cc-playhead", x1: 0, y1: mainRect.y, x2: 0, y2: mainRect.y + mainRect.h, style: { stroke: playheadColor } }),
-        mode !== "trigger" && /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("circle", { ref: seriesDotRef, className: "dialkit-cc-dot", cx: 0, cy: mapY(mainRect, 0), r: 3, style: { fill: playheadColor } }),
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("circle", { ref: seriesDotRef, className: "dialkit-cc-dot", cx: 0, cy: mapY(mainRect, 0), r: 3, style: { fill: playheadColor } }),
         driverRect && /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(import_jsx_runtime24.Fragment, { children: [
           renderLaneBg(driverRect, "driver-bg"),
           renderLaneGrid(driverRect),
@@ -4550,7 +4552,7 @@ function ShortcutsMenu({ panelId }) {
   setDriverCurvature,
   setSegmentCurvature,
   splitSegment,
-  triggerPhases,
+  triggerLevels,
   triggersCrossed,
   useDialKit
 });

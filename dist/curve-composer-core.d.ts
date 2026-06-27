@@ -103,22 +103,29 @@ declare function readComposition(comp: CurveComposition, u: number, s: Compositi
 /** Default trigger count for a trigger series. */
 declare const DEFAULT_TRIGGER_STEPS = 5;
 /**
- * The distinct firing phases of a `steps`-trigger series. The first trigger sits at 0
- * and the conceptual last at 1, but on a loop 0 and 1 are the same instant, so they
- * fold into a single boundary trigger. A `steps`-series therefore has `steps - 1`
- * firing phases in [0, 1), spaced 1/(steps - 1) apart — e.g. steps=5 → [0, .25, .5, .75],
- * with the .75→0 wrap closing the loop. This fold is what prevents a double fire at the edge.
+ * The evenly-spaced trigger levels in VALUE (signal) space — not time. The first sits at
+ * 0 and the last at 1, e.g. steps=5 → [0, .25, .5, .75, 1]. Triggers fire when the composed
+ * value crosses these levels, so a non-linear curve (which reaches each level at an uneven
+ * pace) fires them unevenly in time — that pacing is the whole point. Use these to draw the
+ * horizontal level lines a trigger series rides.
  */
-declare function triggerPhases(steps: number): number[];
+declare function triggerLevels(steps: number): number[];
 /**
- * Indices (into `triggerPhases`) crossed as the loop phase advances `prev` → `cur`,
- * exclusive of `prev` and inclusive of `cur`. Handles the 0→1 wrap (so the boundary
- * trigger fires once per loop, not twice) and a frame that skips several triggers at once.
- * `cur`/`prev` are raw transport phases in 0..1; detection ignores the driver/direction
- * warp so the grid stays evenly timed.
+ * Level indices (into `triggerLevels`) fired as the composed value moves `prevValue` →
+ * `curValue`. Pass the composed `value` (post driver/direction) frame to frame:
+ *
+ * - Climbing: the INTERIOR levels (strictly between 0 and 1) crossed upward fire — the
+ *   curve sets how fast the value reaches each, so non-linear curves fire them unevenly.
+ * - The TOP level (1) fires on walk completion — a single-frame value drop larger than one
+ *   level, i.e. the per-segment / loop reset. (The looping transport reaches ~0.999 but
+ *   never exactly 1, so the peak must be caught at the reset, not by an upward crossing.)
+ * - The floor level 0 never fires; it is the start of a walk, folded onto the prior top so
+ *   the edge never double-triggers.
+ *
+ * Values are clamped to [0, 1] so spring overshoot can't perturb the top.
  */
-declare function triggersCrossed(prev: number, cur: number, steps: number): number[];
+declare function triggersCrossed(prevValue: number, curValue: number, steps: number): number[];
 /** A reasonable starting composition for demos / uncontrolled mounts. */
 declare function defaultComposition(): CurveComposition;
 
-export { CURVE_CYCLE, CURVE_MIN_WEIGHT_FRAC, type CompositionRead, type CompositionSamplers, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, DRAG_THRESHOLD, type DriverDirection, EDGE_HIT, type Sampler, addDriver, boundaries, boundaryAt, buildSampler, buildSamplers, cycleDriverType, cycleSegmentType, defaultComposition, deriveEase, directionPhase, easingPresets, readComposition, redistributeWeight, removeDriver, removeSegment, segmentIndexAt, segmentSpan, setDriverCurvature, setSegmentCurvature, splitSegment, totalWeight, triggerPhases, triggersCrossed };
+export { CURVE_CYCLE, CURVE_MIN_WEIGHT_FRAC, type CompositionRead, type CompositionSamplers, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, DRAG_THRESHOLD, type DriverDirection, EDGE_HIT, type Sampler, addDriver, boundaries, boundaryAt, buildSampler, buildSamplers, cycleDriverType, cycleSegmentType, defaultComposition, deriveEase, directionPhase, easingPresets, readComposition, redistributeWeight, removeDriver, removeSegment, segmentIndexAt, segmentSpan, setDriverCurvature, setSegmentCurvature, splitSegment, totalWeight, triggerLevels, triggersCrossed };

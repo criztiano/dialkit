@@ -36,7 +36,7 @@ export {
   buildSamplers,
   readComposition,
   directionPhase,
-  triggerPhases,
+  triggerLevels,
   triggersCrossed,
   DEFAULT_TRIGGER_STEPS,
 } from './curve-composer-core';

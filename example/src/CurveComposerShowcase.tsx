@@ -151,7 +151,7 @@ export function CurveComposerShowcase() {
             }}
           />
           <span style={{ fontSize: 12, color: 'var(--dial-text-secondary)' }}>
-            {triggerSteps} triggers · blinks purple on each hit
+            {triggerSteps} triggers, evenly spaced in the signal · non-linear curves fire them unevenly
           </span>
         </div>
       )}
