@@ -100,7 +100,25 @@ interface CompositionRead {
  * playhead sweeps left→right once, while `value` is each segment's own full 0→1 walk.
  */
 declare function readComposition(comp: CurveComposition, u: number, s: CompositionSamplers): CompositionRead;
+/** Default trigger count for a trigger series. */
+declare const DEFAULT_TRIGGER_STEPS = 5;
+/**
+ * The distinct firing phases of a `steps`-trigger series. The first trigger sits at 0
+ * and the conceptual last at 1, but on a loop 0 and 1 are the same instant, so they
+ * fold into a single boundary trigger. A `steps`-series therefore has `steps - 1`
+ * firing phases in [0, 1), spaced 1/(steps - 1) apart — e.g. steps=5 → [0, .25, .5, .75],
+ * with the .75→0 wrap closing the loop. This fold is what prevents a double fire at the edge.
+ */
+declare function triggerPhases(steps: number): number[];
+/**
+ * Indices (into `triggerPhases`) crossed as the loop phase advances `prev` → `cur`,
+ * exclusive of `prev` and inclusive of `cur`. Handles the 0→1 wrap (so the boundary
+ * trigger fires once per loop, not twice) and a frame that skips several triggers at once.
+ * `cur`/`prev` are raw transport phases in 0..1; detection ignores the driver/direction
+ * warp so the grid stays evenly timed.
+ */
+declare function triggersCrossed(prev: number, cur: number, steps: number): number[];
 /** A reasonable starting composition for demos / uncontrolled mounts. */
 declare function defaultComposition(): CurveComposition;
 
-export { CURVE_CYCLE, CURVE_MIN_WEIGHT_FRAC, type CompositionRead, type CompositionSamplers, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DRAG_THRESHOLD, type DriverDirection, EDGE_HIT, type Sampler, addDriver, boundaries, boundaryAt, buildSampler, buildSamplers, cycleDriverType, cycleSegmentType, defaultComposition, deriveEase, directionPhase, easingPresets, readComposition, redistributeWeight, removeDriver, removeSegment, segmentIndexAt, segmentSpan, setDriverCurvature, setSegmentCurvature, splitSegment, totalWeight };
+export { CURVE_CYCLE, CURVE_MIN_WEIGHT_FRAC, type CompositionRead, type CompositionSamplers, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, DRAG_THRESHOLD, type DriverDirection, EDGE_HIT, type Sampler, addDriver, boundaries, boundaryAt, buildSampler, buildSamplers, cycleDriverType, cycleSegmentType, defaultComposition, deriveEase, directionPhase, easingPresets, readComposition, redistributeWeight, removeDriver, removeSegment, segmentIndexAt, segmentSpan, setDriverCurvature, setSegmentCurvature, splitSegment, totalWeight, triggerPhases, triggersCrossed };

@@ -19,6 +19,9 @@ import {
   cycleDriverType,
   setDriverCurvature,
   readComposition,
+  triggerPhases,
+  triggersCrossed,
+  DEFAULT_TRIGGER_STEPS,
   DRAG_THRESHOLD,
   EDGE_HIT,
 } from '../curve-composer-core';
@@ -46,6 +49,16 @@ interface CurveComposerProps {
   getPhase?: () => number;
   /** Static transport phase 0..1 (used when `getPhase` is absent). */
   phase?: number;
+  /**
+   * Output mode. 'continuous' (default) reads the composed value each frame; 'trigger'
+   * emits a discrete signal (via `onTrigger`) when the transport crosses one of the
+   * evenly-spaced trigger phases and draws those ticks instead of the value dot.
+   */
+  mode?: 'continuous' | 'trigger';
+  /** Number of triggers in trigger mode (first at 0, last at 1, evenly spaced). Default 5. */
+  triggerSteps?: number;
+  /** Fired in trigger mode when a trigger phase is crossed; `index` is into `triggerPhases`. */
+  onTrigger?: (index: number) => void;
   /** Curve stroke color. Defaults to the theme text color. */
   curveColor?: string;
   /** Playhead / marker color. Defaults to the theme text color. */
@@ -79,6 +92,9 @@ export function CurveComposer({
   onDriverChange,
   getPhase,
   phase = 0,
+  mode = 'continuous',
+  triggerSteps = DEFAULT_TRIGGER_STEPS,
+  onTrigger,
   curveColor,
   playheadColor,
   grid = false,
@@ -101,13 +117,19 @@ export function CurveComposer({
 
   // Samplers + latest state for the rAF-driven playhead (read without re-rendering).
   const samplers = useMemo(() => buildSamplers(composition), [composition]);
-  const liveRef = useRef({ composition, samplers, getPhase, phase });
-  liveRef.current = { composition, samplers, getPhase, phase };
+  const liveRef = useRef({ composition, samplers, getPhase, phase, mode, triggerSteps });
+  liveRef.current = { composition, samplers, getPhase, phase, mode, triggerSteps };
+  const onTriggerRef = useRef(onTrigger);
+  onTriggerRef.current = onTrigger;
 
   const svgRef = useRef<SVGSVGElement>(null);
   const seriesPlayheadRef = useRef<SVGLineElement>(null);
   const seriesDotRef = useRef<SVGCircleElement>(null);
   const driverPlayheadRef = useRef<SVGLineElement>(null);
+  // Trigger ticks + per-tick flash timers; prevTrigPhase tracks crossings across frames.
+  const tickRefs = useRef<(SVGLineElement | null)[]>([]);
+  const tickTimers = useRef<number[]>([]);
+  const prevTrigPhase = useRef<number>(Number.NaN);
 
   const [drag, setDrag] = useState<Drag | null>(null);
   const [hover, setHover] = useState<{ kind: 'boundary' | 'segment' | 'driver'; index: number } | null>(null);
@@ -128,7 +150,7 @@ export function CurveComposer({
     let raf = 0;
     const tick = () => {
       raf = requestAnimationFrame(tick);
-      const { composition: c, samplers: s, getPhase: gp, phase: p } = liveRef.current;
+      const { composition: c, samplers: s, getPhase: gp, phase: p, mode: md, triggerSteps: ts } = liveRef.current;
       const u = gp ? gp() : p;
       const read = readComposition(c, u, s);
       const sx = read.warpedPhase * W;
@@ -146,9 +168,32 @@ export function CurveComposer({
         driverPlayheadRef.current.setAttribute('x1', String(dx));
         driverPlayheadRef.current.setAttribute('x2', String(dx));
       }
+      // Trigger mode: detect crossings on the raw transport phase (evenly timed, ignores
+      // the driver warp) and flash each crossed tick, emitting onTrigger.
+      if (md === 'trigger') {
+        const prev = prevTrigPhase.current;
+        if (!Number.isNaN(prev)) {
+          for (const idx of triggersCrossed(prev, u, ts)) {
+            onTriggerRef.current?.(idx);
+            const el = tickRefs.current[idx];
+            if (el) {
+              el.setAttribute('data-firing', 'true');
+              window.clearTimeout(tickTimers.current[idx]);
+              tickTimers.current[idx] = window.setTimeout(() => el.setAttribute('data-firing', 'false'), 140);
+            }
+          }
+        }
+        prevTrigPhase.current = u;
+      } else {
+        prevTrigPhase.current = Number.NaN;
+      }
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    const timers = tickTimers.current;
+    return () => {
+      cancelAnimationFrame(raf);
+      for (const t of timers) window.clearTimeout(t);
+    };
     // mapY/mainRect are derived from width/height which the loop reads via closure; only
     // the geometry inputs need to re-arm the loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -383,9 +428,32 @@ export function CurveComposer({
           />
         ))}
 
-        {/* series playhead + dot */}
+        {/* trigger ticks (trigger mode): evenly-spaced markers that flash when crossed */}
+        {mode === 'trigger' &&
+          triggerPhases(triggerSteps).map((px, i) => {
+            const tx = Math.max(1, Math.min(W - 1, px * W));
+            return (
+              <line
+                key={`trig-${i}`}
+                ref={(el) => {
+                  tickRefs.current[i] = el;
+                }}
+                className="dialkit-cc-trigger"
+                data-firing="false"
+                x1={tx}
+                y1={mainRect.y + mainRect.h - 12}
+                x2={tx}
+                y2={mainRect.y + mainRect.h - 2}
+                style={{ stroke: playheadColor }}
+              />
+            );
+          })}
+
+        {/* series playhead + dot (the value dot is meaningless in trigger mode) */}
         <line ref={seriesPlayheadRef} className="dialkit-cc-playhead" x1={0} y1={mainRect.y} x2={0} y2={mainRect.y + mainRect.h} style={{ stroke: playheadColor }} />
-        <circle ref={seriesDotRef} className="dialkit-cc-dot" cx={0} cy={mapY(mainRect, 0)} r={3} style={{ fill: playheadColor }} />
+        {mode !== 'trigger' && (
+          <circle ref={seriesDotRef} className="dialkit-cc-dot" cx={0} cy={mapY(mainRect, 0)} r={3} style={{ fill: playheadColor }} />
+        )}
 
         {/* driver lane */}
         {driverRect && (

@@ -26,6 +26,7 @@ __export(index_exports, {
   ChipsControl: () => ChipsControl,
   ColorControl: () => ColorControl,
   CurveComposer: () => CurveComposer,
+  DEFAULT_TRIGGER_STEPS: () => DEFAULT_TRIGGER_STEPS,
   DialRoot: () => DialRoot,
   DialStore: () => DialStore,
   EasingVisualization: () => EasingVisualization,
@@ -62,6 +63,8 @@ __export(index_exports, {
   setDriverCurvature: () => setDriverCurvature,
   setSegmentCurvature: () => setSegmentCurvature,
   splitSegment: () => splitSegment,
+  triggerPhases: () => triggerPhases,
+  triggersCrossed: () => triggersCrossed,
   useDialKit: () => useDialKit
 });
 module.exports = __toCommonJS(index_exports);
@@ -3968,7 +3971,7 @@ function cycleSegmentType(comp, index) {
   if (!src) return comp;
   const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(src.type) + 1) % CURVE_CYCLE.length];
   const next = comp.segments.slice();
-  next[index] = { ...src, type };
+  next[index] = { ...src, type, curvature: 0 };
   return cloneSegments(comp, next);
 }
 function setSegmentCurvature(comp, index, curvature) {
@@ -4002,7 +4005,7 @@ function removeDriver(comp) {
 function cycleDriverType(comp) {
   if (!comp.driver) return comp;
   const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(comp.driver.type) + 1) % CURVE_CYCLE.length];
-  return { ...comp, driver: { ...comp.driver, type } };
+  return { ...comp, driver: { ...comp.driver, type, curvature: 0 } };
 }
 function setDriverCurvature(comp, curvature) {
   if (!comp.driver) return comp;
@@ -4029,6 +4032,27 @@ function readComposition(comp, u, s) {
   const value = s.segments[segIndex] ? s.segments[segIndex](localT) : 0;
   return { inputPhase, warpedPhase, value, segIndex, localT };
 }
+var DEFAULT_TRIGGER_STEPS = 5;
+function triggerPhases(steps) {
+  const n = Math.max(2, Math.floor(steps));
+  const out = [];
+  for (let k = 0; k < n - 1; k++) out.push(k / (n - 1));
+  return out;
+}
+function triggersCrossed(prev, cur, steps) {
+  const n = Math.max(2, Math.floor(steps));
+  const distinct = n - 1;
+  const seg = 1 / distinct;
+  const p = clamp01(prev);
+  let c = clamp01(cur);
+  if (c < p) c += 1;
+  const EPS = 1e-9;
+  const startK = Math.floor(p / seg + EPS) + 1;
+  const endK = Math.floor(c / seg + EPS);
+  const fired = [];
+  for (let k = startK; k <= endK; k++) fired.push((k % distinct + distinct) % distinct);
+  return fired;
+}
 function defaultComposition() {
   return {
     segments: [
@@ -4053,6 +4077,9 @@ function CurveComposer({
   onDriverChange,
   getPhase,
   phase = 0,
+  mode = "continuous",
+  triggerSteps = DEFAULT_TRIGGER_STEPS,
+  onTrigger,
   curveColor,
   playheadColor,
   grid = false,
@@ -4071,12 +4098,17 @@ function CurveComposer({
     [segments, driver, direction]
   );
   const samplers = (0, import_react24.useMemo)(() => buildSamplers(composition), [composition]);
-  const liveRef = (0, import_react24.useRef)({ composition, samplers, getPhase, phase });
-  liveRef.current = { composition, samplers, getPhase, phase };
+  const liveRef = (0, import_react24.useRef)({ composition, samplers, getPhase, phase, mode, triggerSteps });
+  liveRef.current = { composition, samplers, getPhase, phase, mode, triggerSteps };
+  const onTriggerRef = (0, import_react24.useRef)(onTrigger);
+  onTriggerRef.current = onTrigger;
   const svgRef = (0, import_react24.useRef)(null);
   const seriesPlayheadRef = (0, import_react24.useRef)(null);
   const seriesDotRef = (0, import_react24.useRef)(null);
   const driverPlayheadRef = (0, import_react24.useRef)(null);
+  const tickRefs = (0, import_react24.useRef)([]);
+  const tickTimers = (0, import_react24.useRef)([]);
+  const prevTrigPhase = (0, import_react24.useRef)(Number.NaN);
   const [drag, setDrag] = (0, import_react24.useState)(null);
   const [hover, setHover] = (0, import_react24.useState)(null);
   const dragRef = (0, import_react24.useRef)(null);
@@ -4091,7 +4123,7 @@ function CurveComposer({
     let raf = 0;
     const tick = () => {
       raf = requestAnimationFrame(tick);
-      const { composition: c, samplers: s, getPhase: gp, phase: p } = liveRef.current;
+      const { composition: c, samplers: s, getPhase: gp, phase: p, mode: md, triggerSteps: ts } = liveRef.current;
       const u = gp ? gp() : p;
       const read = readComposition(c, u, s);
       const sx = read.warpedPhase * W;
@@ -4108,9 +4140,30 @@ function CurveComposer({
         driverPlayheadRef.current.setAttribute("x1", String(dx));
         driverPlayheadRef.current.setAttribute("x2", String(dx));
       }
+      if (md === "trigger") {
+        const prev = prevTrigPhase.current;
+        if (!Number.isNaN(prev)) {
+          for (const idx of triggersCrossed(prev, u, ts)) {
+            onTriggerRef.current?.(idx);
+            const el = tickRefs.current[idx];
+            if (el) {
+              el.setAttribute("data-firing", "true");
+              window.clearTimeout(tickTimers.current[idx]);
+              tickTimers.current[idx] = window.setTimeout(() => el.setAttribute("data-firing", "false"), 140);
+            }
+          }
+        }
+        prevTrigPhase.current = u;
+      } else {
+        prevTrigPhase.current = Number.NaN;
+      }
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    const timers = tickTimers.current;
+    return () => {
+      cancelAnimationFrame(raf);
+      for (const t of timers) window.clearTimeout(t);
+    };
   }, [W, laneH, driverH]);
   const localCoords = (clientX, clientY) => {
     const rect = svgRef.current.getBoundingClientRect();
@@ -4298,8 +4351,27 @@ function CurveComposer({
           },
           `b-${i}`
         )),
+        mode === "trigger" && triggerPhases(triggerSteps).map((px, i) => {
+          const tx = Math.max(1, Math.min(W - 1, px * W));
+          return /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+            "line",
+            {
+              ref: (el) => {
+                tickRefs.current[i] = el;
+              },
+              className: "dialkit-cc-trigger",
+              "data-firing": "false",
+              x1: tx,
+              y1: mainRect.y + mainRect.h - 12,
+              x2: tx,
+              y2: mainRect.y + mainRect.h - 2,
+              style: { stroke: playheadColor }
+            },
+            `trig-${i}`
+          );
+        }),
         /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("line", { ref: seriesPlayheadRef, className: "dialkit-cc-playhead", x1: 0, y1: mainRect.y, x2: 0, y2: mainRect.y + mainRect.h, style: { stroke: playheadColor } }),
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("circle", { ref: seriesDotRef, className: "dialkit-cc-dot", cx: 0, cy: mapY(mainRect, 0), r: 3, style: { fill: playheadColor } }),
+        mode !== "trigger" && /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("circle", { ref: seriesDotRef, className: "dialkit-cc-dot", cx: 0, cy: mapY(mainRect, 0), r: 3, style: { fill: playheadColor } }),
         driverRect && /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(import_jsx_runtime24.Fragment, { children: [
           renderLaneBg(driverRect, "driver-bg"),
           renderLaneGrid(driverRect),
@@ -4441,6 +4513,7 @@ function ShortcutsMenu({ panelId }) {
   ChipsControl,
   ColorControl,
   CurveComposer,
+  DEFAULT_TRIGGER_STEPS,
   DialRoot,
   DialStore,
   EasingVisualization,
@@ -4477,6 +4550,8 @@ function ShortcutsMenu({ panelId }) {
   setDriverCurvature,
   setSegmentCurvature,
   splitSegment,
+  triggerPhases,
+  triggersCrossed,
   useDialKit
 });
 //# sourceMappingURL=index.cjs.map

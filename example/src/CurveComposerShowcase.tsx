@@ -21,8 +21,25 @@ export function CurveComposerShowcase() {
   const [selected, setSelected] = useState(0);
   const [curveColor, setCurveColor] = useState('#ffffff');
   const [playheadColor, setPlayheadColor] = useState('#6366f1');
+  const [mode, setMode] = useState<'continuous' | 'trigger'>('continuous');
+  const [triggerSteps, setTriggerSteps] = useState(5);
 
   const { segments, driver, direction } = comp;
+
+  // Trigger mode: flash a static grey dot purple on each trigger, then ease it back.
+  const triggerDotRef = useRef<HTMLDivElement>(null);
+  const blinkTimer = useRef<number | undefined>(undefined);
+  const handleTrigger = () => {
+    const el = triggerDotRef.current;
+    if (!el) return;
+    el.style.background = playheadColor;
+    el.style.transform = 'scale(1.3)';
+    window.clearTimeout(blinkTimer.current);
+    blinkTimer.current = window.setTimeout(() => {
+      el.style.background = 'var(--dial-text-tertiary)';
+      el.style.transform = 'scale(1)';
+    }, 130);
+  };
 
   // Virtual transport: a clock-driven phase 0..1 (no parent re-render via getPhase).
   const elapsedRef = useRef(0);
@@ -89,6 +106,9 @@ export function CurveComposerShowcase() {
         onSegmentsChange={onSegments}
         onDriverChange={onDriver}
         getPhase={getPhase}
+        mode={mode}
+        triggerSteps={triggerSteps}
+        onTrigger={handleTrigger}
         curveColor={curveColor === '#ffffff' ? undefined : curveColor}
         playheadColor={playheadColor}
         grid
@@ -101,22 +121,40 @@ export function CurveComposerShowcase() {
         middle to move energy (onset ↔ fall) · drag a divider to retime · double-click to split
       </div>
 
-      {/* demo track driven by the composed value */}
-      <div style={{ position: 'relative', height: 22, background: 'var(--dial-surface)', borderRadius: 8 }}>
-        <div
-          ref={demoRef}
-          style={{
-            position: 'absolute',
-            top: 3,
-            left: 6,
-            width: 16,
-            height: 16,
-            borderRadius: '50%',
-            background: playheadColor,
-            willChange: 'transform',
-          }}
-        />
-      </div>
+      {/* preview: continuous → a dot driven by the composed value; trigger → a grey dot that blinks */}
+      {mode === 'continuous' ? (
+        <div style={{ position: 'relative', height: 22, background: 'var(--dial-surface)', borderRadius: 8 }}>
+          <div
+            ref={demoRef}
+            style={{
+              position: 'absolute',
+              top: 3,
+              left: 6,
+              width: 16,
+              height: 16,
+              borderRadius: '50%',
+              background: playheadColor,
+              willChange: 'transform',
+            }}
+          />
+        </div>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 22 }}>
+          <div
+            ref={triggerDotRef}
+            style={{
+              width: 16,
+              height: 16,
+              borderRadius: '50%',
+              background: 'var(--dial-text-tertiary)',
+              transition: 'background 120ms ease, transform 120ms ease',
+            }}
+          />
+          <span style={{ fontSize: 12, color: 'var(--dial-text-secondary)' }}>
+            {triggerSteps} triggers · blinks purple on each hit
+          </span>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <button type="button" className="lib-tab" data-active={String(playing)} onClick={() => setPlaying((p) => !p)}>
@@ -135,6 +173,33 @@ export function CurveComposerShowcase() {
           driver: {driver ? 'on' : 'off'}
         </button>
       </div>
+
+      <div className="dialkit-labeled-control">
+        <span className="dialkit-labeled-control-label">Signal</span>
+        <SegmentedControl
+          options={[
+            { value: 'continuous' as const, label: 'Continuous' },
+            { value: 'trigger' as const, label: 'Trigger' },
+          ]}
+          value={mode}
+          onChange={setMode}
+        />
+      </div>
+
+      {mode === 'trigger' && (
+        <div className="dialkit-labeled-control">
+          <span className="dialkit-labeled-control-label">Triggers</span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button type="button" className="lib-tab" onClick={() => setTriggerSteps((s) => Math.max(2, s - 1))}>
+              −
+            </button>
+            <span style={{ minWidth: 20, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{triggerSteps}</span>
+            <button type="button" className="lib-tab" onClick={() => setTriggerSteps((s) => Math.min(16, s + 1))}>
+              +
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="dialkit-labeled-control">
         <span className="dialkit-labeled-control-label">Direction</span>

@@ -553,6 +553,24 @@ interface CompositionRead {
  * playhead sweeps left→right once, while `value` is each segment's own full 0→1 walk.
  */
 declare function readComposition(comp: CurveComposition, u: number, s: CompositionSamplers): CompositionRead;
+/** Default trigger count for a trigger series. */
+declare const DEFAULT_TRIGGER_STEPS = 5;
+/**
+ * The distinct firing phases of a `steps`-trigger series. The first trigger sits at 0
+ * and the conceptual last at 1, but on a loop 0 and 1 are the same instant, so they
+ * fold into a single boundary trigger. A `steps`-series therefore has `steps - 1`
+ * firing phases in [0, 1), spaced 1/(steps - 1) apart — e.g. steps=5 → [0, .25, .5, .75],
+ * with the .75→0 wrap closing the loop. This fold is what prevents a double fire at the edge.
+ */
+declare function triggerPhases(steps: number): number[];
+/**
+ * Indices (into `triggerPhases`) crossed as the loop phase advances `prev` → `cur`,
+ * exclusive of `prev` and inclusive of `cur`. Handles the 0→1 wrap (so the boundary
+ * trigger fires once per loop, not twice) and a frame that skips several triggers at once.
+ * `cur`/`prev` are raw transport phases in 0..1; detection ignores the driver/direction
+ * warp so the grid stays evenly timed.
+ */
+declare function triggersCrossed(prev: number, cur: number, steps: number): number[];
 /** A reasonable starting composition for demos / uncontrolled mounts. */
 declare function defaultComposition(): CurveComposition;
 
@@ -571,6 +589,16 @@ interface CurveComposerProps {
     getPhase?: () => number;
     /** Static transport phase 0..1 (used when `getPhase` is absent). */
     phase?: number;
+    /**
+     * Output mode. 'continuous' (default) reads the composed value each frame; 'trigger'
+     * emits a discrete signal (via `onTrigger`) when the transport crosses one of the
+     * evenly-spaced trigger phases and draws those ticks instead of the value dot.
+     */
+    mode?: 'continuous' | 'trigger';
+    /** Number of triggers in trigger mode (first at 0, last at 1, evenly spaced). Default 5. */
+    triggerSteps?: number;
+    /** Fired in trigger mode when a trigger phase is crossed; `index` is into `triggerPhases`. */
+    onTrigger?: (index: number) => void;
     /** Curve stroke color. Defaults to the theme text color. */
     curveColor?: string;
     /** Playhead / marker color. Defaults to the theme text color. */
@@ -582,7 +610,7 @@ interface CurveComposerProps {
     /** Height of the main lane; the driver lane adds height below it. */
     height?: number;
 }
-declare function CurveComposer({ segments, driver, direction, onSegmentsChange, onDriverChange, getPhase, phase, curveColor, playheadColor, grid, gridSubdivisions, width, height, }: CurveComposerProps): react_jsx_runtime.JSX.Element;
+declare function CurveComposer({ segments, driver, direction, onSegmentsChange, onDriverChange, getPhase, phase, mode, triggerSteps, onTrigger, curveColor, playheadColor, grid, gridSubdivisions, width, height, }: CurveComposerProps): react_jsx_runtime.JSX.Element;
 
 interface TextControlProps {
     label: string;
@@ -673,4 +701,4 @@ interface ShortcutsMenuProps {
 }
 declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react_jsx_runtime.JSX.Element | null;
 
-export { type ActionConfig, ButtonGroup, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, addDriver, buildSamplers, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, directionPhase, normalizeListItems, parseListItemSchema, readComposition, redistributeWeight, removeDriver, removeSegment, setDriverCurvature, setSegmentCurvature, splitSegment, useDialKit };
+export { type ActionConfig, ButtonGroup, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, addDriver, buildSamplers, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, directionPhase, normalizeListItems, parseListItemSchema, readComposition, redistributeWeight, removeDriver, removeSegment, setDriverCurvature, setSegmentCurvature, splitSegment, triggerPhases, triggersCrossed, useDialKit };

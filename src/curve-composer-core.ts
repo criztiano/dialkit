@@ -232,7 +232,8 @@ export function cycleSegmentType(comp: CurveComposition, index: number): CurveCo
   if (!src) return comp;
   const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(src.type) + 1) % CURVE_CYCLE.length];
   const next = comp.segments.slice();
-  next[index] = { ...src, type };
+  // Cycling picks a fresh curve, so drop the applied energy bias — show the canonical shape.
+  next[index] = { ...src, type, curvature: 0 };
   return cloneSegments(comp, next);
 }
 
@@ -276,7 +277,8 @@ export function removeDriver(comp: CurveComposition): CurveComposition {
 export function cycleDriverType(comp: CurveComposition): CurveComposition {
   if (!comp.driver) return comp;
   const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(comp.driver.type) + 1) % CURVE_CYCLE.length];
-  return { ...comp, driver: { ...comp.driver, type } };
+  // Reset the energy bias on cycle so the new curve shows in its canonical form.
+  return { ...comp, driver: { ...comp.driver, type, curvature: 0 } };
 }
 
 export function setDriverCurvature(comp: CurveComposition, curvature: number): CurveComposition {
@@ -334,6 +336,47 @@ export function readComposition(comp: CurveComposition, u: number, s: Compositio
   const localT = b > a ? (warpedPhase - a) / (b - a) : 0;
   const value = s.segments[segIndex] ? s.segments[segIndex](localT) : 0;
   return { inputPhase, warpedPhase, value, segIndex, localT };
+}
+
+// --- trigger series (an alternative, discrete read of the transport) ---
+
+/** Default trigger count for a trigger series. */
+export const DEFAULT_TRIGGER_STEPS = 5;
+
+/**
+ * The distinct firing phases of a `steps`-trigger series. The first trigger sits at 0
+ * and the conceptual last at 1, but on a loop 0 and 1 are the same instant, so they
+ * fold into a single boundary trigger. A `steps`-series therefore has `steps - 1`
+ * firing phases in [0, 1), spaced 1/(steps - 1) apart — e.g. steps=5 → [0, .25, .5, .75],
+ * with the .75→0 wrap closing the loop. This fold is what prevents a double fire at the edge.
+ */
+export function triggerPhases(steps: number): number[] {
+  const n = Math.max(2, Math.floor(steps));
+  const out: number[] = [];
+  for (let k = 0; k < n - 1; k++) out.push(k / (n - 1));
+  return out;
+}
+
+/**
+ * Indices (into `triggerPhases`) crossed as the loop phase advances `prev` → `cur`,
+ * exclusive of `prev` and inclusive of `cur`. Handles the 0→1 wrap (so the boundary
+ * trigger fires once per loop, not twice) and a frame that skips several triggers at once.
+ * `cur`/`prev` are raw transport phases in 0..1; detection ignores the driver/direction
+ * warp so the grid stays evenly timed.
+ */
+export function triggersCrossed(prev: number, cur: number, steps: number): number[] {
+  const n = Math.max(2, Math.floor(steps));
+  const distinct = n - 1; // firing phases at k/(n-1) for k = 0..n-2; k = n-1 folds onto 0
+  const seg = 1 / distinct;
+  const p = clamp01(prev);
+  let c = clamp01(cur);
+  if (c < p) c += 1; // unwrap a loop-boundary crossing into a monotonic interval
+  const EPS = 1e-9;
+  const startK = Math.floor(p / seg + EPS) + 1; // first trigger strictly past `prev`
+  const endK = Math.floor(c / seg + EPS); // last trigger at or before `cur`
+  const fired: number[] = [];
+  for (let k = startK; k <= endK; k++) fired.push(((k % distinct) + distinct) % distinct);
+  return fired;
 }
 
 /** A reasonable starting composition for demos / uncontrolled mounts. */

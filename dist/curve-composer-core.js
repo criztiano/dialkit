@@ -138,7 +138,7 @@ function cycleSegmentType(comp, index) {
   if (!src) return comp;
   const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(src.type) + 1) % CURVE_CYCLE.length];
   const next = comp.segments.slice();
-  next[index] = { ...src, type };
+  next[index] = { ...src, type, curvature: 0 };
   return cloneSegments(comp, next);
 }
 function setSegmentCurvature(comp, index, curvature) {
@@ -172,7 +172,7 @@ function removeDriver(comp) {
 function cycleDriverType(comp) {
   if (!comp.driver) return comp;
   const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(comp.driver.type) + 1) % CURVE_CYCLE.length];
-  return { ...comp, driver: { ...comp.driver, type } };
+  return { ...comp, driver: { ...comp.driver, type, curvature: 0 } };
 }
 function setDriverCurvature(comp, curvature) {
   if (!comp.driver) return comp;
@@ -199,6 +199,27 @@ function readComposition(comp, u, s) {
   const value = s.segments[segIndex] ? s.segments[segIndex](localT) : 0;
   return { inputPhase, warpedPhase, value, segIndex, localT };
 }
+var DEFAULT_TRIGGER_STEPS = 5;
+function triggerPhases(steps) {
+  const n = Math.max(2, Math.floor(steps));
+  const out = [];
+  for (let k = 0; k < n - 1; k++) out.push(k / (n - 1));
+  return out;
+}
+function triggersCrossed(prev, cur, steps) {
+  const n = Math.max(2, Math.floor(steps));
+  const distinct = n - 1;
+  const seg = 1 / distinct;
+  const p = clamp01(prev);
+  let c = clamp01(cur);
+  if (c < p) c += 1;
+  const EPS = 1e-9;
+  const startK = Math.floor(p / seg + EPS) + 1;
+  const endK = Math.floor(c / seg + EPS);
+  const fired = [];
+  for (let k = startK; k <= endK; k++) fired.push((k % distinct + distinct) % distinct);
+  return fired;
+}
 function defaultComposition() {
   return {
     segments: [
@@ -212,6 +233,7 @@ function defaultComposition() {
 export {
   CURVE_CYCLE,
   CURVE_MIN_WEIGHT_FRAC,
+  DEFAULT_TRIGGER_STEPS,
   DRAG_THRESHOLD,
   EDGE_HIT,
   addDriver,
@@ -234,6 +256,8 @@ export {
   setDriverCurvature,
   setSegmentCurvature,
   splitSegment,
-  totalWeight
+  totalWeight,
+  triggerPhases,
+  triggersCrossed
 };
 //# sourceMappingURL=curve-composer-core.js.map

@@ -2236,6 +2236,20 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
   pointer-events: none;
 }
 
+.dialkit-cc-trigger {
+  stroke: currentColor;
+  stroke-opacity: 0.3;
+  stroke-width: 2;
+  stroke-linecap: round;
+  pointer-events: none;
+  transition: stroke-opacity 0.12s ease, stroke-width 0.12s ease;
+}
+
+.dialkit-cc-trigger[data-firing='true'] {
+  stroke-opacity: 1;
+  stroke-width: 3;
+}
+
 .dialkit-cc-label {
   fill: currentColor;
   fill-opacity: 0.4;

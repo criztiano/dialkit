@@ -36,6 +36,9 @@ export {
   buildSamplers,
   readComposition,
   directionPhase,
+  triggerPhases,
+  triggersCrossed,
+  DEFAULT_TRIGGER_STEPS,
 } from './curve-composer-core';
 export type { Sampler, CompositionSamplers, CompositionRead } from './curve-composer-core';
 export { TextControl } from './components/TextControl';
