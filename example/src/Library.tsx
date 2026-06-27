@@ -21,6 +21,7 @@ import {
 } from 'dialkit';
 import type { SpringConfig, TransitionConfig, EasingConfig, GalleryItem } from 'dialkit';
 import { WaveformShowcase } from './WaveformShowcase';
+import { CurveComposerShowcase } from './CurveComposerShowcase';
 import 'dialkit/styles.css';
 
 type Theme = 'dark' | 'light';
@@ -310,10 +311,16 @@ export function Library() {
           </Card>
         </Section>
 
+        <Section index="09" title="Curve Composer" hint="Compose several curves into one. Split divides the time axis into more segments; quick-click a segment to cycle its shape (linear → easeIn → easeOut → easeInOut → spring); drag a segment's middle for curvature; drag a divider to retime neighbors. Add a driver — a stacked lane below that re-paces the reading — and set Direction (forward / mirror / reverse)." single>
+          <Card title="CurveComposer" desc="An editable curve series with an optional time-warping driver lane. Each segment owns a slice of the horizontal time axis (its relative duration); quick-click cycles its curve type, dragging its body changes the curvature amount, and dragging a shared divider trades duration between neighbors. Double-click splits a segment in two. The driver is a single stacked curve below that remaps the reading pace of the series above; Direction reverses or ping-pongs the whole composition. Curves are SVG, themed via currentColor; curveColor and playheadColor are overridable." code="<CurveComposer segments driver direction onSegmentsChange onDriverChange getPhase />">
+            <CurveComposerShowcase />
+          </Card>
+        </Section>
+
         <section className="lib-section">
           <div className="lib-section-head">
             <div className="lib-section-headline">
-              <span className="lib-section-index">09</span>
+              <span className="lib-section-index">10</span>
               <h2 className="lib-section-title">Live panel</h2>
               {liveId && <ShortcutsMenu panelId={liveId} />}
             </div>

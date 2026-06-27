@@ -65,6 +65,7 @@ export default defineConfig([
       icons: 'src/icons.ts',
       'shortcut-utils': 'src/shortcut-utils.ts',
       'waveform-engine': 'src/waveform-engine.ts',
+      'curve-composer-core': 'src/curve-composer-core.ts',
     },
     outDir: 'dist',
     format: ['esm'],

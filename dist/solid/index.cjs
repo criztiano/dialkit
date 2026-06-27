@@ -3262,19 +3262,7 @@ var import_web107 = require("solid-js/web");
 var import_web108 = require("solid-js/web");
 var import_solid_js15 = require("solid-js");
 
-// src/waveform-engine.ts
-var WAVEFORM_MAX_ZOOM = 8;
-var BANDS = [
-  { type: "lowpass", freq: 250 },
-  { type: "bandpass", freq: 1100, q: 0.6 },
-  { type: "highpass", freq: 4200 }
-];
-var BAND_COLORS = ["#a855f7", "#22d3ee", "#a3e635"];
-var SIMPLE_POINTS = 46;
-var BORDER_FILL_ALPHA = 0.2;
-var DRAG_THRESHOLD = 3;
-var EDGE_HIT = 6;
-var MIN_LOOP = 1e-3;
+// src/waveform-dsp.ts
 function mixToMono(buffer) {
   if (buffer.numberOfChannels === 1) return buffer.getChannelData(0);
   const len = buffer.length;
@@ -3316,6 +3304,20 @@ function envelope(p, cols, n) {
   }
   return out;
 }
+
+// src/waveform-engine.ts
+var WAVEFORM_MAX_ZOOM = 8;
+var BANDS = [
+  { type: "lowpass", freq: 250 },
+  { type: "bandpass", freq: 1100, q: 0.6 },
+  { type: "highpass", freq: 4200 }
+];
+var BAND_COLORS = ["#a855f7", "#22d3ee", "#a3e635"];
+var SIMPLE_POINTS = 46;
+var BORDER_FILL_ALPHA = 0.2;
+var DRAG_THRESHOLD = 3;
+var EDGE_HIT = 6;
+var MIN_LOOP = 1e-3;
 function smoothThrough(ctx, pts) {
   for (let i = 0; i < pts.length - 1; i++) {
     const p0 = pts[i - 1] || pts[i];

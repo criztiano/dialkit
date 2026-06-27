@@ -477,6 +477,165 @@ interface WaveformVisualizationProps {
 }
 declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, pixelSize, grid, gridSubdivisions, onSeek, loop, onLoopChange, waveColor, playheadColor, autoZoomOnLoop, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
 
+/** The curve vocabulary a segment cycles through on quick-click. */
+type CurveType = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'spring';
+/** Cycle order for quick-click (loops back to the start). */
+declare const CURVE_CYCLE: CurveType[];
+/** One curve in the series. `weight` is a relative duration share (normalized by the sum). */
+interface CurveSegment {
+    type: CurveType;
+    weight: number;
+    /**
+     * Bipolar -1..1 "energy" bias. 0 = the type's canonical shape; bezier types skew
+     * both x control points (−1 = energy to the onset, +1 = energy to the fall);
+     * spring maps it to bounce (−1 = none → +1 = max).
+     */
+    curvature: number;
+    /**
+     * Bipolar -1..1 steepness — how pronounced the ease is, independent of the energy bias.
+     * Scales each control point's deviation from the linear diagonal: 0 = canonical preset,
+     * +1 = sharper (e.g. easeInOut gets much slower start/end), −1 = flatter toward linear.
+     * Spring maps it to stiffness (snappier rise).
+     */
+    steepness: number;
+}
+/** The stacked driver curve (a single curve, no internal splits). */
+interface CurveDriver {
+    type: CurveType;
+    /** Bipolar -1..1 energy bias — see CurveSegment.curvature. */
+    curvature: number;
+    /** Bipolar -1..1 steepness — see CurveSegment.steepness. */
+    steepness: number;
+}
+type DriverDirection = 'forward' | 'mirror' | 'reverse';
+interface CurveComposition {
+    segments: CurveSegment[];
+    /** null → no driver lane (the component renders a single lane). */
+    driver: CurveDriver | null;
+    direction: DriverDirection;
+}
+/** A pure `(t) -> value` sampler over local time, both in 0..1 (value may overshoot for springs). */
+type Sampler = (t: number) => number;
+/**
+ * Insert a copy of the segment at `index` after it, then re-divide ALL segments to
+ * equal duration — split always yields evenly-spaced clips.
+ */
+declare function splitSegment(comp: CurveComposition, index: number): CurveComposition;
+/** Remove the segment at `index` (no-op when it's the only one). */
+declare function removeSegment(comp: CurveComposition, index: number): CurveComposition;
+declare function cycleSegmentType(comp: CurveComposition, index: number): CurveComposition;
+declare function setSegmentCurvature(comp: CurveComposition, index: number, curvature: number): CurveComposition;
+declare function setSegmentSteepness(comp: CurveComposition, index: number, steepness: number): CurveComposition;
+/**
+ * Move `deltaFrac` (0..1 of the whole series) across the boundary between segment
+ * `boundaryIndex` and the next, keeping the rest untouched and the pair's combined
+ * width constant. Each side is clamped to `CURVE_MIN_WEIGHT_FRAC`.
+ */
+declare function redistributeWeight(comp: CurveComposition, boundaryIndex: number, deltaFrac: number): CurveComposition;
+declare function addDriver(comp: CurveComposition): CurveComposition;
+declare function removeDriver(comp: CurveComposition): CurveComposition;
+declare function cycleDriverType(comp: CurveComposition): CurveComposition;
+declare function setDriverCurvature(comp: CurveComposition, curvature: number): CurveComposition;
+declare function setDriverSteepness(comp: CurveComposition, steepness: number): CurveComposition;
+interface CompositionSamplers {
+    segments: Sampler[];
+    driver: Sampler | null;
+}
+declare function buildSamplers(comp: CurveComposition): CompositionSamplers;
+/** Apply playback direction to the raw loop phase u (0..1). */
+declare function directionPhase(u: number, dir: DriverDirection): number;
+interface CompositionRead {
+    /** Read position after direction, before the driver warps it (0..1) — the driver lane marker. */
+    inputPhase: number;
+    /** Read position after the driver warps it (0..1) — the series lane playhead (sweeps once). */
+    warpedPhase: number;
+    /**
+     * Composed output, 0..1 — the ACTIVE segment's own full min→max walk, shaped by that
+     * segment's curve. It resets and climbs again at each divider, so N segments make the
+     * output walk min→max N times across one sweep (the segments are not summed into one path).
+     */
+    value: number;
+    segIndex: number;
+    localT: number;
+}
+/**
+ * Read the composition at raw loop phase `u`. direction reverses/ping-pongs the
+ * traversal of the whole composition; the driver then warps the reading pace. The
+ * playhead sweeps left→right once, while `value` is each segment's own full 0→1 walk.
+ */
+declare function readComposition(comp: CurveComposition, u: number, s: CompositionSamplers): CompositionRead;
+/** Default trigger count for a trigger series. */
+declare const DEFAULT_TRIGGER_STEPS = 5;
+/**
+ * The evenly-spaced trigger levels in VALUE (signal) space — not time. The first sits at
+ * 0 and the last at 1, e.g. steps=5 → [0, .25, .5, .75, 1]. Triggers fire when the composed
+ * value crosses these levels, so a non-linear curve (which reaches each level at an uneven
+ * pace) fires them unevenly in time — that pacing is the whole point. Use these to draw the
+ * horizontal level lines a trigger series rides.
+ */
+declare function triggerLevels(steps: number): number[];
+/**
+ * Level indices (into `triggerLevels`) fired as the composed value moves `prevValue` →
+ * `curValue`. Pass the composed `value` (post driver/direction) frame to frame:
+ *
+ * - Climbing: the INTERIOR levels (strictly between 0 and 1) crossed upward fire — the
+ *   curve sets how fast the value reaches each, so non-linear curves fire them unevenly.
+ * - The TOP level (1) fires on walk completion — a single-frame value drop larger than one
+ *   level, i.e. the per-segment / loop reset. (The looping transport reaches ~0.999 but
+ *   never exactly 1, so the peak must be caught at the reset, not by an upward crossing.)
+ * - The floor level 0 never fires; it is the start of a walk, folded onto the prior top so
+ *   the edge never double-triggers.
+ *
+ * Values are clamped to [0, 1] so spring overshoot can't perturb the top.
+ */
+declare function triggersCrossed(prevValue: number, curValue: number, steps: number): number[];
+/** A reasonable starting composition for demos / uncontrolled mounts. */
+declare function defaultComposition(): CurveComposition;
+
+interface CurveComposerProps {
+    /** The curve series (controlled). */
+    segments: CurveSegment[];
+    /** The stacked driver curve, or null for none (adds a second lane below). */
+    driver?: CurveDriver | null;
+    /** Playback direction for the demo playhead (forward / mirror / reverse). */
+    direction?: DriverDirection;
+    /** Commit a changed series — fired live during boundary/curvature drags and on click-cycle. */
+    onSegmentsChange?: (segments: CurveSegment[]) => void;
+    /** Commit a changed driver — fired live during driver drags and on click-cycle. */
+    onDriverChange?: (driver: CurveDriver) => void;
+    /** Raw transport phase 0..1, polled every frame for a smooth playhead (no parent re-render). */
+    getPhase?: () => number;
+    /** Static transport phase 0..1 (used when `getPhase` is absent). */
+    phase?: number;
+    /**
+     * Output mode. 'continuous' (default) reads the composed value each frame; 'trigger'
+     * emits a discrete signal (via `onTrigger`) when the composed value crosses one of the
+     * evenly-spaced trigger levels. The component itself draws no trigger UI — visualization
+     * (e.g. markers on the output track) is the consumer's job; see `onTrigger`.
+     *
+     * Trigger detection assumes forward traversal: interior levels fire as the value climbs
+     * and the top fires on each walk's reset. Under `direction: 'mirror' | 'reverse'` the
+     * descending leg does not fire interior triggers, so trigger mode is intended for
+     * `direction: 'forward'`.
+     */
+    mode?: 'continuous' | 'trigger';
+    /** Number of trigger levels in trigger mode (first at 0, last at 1, evenly spaced in value). Default 5. */
+    triggerSteps?: number;
+    /** Fired in trigger mode when the value crosses a trigger level; `index` is into `triggerLevels`. */
+    onTrigger?: (index: number) => void;
+    /** Curve stroke color. Defaults to the theme text color. */
+    curveColor?: string;
+    /** Playhead / marker color. Defaults to the theme text color. */
+    playheadColor?: string;
+    /** Faint vertical reference grid behind each lane. */
+    grid?: boolean;
+    gridSubdivisions?: number;
+    width?: number;
+    /** Height of the main lane; the driver lane adds height below it. */
+    height?: number;
+}
+declare function CurveComposer({ segments, driver, direction, onSegmentsChange, onDriverChange, getPhase, phase, mode, triggerSteps, onTrigger, curveColor, playheadColor, grid, gridSubdivisions, width, height, }: CurveComposerProps): react_jsx_runtime.JSX.Element;
+
 interface TextControlProps {
     label: string;
     value: string;
@@ -566,4 +725,4 @@ interface ShortcutsMenuProps {
 }
 declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react_jsx_runtime.JSX.Element | null;
 
-export { type ActionConfig, ButtonGroup, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ControlMeta, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, defaultListItemParams, normalizeListItems, parseListItemSchema, useDialKit };
+export { type ActionConfig, ButtonGroup, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, addDriver, buildSamplers, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, directionPhase, normalizeListItems, parseListItemSchema, readComposition, redistributeWeight, removeDriver, removeSegment, setDriverCurvature, setDriverSteepness, setSegmentCurvature, setSegmentSteepness, splitSegment, triggerLevels, triggersCrossed, useDialKit };
