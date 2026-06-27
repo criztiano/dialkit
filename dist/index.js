@@ -3774,16 +3774,12 @@ var EDGE_HIT2 = 6;
 var CURVE_MIN_WEIGHT_FRAC = 0.06;
 var lerp = (a, b, t) => a + (b - a) * t;
 var clamp01 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
+var clampBipolar = (v) => v < -1 ? -1 : v > 1 ? 1 : v;
+var SKEW_MAX = 0.45;
 function deriveEase(type, curvature) {
-  const preset = type === "spring" ? easingPresets.linear : easingPresets[type];
-  const k = clamp01(curvature);
-  const lin = easingPresets.linear;
-  return [
-    lerp(lin[0], preset[0], k),
-    lerp(lin[1], preset[1], k),
-    lerp(lin[2], preset[2], k),
-    lerp(lin[3], preset[3], k)
-  ];
+  const base = type === "spring" ? easingPresets.linear : easingPresets[type];
+  const shift = clampBipolar(curvature) * SKEW_MAX;
+  return [clamp01(base[0] + shift), base[1], clamp01(base[2] + shift), base[3]];
 }
 function bezierAxis(p1, p2, s) {
   const u = 1 - s;
@@ -3808,7 +3804,7 @@ function bezierY(ease, x) {
 var SPRING_SAMPLES = 72;
 function springPoints(curvature) {
   const visualDuration = 1;
-  const bounce = clamp01(curvature) * 0.6;
+  const bounce = clamp01((clampBipolar(curvature) + 1) / 2) * 0.6;
   const mass = 1;
   let stiffness = 2 * Math.PI / visualDuration;
   stiffness = stiffness * stiffness;
@@ -3912,7 +3908,7 @@ function setSegmentCurvature(comp, index, curvature) {
   const src = comp.segments[index];
   if (!src) return comp;
   const next = comp.segments.slice();
-  next[index] = { ...src, curvature: clamp01(curvature) };
+  next[index] = { ...src, curvature: clampBipolar(curvature) };
   return cloneSegments(comp, next);
 }
 function redistributeWeight(comp, boundaryIndex, deltaFrac) {
@@ -3931,7 +3927,7 @@ function redistributeWeight(comp, boundaryIndex, deltaFrac) {
 }
 function addDriver(comp) {
   if (comp.driver) return comp;
-  return { ...comp, driver: { type: "easeInOut", curvature: 1 } };
+  return { ...comp, driver: { type: "easeInOut", curvature: 0 } };
 }
 function removeDriver(comp) {
   return { ...comp, driver: null };
@@ -3943,7 +3939,7 @@ function cycleDriverType(comp) {
 }
 function setDriverCurvature(comp, curvature) {
   if (!comp.driver) return comp;
-  return { ...comp, driver: { ...comp.driver, curvature: clamp01(curvature) } };
+  return { ...comp, driver: { ...comp.driver, curvature: clampBipolar(curvature) } };
 }
 function buildSamplers(comp) {
   return {
@@ -3970,8 +3966,8 @@ function readComposition(comp, u, s) {
 function defaultComposition() {
   return {
     segments: [
-      { type: "easeOut", weight: 1, curvature: 1 },
-      { type: "easeInOut", weight: 1, curvature: 1 }
+      { type: "easeOut", weight: 1, curvature: 0 },
+      { type: "easeInOut", weight: 1, curvature: 0 }
     ],
     driver: null,
     direction: "forward"
@@ -4058,7 +4054,10 @@ function CurveComposer({
   };
   const onPointerDown = (e) => {
     const { xN, py, rectW } = localCoords(e.clientX, e.clientY);
-    svgRef.current?.setPointerCapture(e.pointerId);
+    try {
+      svgRef.current?.setPointerCapture(e.pointerId);
+    } catch {
+    }
     if (driverRect && py >= driverRect.y) {
       setDrag({ kind: "driver", startX: e.clientX, baseCurvature: driver.curvature, moved: false });
       return;
@@ -4074,7 +4073,7 @@ function CurveComposer({
       kind: "segment",
       index: sIdx,
       startX: e.clientX,
-      baseCurvature: segments[sIdx]?.curvature ?? 1,
+      baseCurvature: segments[sIdx]?.curvature ?? 0,
       moved: false
     });
   };

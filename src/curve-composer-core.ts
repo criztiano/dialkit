@@ -23,13 +23,18 @@ export const easingPresets: Record<Exclude<CurveType, 'spring'>, [number, number
 export interface CurveSegment {
   type: CurveType;
   weight: number;
-  /** 0..1 intensity — bezier: lerp linear↔preset; spring: bounce amount. */
+  /**
+   * Bipolar -1..1 "energy" bias. 0 = the type's canonical shape; bezier types skew
+   * both x control points (−1 = energy to the onset, +1 = energy to the fall);
+   * spring maps it to bounce (−1 = none → +1 = max).
+   */
   curvature: number;
 }
 
 /** The stacked driver curve (a single curve, no internal splits). */
 export interface CurveDriver {
   type: CurveType;
+  /** Bipolar -1..1 energy bias — see CurveSegment.curvature. */
   curvature: number;
 }
 
@@ -58,18 +63,21 @@ export type Sampler = (t: number) => number;
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
+const clampBipolar = (v: number) => (v < -1 ? -1 : v > 1 ? 1 : v);
 
-/** Derive the bezier control points for a type at a given curvature (linear↔preset). */
+/** How far (in x) a full ±1 bias shifts the control points. */
+const SKEW_MAX = 0.45;
+
+/**
+ * Derive the bezier control points for a type at a given energy bias.
+ * Every preset shares y=(0,1) and differs only in its x control points, so "moving
+ * energy" is a tandem shift of both x's: bias>0 pushes the bend toward the fall
+ * (slow start, late rush), bias<0 toward the onset (early rush, slow finish).
+ */
 export function deriveEase(type: CurveType, curvature: number): [number, number, number, number] {
-  const preset = type === 'spring' ? easingPresets.linear : easingPresets[type];
-  const k = clamp01(curvature);
-  const lin = easingPresets.linear;
-  return [
-    lerp(lin[0], preset[0], k),
-    lerp(lin[1], preset[1], k),
-    lerp(lin[2], preset[2], k),
-    lerp(lin[3], preset[3], k),
-  ];
+  const base = type === 'spring' ? easingPresets.linear : easingPresets[type];
+  const shift = clampBipolar(curvature) * SKEW_MAX;
+  return [clamp01(base[0] + shift), base[1], clamp01(base[2] + shift), base[3]];
 }
 
 // Solve the cubic-bezier for `y` given `x`, with P0=(0,0), P3=(1,1).
@@ -100,7 +108,8 @@ function bezierY(ease: [number, number, number, number], x: number): number {
 const SPRING_SAMPLES = 72;
 function springPoints(curvature: number): number[] {
   const visualDuration = 1;
-  const bounce = clamp01(curvature) * 0.6;
+  // Bipolar bias → bounce: −1 = none, 0 = moderate, +1 = max.
+  const bounce = clamp01((clampBipolar(curvature) + 1) / 2) * 0.6;
   const mass = 1;
   let stiffness = (2 * Math.PI) / visualDuration;
   stiffness = stiffness * stiffness;
@@ -231,7 +240,7 @@ export function setSegmentCurvature(comp: CurveComposition, index: number, curva
   const src = comp.segments[index];
   if (!src) return comp;
   const next = comp.segments.slice();
-  next[index] = { ...src, curvature: clamp01(curvature) };
+  next[index] = { ...src, curvature: clampBipolar(curvature) };
   return cloneSegments(comp, next);
 }
 
@@ -257,7 +266,7 @@ export function redistributeWeight(comp: CurveComposition, boundaryIndex: number
 
 export function addDriver(comp: CurveComposition): CurveComposition {
   if (comp.driver) return comp;
-  return { ...comp, driver: { type: 'easeInOut', curvature: 1 } };
+  return { ...comp, driver: { type: 'easeInOut', curvature: 0 } };
 }
 
 export function removeDriver(comp: CurveComposition): CurveComposition {
@@ -272,7 +281,7 @@ export function cycleDriverType(comp: CurveComposition): CurveComposition {
 
 export function setDriverCurvature(comp: CurveComposition, curvature: number): CurveComposition {
   if (!comp.driver) return comp;
-  return { ...comp, driver: { ...comp.driver, curvature: clamp01(curvature) } };
+  return { ...comp, driver: { ...comp.driver, curvature: clampBipolar(curvature) } };
 }
 
 // --- read pipeline (drives the demo transport + the playhead) ---
@@ -335,8 +344,8 @@ export function readComposition(comp: CurveComposition, u: number, s: Compositio
 export function defaultComposition(): CurveComposition {
   return {
     segments: [
-      { type: 'easeOut', weight: 1, curvature: 1 },
-      { type: 'easeInOut', weight: 1, curvature: 1 },
+      { type: 'easeOut', weight: 1, curvature: 0 },
+      { type: 'easeInOut', weight: 1, curvature: 0 },
     ],
     driver: null,
     direction: 'forward',

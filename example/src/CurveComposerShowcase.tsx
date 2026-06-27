@@ -98,7 +98,7 @@ export function CurveComposerShowcase() {
 
       <div style={{ fontSize: 12, color: 'var(--dial-text-secondary)' }}>
         {segments.length} segment{segments.length > 1 ? 's' : ''} · click a curve to change its shape · drag its
-        middle for curvature · drag a divider to retime · double-click to split
+        middle to move energy (onset ↔ fall) · drag a divider to retime · double-click to split
       </div>
 
       {/* demo track driven by the composed value */}

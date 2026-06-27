@@ -485,12 +485,17 @@ declare const CURVE_CYCLE: CurveType[];
 interface CurveSegment {
     type: CurveType;
     weight: number;
-    /** 0..1 intensity — bezier: lerp linear↔preset; spring: bounce amount. */
+    /**
+     * Bipolar -1..1 "energy" bias. 0 = the type's canonical shape; bezier types skew
+     * both x control points (−1 = energy to the onset, +1 = energy to the fall);
+     * spring maps it to bounce (−1 = none → +1 = max).
+     */
     curvature: number;
 }
 /** The stacked driver curve (a single curve, no internal splits). */
 interface CurveDriver {
     type: CurveType;
+    /** Bipolar -1..1 energy bias — see CurveSegment.curvature. */
     curvature: number;
 }
 type DriverDirection = 'forward' | 'mirror' | 'reverse';

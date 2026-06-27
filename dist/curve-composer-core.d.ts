@@ -8,12 +8,17 @@ declare const easingPresets: Record<Exclude<CurveType, 'spring'>, [number, numbe
 interface CurveSegment {
     type: CurveType;
     weight: number;
-    /** 0..1 intensity — bezier: lerp linear↔preset; spring: bounce amount. */
+    /**
+     * Bipolar -1..1 "energy" bias. 0 = the type's canonical shape; bezier types skew
+     * both x control points (−1 = energy to the onset, +1 = energy to the fall);
+     * spring maps it to bounce (−1 = none → +1 = max).
+     */
     curvature: number;
 }
 /** The stacked driver curve (a single curve, no internal splits). */
 interface CurveDriver {
     type: CurveType;
+    /** Bipolar -1..1 energy bias — see CurveSegment.curvature. */
     curvature: number;
 }
 type DriverDirection = 'forward' | 'mirror' | 'reverse';
@@ -31,7 +36,12 @@ declare const EDGE_HIT = 6;
 declare const CURVE_MIN_WEIGHT_FRAC = 0.06;
 /** A pure `(t) -> value` sampler over local time, both in 0..1 (value may overshoot for springs). */
 type Sampler = (t: number) => number;
-/** Derive the bezier control points for a type at a given curvature (linear↔preset). */
+/**
+ * Derive the bezier control points for a type at a given energy bias.
+ * Every preset shares y=(0,1) and differs only in its x control points, so "moving
+ * energy" is a tandem shift of both x's: bias>0 pushes the bend toward the fall
+ * (slow start, late rush), bias<0 toward the onset (early rush, slow finish).
+ */
 declare function deriveEase(type: CurveType, curvature: number): [number, number, number, number];
 /** Build a reusable sampler for a segment/driver (precomputes spring points once). */
 declare function buildSampler(curve: CurveSegment | CurveDriver): Sampler;

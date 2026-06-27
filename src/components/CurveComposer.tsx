@@ -165,7 +165,11 @@ export function CurveComposer({
 
   const onPointerDown = (e: React.PointerEvent) => {
     const { xN, py, rectW } = localCoords(e.clientX, e.clientY);
-    svgRef.current?.setPointerCapture(e.pointerId);
+    try {
+      svgRef.current?.setPointerCapture(e.pointerId);
+    } catch {
+      // No active pointer (e.g. a synthetic event) — capture is a nicety, not required.
+    }
 
     // Driver lane?
     if (driverRect && py >= driverRect.y) {
@@ -184,7 +188,7 @@ export function CurveComposer({
       kind: 'segment',
       index: sIdx,
       startX: e.clientX,
-      baseCurvature: segments[sIdx]?.curvature ?? 1,
+      baseCurvature: segments[sIdx]?.curvature ?? 0,
       moved: false,
     });
   };
