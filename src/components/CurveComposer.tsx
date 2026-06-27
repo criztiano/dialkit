@@ -15,9 +15,11 @@ import {
   splitSegment,
   cycleSegmentType,
   setSegmentCurvature,
+  setSegmentSteepness,
   redistributeWeight,
   cycleDriverType,
   setDriverCurvature,
+  setDriverSteepness,
   readComposition,
   triggersCrossed,
   DEFAULT_TRIGGER_STEPS,
@@ -79,9 +81,9 @@ type Rect = { x: number; y: number; w: number; h: number };
 // A drag in progress, captured against the composition state at press time so live
 // commits compute from a stable baseline rather than compounding.
 type Drag =
-  | { kind: 'boundary'; index: number; startX: number; base: CurveComposition; moved: boolean }
-  | { kind: 'segment'; index: number; startX: number; baseCurvature: number; moved: boolean }
-  | { kind: 'driver'; startX: number; baseCurvature: number; moved: boolean };
+  | { kind: 'boundary'; index: number; startX: number; startY: number; base: CurveComposition; moved: boolean }
+  | { kind: 'segment'; index: number; startX: number; startY: number; baseCurvature: number; baseSteepness: number; moved: boolean }
+  | { kind: 'driver'; startX: number; startY: number; baseCurvature: number; baseSteepness: number; moved: boolean };
 
 export function CurveComposer({
   segments,
@@ -205,14 +207,21 @@ export function CurveComposer({
 
     // Driver lane?
     if (driverRect && py >= driverRect.y) {
-      setDrag({ kind: 'driver', startX: e.clientX, baseCurvature: driver!.curvature, moved: false });
+      setDrag({
+        kind: 'driver',
+        startX: e.clientX,
+        startY: e.clientY,
+        baseCurvature: driver!.curvature,
+        baseSteepness: driver!.steepness,
+        moved: false,
+      });
       return;
     }
     // Main lane: boundary grab takes priority over the segment body.
     const edgeHitNorm = EDGE_HIT / rectW;
     const bIdx = boundaryAt(xN, segments, edgeHitNorm);
     if (bIdx != null) {
-      setDrag({ kind: 'boundary', index: bIdx, startX: e.clientX, base: composition, moved: false });
+      setDrag({ kind: 'boundary', index: bIdx, startX: e.clientX, startY: e.clientY, base: composition, moved: false });
       return;
     }
     const sIdx = segmentIndexAt(xN, segments);
@@ -220,7 +229,9 @@ export function CurveComposer({
       kind: 'segment',
       index: sIdx,
       startX: e.clientX,
+      startY: e.clientY,
       baseCurvature: segments[sIdx]?.curvature ?? 0,
+      baseSteepness: segments[sIdx]?.steepness ?? 0,
       moved: false,
     });
   };
@@ -240,8 +251,11 @@ export function CurveComposer({
       return;
     }
 
-    const rectW = svgRef.current!.getBoundingClientRect().width;
-    const moved = Math.abs(e.clientX - d.startX) > DRAG_THRESHOLD;
+    const svgRect = svgRef.current!.getBoundingClientRect();
+    const rectW = svgRect.width;
+    const rectH = svgRect.height;
+    // Either axis past the threshold counts as a drag (horizontal = energy, vertical = steepness).
+    const moved = Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > DRAG_THRESHOLD;
     if (!moved) return;
 
     if (d.kind === 'boundary') {
@@ -250,13 +264,18 @@ export function CurveComposer({
       onSegmentsChange?.(next.segments);
       if (!d.moved) setDrag({ ...d, moved: true });
     } else if (d.kind === 'segment') {
+      // Horizontal → energy bias; vertical (up = more) → steepness.
       const dCurv = (e.clientX - d.startX) / (rectW * 0.6);
-      const next = setSegmentCurvature(composition, d.index, d.baseCurvature + dCurv);
+      const dSteep = -(e.clientY - d.startY) / (rectH * 0.6);
+      let next = setSegmentCurvature(composition, d.index, d.baseCurvature + dCurv);
+      next = setSegmentSteepness(next, d.index, d.baseSteepness + dSteep);
       onSegmentsChange?.(next.segments);
       if (!d.moved) setDrag({ ...d, moved: true });
     } else {
       const dCurv = (e.clientX - d.startX) / (rectW * 0.6);
-      const next = setDriverCurvature(composition, d.baseCurvature + dCurv);
+      const dSteep = -(e.clientY - d.startY) / (rectH * 0.6);
+      let next = setDriverCurvature(composition, d.baseCurvature + dCurv);
+      next = setDriverSteepness(next, d.baseSteepness + dSteep);
       if (next.driver) onDriverChange?.(next.driver);
       if (!d.moved) setDrag({ ...d, moved: true });
     }
@@ -288,13 +307,9 @@ export function CurveComposer({
     onSegmentsChange?.(splitSegment(composition, segmentIndexAt(xN, segments)).segments);
   };
 
-  const cursor = drag
-    ? drag.kind === 'boundary'
-      ? 'ew-resize'
-      : 'ew-resize'
-    : hover
-      ? 'ew-resize'
-      : 'default';
+  const activeKind = drag?.kind ?? hover?.kind;
+  const cursor =
+    activeKind === 'boundary' ? 'ew-resize' : activeKind === 'segment' || activeKind === 'driver' ? 'move' : 'default';
 
   // --- path builders ---
 
@@ -312,7 +327,7 @@ export function CurveComposer({
         }
         return d;
       }
-      const e = deriveEase(curve.type, curve.curvature);
+      const e = deriveEase(curve.type, curve.curvature, curve.steepness);
       return `M ${x(0)} ${y(0)} C ${x(e[0])} ${y(e[1])}, ${x(e[2])} ${y(e[3])}, ${x(1)} ${y(1)}`;
     },
     // mapY depends on the rect passed in; W is closed over.

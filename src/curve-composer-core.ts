@@ -29,6 +29,13 @@ export interface CurveSegment {
    * spring maps it to bounce (−1 = none → +1 = max).
    */
   curvature: number;
+  /**
+   * Bipolar -1..1 steepness — how pronounced the ease is, independent of the energy bias.
+   * Scales each control point's deviation from the linear diagonal: 0 = canonical preset,
+   * +1 = sharper (e.g. easeInOut gets much slower start/end), −1 = flatter toward linear.
+   * Spring maps it to stiffness (snappier rise).
+   */
+  steepness: number;
 }
 
 /** The stacked driver curve (a single curve, no internal splits). */
@@ -36,6 +43,8 @@ export interface CurveDriver {
   type: CurveType;
   /** Bipolar -1..1 energy bias — see CurveSegment.curvature. */
   curvature: number;
+  /** Bipolar -1..1 steepness — see CurveSegment.steepness. */
+  steepness: number;
 }
 
 export type DriverDirection = 'forward' | 'mirror' | 'reverse';
@@ -68,16 +77,31 @@ const clampBipolar = (v: number) => (v < -1 ? -1 : v > 1 ? 1 : v);
 /** How far (in x) a full ±1 bias shifts the control points. */
 const SKEW_MAX = 0.45;
 
+/** Multiplier on a preset's deviation from linear at full ±1 steepness. */
+function steepnessGain(steepness: number): number {
+  const v = clampBipolar(steepness);
+  // +1 → 2.3× deviation (sharper, slower ends); 0 → preset; −1 → 0× (linear/flat).
+  return v >= 0 ? 1 + v * 1.3 : 1 + v;
+}
+
 /**
- * Derive the bezier control points for a type at a given energy bias.
- * Every preset shares y=(0,1) and differs only in its x control points, so "moving
- * energy" is a tandem shift of both x's: bias>0 pushes the bend toward the fall
- * (slow start, late rush), bias<0 toward the onset (early rush, slow finish).
+ * Derive the bezier control points for a type at a given energy bias + steepness.
+ * Every preset shares y=(0,1) and differs only in its x control points. Steepness scales
+ * each x's deviation from the linear diagonal (x1 from 0, x2 from 1) — intensifying or
+ * relaxing the ease while keeping its character. Energy then shifts both x's in tandem:
+ * bias>0 pushes the bend toward the fall (slow start, late rush), bias<0 toward the onset.
  */
-export function deriveEase(type: CurveType, curvature: number): [number, number, number, number] {
+export function deriveEase(
+  type: CurveType,
+  curvature: number,
+  steepness = 0
+): [number, number, number, number] {
   const base = type === 'spring' ? easingPresets.linear : easingPresets[type];
+  const k = steepnessGain(steepness);
+  const x1 = base[0] * k; // linear x1 is 0, so the deviation is base[0]
+  const x2 = 1 + (base[2] - 1) * k; // linear x2 is 1
   const shift = clampBipolar(curvature) * SKEW_MAX;
-  return [clamp01(base[0] + shift), base[1], clamp01(base[2] + shift), base[3]];
+  return [clamp01(x1 + shift), base[1], clamp01(x2 + shift), base[3]];
 }
 
 // Solve the cubic-bezier for `y` given `x`, with P0=(0,0), P3=(1,1).
@@ -106,13 +130,15 @@ function bezierY(ease: [number, number, number, number], x: number): number {
 // kept (settles at 1, overshoots above it) so the bounce stays visible — a spring is
 // only recognizable by its overshoot. Curvature maps to a tasteful bounce range.
 const SPRING_SAMPLES = 72;
-function springPoints(curvature: number): number[] {
+function springPoints(curvature: number, steepness = 0): number[] {
   const visualDuration = 1;
   // Bipolar bias → bounce: −1 = none, 0 = moderate, +1 = max.
   const bounce = clamp01((clampBipolar(curvature) + 1) / 2) * 0.6;
   const mass = 1;
   let stiffness = (2 * Math.PI) / visualDuration;
   stiffness = stiffness * stiffness;
+  // Steepness scales stiffness → a snappier (steeper) rise; clamped to stay stable.
+  stiffness *= Math.max(0.2, 1 + clampBipolar(steepness) * 0.9);
   const dampingRatio = 1 - bounce;
   const damping = 2 * dampingRatio * Math.sqrt(stiffness * mass);
 
@@ -140,10 +166,10 @@ function interp(points: number[], t: number): number {
 /** Build a reusable sampler for a segment/driver (precomputes spring points once). */
 export function buildSampler(curve: CurveSegment | CurveDriver): Sampler {
   if (curve.type === 'spring') {
-    const pts = springPoints(curve.curvature);
+    const pts = springPoints(curve.curvature, curve.steepness);
     return (t) => interp(pts, t);
   }
-  const ease = deriveEase(curve.type, curve.curvature);
+  const ease = deriveEase(curve.type, curve.curvature, curve.steepness);
   return (t) => bezierY(ease, t);
 }
 
@@ -232,8 +258,8 @@ export function cycleSegmentType(comp: CurveComposition, index: number): CurveCo
   if (!src) return comp;
   const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(src.type) + 1) % CURVE_CYCLE.length];
   const next = comp.segments.slice();
-  // Cycling picks a fresh curve, so drop the applied energy bias — show the canonical shape.
-  next[index] = { ...src, type, curvature: 0 };
+  // Cycling picks a fresh curve, so drop the applied energy + steepness — show the canonical shape.
+  next[index] = { ...src, type, curvature: 0, steepness: 0 };
   return cloneSegments(comp, next);
 }
 
@@ -242,6 +268,14 @@ export function setSegmentCurvature(comp: CurveComposition, index: number, curva
   if (!src) return comp;
   const next = comp.segments.slice();
   next[index] = { ...src, curvature: clampBipolar(curvature) };
+  return cloneSegments(comp, next);
+}
+
+export function setSegmentSteepness(comp: CurveComposition, index: number, steepness: number): CurveComposition {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const next = comp.segments.slice();
+  next[index] = { ...src, steepness: clampBipolar(steepness) };
   return cloneSegments(comp, next);
 }
 
@@ -267,7 +301,7 @@ export function redistributeWeight(comp: CurveComposition, boundaryIndex: number
 
 export function addDriver(comp: CurveComposition): CurveComposition {
   if (comp.driver) return comp;
-  return { ...comp, driver: { type: 'easeInOut', curvature: 0 } };
+  return { ...comp, driver: { type: 'easeInOut', curvature: 0, steepness: 0 } };
 }
 
 export function removeDriver(comp: CurveComposition): CurveComposition {
@@ -277,13 +311,18 @@ export function removeDriver(comp: CurveComposition): CurveComposition {
 export function cycleDriverType(comp: CurveComposition): CurveComposition {
   if (!comp.driver) return comp;
   const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(comp.driver.type) + 1) % CURVE_CYCLE.length];
-  // Reset the energy bias on cycle so the new curve shows in its canonical form.
-  return { ...comp, driver: { ...comp.driver, type, curvature: 0 } };
+  // Reset the energy + steepness on cycle so the new curve shows in its canonical form.
+  return { ...comp, driver: { ...comp.driver, type, curvature: 0, steepness: 0 } };
 }
 
 export function setDriverCurvature(comp: CurveComposition, curvature: number): CurveComposition {
   if (!comp.driver) return comp;
   return { ...comp, driver: { ...comp.driver, curvature: clampBipolar(curvature) } };
+}
+
+export function setDriverSteepness(comp: CurveComposition, steepness: number): CurveComposition {
+  if (!comp.driver) return comp;
+  return { ...comp, driver: { ...comp.driver, steepness: clampBipolar(steepness) } };
 }
 
 // --- read pipeline (drives the demo transport + the playhead) ---
@@ -392,8 +431,8 @@ export function triggersCrossed(prevValue: number, curValue: number, steps: numb
 export function defaultComposition(): CurveComposition {
   return {
     segments: [
-      { type: 'easeOut', weight: 1, curvature: 0 },
-      { type: 'easeInOut', weight: 1, curvature: 0 },
+      { type: 'easeOut', weight: 1, curvature: 0, steepness: 0 },
+      { type: 'easeInOut', weight: 1, curvature: 0, steepness: 0 },
     ],
     driver: null,
     direction: 'forward',

@@ -491,12 +491,21 @@ interface CurveSegment {
      * spring maps it to bounce (−1 = none → +1 = max).
      */
     curvature: number;
+    /**
+     * Bipolar -1..1 steepness — how pronounced the ease is, independent of the energy bias.
+     * Scales each control point's deviation from the linear diagonal: 0 = canonical preset,
+     * +1 = sharper (e.g. easeInOut gets much slower start/end), −1 = flatter toward linear.
+     * Spring maps it to stiffness (snappier rise).
+     */
+    steepness: number;
 }
 /** The stacked driver curve (a single curve, no internal splits). */
 interface CurveDriver {
     type: CurveType;
     /** Bipolar -1..1 energy bias — see CurveSegment.curvature. */
     curvature: number;
+    /** Bipolar -1..1 steepness — see CurveSegment.steepness. */
+    steepness: number;
 }
 type DriverDirection = 'forward' | 'mirror' | 'reverse';
 interface CurveComposition {
@@ -516,6 +525,7 @@ declare function splitSegment(comp: CurveComposition, index: number): CurveCompo
 declare function removeSegment(comp: CurveComposition, index: number): CurveComposition;
 declare function cycleSegmentType(comp: CurveComposition, index: number): CurveComposition;
 declare function setSegmentCurvature(comp: CurveComposition, index: number, curvature: number): CurveComposition;
+declare function setSegmentSteepness(comp: CurveComposition, index: number, steepness: number): CurveComposition;
 /**
  * Move `deltaFrac` (0..1 of the whole series) across the boundary between segment
  * `boundaryIndex` and the next, keeping the rest untouched and the pair's combined
@@ -526,6 +536,7 @@ declare function addDriver(comp: CurveComposition): CurveComposition;
 declare function removeDriver(comp: CurveComposition): CurveComposition;
 declare function cycleDriverType(comp: CurveComposition): CurveComposition;
 declare function setDriverCurvature(comp: CurveComposition, curvature: number): CurveComposition;
+declare function setDriverSteepness(comp: CurveComposition, steepness: number): CurveComposition;
 interface CompositionSamplers {
     segments: Sampler[];
     driver: Sampler | null;
@@ -708,4 +719,4 @@ interface ShortcutsMenuProps {
 }
 declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react_jsx_runtime.JSX.Element | null;
 
-export { type ActionConfig, ButtonGroup, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, addDriver, buildSamplers, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, directionPhase, normalizeListItems, parseListItemSchema, readComposition, redistributeWeight, removeDriver, removeSegment, setDriverCurvature, setSegmentCurvature, splitSegment, triggerLevels, triggersCrossed, useDialKit };
+export { type ActionConfig, ButtonGroup, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, addDriver, buildSamplers, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, directionPhase, normalizeListItems, parseListItemSchema, readComposition, redistributeWeight, removeDriver, removeSegment, setDriverCurvature, setDriverSteepness, setSegmentCurvature, setSegmentSteepness, splitSegment, triggerLevels, triggersCrossed, useDialKit };

@@ -124,8 +124,8 @@ export function CurveComposerShowcase() {
       />
 
       <div style={{ fontSize: 12, color: 'var(--dial-text-secondary)' }}>
-        {segments.length} segment{segments.length > 1 ? 's' : ''} · click a curve to change its shape · drag its
-        middle to move energy (onset ↔ fall) · drag a divider to retime · double-click to split
+        {segments.length} segment{segments.length > 1 ? 's' : ''} · click a curve to change its shape · drag its body
+        — sideways for energy (onset ↔ fall), up/down for steepness · drag a divider to retime · double-click to split
       </div>
 
       {/* output track: the continuous dot travels along it (position = value). In trigger mode,

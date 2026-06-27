@@ -3776,10 +3776,17 @@ var lerp = (a, b, t) => a + (b - a) * t;
 var clamp01 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
 var clampBipolar = (v) => v < -1 ? -1 : v > 1 ? 1 : v;
 var SKEW_MAX = 0.45;
-function deriveEase(type, curvature) {
+function steepnessGain(steepness) {
+  const v = clampBipolar(steepness);
+  return v >= 0 ? 1 + v * 1.3 : 1 + v;
+}
+function deriveEase(type, curvature, steepness = 0) {
   const base = type === "spring" ? easingPresets.linear : easingPresets[type];
+  const k = steepnessGain(steepness);
+  const x1 = base[0] * k;
+  const x2 = 1 + (base[2] - 1) * k;
   const shift = clampBipolar(curvature) * SKEW_MAX;
-  return [clamp01(base[0] + shift), base[1], clamp01(base[2] + shift), base[3]];
+  return [clamp01(x1 + shift), base[1], clamp01(x2 + shift), base[3]];
 }
 function bezierAxis(p1, p2, s) {
   const u = 1 - s;
@@ -3802,12 +3809,13 @@ function bezierY(ease, x) {
   return bezierAxis(ease[1], ease[3], s);
 }
 var SPRING_SAMPLES = 72;
-function springPoints(curvature) {
+function springPoints(curvature, steepness = 0) {
   const visualDuration = 1;
   const bounce = clamp01((clampBipolar(curvature) + 1) / 2) * 0.6;
   const mass = 1;
   let stiffness = 2 * Math.PI / visualDuration;
   stiffness = stiffness * stiffness;
+  stiffness *= Math.max(0.2, 1 + clampBipolar(steepness) * 0.9);
   const dampingRatio = 1 - bounce;
   const damping = 2 * dampingRatio * Math.sqrt(stiffness * mass);
   const raw = [];
@@ -3831,10 +3839,10 @@ function interp(points, t) {
 }
 function buildSampler(curve) {
   if (curve.type === "spring") {
-    const pts = springPoints(curve.curvature);
+    const pts = springPoints(curve.curvature, curve.steepness);
     return (t) => interp(pts, t);
   }
-  const ease = deriveEase(curve.type, curve.curvature);
+  const ease = deriveEase(curve.type, curve.curvature, curve.steepness);
   return (t) => bezierY(ease, t);
 }
 function boundaries(segments) {
@@ -3901,7 +3909,7 @@ function cycleSegmentType(comp, index) {
   if (!src) return comp;
   const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(src.type) + 1) % CURVE_CYCLE.length];
   const next = comp.segments.slice();
-  next[index] = { ...src, type, curvature: 0 };
+  next[index] = { ...src, type, curvature: 0, steepness: 0 };
   return cloneSegments(comp, next);
 }
 function setSegmentCurvature(comp, index, curvature) {
@@ -3909,6 +3917,13 @@ function setSegmentCurvature(comp, index, curvature) {
   if (!src) return comp;
   const next = comp.segments.slice();
   next[index] = { ...src, curvature: clampBipolar(curvature) };
+  return cloneSegments(comp, next);
+}
+function setSegmentSteepness(comp, index, steepness) {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const next = comp.segments.slice();
+  next[index] = { ...src, steepness: clampBipolar(steepness) };
   return cloneSegments(comp, next);
 }
 function redistributeWeight(comp, boundaryIndex, deltaFrac) {
@@ -3927,7 +3942,7 @@ function redistributeWeight(comp, boundaryIndex, deltaFrac) {
 }
 function addDriver(comp) {
   if (comp.driver) return comp;
-  return { ...comp, driver: { type: "easeInOut", curvature: 0 } };
+  return { ...comp, driver: { type: "easeInOut", curvature: 0, steepness: 0 } };
 }
 function removeDriver(comp) {
   return { ...comp, driver: null };
@@ -3935,11 +3950,15 @@ function removeDriver(comp) {
 function cycleDriverType(comp) {
   if (!comp.driver) return comp;
   const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(comp.driver.type) + 1) % CURVE_CYCLE.length];
-  return { ...comp, driver: { ...comp.driver, type, curvature: 0 } };
+  return { ...comp, driver: { ...comp.driver, type, curvature: 0, steepness: 0 } };
 }
 function setDriverCurvature(comp, curvature) {
   if (!comp.driver) return comp;
   return { ...comp, driver: { ...comp.driver, curvature: clampBipolar(curvature) } };
+}
+function setDriverSteepness(comp, steepness) {
+  if (!comp.driver) return comp;
+  return { ...comp, driver: { ...comp.driver, steepness: clampBipolar(steepness) } };
 }
 function buildSamplers(comp) {
   return {
@@ -3988,8 +4007,8 @@ function triggersCrossed(prevValue, curValue, steps) {
 function defaultComposition() {
   return {
     segments: [
-      { type: "easeOut", weight: 1, curvature: 0 },
-      { type: "easeInOut", weight: 1, curvature: 0 }
+      { type: "easeOut", weight: 1, curvature: 0, steepness: 0 },
+      { type: "easeInOut", weight: 1, curvature: 0, steepness: 0 }
     ],
     driver: null,
     direction: "forward"
@@ -4096,13 +4115,20 @@ function CurveComposer({
     } catch {
     }
     if (driverRect && py >= driverRect.y) {
-      setDrag({ kind: "driver", startX: e.clientX, baseCurvature: driver.curvature, moved: false });
+      setDrag({
+        kind: "driver",
+        startX: e.clientX,
+        startY: e.clientY,
+        baseCurvature: driver.curvature,
+        baseSteepness: driver.steepness,
+        moved: false
+      });
       return;
     }
     const edgeHitNorm = EDGE_HIT2 / rectW;
     const bIdx = boundaryAt(xN, segments, edgeHitNorm);
     if (bIdx != null) {
-      setDrag({ kind: "boundary", index: bIdx, startX: e.clientX, base: composition, moved: false });
+      setDrag({ kind: "boundary", index: bIdx, startX: e.clientX, startY: e.clientY, base: composition, moved: false });
       return;
     }
     const sIdx = segmentIndexAt(xN, segments);
@@ -4110,7 +4136,9 @@ function CurveComposer({
       kind: "segment",
       index: sIdx,
       startX: e.clientX,
+      startY: e.clientY,
       baseCurvature: segments[sIdx]?.curvature ?? 0,
+      baseSteepness: segments[sIdx]?.steepness ?? 0,
       moved: false
     });
   };
@@ -4127,8 +4155,10 @@ function CurveComposer({
       }
       return;
     }
-    const rectW = svgRef.current.getBoundingClientRect().width;
-    const moved = Math.abs(e.clientX - d.startX) > DRAG_THRESHOLD2;
+    const svgRect = svgRef.current.getBoundingClientRect();
+    const rectW = svgRect.width;
+    const rectH = svgRect.height;
+    const moved = Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > DRAG_THRESHOLD2;
     if (!moved) return;
     if (d.kind === "boundary") {
       const deltaFrac = (e.clientX - d.startX) / rectW;
@@ -4137,12 +4167,16 @@ function CurveComposer({
       if (!d.moved) setDrag({ ...d, moved: true });
     } else if (d.kind === "segment") {
       const dCurv = (e.clientX - d.startX) / (rectW * 0.6);
-      const next = setSegmentCurvature(composition, d.index, d.baseCurvature + dCurv);
+      const dSteep = -(e.clientY - d.startY) / (rectH * 0.6);
+      let next = setSegmentCurvature(composition, d.index, d.baseCurvature + dCurv);
+      next = setSegmentSteepness(next, d.index, d.baseSteepness + dSteep);
       onSegmentsChange?.(next.segments);
       if (!d.moved) setDrag({ ...d, moved: true });
     } else {
       const dCurv = (e.clientX - d.startX) / (rectW * 0.6);
-      const next = setDriverCurvature(composition, d.baseCurvature + dCurv);
+      const dSteep = -(e.clientY - d.startY) / (rectH * 0.6);
+      let next = setDriverCurvature(composition, d.baseCurvature + dCurv);
+      next = setDriverSteepness(next, d.baseSteepness + dSteep);
       if (next.driver) onDriverChange?.(next.driver);
       if (!d.moved) setDrag({ ...d, moved: true });
     }
@@ -4168,7 +4202,8 @@ function CurveComposer({
     if (driverRect && py >= driverRect.y) return;
     onSegmentsChange?.(splitSegment(composition, segmentIndexAt(xN, segments)).segments);
   };
-  const cursor = drag ? drag.kind === "boundary" ? "ew-resize" : "ew-resize" : hover ? "ew-resize" : "default";
+  const activeKind = drag?.kind ?? hover?.kind;
+  const cursor = activeKind === "boundary" ? "ew-resize" : activeKind === "segment" || activeKind === "driver" ? "move" : "default";
   const curvePath = useCallback8(
     (curve, rect, span) => {
       const x = (nx) => (span[0] + nx * (span[1] - span[0])) * W;
@@ -4183,7 +4218,7 @@ function CurveComposer({
         }
         return d;
       }
-      const e = deriveEase(curve.type, curve.curvature);
+      const e = deriveEase(curve.type, curve.curvature, curve.steepness);
       return `M ${x(0)} ${y(0)} C ${x(e[0])} ${y(e[1])}, ${x(e[2])} ${y(e[3])}, ${x(1)} ${y(1)}`;
     },
     // mapY depends on the rect passed in; W is closed over.
@@ -4446,7 +4481,9 @@ export {
   removeDriver,
   removeSegment,
   setDriverCurvature,
+  setDriverSteepness,
   setSegmentCurvature,
+  setSegmentSteepness,
   splitSegment,
   triggerLevels,
   triggersCrossed,

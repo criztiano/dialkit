@@ -14,12 +14,21 @@ interface CurveSegment {
      * spring maps it to bounce (−1 = none → +1 = max).
      */
     curvature: number;
+    /**
+     * Bipolar -1..1 steepness — how pronounced the ease is, independent of the energy bias.
+     * Scales each control point's deviation from the linear diagonal: 0 = canonical preset,
+     * +1 = sharper (e.g. easeInOut gets much slower start/end), −1 = flatter toward linear.
+     * Spring maps it to stiffness (snappier rise).
+     */
+    steepness: number;
 }
 /** The stacked driver curve (a single curve, no internal splits). */
 interface CurveDriver {
     type: CurveType;
     /** Bipolar -1..1 energy bias — see CurveSegment.curvature. */
     curvature: number;
+    /** Bipolar -1..1 steepness — see CurveSegment.steepness. */
+    steepness: number;
 }
 type DriverDirection = 'forward' | 'mirror' | 'reverse';
 interface CurveComposition {
@@ -37,12 +46,13 @@ declare const CURVE_MIN_WEIGHT_FRAC = 0.06;
 /** A pure `(t) -> value` sampler over local time, both in 0..1 (value may overshoot for springs). */
 type Sampler = (t: number) => number;
 /**
- * Derive the bezier control points for a type at a given energy bias.
- * Every preset shares y=(0,1) and differs only in its x control points, so "moving
- * energy" is a tandem shift of both x's: bias>0 pushes the bend toward the fall
- * (slow start, late rush), bias<0 toward the onset (early rush, slow finish).
+ * Derive the bezier control points for a type at a given energy bias + steepness.
+ * Every preset shares y=(0,1) and differs only in its x control points. Steepness scales
+ * each x's deviation from the linear diagonal (x1 from 0, x2 from 1) — intensifying or
+ * relaxing the ease while keeping its character. Energy then shifts both x's in tandem:
+ * bias>0 pushes the bend toward the fall (slow start, late rush), bias<0 toward the onset.
  */
-declare function deriveEase(type: CurveType, curvature: number): [number, number, number, number];
+declare function deriveEase(type: CurveType, curvature: number, steepness?: number): [number, number, number, number];
 /** Build a reusable sampler for a segment/driver (precomputes spring points once). */
 declare function buildSampler(curve: CurveSegment | CurveDriver): Sampler;
 /** Interior cumulative split positions (0..1), excluding the 0 and 1 ends. */
@@ -63,6 +73,7 @@ declare function splitSegment(comp: CurveComposition, index: number): CurveCompo
 declare function removeSegment(comp: CurveComposition, index: number): CurveComposition;
 declare function cycleSegmentType(comp: CurveComposition, index: number): CurveComposition;
 declare function setSegmentCurvature(comp: CurveComposition, index: number, curvature: number): CurveComposition;
+declare function setSegmentSteepness(comp: CurveComposition, index: number, steepness: number): CurveComposition;
 /**
  * Move `deltaFrac` (0..1 of the whole series) across the boundary between segment
  * `boundaryIndex` and the next, keeping the rest untouched and the pair's combined
@@ -73,6 +84,7 @@ declare function addDriver(comp: CurveComposition): CurveComposition;
 declare function removeDriver(comp: CurveComposition): CurveComposition;
 declare function cycleDriverType(comp: CurveComposition): CurveComposition;
 declare function setDriverCurvature(comp: CurveComposition, curvature: number): CurveComposition;
+declare function setDriverSteepness(comp: CurveComposition, steepness: number): CurveComposition;
 interface CompositionSamplers {
     segments: Sampler[];
     driver: Sampler | null;
@@ -128,4 +140,4 @@ declare function triggersCrossed(prevValue: number, curValue: number, steps: num
 /** A reasonable starting composition for demos / uncontrolled mounts. */
 declare function defaultComposition(): CurveComposition;
 
-export { CURVE_CYCLE, CURVE_MIN_WEIGHT_FRAC, type CompositionRead, type CompositionSamplers, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, DRAG_THRESHOLD, type DriverDirection, EDGE_HIT, type Sampler, addDriver, boundaries, boundaryAt, buildSampler, buildSamplers, cycleDriverType, cycleSegmentType, defaultComposition, deriveEase, directionPhase, easingPresets, readComposition, redistributeWeight, removeDriver, removeSegment, segmentIndexAt, segmentSpan, setDriverCurvature, setSegmentCurvature, splitSegment, totalWeight, triggerLevels, triggersCrossed };
+export { CURVE_CYCLE, CURVE_MIN_WEIGHT_FRAC, type CompositionRead, type CompositionSamplers, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, DRAG_THRESHOLD, type DriverDirection, EDGE_HIT, type Sampler, addDriver, boundaries, boundaryAt, buildSampler, buildSamplers, cycleDriverType, cycleSegmentType, defaultComposition, deriveEase, directionPhase, easingPresets, readComposition, redistributeWeight, removeDriver, removeSegment, segmentIndexAt, segmentSpan, setDriverCurvature, setDriverSteepness, setSegmentCurvature, setSegmentSteepness, splitSegment, totalWeight, triggerLevels, triggersCrossed };
