@@ -4038,8 +4038,6 @@ function CurveComposer({
   const seriesPlayheadRef = useRef17(null);
   const seriesDotRef = useRef17(null);
   const driverPlayheadRef = useRef17(null);
-  const tickRefs = useRef17([]);
-  const tickTimers = useRef17([]);
   const prevTrigValue = useRef17(Number.NaN);
   const [drag, setDrag] = useState15(null);
   const [hover, setHover] = useState15(null);
@@ -4075,15 +4073,7 @@ function CurveComposer({
       if (md === "trigger") {
         const prev = prevTrigValue.current;
         if (!Number.isNaN(prev)) {
-          for (const idx of triggersCrossed(prev, read.value, ts)) {
-            onTriggerRef.current?.(idx);
-            const el = tickRefs.current[idx];
-            if (el) {
-              el.setAttribute("data-firing", "true");
-              window.clearTimeout(tickTimers.current[idx]);
-              tickTimers.current[idx] = window.setTimeout(() => el.setAttribute("data-firing", "false"), 140);
-            }
-          }
+          for (const idx of triggersCrossed(prev, read.value, ts)) onTriggerRef.current?.(idx);
         }
         prevTrigValue.current = read.value;
       } else {
@@ -4091,11 +4081,7 @@ function CurveComposer({
       }
     };
     raf = requestAnimationFrame(tick);
-    const timers = tickTimers.current;
-    return () => {
-      cancelAnimationFrame(raf);
-      for (const t of timers) window.clearTimeout(t);
-    };
+    return () => cancelAnimationFrame(raf);
   }, [W, laneH, driverH]);
   const localCoords = (clientX, clientY) => {
     const rect = svgRef.current.getBoundingClientRect();
@@ -4283,25 +4269,6 @@ function CurveComposer({
           },
           `b-${i}`
         )),
-        mode === "trigger" && triggerLevels(triggerSteps).map((lv, i) => {
-          const ly = mapY(mainRect, lv);
-          return /* @__PURE__ */ jsx24(
-            "line",
-            {
-              ref: (el) => {
-                tickRefs.current[i] = el;
-              },
-              className: "dialkit-cc-trigger",
-              "data-firing": "false",
-              x1: 0,
-              y1: ly,
-              x2: W,
-              y2: ly,
-              style: { stroke: playheadColor }
-            },
-            `trig-${i}`
-          );
-        }),
         /* @__PURE__ */ jsx24("line", { ref: seriesPlayheadRef, className: "dialkit-cc-playhead", x1: 0, y1: mainRect.y, x2: 0, y2: mainRect.y + mainRect.h, style: { stroke: playheadColor } }),
         /* @__PURE__ */ jsx24("circle", { ref: seriesDotRef, className: "dialkit-cc-dot", cx: 0, cy: mapY(mainRect, 0), r: 3, style: { fill: playheadColor } }),
         driverRect && /* @__PURE__ */ jsxs21(Fragment4, { children: [

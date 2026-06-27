@@ -10,6 +10,7 @@ import {
   removeDriver,
   buildSamplers,
   readComposition,
+  triggerLevels,
 } from 'dialkit';
 import type { CurveSegment, CurveDriver, DriverDirection, CurveComposition } from 'dialkit';
 
@@ -26,18 +27,24 @@ export function CurveComposerShowcase() {
 
   const { segments, driver, direction } = comp;
 
-  // Trigger mode: flash a static grey dot purple on each trigger, then ease it back.
-  const triggerDotRef = useRef<HTMLDivElement>(null);
-  const blinkTimer = useRef<number | undefined>(undefined);
-  const handleTrigger = () => {
-    const el = triggerDotRef.current;
+  // The continuous dot's travel along the demo track: left 6 + radius 8 = center start,
+  // then value * TRACK_TRAVEL. Trigger markers sit at the same per-value positions, so the
+  // dot visibly crosses them.
+  const TRACK_TRAVEL = 220;
+  const DOT_CENTER = 14;
+
+  // Trigger mode: blink the crossed marker purple as the continuous dot passes over it.
+  const markerRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const blinkTimers = useRef<number[]>([]);
+  const handleTrigger = (index: number) => {
+    const el = markerRefs.current[index];
     if (!el) return;
     el.style.background = playheadColor;
-    el.style.transform = 'scale(1.3)';
-    window.clearTimeout(blinkTimer.current);
-    blinkTimer.current = window.setTimeout(() => {
+    el.style.transform = 'translate(-50%, -50%) scale(1.9)';
+    window.clearTimeout(blinkTimers.current[index]);
+    blinkTimers.current[index] = window.setTimeout(() => {
       el.style.background = 'var(--dial-text-tertiary)';
-      el.style.transform = 'scale(1)';
+      el.style.transform = 'translate(-50%, -50%) scale(1)';
     }, 130);
   };
 
@@ -121,38 +128,47 @@ export function CurveComposerShowcase() {
         middle to move energy (onset ↔ fall) · drag a divider to retime · double-click to split
       </div>
 
-      {/* preview: continuous → a dot driven by the composed value; trigger → a grey dot that blinks */}
-      {mode === 'continuous' ? (
-        <div style={{ position: 'relative', height: 22, background: 'var(--dial-surface)', borderRadius: 8 }}>
-          <div
-            ref={demoRef}
-            style={{
-              position: 'absolute',
-              top: 3,
-              left: 6,
-              width: 16,
-              height: 16,
-              borderRadius: '50%',
-              background: playheadColor,
-              willChange: 'transform',
-            }}
-          />
-        </div>
-      ) : (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 22 }}>
-          <div
-            ref={triggerDotRef}
-            style={{
-              width: 16,
-              height: 16,
-              borderRadius: '50%',
-              background: 'var(--dial-text-tertiary)',
-              transition: 'background 120ms ease, transform 120ms ease',
-            }}
-          />
-          <span style={{ fontSize: 12, color: 'var(--dial-text-secondary)' }}>
-            {triggerSteps} triggers, evenly spaced in the signal · non-linear curves fire them unevenly
-          </span>
+      {/* output track: the continuous dot travels along it (position = value). In trigger mode,
+          evenly-spaced markers sit along the track and blink as the dot crosses each one. */}
+      <div style={{ position: 'relative', height: 22, background: 'var(--dial-surface)', borderRadius: 8 }}>
+        {/* moving continuous dot (behind), so the markers' flash always reads on top of it */}
+        <div
+          ref={demoRef}
+          style={{
+            position: 'absolute',
+            top: 3,
+            left: 6,
+            width: 16,
+            height: 16,
+            borderRadius: '50%',
+            background: mode === 'trigger' ? 'var(--dial-text-tertiary)' : playheadColor,
+            willChange: 'transform',
+          }}
+        />
+        {mode === 'trigger' &&
+          triggerLevels(triggerSteps).map((lv, i) => (
+            <div
+              key={i}
+              ref={(el) => {
+                markerRefs.current[i] = el;
+              }}
+              style={{
+                position: 'absolute',
+                top: '50%',
+                left: DOT_CENTER + lv * TRACK_TRAVEL,
+                width: 7,
+                height: 7,
+                borderRadius: '50%',
+                background: 'var(--dial-text-tertiary)',
+                transform: 'translate(-50%, -50%) scale(1)',
+                transition: 'background 120ms ease, transform 120ms ease',
+              }}
+            />
+          ))}
+      </div>
+      {mode === 'trigger' && (
+        <div style={{ fontSize: 12, color: 'var(--dial-text-secondary)' }}>
+          {triggerSteps} triggers, evenly spaced along the signal · the dot crosses them unevenly when the curve isn't linear
         </div>
       )}
 

@@ -2235,21 +2235,6 @@
   pointer-events: none;
 }
 
-.dialkit-cc-trigger {
-  stroke: currentColor;
-  stroke-opacity: 0.22;
-  stroke-width: 1;
-  stroke-dasharray: 2 4;
-  pointer-events: none;
-  transition: stroke-opacity 0.12s ease, stroke-width 0.12s ease;
-}
-
-.dialkit-cc-trigger[data-firing='true'] {
-  stroke-opacity: 0.95;
-  stroke-width: 2;
-  stroke-dasharray: none;
-}
-
 .dialkit-cc-label {
   fill: currentColor;
   fill-opacity: 0.4;

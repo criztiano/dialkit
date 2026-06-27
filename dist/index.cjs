@@ -4108,8 +4108,6 @@ function CurveComposer({
   const seriesPlayheadRef = (0, import_react24.useRef)(null);
   const seriesDotRef = (0, import_react24.useRef)(null);
   const driverPlayheadRef = (0, import_react24.useRef)(null);
-  const tickRefs = (0, import_react24.useRef)([]);
-  const tickTimers = (0, import_react24.useRef)([]);
   const prevTrigValue = (0, import_react24.useRef)(Number.NaN);
   const [drag, setDrag] = (0, import_react24.useState)(null);
   const [hover, setHover] = (0, import_react24.useState)(null);
@@ -4145,15 +4143,7 @@ function CurveComposer({
       if (md === "trigger") {
         const prev = prevTrigValue.current;
         if (!Number.isNaN(prev)) {
-          for (const idx of triggersCrossed(prev, read.value, ts)) {
-            onTriggerRef.current?.(idx);
-            const el = tickRefs.current[idx];
-            if (el) {
-              el.setAttribute("data-firing", "true");
-              window.clearTimeout(tickTimers.current[idx]);
-              tickTimers.current[idx] = window.setTimeout(() => el.setAttribute("data-firing", "false"), 140);
-            }
-          }
+          for (const idx of triggersCrossed(prev, read.value, ts)) onTriggerRef.current?.(idx);
         }
         prevTrigValue.current = read.value;
       } else {
@@ -4161,11 +4151,7 @@ function CurveComposer({
       }
     };
     raf = requestAnimationFrame(tick);
-    const timers = tickTimers.current;
-    return () => {
-      cancelAnimationFrame(raf);
-      for (const t of timers) window.clearTimeout(t);
-    };
+    return () => cancelAnimationFrame(raf);
   }, [W, laneH, driverH]);
   const localCoords = (clientX, clientY) => {
     const rect = svgRef.current.getBoundingClientRect();
@@ -4353,25 +4339,6 @@ function CurveComposer({
           },
           `b-${i}`
         )),
-        mode === "trigger" && triggerLevels(triggerSteps).map((lv, i) => {
-          const ly = mapY(mainRect, lv);
-          return /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
-            "line",
-            {
-              ref: (el) => {
-                tickRefs.current[i] = el;
-              },
-              className: "dialkit-cc-trigger",
-              "data-firing": "false",
-              x1: 0,
-              y1: ly,
-              x2: W,
-              y2: ly,
-              style: { stroke: playheadColor }
-            },
-            `trig-${i}`
-          );
-        }),
         /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("line", { ref: seriesPlayheadRef, className: "dialkit-cc-playhead", x1: 0, y1: mainRect.y, x2: 0, y2: mainRect.y + mainRect.h, style: { stroke: playheadColor } }),
         /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("circle", { ref: seriesDotRef, className: "dialkit-cc-dot", cx: 0, cy: mapY(mainRect, 0), r: 3, style: { fill: playheadColor } }),
         driverRect && /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(import_jsx_runtime24.Fragment, { children: [

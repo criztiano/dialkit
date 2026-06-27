@@ -19,7 +19,6 @@ import {
   cycleDriverType,
   setDriverCurvature,
   readComposition,
-  triggerLevels,
   triggersCrossed,
   DEFAULT_TRIGGER_STEPS,
   DRAG_THRESHOLD,
@@ -126,9 +125,7 @@ export function CurveComposer({
   const seriesPlayheadRef = useRef<SVGLineElement>(null);
   const seriesDotRef = useRef<SVGCircleElement>(null);
   const driverPlayheadRef = useRef<SVGLineElement>(null);
-  // Trigger level lines + per-level flash timers; prevTrigValue tracks value crossings.
-  const tickRefs = useRef<(SVGLineElement | null)[]>([]);
-  const tickTimers = useRef<number[]>([]);
+  // Tracks the composed value across frames to detect upward trigger-level crossings.
   const prevTrigValue = useRef<number>(Number.NaN);
 
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -168,21 +165,14 @@ export function CurveComposer({
         driverPlayheadRef.current.setAttribute('x1', String(dx));
         driverPlayheadRef.current.setAttribute('x2', String(dx));
       }
-      // Trigger mode: fire when the composed VALUE crosses an evenly-spaced level. The
+      // Trigger mode: emit when the composed VALUE crosses an evenly-spaced level. The
       // curve sets how fast the value reaches each level, so non-linear curves fire
-      // unevenly in time. Flash the crossed level line and emit onTrigger.
+      // unevenly in time. Visualization is the consumer's job (e.g. markers on the output
+      // track the value dot travels) — the component only emits onTrigger.
       if (md === 'trigger') {
         const prev = prevTrigValue.current;
         if (!Number.isNaN(prev)) {
-          for (const idx of triggersCrossed(prev, read.value, ts)) {
-            onTriggerRef.current?.(idx);
-            const el = tickRefs.current[idx];
-            if (el) {
-              el.setAttribute('data-firing', 'true');
-              window.clearTimeout(tickTimers.current[idx]);
-              tickTimers.current[idx] = window.setTimeout(() => el.setAttribute('data-firing', 'false'), 140);
-            }
-          }
+          for (const idx of triggersCrossed(prev, read.value, ts)) onTriggerRef.current?.(idx);
         }
         prevTrigValue.current = read.value;
       } else {
@@ -190,11 +180,7 @@ export function CurveComposer({
       }
     };
     raf = requestAnimationFrame(tick);
-    const timers = tickTimers.current;
-    return () => {
-      cancelAnimationFrame(raf);
-      for (const t of timers) window.clearTimeout(t);
-    };
+    return () => cancelAnimationFrame(raf);
     // mapY/mainRect are derived from width/height which the loop reads via closure; only
     // the geometry inputs need to re-arm the loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -429,29 +415,7 @@ export function CurveComposer({
           />
         ))}
 
-        {/* trigger level lines (trigger mode): evenly spaced in VALUE, not time — they flash
-            as the value dot crosses them, so non-linear curves fire them unevenly. */}
-        {mode === 'trigger' &&
-          triggerLevels(triggerSteps).map((lv, i) => {
-            const ly = mapY(mainRect, lv);
-            return (
-              <line
-                key={`trig-${i}`}
-                ref={(el) => {
-                  tickRefs.current[i] = el;
-                }}
-                className="dialkit-cc-trigger"
-                data-firing="false"
-                x1={0}
-                y1={ly}
-                x2={W}
-                y2={ly}
-                style={{ stroke: playheadColor }}
-              />
-            );
-          })}
-
-        {/* series playhead + value dot (rides the curve; in trigger mode it crosses the levels) */}
+        {/* series playhead + value dot (rides the curve; this is the signal triggers read) */}
         <line ref={seriesPlayheadRef} className="dialkit-cc-playhead" x1={0} y1={mainRect.y} x2={0} y2={mainRect.y + mainRect.h} style={{ stroke: playheadColor }} />
         <circle ref={seriesDotRef} className="dialkit-cc-dot" cx={0} cy={mapY(mainRect, 0)} r={3} style={{ fill: playheadColor }} />
 
