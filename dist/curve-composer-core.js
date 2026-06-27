@@ -42,10 +42,10 @@ function bezierY(ease, x) {
   }
   return bezierAxis(ease[1], ease[3], s);
 }
-var SPRING_SAMPLES = 64;
+var SPRING_SAMPLES = 72;
 function springPoints(curvature) {
   const visualDuration = 1;
-  const bounce = clamp01(curvature);
+  const bounce = clamp01(curvature) * 0.6;
   const mass = 1;
   let stiffness = 2 * Math.PI / visualDuration;
   stiffness = stiffness * stiffness;
@@ -62,14 +62,7 @@ function springPoints(curvature) {
     velocity += acceleration * dt;
     position += velocity * dt;
   }
-  let min = Infinity;
-  let max = -Infinity;
-  for (const v of raw) {
-    if (v < min) min = v;
-    if (v > max) max = v;
-  }
-  const span = max - min || 1;
-  return raw.map((v) => (v - min) / span);
+  return raw;
 }
 function interp(points, t) {
   const x = clamp01(t) * (points.length - 1);
@@ -136,10 +129,9 @@ function cloneSegments(comp, segments) {
 function splitSegment(comp, index) {
   const src = comp.segments[index];
   if (!src) return comp;
-  const half = { ...src, weight: src.weight / 2 };
   const next = comp.segments.slice();
-  next.splice(index, 1, half, { ...half });
-  return cloneSegments(comp, next);
+  next.splice(index + 1, 0, { ...src });
+  return cloneSegments(comp, next.map((s) => ({ ...s, weight: 1 })));
 }
 function removeSegment(comp, index) {
   if (comp.segments.length <= 1) return comp;

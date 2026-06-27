@@ -94,11 +94,13 @@ function bezierY(ease: [number, number, number, number], x: number): number {
   return bezierAxis(ease[1], ease[3], s);
 }
 
-// Spring physics integrator (lifted from SpringVisualization), normalized to 0..1.
-const SPRING_SAMPLES = 64;
+// Spring physics integrator (lifted from SpringVisualization). The raw position is
+// kept (settles at 1, overshoots above it) so the bounce stays visible — a spring is
+// only recognizable by its overshoot. Curvature maps to a tasteful bounce range.
+const SPRING_SAMPLES = 72;
 function springPoints(curvature: number): number[] {
   const visualDuration = 1;
-  const bounce = clamp01(curvature);
+  const bounce = clamp01(curvature) * 0.6;
   const mass = 1;
   let stiffness = (2 * Math.PI) / visualDuration;
   stiffness = stiffness * stiffness;
@@ -116,15 +118,7 @@ function springPoints(curvature: number): number[] {
     velocity += acceleration * dt;
     position += velocity * dt;
   }
-  // Normalize to 0..1 so the curve fits its lane (overshoot included), matching SpringVisualization.
-  let min = Infinity;
-  let max = -Infinity;
-  for (const v of raw) {
-    if (v < min) min = v;
-    if (v > max) max = v;
-  }
-  const span = max - min || 1;
-  return raw.map((v) => (v - min) / span);
+  return raw;
 }
 
 function interp(points: number[], t: number): number {
@@ -206,14 +200,16 @@ function cloneSegments(comp: CurveComposition, segments: CurveSegment[]): CurveC
   return { ...comp, segments };
 }
 
-/** Halve the segment at `index` and insert a copy after it (inherits type + curvature). */
+/**
+ * Insert a copy of the segment at `index` after it, then re-divide ALL segments to
+ * equal duration — split always yields evenly-spaced clips.
+ */
 export function splitSegment(comp: CurveComposition, index: number): CurveComposition {
   const src = comp.segments[index];
   if (!src) return comp;
-  const half = { ...src, weight: src.weight / 2 };
   const next = comp.segments.slice();
-  next.splice(index, 1, half, { ...half });
-  return cloneSegments(comp, next);
+  next.splice(index + 1, 0, { ...src });
+  return cloneSegments(comp, next.map((s) => ({ ...s, weight: 1 })));
 }
 
 /** Remove the segment at `index` (no-op when it's the only one). */

@@ -44,7 +44,10 @@ declare function segmentSpan(segments: CurveSegment[], index: number): [number, 
 declare function segmentIndexAt(xNorm: number, segments: CurveSegment[]): number;
 /** Nearest interior boundary within `edgeHitNorm` of x, or null. Returns the boundary index (between i and i+1). */
 declare function boundaryAt(xNorm: number, segments: CurveSegment[], edgeHitNorm: number): number | null;
-/** Halve the segment at `index` and insert a copy after it (inherits type + curvature). */
+/**
+ * Insert a copy of the segment at `index` after it, then re-divide ALL segments to
+ * equal duration — split always yields evenly-spaced clips.
+ */
 declare function splitSegment(comp: CurveComposition, index: number): CurveComposition;
 /** Remove the segment at `index` (no-op when it's the only one). */
 declare function removeSegment(comp: CurveComposition, index: number): CurveComposition;

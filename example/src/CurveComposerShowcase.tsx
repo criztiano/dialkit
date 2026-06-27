@@ -74,6 +74,10 @@ export function CurveComposerShowcase() {
     setComp((c) => removeSegment(c, Math.min(selected, c.segments.length - 1)));
     setSelected((s) => Math.max(0, s - 1));
   };
+  const doReset = () => {
+    setComp(defaultComposition());
+    setSelected(0);
+  };
   const toggleDriver = () => setComp((c) => (c.driver ? removeDriver(c) : addDriver(c)));
 
   return (
@@ -123,6 +127,9 @@ export function CurveComposerShowcase() {
         </button>
         <button type="button" className="lib-tab" onClick={doRemove} disabled={segments.length <= 1}>
           − Remove
+        </button>
+        <button type="button" className="lib-tab" onClick={doReset}>
+          ⟲ Reset
         </button>
         <button type="button" className="lib-tab" data-active={String(!!driver)} onClick={toggleDriver}>
           driver: {driver ? 'on' : 'off'}

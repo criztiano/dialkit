@@ -3872,10 +3872,10 @@ function bezierY(ease, x) {
   }
   return bezierAxis(ease[1], ease[3], s);
 }
-var SPRING_SAMPLES = 64;
+var SPRING_SAMPLES = 72;
 function springPoints(curvature) {
   const visualDuration = 1;
-  const bounce = clamp01(curvature);
+  const bounce = clamp01(curvature) * 0.6;
   const mass = 1;
   let stiffness = 2 * Math.PI / visualDuration;
   stiffness = stiffness * stiffness;
@@ -3892,14 +3892,7 @@ function springPoints(curvature) {
     velocity += acceleration * dt;
     position += velocity * dt;
   }
-  let min = Infinity;
-  let max = -Infinity;
-  for (const v of raw) {
-    if (v < min) min = v;
-    if (v > max) max = v;
-  }
-  const span = max - min || 1;
-  return raw.map((v) => (v - min) / span);
+  return raw;
 }
 function interp(points, t) {
   const x = clamp01(t) * (points.length - 1);
@@ -3966,10 +3959,9 @@ function cloneSegments(comp, segments) {
 function splitSegment(comp, index) {
   const src = comp.segments[index];
   if (!src) return comp;
-  const half = { ...src, weight: src.weight / 2 };
   const next = comp.segments.slice();
-  next.splice(index, 1, half, { ...half });
-  return cloneSegments(comp, next);
+  next.splice(index + 1, 0, { ...src });
+  return cloneSegments(comp, next.map((s) => ({ ...s, weight: 1 })));
 }
 function removeSegment(comp, index) {
   if (comp.segments.length <= 1) return comp;
@@ -4056,7 +4048,7 @@ function defaultComposition() {
 // src/components/CurveComposer.tsx
 var import_jsx_runtime24 = require("react/jsx-runtime");
 var GAP = 10;
-var PAD_FRAC = 0.12;
+var PAD_FRAC = 0.18;
 var DRIVER_FRAC = 0.55;
 function CurveComposer({
   segments,
@@ -4290,7 +4282,8 @@ function CurveComposer({
           const span = segmentSpan(segments, i);
           return /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("g", { children: [
             diagonal(mainRect, span, `diag-${i}`),
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("path", { className: "dialkit-cc-curve", d: curvePath(seg, mainRect, span) })
+            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("path", { className: "dialkit-cc-curve", d: curvePath(seg, mainRect, span) }),
+            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("text", { className: "dialkit-cc-label", x: (span[0] + span[1]) * 0.5 * W, y: mainRect.y + 13, children: seg.type })
           ] }, `seg-${i}`);
         }),
         interior.map((bx, i) => /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
@@ -4315,6 +4308,10 @@ function CurveComposer({
           hover?.kind === "driver" && !drag && /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("rect", { className: "dialkit-cc-seg-hover", x: 0, y: driverRect.y, width: W, height: driverRect.h, rx: 8 }),
           diagonal(driverRect, [0, 1], "driver-diag"),
           /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("path", { className: "dialkit-cc-curve dialkit-cc-curve-driver", d: curvePath(driver, driverRect, [0, 1]) }),
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("text", { className: "dialkit-cc-label", x: W * 0.5, y: driverRect.y + 13, children: [
+            "driver \xB7 ",
+            driver.type
+          ] }),
           /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("line", { ref: driverPlayheadRef, className: "dialkit-cc-playhead", x1: 0, y1: driverRect.y, x2: 0, y2: driverRect.y + driverRect.h, style: { stroke: playheadColor } })
         ] })
       ]

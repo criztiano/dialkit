@@ -502,7 +502,10 @@ interface CurveComposition {
 }
 /** A pure `(t) -> value` sampler over local time, both in 0..1 (value may overshoot for springs). */
 type Sampler = (t: number) => number;
-/** Halve the segment at `index` and insert a copy after it (inherits type + curvature). */
+/**
+ * Insert a copy of the segment at `index` after it, then re-divide ALL segments to
+ * equal duration — split always yields evenly-spaced clips.
+ */
 declare function splitSegment(comp: CurveComposition, index: number): CurveComposition;
 /** Remove the segment at `index` (no-op when it's the only one). */
 declare function removeSegment(comp: CurveComposition, index: number): CurveComposition;

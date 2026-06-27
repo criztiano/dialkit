@@ -2235,4 +2235,14 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
   fill: currentColor;
   pointer-events: none;
 }
+
+.dialkit-cc-label {
+  fill: currentColor;
+  fill-opacity: 0.4;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 9px;
+  text-anchor: middle;
+  pointer-events: none;
+  text-transform: capitalize;
+}
 `;

@@ -59,7 +59,7 @@ interface CurveComposerProps {
 }
 
 const GAP = 10; // px between the main lane and the driver lane
-const PAD_FRAC = 0.12; // vertical headroom inside a lane (for overshoot)
+const PAD_FRAC = 0.18; // vertical headroom inside a lane (room for spring overshoot)
 const DRIVER_FRAC = 0.55; // driver lane height relative to the main lane
 
 type Rect = { x: number; y: number; w: number; h: number };
@@ -357,6 +357,9 @@ export function CurveComposer({
             <g key={`seg-${i}`}>
               {diagonal(mainRect, span, `diag-${i}`)}
               <path className="dialkit-cc-curve" d={curvePath(seg, mainRect, span)} />
+              <text className="dialkit-cc-label" x={(span[0] + span[1]) * 0.5 * W} y={mainRect.y + 13}>
+                {seg.type}
+              </text>
             </g>
           );
         })}
@@ -390,6 +393,9 @@ export function CurveComposer({
             )}
             {diagonal(driverRect, [0, 1], 'driver-diag')}
             <path className="dialkit-cc-curve dialkit-cc-curve-driver" d={curvePath(driver!, driverRect, [0, 1])} />
+            <text className="dialkit-cc-label" x={W * 0.5} y={driverRect.y + 13}>
+              driver · {driver!.type}
+            </text>
             <line ref={driverPlayheadRef} className="dialkit-cc-playhead" x1={0} y1={driverRect.y} x2={0} y2={driverRect.y + driverRect.h} style={{ stroke: playheadColor }} />
           </>
         )}
