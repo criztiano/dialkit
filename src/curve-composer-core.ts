@@ -396,33 +396,45 @@ export function triggerLevels(steps: number): number[] {
   return out;
 }
 
+/** A single-frame value change this large is a segment/loop flyback, not a smooth crossing. */
+const TRIGGER_FLYBACK = 0.5;
+
 /**
  * Level indices (into `triggerLevels`) fired as the composed value moves `prevValue` →
- * `curValue`. Pass the composed `value` (post driver/direction) frame to frame:
+ * `curValue`. Pass the composed `value` (post driver/direction) frame to frame; the
+ * firing is direction-symmetric — it reads the value sequence, so it works for forward,
+ * reverse, and mirror alike:
  *
- * - Climbing: the INTERIOR levels (strictly between 0 and 1) crossed upward fire — the
- *   curve sets how fast the value reaches each, so non-linear curves fire them unevenly.
- * - The TOP level (1) fires on walk completion — a single-frame value drop larger than one
- *   level, i.e. the per-segment / loop reset. (The looping transport reaches ~0.999 but
- *   never exactly 1, so the peak must be caught at the reset, not by an upward crossing.)
- * - The floor level 0 never fires; it is the start of a walk, folded onto the prior top so
- *   the edge never double-triggers.
+ * - A smooth move fires the INTERIOR levels (strictly between 0 and 1) it crosses, in the
+ *   travel direction — the curve sets how fast the value reaches each, so non-linear
+ *   curves fire them unevenly.
+ * - A flyback (a single-frame jump larger than {@link TRIGGER_FLYBACK}) is the per-segment /
+ *   loop boundary. The walk reached the far endpoint it flew back from, so that endpoint
+ *   fires: a downward flyback (a forward walk that peaked) fires the top (n−1); an upward
+ *   flyback (a reverse walk that bottomed) fires the floor (0). The opposite endpoint is the
+ *   start of the next walk, folded onto this one so the boundary never double-triggers.
  *
- * Values are clamped to [0, 1] so spring overshoot can't perturb the top.
+ * Values are clamped to [0, 1] so spring overshoot can't perturb the endpoints.
  */
 export function triggersCrossed(prevValue: number, curValue: number, steps: number): number[] {
   const n = Math.max(2, Math.floor(steps));
   const seg = 1 / (n - 1); // value spacing between adjacent levels
   const p = clamp01(prevValue);
   const c = clamp01(curValue);
+  const delta = c - p;
   const fired: number[] = [];
-  if (c > p) {
-    const EPS = 1e-9;
-    const startK = Math.floor(p / seg + EPS) + 1; // first level strictly above prevValue
-    const endK = Math.floor(c / seg + EPS); // last level at or below curValue
-    for (let k = startK; k <= endK; k++) if (k >= 1 && k <= n - 2) fired.push(k); // interior only
-  } else if (p - c > seg) {
-    fired.push(n - 1); // a walk reset → the walk peaked: fire the top level
+  if (Math.abs(delta) > TRIGGER_FLYBACK) {
+    fired.push(delta < 0 ? n - 1 : 0); // flyback: fire the far endpoint the walk flew back from
+  } else if (delta > 0) {
+    for (let k = 1; k <= n - 2; k++) {
+      const level = k * seg;
+      if (p < level && level <= c) fired.push(k); // ascending: interior levels in (p, c]
+    }
+  } else if (delta < 0) {
+    for (let k = n - 2; k >= 1; k--) {
+      const level = k * seg;
+      if (c <= level && level < p) fired.push(k); // descending: interior levels in [c, p)
+    }
   }
   return fired;
 }

@@ -124,17 +124,20 @@ declare const DEFAULT_TRIGGER_STEPS = 5;
 declare function triggerLevels(steps: number): number[];
 /**
  * Level indices (into `triggerLevels`) fired as the composed value moves `prevValue` →
- * `curValue`. Pass the composed `value` (post driver/direction) frame to frame:
+ * `curValue`. Pass the composed `value` (post driver/direction) frame to frame; the
+ * firing is direction-symmetric — it reads the value sequence, so it works for forward,
+ * reverse, and mirror alike:
  *
- * - Climbing: the INTERIOR levels (strictly between 0 and 1) crossed upward fire — the
- *   curve sets how fast the value reaches each, so non-linear curves fire them unevenly.
- * - The TOP level (1) fires on walk completion — a single-frame value drop larger than one
- *   level, i.e. the per-segment / loop reset. (The looping transport reaches ~0.999 but
- *   never exactly 1, so the peak must be caught at the reset, not by an upward crossing.)
- * - The floor level 0 never fires; it is the start of a walk, folded onto the prior top so
- *   the edge never double-triggers.
+ * - A smooth move fires the INTERIOR levels (strictly between 0 and 1) it crosses, in the
+ *   travel direction — the curve sets how fast the value reaches each, so non-linear
+ *   curves fire them unevenly.
+ * - A flyback (a single-frame jump larger than {@link TRIGGER_FLYBACK}) is the per-segment /
+ *   loop boundary. The walk reached the far endpoint it flew back from, so that endpoint
+ *   fires: a downward flyback (a forward walk that peaked) fires the top (n−1); an upward
+ *   flyback (a reverse walk that bottomed) fires the floor (0). The opposite endpoint is the
+ *   start of the next walk, folded onto this one so the boundary never double-triggers.
  *
- * Values are clamped to [0, 1] so spring overshoot can't perturb the top.
+ * Values are clamped to [0, 1] so spring overshoot can't perturb the endpoints.
  */
 declare function triggersCrossed(prevValue: number, curValue: number, steps: number): number[];
 /** A reasonable starting composition for demos / uncontrolled mounts. */
