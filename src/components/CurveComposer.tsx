@@ -10,18 +10,17 @@ import {
   buildSamplers,
   segmentSpan,
   segmentIndexAt,
-  boundaryAt,
   boundaries,
   splitSegment,
   cycleSegmentType,
-  setSegmentCurvature,
-  setSegmentSteepness,
   redistributeWeight,
   cycleDriverType,
-  setDriverCurvature,
-  setDriverSteepness,
   readComposition,
   triggersCrossed,
+  toLocalCoords,
+  pointerTarget,
+  applySegmentBodyDrag,
+  applyDriverBodyDrag,
   DEFAULT_TRIGGER_STEPS,
   DRAG_THRESHOLD,
   EDGE_HIT,
@@ -56,10 +55,8 @@ interface CurveComposerProps {
    * evenly-spaced trigger levels. The component itself draws no trigger UI — visualization
    * (e.g. markers on the output track) is the consumer's job; see `onTrigger`.
    *
-   * Trigger detection assumes forward traversal: interior levels fire as the value climbs
-   * and the top fires on each walk's reset. Under `direction: 'mirror' | 'reverse'` the
-   * descending leg does not fire interior triggers, so trigger mode is intended for
-   * `direction: 'forward'`.
+   * Trigger firing is direction-symmetric: interior levels fire in whichever direction the
+   * value travels, so it works under `direction: 'forward' | 'mirror' | 'reverse'`.
    */
   mode?: 'continuous' | 'trigger';
   /** Number of trigger levels in trigger mode (first at 0, last at 1, evenly spaced in value). Default 5. */
@@ -199,11 +196,11 @@ export function CurveComposer({
 
   // --- pointer interaction ---
 
+  const hitLayout = () => ({ totalH, driverY: driverRect ? driverRect.y : null });
+
   const localCoords = (clientX: number, clientY: number) => {
     const rect = svgRef.current!.getBoundingClientRect();
-    const xN = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    const py = ((clientY - rect.top) / rect.height) * totalH;
-    return { xN, py, rectW: rect.width };
+    return { ...toLocalCoords(clientX, clientY, rect, totalH), rectW: rect.width };
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -214,8 +211,8 @@ export function CurveComposer({
       // No active pointer (e.g. a synthetic event) — capture is a nicety, not required.
     }
 
-    // Driver lane?
-    if (driverRect && py >= driverRect.y) {
+    const target = pointerTarget(xN, py, segments, hitLayout(), EDGE_HIT / rectW);
+    if (target.kind === 'driver') {
       setDrag({
         kind: 'driver',
         startX: e.clientX,
@@ -224,25 +221,20 @@ export function CurveComposer({
         baseSteepness: driver!.steepness,
         moved: false,
       });
-      return;
+    } else if (target.kind === 'boundary') {
+      setDrag({ kind: 'boundary', index: target.index, startX: e.clientX, startY: e.clientY, base: composition, moved: false });
+    } else {
+      const seg = segments[target.index];
+      setDrag({
+        kind: 'segment',
+        index: target.index,
+        startX: e.clientX,
+        startY: e.clientY,
+        baseCurvature: seg?.curvature ?? 0,
+        baseSteepness: seg?.steepness ?? 0,
+        moved: false,
+      });
     }
-    // Main lane: boundary grab takes priority over the segment body.
-    const edgeHitNorm = EDGE_HIT / rectW;
-    const bIdx = boundaryAt(xN, segments, edgeHitNorm);
-    if (bIdx != null) {
-      setDrag({ kind: 'boundary', index: bIdx, startX: e.clientX, startY: e.clientY, base: composition, moved: false });
-      return;
-    }
-    const sIdx = segmentIndexAt(xN, segments);
-    setDrag({
-      kind: 'segment',
-      index: sIdx,
-      startX: e.clientX,
-      startY: e.clientY,
-      baseCurvature: segments[sIdx]?.curvature ?? 0,
-      baseSteepness: segments[sIdx]?.steepness ?? 0,
-      moved: false,
-    });
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -250,13 +242,8 @@ export function CurveComposer({
     if (!d) {
       // Hover affordance only.
       const { xN, py, rectW } = localCoords(e.clientX, e.clientY);
-      if (driverRect && py >= driverRect.y) {
-        setHover({ kind: 'driver', index: 0 });
-      } else {
-        const bIdx = boundaryAt(xN, segments, EDGE_HIT / rectW);
-        if (bIdx != null) setHover({ kind: 'boundary', index: bIdx });
-        else setHover({ kind: 'segment', index: segmentIndexAt(xN, segments) });
-      }
+      const t = pointerTarget(xN, py, segments, hitLayout(), EDGE_HIT / rectW);
+      setHover(t.kind === 'driver' ? { kind: 'driver', index: 0 } : { kind: t.kind, index: t.index });
       return;
     }
 
@@ -274,17 +261,15 @@ export function CurveComposer({
       if (!d.moved) setDrag({ ...d, moved: true });
     } else if (d.kind === 'segment') {
       // Horizontal → energy bias; vertical (up = more) → steepness.
-      const dCurv = (e.clientX - d.startX) / (rectW * 0.6);
-      const dSteep = -(e.clientY - d.startY) / (rectH * 0.6);
-      let next = setSegmentCurvature(composition, d.index, d.baseCurvature + dCurv);
-      next = setSegmentSteepness(next, d.index, d.baseSteepness + dSteep);
+      const dxFrac = (e.clientX - d.startX) / rectW;
+      const dyFrac = (e.clientY - d.startY) / rectH;
+      const next = applySegmentBodyDrag(composition, d.index, d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
       onSegmentsChange?.(next.segments);
       if (!d.moved) setDrag({ ...d, moved: true });
     } else {
-      const dCurv = (e.clientX - d.startX) / (rectW * 0.6);
-      const dSteep = -(e.clientY - d.startY) / (rectH * 0.6);
-      let next = setDriverCurvature(composition, d.baseCurvature + dCurv);
-      next = setDriverSteepness(next, d.baseSteepness + dSteep);
+      const dxFrac = (e.clientX - d.startX) / rectW;
+      const dyFrac = (e.clientY - d.startY) / rectH;
+      const next = applyDriverBodyDrag(composition, d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
       if (next.driver) onDriverChange?.(next.driver);
       if (!d.moved) setDrag({ ...d, moved: true });
     }

@@ -22,6 +22,7 @@ var vue_exports = {};
 __export(vue_exports, {
   ButtonGroup: () => ButtonGroup,
   ColorControl: () => ColorControl,
+  CurveComposer: () => CurveComposer,
   DialRoot: () => DialRoot,
   DialStore: () => DialStore,
   EasingVisualization: () => EasingVisualization,
@@ -3737,10 +3738,644 @@ var WaveformVisualization = (0, import_vue21.defineComponent)({
     };
   }
 });
+
+// src/vue/components/CurveComposer.ts
+var import_vue22 = require("vue");
+
+// src/curve-composer-core.ts
+var CURVE_CYCLE = ["linear", "easeIn", "easeOut", "easeInOut", "spring"];
+var easingPresets = {
+  linear: [0, 0, 1, 1],
+  easeIn: [0.42, 0, 1, 1],
+  easeOut: [0, 0, 0.58, 1],
+  easeInOut: [0.42, 0, 0.58, 1]
+};
+var DRAG_THRESHOLD2 = 3;
+var EDGE_HIT2 = 6;
+var CURVE_MIN_WEIGHT_FRAC = 0.06;
+var lerp = (a, b, t) => a + (b - a) * t;
+var clamp01 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
+var clampBipolar = (v) => v < -1 ? -1 : v > 1 ? 1 : v;
+var SKEW_MAX = 0.45;
+function steepnessGain(steepness) {
+  const v = clampBipolar(steepness);
+  return v >= 0 ? 1 + v * 1.3 : 1 + v;
+}
+function deriveEase(type, curvature, steepness = 0) {
+  const base = type === "spring" ? easingPresets.linear : easingPresets[type];
+  const k = steepnessGain(steepness);
+  const x1 = base[0] * k;
+  const x2 = 1 + (base[2] - 1) * k;
+  const shift = clampBipolar(curvature) * SKEW_MAX;
+  return [clamp01(x1 + shift), base[1], clamp01(x2 + shift), base[3]];
+}
+function bezierAxis(p1, p2, s) {
+  const u = 1 - s;
+  return 3 * u * u * s * p1 + 3 * u * s * s * p2 + s * s * s;
+}
+function bezierAxisDeriv(p1, p2, s) {
+  const u = 1 - s;
+  return 3 * u * u * p1 + 6 * u * s * (p2 - p1) + 3 * s * s * (1 - p2);
+}
+function bezierY(ease, x) {
+  const tx = clamp01(x);
+  let s = tx;
+  for (let i = 0; i < 6; i++) {
+    const xs = bezierAxis(ease[0], ease[2], s) - tx;
+    if (Math.abs(xs) < 1e-5) break;
+    const d = bezierAxisDeriv(ease[0], ease[2], s);
+    if (Math.abs(d) < 1e-6) break;
+    s = clamp01(s - xs / d);
+  }
+  return bezierAxis(ease[1], ease[3], s);
+}
+var SPRING_SAMPLES = 72;
+function springPoints(curvature, steepness = 0) {
+  const visualDuration = 1;
+  const bounce = clamp01((clampBipolar(curvature) + 1) / 2) * 0.6;
+  const mass = 1;
+  let stiffness = 2 * Math.PI / visualDuration;
+  stiffness = stiffness * stiffness;
+  stiffness *= Math.max(0.2, 1 + clampBipolar(steepness) * 0.9);
+  const dampingRatio = 1 - bounce;
+  const damping = 2 * dampingRatio * Math.sqrt(stiffness * mass);
+  const raw = [];
+  const steps = SPRING_SAMPLES;
+  const dt = visualDuration / steps;
+  let position = 0;
+  let velocity = 0;
+  for (let i = 0; i <= steps; i++) {
+    raw.push(position);
+    const acceleration = (-stiffness * (position - 1) - damping * velocity) / mass;
+    velocity += acceleration * dt;
+    position += velocity * dt;
+  }
+  return raw;
+}
+function interp(points, t) {
+  const x = clamp01(t) * (points.length - 1);
+  const i = Math.floor(x);
+  if (i >= points.length - 1) return points[points.length - 1];
+  return lerp(points[i], points[i + 1], x - i);
+}
+function buildSampler(curve) {
+  if (curve.type === "spring") {
+    const pts = springPoints(curve.curvature, curve.steepness);
+    return (t) => interp(pts, t);
+  }
+  const ease = deriveEase(curve.type, curve.curvature, curve.steepness);
+  return (t) => bezierY(ease, t);
+}
+function boundaries(segments) {
+  const total = totalWeight(segments);
+  const out = [];
+  let acc = 0;
+  for (let i = 0; i < segments.length - 1; i++) {
+    acc += segments[i].weight;
+    out.push(acc / total);
+  }
+  return out;
+}
+function totalWeight(segments) {
+  let t = 0;
+  for (const s of segments) t += Math.max(0, s.weight);
+  return t || 1;
+}
+function segmentSpan(segments, index) {
+  const total = totalWeight(segments);
+  let acc = 0;
+  for (let i = 0; i < index; i++) acc += segments[i].weight;
+  return [acc / total, (acc + segments[index].weight) / total];
+}
+function segmentIndexAt(xNorm, segments) {
+  const total = totalWeight(segments);
+  const x = clamp01(xNorm) * total;
+  let acc = 0;
+  for (let i = 0; i < segments.length; i++) {
+    acc += segments[i].weight;
+    if (x <= acc) return i;
+  }
+  return segments.length - 1;
+}
+function boundaryAt(xNorm, segments, edgeHitNorm) {
+  if (segments.length < 2) return null;
+  const bs = boundaries(segments);
+  let best = null;
+  let bestDist = edgeHitNorm;
+  for (let i = 0; i < bs.length; i++) {
+    const d = Math.abs(xNorm - bs[i]);
+    if (d <= bestDist) {
+      bestDist = d;
+      best = i;
+    }
+  }
+  return best;
+}
+function cloneSegments(comp, segments) {
+  return { ...comp, segments };
+}
+function splitSegment(comp, index) {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const next = comp.segments.slice();
+  next.splice(index + 1, 0, { ...src });
+  return cloneSegments(comp, next.map((s) => ({ ...s, weight: 1 })));
+}
+function cycleSegmentType(comp, index) {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(src.type) + 1) % CURVE_CYCLE.length];
+  const next = comp.segments.slice();
+  next[index] = { ...src, type, curvature: 0, steepness: 0 };
+  return cloneSegments(comp, next);
+}
+function setSegmentCurvature(comp, index, curvature) {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const next = comp.segments.slice();
+  next[index] = { ...src, curvature: clampBipolar(curvature) };
+  return cloneSegments(comp, next);
+}
+function setSegmentSteepness(comp, index, steepness) {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const next = comp.segments.slice();
+  next[index] = { ...src, steepness: clampBipolar(steepness) };
+  return cloneSegments(comp, next);
+}
+function redistributeWeight(comp, boundaryIndex, deltaFrac) {
+  const segs = comp.segments;
+  const i = boundaryIndex;
+  if (i < 0 || i >= segs.length - 1) return comp;
+  const total = totalWeight(segs);
+  const span = segs[i].weight + segs[i + 1].weight;
+  const minW = CURVE_MIN_WEIGHT_FRAC * total;
+  let wi = segs[i].weight + deltaFrac * total;
+  wi = Math.max(minW, Math.min(span - minW, wi));
+  const next = segs.slice();
+  next[i] = { ...segs[i], weight: wi };
+  next[i + 1] = { ...segs[i + 1], weight: span - wi };
+  return cloneSegments(comp, next);
+}
+function cycleDriverType(comp) {
+  if (!comp.driver) return comp;
+  const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(comp.driver.type) + 1) % CURVE_CYCLE.length];
+  return { ...comp, driver: { ...comp.driver, type, curvature: 0, steepness: 0 } };
+}
+function setDriverCurvature(comp, curvature) {
+  if (!comp.driver) return comp;
+  return { ...comp, driver: { ...comp.driver, curvature: clampBipolar(curvature) } };
+}
+function setDriverSteepness(comp, steepness) {
+  if (!comp.driver) return comp;
+  return { ...comp, driver: { ...comp.driver, steepness: clampBipolar(steepness) } };
+}
+var DRAG_ENERGY_GAIN = 0.6;
+var DRAG_STEEP_GAIN = 0.6;
+function toLocalCoords(clientX, clientY, rect, totalH) {
+  const xN = clamp01((clientX - rect.left) / (rect.width || 1));
+  const py = (clientY - rect.top) / (rect.height || 1) * totalH;
+  return { xN, py };
+}
+function pointerTarget(xN, py, segments, layout, edgeHitNorm) {
+  if (layout.driverY != null && py >= layout.driverY) return { kind: "driver" };
+  const b = boundaryAt(xN, segments, edgeHitNorm);
+  if (b != null) return { kind: "boundary", index: b };
+  return { kind: "segment", index: segmentIndexAt(xN, segments) };
+}
+function applySegmentBodyDrag(comp, index, baseCurvature, baseSteepness, dxFrac, dyFrac) {
+  const next = setSegmentCurvature(comp, index, baseCurvature + dxFrac / DRAG_ENERGY_GAIN);
+  return setSegmentSteepness(next, index, baseSteepness - dyFrac / DRAG_STEEP_GAIN);
+}
+function applyDriverBodyDrag(comp, baseCurvature, baseSteepness, dxFrac, dyFrac) {
+  const next = setDriverCurvature(comp, baseCurvature + dxFrac / DRAG_ENERGY_GAIN);
+  return setDriverSteepness(next, baseSteepness - dyFrac / DRAG_STEEP_GAIN);
+}
+function buildSamplers(comp) {
+  return {
+    segments: comp.segments.map(buildSampler),
+    driver: comp.driver ? buildSampler(comp.driver) : null
+  };
+}
+function directionPhase(u, dir) {
+  const x = clamp01(u);
+  if (dir === "reverse") return 1 - x;
+  if (dir === "mirror") return 1 - Math.abs(1 - 2 * x);
+  return x;
+}
+function readComposition(comp, u, s) {
+  const inputPhase = directionPhase(u, comp.direction);
+  const warpedPhase = s.driver ? clamp01(s.driver(inputPhase)) : inputPhase;
+  const segIndex = segmentIndexAt(warpedPhase, comp.segments);
+  const [a, b] = segmentSpan(comp.segments, segIndex);
+  const localT = b > a ? (warpedPhase - a) / (b - a) : 0;
+  const value = s.segments[segIndex] ? s.segments[segIndex](localT) : 0;
+  return { inputPhase, warpedPhase, value, segIndex, localT };
+}
+var DEFAULT_TRIGGER_STEPS = 5;
+var TRIGGER_FLYBACK = 0.5;
+function triggersCrossed(prevValue, curValue, steps) {
+  const n = Math.max(2, Math.floor(steps));
+  const seg = 1 / (n - 1);
+  const p = clamp01(prevValue);
+  const c = clamp01(curValue);
+  const delta = c - p;
+  const fired = [];
+  if (Math.abs(delta) > TRIGGER_FLYBACK) {
+    fired.push(delta < 0 ? n - 1 : 0);
+  } else if (delta > 0) {
+    for (let k = 1; k <= n - 2; k++) {
+      const level = k * seg;
+      if (p < level && level <= c) fired.push(k);
+    }
+  } else if (delta < 0) {
+    for (let k = n - 2; k >= 1; k--) {
+      const level = k * seg;
+      if (c <= level && level < p) fired.push(k);
+    }
+  }
+  return fired;
+}
+
+// src/vue/components/CurveComposer.ts
+var GAP = 10;
+var PAD_FRAC = 0.18;
+var DRIVER_FRAC = 0.55;
+var CurveComposer = (0, import_vue22.defineComponent)({
+  name: "DialKitCurveComposer",
+  props: {
+    /** The curve series (controlled). */
+    segments: { type: Array, required: true },
+    /** The stacked driver curve, or null for none (adds a second lane below). */
+    driver: { type: Object, default: null },
+    /** Playback direction for the demo playhead (forward / mirror / reverse). */
+    direction: { type: String, default: "forward" },
+    /** Commit a changed series — fired live during boundary/curvature drags and on click-cycle. */
+    onSegmentsChange: { type: Function, default: void 0 },
+    /** Commit a changed driver — fired live during driver drags and on click-cycle. */
+    onDriverChange: { type: Function, default: void 0 },
+    /** Raw transport phase 0..1, polled every frame for a smooth playhead (no parent re-render). */
+    getPhase: { type: Function, default: void 0 },
+    /** Static transport phase 0..1 (used when `getPhase` is absent). */
+    phase: { type: Number, default: 0 },
+    /** Output mode. 'continuous' reads the composed value each frame; 'trigger' emits via onTrigger. */
+    mode: { type: String, default: "continuous" },
+    /** Number of trigger levels in trigger mode. */
+    triggerSteps: { type: Number, default: DEFAULT_TRIGGER_STEPS },
+    /** Fired in trigger mode when the value crosses a trigger level. */
+    onTrigger: { type: Function, default: void 0 },
+    /** Curve stroke color. Defaults to the theme text color. */
+    curveColor: { type: String, default: void 0 },
+    /** Playhead / marker color. Defaults to the theme text color. */
+    playheadColor: { type: String, default: void 0 },
+    /** Faint vertical reference grid behind each lane. */
+    grid: { type: Boolean, default: false },
+    gridSubdivisions: { type: Number, default: 8 },
+    width: { type: Number, default: 256 },
+    /** Height of the main lane; the driver lane adds height below it. */
+    height: { type: Number, default: 140 }
+  },
+  setup(props) {
+    const svgRef = (0, import_vue22.ref)(null);
+    const seriesPlayheadRef = (0, import_vue22.ref)(null);
+    const seriesDotRef = (0, import_vue22.ref)(null);
+    const driverPlayheadRef = (0, import_vue22.ref)(null);
+    const drag = (0, import_vue22.ref)(null);
+    const hover = (0, import_vue22.ref)(null);
+    const W = (0, import_vue22.computed)(() => props.width);
+    const laneH = (0, import_vue22.computed)(() => props.height);
+    const driverH = (0, import_vue22.computed)(() => props.driver ? Math.round(props.height * DRIVER_FRAC) : 0);
+    const totalH = (0, import_vue22.computed)(() => laneH.value + (props.driver ? GAP + driverH.value : 0));
+    const mainRect = (0, import_vue22.computed)(() => ({ x: 0, y: 0, w: W.value, h: laneH.value }));
+    const driverRect = (0, import_vue22.computed)(
+      () => props.driver ? { x: 0, y: laneH.value + GAP, w: W.value, h: driverH.value } : null
+    );
+    const composition = (0, import_vue22.computed)(() => ({
+      segments: props.segments,
+      driver: props.driver,
+      direction: props.direction
+    }));
+    const samplers = (0, import_vue22.computed)(() => buildSamplers(composition.value));
+    const padY = (r) => r.h * PAD_FRAC;
+    const mapY = (r, ny) => {
+      const top = r.y + padY(r);
+      const bot = r.y + r.h - padY(r);
+      return bot - ny * (bot - top);
+    };
+    let raf = 0;
+    let prevTrigValue = Number.NaN;
+    let armW = Number.NaN;
+    let armLaneH = Number.NaN;
+    let armDriverH = Number.NaN;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      if (W.value !== armW || laneH.value !== armLaneH || driverH.value !== armDriverH) {
+        prevTrigValue = Number.NaN;
+        armW = W.value;
+        armLaneH = laneH.value;
+        armDriverH = driverH.value;
+      }
+      const c = composition.value;
+      const s = samplers.value;
+      const u = props.getPhase ? props.getPhase() : props.phase;
+      const read = readComposition(c, u, s);
+      const sx = read.warpedPhase * W.value;
+      if (seriesPlayheadRef.value) {
+        seriesPlayheadRef.value.setAttribute("x1", String(sx));
+        seriesPlayheadRef.value.setAttribute("x2", String(sx));
+      }
+      if (seriesDotRef.value) {
+        seriesDotRef.value.setAttribute("cx", String(sx));
+        seriesDotRef.value.setAttribute("cy", String(mapY(mainRect.value, read.value)));
+      }
+      if (driverPlayheadRef.value) {
+        const dx = read.inputPhase * W.value;
+        driverPlayheadRef.value.setAttribute("x1", String(dx));
+        driverPlayheadRef.value.setAttribute("x2", String(dx));
+      }
+      if (props.mode === "trigger") {
+        const prev = prevTrigValue;
+        if (!Number.isNaN(prev)) {
+          for (const idx of triggersCrossed(prev, read.value, props.triggerSteps)) props.onTrigger?.(idx);
+        }
+        prevTrigValue = read.value;
+      } else {
+        prevTrigValue = Number.NaN;
+      }
+    };
+    (0, import_vue22.onMounted)(() => {
+      raf = requestAnimationFrame(tick);
+    });
+    (0, import_vue22.onBeforeUnmount)(() => cancelAnimationFrame(raf));
+    const hitLayout = () => ({ totalH: totalH.value, driverY: driverRect.value ? driverRect.value.y : null });
+    const localCoords = (clientX, clientY) => {
+      const rect = svgRef.value.getBoundingClientRect();
+      return { ...toLocalCoords(clientX, clientY, rect, totalH.value), rectW: rect.width };
+    };
+    const onPointerDown = (e) => {
+      const { xN, py, rectW } = localCoords(e.clientX, e.clientY);
+      try {
+        svgRef.value?.setPointerCapture(e.pointerId);
+      } catch {
+      }
+      const target = pointerTarget(xN, py, props.segments, hitLayout(), EDGE_HIT2 / rectW);
+      if (target.kind === "driver") {
+        drag.value = {
+          kind: "driver",
+          startX: e.clientX,
+          startY: e.clientY,
+          baseCurvature: props.driver.curvature,
+          baseSteepness: props.driver.steepness,
+          moved: false
+        };
+      } else if (target.kind === "boundary") {
+        drag.value = {
+          kind: "boundary",
+          index: target.index,
+          startX: e.clientX,
+          startY: e.clientY,
+          base: composition.value,
+          moved: false
+        };
+      } else {
+        const seg = props.segments[target.index];
+        drag.value = {
+          kind: "segment",
+          index: target.index,
+          startX: e.clientX,
+          startY: e.clientY,
+          baseCurvature: seg?.curvature ?? 0,
+          baseSteepness: seg?.steepness ?? 0,
+          moved: false
+        };
+      }
+    };
+    const onPointerMove = (e) => {
+      const d = drag.value;
+      if (!d) {
+        const { xN, py, rectW: rectW2 } = localCoords(e.clientX, e.clientY);
+        const t = pointerTarget(xN, py, props.segments, hitLayout(), EDGE_HIT2 / rectW2);
+        hover.value = t.kind === "driver" ? { kind: "driver", index: 0 } : { kind: t.kind, index: t.index };
+        return;
+      }
+      const svgRect = svgRef.value.getBoundingClientRect();
+      const rectW = svgRect.width;
+      const rectH = svgRect.height;
+      const moved = Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > DRAG_THRESHOLD2;
+      if (!moved) return;
+      if (d.kind === "boundary") {
+        const deltaFrac = (e.clientX - d.startX) / rectW;
+        const next = redistributeWeight(d.base, d.index, deltaFrac);
+        props.onSegmentsChange?.(next.segments);
+        if (!d.moved) drag.value = { ...d, moved: true };
+      } else if (d.kind === "segment") {
+        const dxFrac = (e.clientX - d.startX) / rectW;
+        const dyFrac = (e.clientY - d.startY) / rectH;
+        const next = applySegmentBodyDrag(composition.value, d.index, d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
+        props.onSegmentsChange?.(next.segments);
+        if (!d.moved) drag.value = { ...d, moved: true };
+      } else {
+        const dxFrac = (e.clientX - d.startX) / rectW;
+        const dyFrac = (e.clientY - d.startY) / rectH;
+        const next = applyDriverBodyDrag(composition.value, d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
+        if (next.driver) props.onDriverChange?.(next.driver);
+        if (!d.moved) drag.value = { ...d, moved: true };
+      }
+    };
+    const onPointerUp = (e) => {
+      const d = drag.value;
+      drag.value = null;
+      try {
+        svgRef.value?.releasePointerCapture(e.pointerId);
+      } catch {
+      }
+      if (!d || d.moved) return;
+      if (d.kind === "driver") {
+        const next = cycleDriverType(composition.value);
+        if (next.driver) props.onDriverChange?.(next.driver);
+      } else if (d.kind === "segment") {
+        props.onSegmentsChange?.(cycleSegmentType(composition.value, d.index).segments);
+      }
+    };
+    const onPointerCancel = (e) => {
+      drag.value = null;
+      try {
+        svgRef.value?.releasePointerCapture(e.pointerId);
+      } catch {
+      }
+    };
+    const onPointerLeave = () => {
+      if (!drag.value) hover.value = null;
+    };
+    const onDoubleClick = (e) => {
+      const { xN, py } = localCoords(e.clientX, e.clientY);
+      if (driverRect.value && py >= driverRect.value.y) return;
+      props.onSegmentsChange?.(splitSegment(composition.value, segmentIndexAt(xN, props.segments)).segments);
+    };
+    const curvePath = (curve, rect, span) => {
+      const x = (nx) => (span[0] + nx * (span[1] - span[0])) * W.value;
+      const y = (ny) => mapY(rect, ny);
+      if (curve.type === "spring") {
+        const sampler = buildSampler(curve);
+        const n = 40;
+        let d = `M ${x(0)} ${y(sampler(0))}`;
+        for (let i = 1; i <= n; i++) {
+          const t = i / n;
+          d += ` L ${x(t)} ${y(sampler(t))}`;
+        }
+        return d;
+      }
+      const e = deriveEase(curve.type, curve.curvature, curve.steepness);
+      return `M ${x(0)} ${y(0)} C ${x(e[0])} ${y(e[1])}, ${x(e[2])} ${y(e[3])}, ${x(1)} ${y(1)}`;
+    };
+    const renderLaneGrid = (rect) => {
+      if (!props.grid) return [];
+      const n = Math.max(1, Math.round(props.gridSubdivisions));
+      const lines = [];
+      for (let i = 1; i < n; i++) {
+        const gx = i / n * W.value;
+        lines.push(
+          (0, import_vue22.h)("line", { key: `g-${rect.y}-${i}`, class: "dialkit-cc-grid", x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h })
+        );
+      }
+      return lines;
+    };
+    const renderLaneBg = (rect, key) => (0, import_vue22.h)("rect", { key, class: "dialkit-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 });
+    const diagonal = (rect, span, key) => (0, import_vue22.h)("line", {
+      key,
+      class: "dialkit-cc-diagonal",
+      x1: span[0] * W.value,
+      y1: mapY(rect, 0),
+      x2: span[1] * W.value,
+      y2: mapY(rect, 1)
+    });
+    return () => {
+      const main = mainRect.value;
+      const dr = driverRect.value;
+      const interior = boundaries(props.segments);
+      const activeKind = drag.value?.kind ?? hover.value?.kind;
+      const cursor = activeKind === "boundary" ? "ew-resize" : activeKind === "segment" || activeKind === "driver" ? "move" : "default";
+      const children = [];
+      children.push(renderLaneBg(main, "main-bg"));
+      children.push(renderLaneGrid(main));
+      if (hover.value?.kind === "segment" && !drag.value) {
+        const span = segmentSpan(props.segments, hover.value.index);
+        children.push(
+          (0, import_vue22.h)("rect", {
+            class: "dialkit-cc-seg-hover",
+            x: span[0] * W.value,
+            y: main.y,
+            width: (span[1] - span[0]) * W.value,
+            height: main.h,
+            rx: 8
+          })
+        );
+      }
+      children.push(
+        props.segments.map((seg, i) => {
+          const span = segmentSpan(props.segments, i);
+          return (0, import_vue22.h)("g", { key: `seg-${i}` }, [
+            diagonal(main, span, `diag-${i}`),
+            (0, import_vue22.h)("path", { class: "dialkit-cc-curve", d: curvePath(seg, main, span) }),
+            (0, import_vue22.h)(
+              "text",
+              { class: "dialkit-cc-label", x: (span[0] + span[1]) * 0.5 * W.value, y: main.y + 13 },
+              seg.type
+            )
+          ]);
+        })
+      );
+      children.push(
+        interior.map(
+          (bx, i) => (0, import_vue22.h)("line", {
+            key: `b-${i}`,
+            class: "dialkit-cc-boundary",
+            "data-active": String(
+              hover.value?.kind === "boundary" && hover.value.index === i || drag.value?.kind === "boundary" && drag.value.index === i
+            ),
+            x1: bx * W.value,
+            y1: main.y,
+            x2: bx * W.value,
+            y2: main.y + main.h
+          })
+        )
+      );
+      children.push(
+        (0, import_vue22.h)("line", {
+          ref: seriesPlayheadRef,
+          class: "dialkit-cc-playhead",
+          x1: 0,
+          y1: main.y,
+          x2: 0,
+          y2: main.y + main.h,
+          style: { stroke: props.playheadColor }
+        })
+      );
+      children.push(
+        (0, import_vue22.h)("circle", {
+          ref: seriesDotRef,
+          class: "dialkit-cc-dot",
+          cx: 0,
+          cy: mapY(main, 0),
+          r: 3,
+          style: { fill: props.playheadColor }
+        })
+      );
+      if (dr) {
+        children.push(renderLaneBg(dr, "driver-bg"));
+        children.push(renderLaneGrid(dr));
+        if (hover.value?.kind === "driver" && !drag.value) {
+          children.push(
+            (0, import_vue22.h)("rect", { class: "dialkit-cc-seg-hover", x: 0, y: dr.y, width: W.value, height: dr.h, rx: 8 })
+          );
+        }
+        children.push(diagonal(dr, [0, 1], "driver-diag"));
+        children.push(
+          (0, import_vue22.h)("path", { class: "dialkit-cc-curve dialkit-cc-curve-driver", d: curvePath(props.driver, dr, [0, 1]) })
+        );
+        children.push(
+          (0, import_vue22.h)("text", { class: "dialkit-cc-label", x: W.value * 0.5, y: dr.y + 13 }, `driver \xB7 ${props.driver.type}`)
+        );
+        children.push(
+          (0, import_vue22.h)("line", {
+            ref: driverPlayheadRef,
+            class: "dialkit-cc-playhead",
+            x1: 0,
+            y1: dr.y,
+            x2: 0,
+            y2: dr.y + dr.h,
+            style: { stroke: props.playheadColor }
+          })
+        );
+      }
+      return (0, import_vue22.h)("div", { class: "dialkit-cc-wrap", style: { width: `${W.value}px` } }, [
+        (0, import_vue22.h)(
+          "svg",
+          {
+            ref: svgRef,
+            class: "dialkit-cc",
+            viewBox: `0 0 ${W.value} ${totalH.value}`,
+            width: W.value,
+            height: totalH.value,
+            style: { width: `${W.value}px`, height: `${totalH.value}px`, cursor, color: props.curveColor },
+            onPointerdown: onPointerDown,
+            onPointermove: onPointerMove,
+            onPointerup: onPointerUp,
+            onPointercancel: onPointerCancel,
+            onPointerleave: onPointerLeave,
+            onDblclick: onDoubleClick
+          },
+          children
+        )
+      ]);
+    };
+  }
+});
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   ButtonGroup,
   ColorControl,
+  CurveComposer,
   DialRoot,
   DialStore,
   EasingVisualization,

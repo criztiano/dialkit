@@ -542,8 +542,6 @@ interface CompositionSamplers {
     driver: Sampler | null;
 }
 declare function buildSamplers(comp: CurveComposition): CompositionSamplers;
-/** Apply playback direction to the raw loop phase u (0..1). */
-declare function directionPhase(u: number, dir: DriverDirection): number;
 interface CompositionRead {
     /** Read position after direction, before the driver warps it (0..1) — the driver lane marker. */
     inputPhase: number;
@@ -576,17 +574,20 @@ declare const DEFAULT_TRIGGER_STEPS = 5;
 declare function triggerLevels(steps: number): number[];
 /**
  * Level indices (into `triggerLevels`) fired as the composed value moves `prevValue` →
- * `curValue`. Pass the composed `value` (post driver/direction) frame to frame:
+ * `curValue`. Pass the composed `value` (post driver/direction) frame to frame; the
+ * firing is direction-symmetric — it reads the value sequence, so it works for forward,
+ * reverse, and mirror alike:
  *
- * - Climbing: the INTERIOR levels (strictly between 0 and 1) crossed upward fire — the
- *   curve sets how fast the value reaches each, so non-linear curves fire them unevenly.
- * - The TOP level (1) fires on walk completion — a single-frame value drop larger than one
- *   level, i.e. the per-segment / loop reset. (The looping transport reaches ~0.999 but
- *   never exactly 1, so the peak must be caught at the reset, not by an upward crossing.)
- * - The floor level 0 never fires; it is the start of a walk, folded onto the prior top so
- *   the edge never double-triggers.
+ * - A smooth move fires the INTERIOR levels (strictly between 0 and 1) it crosses, in the
+ *   travel direction — the curve sets how fast the value reaches each, so non-linear
+ *   curves fire them unevenly.
+ * - A flyback (a single-frame jump larger than {@link TRIGGER_FLYBACK}) is the per-segment /
+ *   loop boundary. The walk reached the far endpoint it flew back from, so that endpoint
+ *   fires: a downward flyback (a forward walk that peaked) fires the top (n−1); an upward
+ *   flyback (a reverse walk that bottomed) fires the floor (0). The opposite endpoint is the
+ *   start of the next walk, folded onto this one so the boundary never double-triggers.
  *
- * Values are clamped to [0, 1] so spring overshoot can't perturb the top.
+ * Values are clamped to [0, 1] so spring overshoot can't perturb the endpoints.
  */
 declare function triggersCrossed(prevValue: number, curValue: number, steps: number): number[];
 /** A reasonable starting composition for demos / uncontrolled mounts. */
@@ -613,10 +614,8 @@ interface CurveComposerProps {
      * evenly-spaced trigger levels. The component itself draws no trigger UI — visualization
      * (e.g. markers on the output track) is the consumer's job; see `onTrigger`.
      *
-     * Trigger detection assumes forward traversal: interior levels fire as the value climbs
-     * and the top fires on each walk's reset. Under `direction: 'mirror' | 'reverse'` the
-     * descending leg does not fire interior triggers, so trigger mode is intended for
-     * `direction: 'forward'`.
+     * Trigger firing is direction-symmetric: interior levels fire in whichever direction the
+     * value travels, so it works under `direction: 'forward' | 'mirror' | 'reverse'`.
      */
     mode?: 'continuous' | 'trigger';
     /** Number of trigger levels in trigger mode (first at 0, last at 1, evenly spaced in value). Default 5. */
@@ -725,4 +724,4 @@ interface ShortcutsMenuProps {
 }
 declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react_jsx_runtime.JSX.Element | null;
 
-export { type ActionConfig, ButtonGroup, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, addDriver, buildSamplers, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, directionPhase, normalizeListItems, parseListItemSchema, readComposition, redistributeWeight, removeDriver, removeSegment, setDriverCurvature, setDriverSteepness, setSegmentCurvature, setSegmentSteepness, splitSegment, triggerLevels, triggersCrossed, useDialKit };
+export { type ActionConfig, ButtonGroup, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, addDriver, buildSamplers, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, normalizeListItems, parseListItemSchema, readComposition, redistributeWeight, removeDriver, removeSegment, setDriverCurvature, setDriverSteepness, setSegmentCurvature, setSegmentSteepness, splitSegment, triggerLevels, triggersCrossed, useDialKit };

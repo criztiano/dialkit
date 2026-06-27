@@ -18,6 +18,7 @@ export { default as SpringVisualization } from './components/SpringVisualization
 export { default as TransitionControl } from './components/TransitionControl.svelte';
 export { default as EasingVisualization } from './components/EasingVisualization.svelte';
 export { default as WaveformVisualization } from './components/WaveformVisualization.svelte';
+export { default as CurveComposer } from './components/CurveComposer.svelte';
 export { default as TextControl } from './components/TextControl.svelte';
 export { default as SelectControl } from './components/SelectControl.svelte';
 export { default as ColorControl } from './components/ColorControl.svelte';

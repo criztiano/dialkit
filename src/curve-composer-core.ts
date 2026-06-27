@@ -325,6 +325,94 @@ export function setDriverSteepness(comp: CurveComposition, steepness: number): C
   return { ...comp, driver: { ...comp.driver, steepness: clampBipolar(steepness) } };
 }
 
+// --- pointer interaction (shared by every framework wrapper) ---
+//
+// The wrappers own only event binding, pointer capture, the in-progress drag state, and
+// the SVG/DOM writes. The hit-testing and the drag→state math live here so all four ports
+// behave identically. A full ±1 energy / steepness sweep spans this fraction of the lane.
+export const DRAG_ENERGY_GAIN = 0.6;
+export const DRAG_STEEP_GAIN = 0.6;
+
+/** The minimal rectangle a wrapper reads from `getBoundingClientRect()`. */
+export interface ClientRectLike {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/** Which lane regions exist, for hit-testing in viewBox (`py`) units. */
+export interface ComposerHitLayout {
+  /** Total composite height (the viewBox height). */
+  totalH: number;
+  /** y where the driver lane begins, or null when there is no driver lane. */
+  driverY: number | null;
+}
+
+/** A resolved press target inside the composer. */
+export type PointerTarget =
+  | { kind: 'driver' }
+  | { kind: 'boundary'; index: number }
+  | { kind: 'segment'; index: number };
+
+/** Normalize a client point to xN (0..1 across the width) + py (0..totalH down the height). */
+export function toLocalCoords(
+  clientX: number,
+  clientY: number,
+  rect: ClientRectLike,
+  totalH: number
+): { xN: number; py: number } {
+  const xN = clamp01((clientX - rect.left) / (rect.width || 1));
+  const py = ((clientY - rect.top) / (rect.height || 1)) * totalH;
+  return { xN, py };
+}
+
+/**
+ * Resolve what a press at (xN, py) targets: the driver lane, an interior boundary (when
+ * within `edgeHitNorm` of one — this takes priority over the body), else the segment body.
+ */
+export function pointerTarget(
+  xN: number,
+  py: number,
+  segments: CurveSegment[],
+  layout: ComposerHitLayout,
+  edgeHitNorm: number
+): PointerTarget {
+  if (layout.driverY != null && py >= layout.driverY) return { kind: 'driver' };
+  const b = boundaryAt(xN, segments, edgeHitNorm);
+  if (b != null) return { kind: 'boundary', index: b };
+  return { kind: 'segment', index: segmentIndexAt(xN, segments) };
+}
+
+/**
+ * Apply a segment body drag from its press-time baseline: horizontal fraction → energy
+ * bias, vertical fraction (up = more) → steepness. `dxFrac`/`dyFrac` are pixel deltas
+ * divided by the lane width/height.
+ */
+export function applySegmentBodyDrag(
+  comp: CurveComposition,
+  index: number,
+  baseCurvature: number,
+  baseSteepness: number,
+  dxFrac: number,
+  dyFrac: number
+): CurveComposition {
+  const next = setSegmentCurvature(comp, index, baseCurvature + dxFrac / DRAG_ENERGY_GAIN);
+  return setSegmentSteepness(next, index, baseSteepness - dyFrac / DRAG_STEEP_GAIN);
+}
+
+/** Driver-lane equivalent of {@link applySegmentBodyDrag}. */
+export function applyDriverBodyDrag(
+  comp: CurveComposition,
+  baseCurvature: number,
+  baseSteepness: number,
+  dxFrac: number,
+  dyFrac: number
+): CurveComposition {
+  const next = setDriverCurvature(comp, baseCurvature + dxFrac / DRAG_ENERGY_GAIN);
+  return setDriverSteepness(next, baseSteepness - dyFrac / DRAG_STEEP_GAIN);
+}
+
 // --- read pipeline (drives the demo transport + the playhead) ---
 
 export interface CompositionSamplers {
@@ -396,33 +484,45 @@ export function triggerLevels(steps: number): number[] {
   return out;
 }
 
+/** A single-frame value change this large is a segment/loop flyback, not a smooth crossing. */
+const TRIGGER_FLYBACK = 0.5;
+
 /**
  * Level indices (into `triggerLevels`) fired as the composed value moves `prevValue` →
- * `curValue`. Pass the composed `value` (post driver/direction) frame to frame:
+ * `curValue`. Pass the composed `value` (post driver/direction) frame to frame; the
+ * firing is direction-symmetric — it reads the value sequence, so it works for forward,
+ * reverse, and mirror alike:
  *
- * - Climbing: the INTERIOR levels (strictly between 0 and 1) crossed upward fire — the
- *   curve sets how fast the value reaches each, so non-linear curves fire them unevenly.
- * - The TOP level (1) fires on walk completion — a single-frame value drop larger than one
- *   level, i.e. the per-segment / loop reset. (The looping transport reaches ~0.999 but
- *   never exactly 1, so the peak must be caught at the reset, not by an upward crossing.)
- * - The floor level 0 never fires; it is the start of a walk, folded onto the prior top so
- *   the edge never double-triggers.
+ * - A smooth move fires the INTERIOR levels (strictly between 0 and 1) it crosses, in the
+ *   travel direction — the curve sets how fast the value reaches each, so non-linear
+ *   curves fire them unevenly.
+ * - A flyback (a single-frame jump larger than {@link TRIGGER_FLYBACK}) is the per-segment /
+ *   loop boundary. The walk reached the far endpoint it flew back from, so that endpoint
+ *   fires: a downward flyback (a forward walk that peaked) fires the top (n−1); an upward
+ *   flyback (a reverse walk that bottomed) fires the floor (0). The opposite endpoint is the
+ *   start of the next walk, folded onto this one so the boundary never double-triggers.
  *
- * Values are clamped to [0, 1] so spring overshoot can't perturb the top.
+ * Values are clamped to [0, 1] so spring overshoot can't perturb the endpoints.
  */
 export function triggersCrossed(prevValue: number, curValue: number, steps: number): number[] {
   const n = Math.max(2, Math.floor(steps));
   const seg = 1 / (n - 1); // value spacing between adjacent levels
   const p = clamp01(prevValue);
   const c = clamp01(curValue);
+  const delta = c - p;
   const fired: number[] = [];
-  if (c > p) {
-    const EPS = 1e-9;
-    const startK = Math.floor(p / seg + EPS) + 1; // first level strictly above prevValue
-    const endK = Math.floor(c / seg + EPS); // last level at or below curValue
-    for (let k = startK; k <= endK; k++) if (k >= 1 && k <= n - 2) fired.push(k); // interior only
-  } else if (p - c > seg) {
-    fired.push(n - 1); // a walk reset → the walk peaked: fire the top level
+  if (Math.abs(delta) > TRIGGER_FLYBACK) {
+    fired.push(delta < 0 ? n - 1 : 0); // flyback: fire the far endpoint the walk flew back from
+  } else if (delta > 0) {
+    for (let k = 1; k <= n - 2; k++) {
+      const level = k * seg;
+      if (p < level && level <= c) fired.push(k); // ascending: interior levels in (p, c]
+    }
+  } else if (delta < 0) {
+    for (let k = n - 2; k >= 1; k--) {
+      const level = k * seg;
+      if (c <= level && level < p) fired.push(k); // descending: interior levels in [c, p)
+    }
   }
   return fired;
 }
