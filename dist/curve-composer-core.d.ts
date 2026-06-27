@@ -83,23 +83,21 @@ declare function directionPhase(u: number, dir: DriverDirection): number;
 interface CompositionRead {
     /** Read position after direction, before the driver warps it (0..1) — the driver lane marker. */
     inputPhase: number;
-    /** Read position after the driver warps it (0..1) — the series lane playhead. */
+    /** Read position after the driver warps it (0..1) — the series lane playhead (sweeps once). */
     warpedPhase: number;
     /**
-     * Composed output, 0..1 — a CONTINUOUS chain: each segment's shape plays within its
-     * own time band [a,b], so the output advances monotonically across dividers instead
-     * of resetting. Reduces to the identity diagonal when every segment is linear.
+     * Composed output, 0..1 — the ACTIVE segment's own full min→max walk, shaped by that
+     * segment's curve. It resets and climbs again at each divider, so N segments make the
+     * output walk min→max N times across one sweep (the segments are not summed into one path).
      */
     value: number;
-    /** The active segment's local eased value, 0..1 — rides the per-box visible curve (the dot). */
-    localValue: number;
     segIndex: number;
     localT: number;
 }
 /**
  * Read the composition at raw loop phase `u`. direction reverses/ping-pongs the
  * traversal of the whole composition; the driver then warps the reading pace. The
- * segments render as independent 0..1 boxes but read as one continuous chain.
+ * playhead sweeps left→right once, while `value` is each segment's own full 0→1 walk.
  */
 declare function readComposition(comp: CurveComposition, u: number, s: CompositionSamplers): CompositionRead;
 /** A reasonable starting composition for demos / uncontrolled mounts. */

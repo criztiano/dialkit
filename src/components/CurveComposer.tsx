@@ -137,9 +137,9 @@ export function CurveComposer({
         seriesPlayheadRef.current.setAttribute('x2', String(sx));
       }
       if (seriesDotRef.current) {
-        // The dot rides the visible per-box curve, so it uses the segment-local value.
+        // The dot rides the active segment's own curve (a full min→max walk per segment).
         seriesDotRef.current.setAttribute('cx', String(sx));
-        seriesDotRef.current.setAttribute('cy', String(mapY(mainRect, read.localValue)));
+        seriesDotRef.current.setAttribute('cy', String(mapY(mainRect, read.value)));
       }
       if (driverPlayheadRef.current) {
         const dx = read.inputPhase * W;

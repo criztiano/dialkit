@@ -196,9 +196,8 @@ function readComposition(comp, u, s) {
   const segIndex = segmentIndexAt(warpedPhase, comp.segments);
   const [a, b] = segmentSpan(comp.segments, segIndex);
   const localT = b > a ? (warpedPhase - a) / (b - a) : 0;
-  const localValue = s.segments[segIndex] ? s.segments[segIndex](localT) : 0;
-  const value = a + localValue * (b - a);
-  return { inputPhase, warpedPhase, value, localValue, segIndex, localT };
+  const value = s.segments[segIndex] ? s.segments[segIndex](localT) : 0;
+  return { inputPhase, warpedPhase, value, segIndex, localT };
 }
 function defaultComposition() {
   return {

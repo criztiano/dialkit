@@ -45,8 +45,8 @@ export function CurveComposerShowcase() {
 
   const getPhase = () => (elapsedRef.current % PERIOD) / PERIOD;
 
-  // Read the composed value each frame to drive the demo dot — uses the same core
-  // pipeline the component renders with, so the dot and the curve always agree.
+  // Read the composed value each frame to drive the demo dot — each segment drives a
+  // full min→max walk, so the dot walks the track once per segment (twice for two).
   const samplers = useMemo(() => buildSamplers(comp), [comp]);
   const demoRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
