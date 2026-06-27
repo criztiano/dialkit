@@ -4142,6 +4142,7 @@ function CurveComposer({
   };
   (0, import_react24.useEffect)(() => {
     let raf = 0;
+    prevTrigValue.current = Number.NaN;
     const tick = () => {
       raf = requestAnimationFrame(tick);
       const { composition: c, samplers: s, getPhase: gp, phase: p, mode: md, triggerSteps: ts } = liveRef.current;
@@ -4268,7 +4269,13 @@ function CurveComposer({
       onSegmentsChange?.(cycleSegmentType(composition, d.index).segments);
     }
   };
-  const onPointerCancel = () => setDrag(null);
+  const onPointerCancel = (e) => {
+    setDrag(null);
+    try {
+      svgRef.current?.releasePointerCapture(e.pointerId);
+    } catch {
+    }
+  };
   const onDoubleClick = (e) => {
     const { xN, py } = localCoords(e.clientX, e.clientY);
     if (driverRect && py >= driverRect.y) return;

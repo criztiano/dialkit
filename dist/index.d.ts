@@ -610,7 +610,13 @@ interface CurveComposerProps {
     /**
      * Output mode. 'continuous' (default) reads the composed value each frame; 'trigger'
      * emits a discrete signal (via `onTrigger`) when the composed value crosses one of the
-     * evenly-spaced trigger levels, and draws those levels as horizontal lines that flash.
+     * evenly-spaced trigger levels. The component itself draws no trigger UI — visualization
+     * (e.g. markers on the output track) is the consumer's job; see `onTrigger`.
+     *
+     * Trigger detection assumes forward traversal: interior levels fire as the value climbs
+     * and the top fires on each walk's reset. Under `direction: 'mirror' | 'reverse'` the
+     * descending leg does not fire interior triggers, so trigger mode is intended for
+     * `direction: 'forward'`.
      */
     mode?: 'continuous' | 'trigger';
     /** Number of trigger levels in trigger mode (first at 0, last at 1, evenly spaced in value). Default 5. */

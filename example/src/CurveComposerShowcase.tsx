@@ -47,6 +47,13 @@ export function CurveComposerShowcase() {
       el.style.transform = 'translate(-50%, -50%) scale(1)';
     }, 130);
   };
+  // Clear any pending blink timers on unmount so they can't write into a detached node.
+  useEffect(() => {
+    const timers = blinkTimers.current;
+    return () => {
+      for (const id of timers) window.clearTimeout(id);
+    };
+  }, []);
 
   // Virtual transport: a clock-driven phase 0..1 (no parent re-render via getPhase).
   const elapsedRef = useRef(0);

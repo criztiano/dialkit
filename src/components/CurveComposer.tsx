@@ -53,7 +53,13 @@ interface CurveComposerProps {
   /**
    * Output mode. 'continuous' (default) reads the composed value each frame; 'trigger'
    * emits a discrete signal (via `onTrigger`) when the composed value crosses one of the
-   * evenly-spaced trigger levels, and draws those levels as horizontal lines that flash.
+   * evenly-spaced trigger levels. The component itself draws no trigger UI — visualization
+   * (e.g. markers on the output track) is the consumer's job; see `onTrigger`.
+   *
+   * Trigger detection assumes forward traversal: interior levels fire as the value climbs
+   * and the top fires on each walk's reset. Under `direction: 'mirror' | 'reverse'` the
+   * descending leg does not fire interior triggers, so trigger mode is intended for
+   * `direction: 'forward'`.
    */
   mode?: 'continuous' | 'trigger';
   /** Number of trigger levels in trigger mode (first at 0, last at 1, evenly spaced in value). Default 5. */
@@ -147,6 +153,9 @@ export function CurveComposer({
   // --- playhead loop (direct DOM writes, like the waveform's polled playhead) ---
   useEffect(() => {
     let raf = 0;
+    // Re-prime crossing detection: a geometry-driven re-arm must not compare the first
+    // frame against a value from the previous loop's composition (phantom trigger).
+    prevTrigValue.current = Number.NaN;
     const tick = () => {
       raf = requestAnimationFrame(tick);
       const { composition: c, samplers: s, getPhase: gp, phase: p, mode: md, triggerSteps: ts } = liveRef.current;
@@ -299,7 +308,14 @@ export function CurveComposer({
     }
   };
 
-  const onPointerCancel = () => setDrag(null);
+  const onPointerCancel = (e: React.PointerEvent) => {
+    setDrag(null);
+    try {
+      svgRef.current?.releasePointerCapture(e.pointerId);
+    } catch {
+      // Capture may not be held — ignore (mirrors onPointerUp).
+    }
+  };
 
   const onDoubleClick = (e: React.MouseEvent) => {
     const { xN, py } = localCoords(e.clientX, e.clientY);
