@@ -390,6 +390,84 @@ interface WaveformVisualizationProps {
 }
 declare function WaveformVisualization(props: WaveformVisualizationProps): solid_js.JSX.Element;
 
+/** The curve vocabulary a segment cycles through on quick-click. */
+type CurveType = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'spring';
+/** One curve in the series. `weight` is a relative duration share (normalized by the sum). */
+interface CurveSegment {
+    type: CurveType;
+    weight: number;
+    /**
+     * Bipolar -1..1 "energy" bias. 0 = the type's canonical shape; bezier types skew
+     * both x control points (−1 = energy to the onset, +1 = energy to the fall);
+     * spring maps it to bounce (−1 = none → +1 = max).
+     */
+    curvature: number;
+    /**
+     * Bipolar -1..1 steepness — how pronounced the ease is, independent of the energy bias.
+     * Scales each control point's deviation from the linear diagonal: 0 = canonical preset,
+     * +1 = sharper (e.g. easeInOut gets much slower start/end), −1 = flatter toward linear.
+     * Spring maps it to stiffness (snappier rise).
+     */
+    steepness: number;
+}
+/** The stacked driver curve (a single curve, no internal splits). */
+interface CurveDriver {
+    type: CurveType;
+    /** Bipolar -1..1 energy bias — see CurveSegment.curvature. */
+    curvature: number;
+    /** Bipolar -1..1 steepness — see CurveSegment.steepness. */
+    steepness: number;
+}
+type DriverDirection = 'forward' | 'mirror' | 'reverse';
+interface CurveComposition {
+    segments: CurveSegment[];
+    /** null → no driver lane (the component renders a single lane). */
+    driver: CurveDriver | null;
+    direction: DriverDirection;
+}
+
+interface CurveComposerProps {
+    /** The curve series (controlled). */
+    segments: CurveSegment[];
+    /** The stacked driver curve, or null for none (adds a second lane below). */
+    driver?: CurveDriver | null;
+    /** Playback direction for the demo playhead (forward / mirror / reverse). */
+    direction?: DriverDirection;
+    /** Commit a changed series — fired live during boundary/curvature drags and on click-cycle. */
+    onSegmentsChange?: (segments: CurveSegment[]) => void;
+    /** Commit a changed driver — fired live during driver drags and on click-cycle. */
+    onDriverChange?: (driver: CurveDriver) => void;
+    /** Raw transport phase 0..1, polled every frame for a smooth playhead (no parent re-render). */
+    getPhase?: () => number;
+    /** Static transport phase 0..1 (used when `getPhase` is absent). */
+    phase?: number;
+    /**
+     * Output mode. 'continuous' (default) reads the composed value each frame; 'trigger'
+     * emits a discrete signal (via `onTrigger`) when the composed value crosses one of the
+     * evenly-spaced trigger levels. The component itself draws no trigger UI — visualization
+     * (e.g. markers on the output track) is the consumer's job; see `onTrigger`.
+     *
+     * Trigger firing is direction-symmetric: interior levels fire in whichever direction the
+     * value travels, so it works under `direction: 'forward' | 'mirror' | 'reverse'`.
+     */
+    mode?: 'continuous' | 'trigger';
+    /** Number of trigger levels in trigger mode (first at 0, last at 1, evenly spaced in value). Default 5. */
+    triggerSteps?: number;
+    /** Fired in trigger mode when the value crosses a trigger level; `index` is into `triggerLevels`. */
+    onTrigger?: (index: number) => void;
+    /** Curve stroke color. Defaults to the theme text color. */
+    curveColor?: string;
+    /** Playhead / marker color. Defaults to the theme text color. */
+    playheadColor?: string;
+    /** Faint vertical reference grid behind each lane. */
+    grid?: boolean;
+    gridSubdivisions?: number;
+    width?: number;
+    /** Height of the main lane; the driver lane adds height below it. */
+    height?: number;
+}
+declare function CurveComposer(props: CurveComposerProps): solid_js.JSX.Element;
+
 interface TextControlProps {
     label: string;
     value: string;
@@ -425,4 +503,4 @@ interface PresetManagerProps {
 }
 declare function PresetManager(props: PresetManagerProps): solid_js.JSX.Element;
 
-export { type ActionConfig, ButtonGroup, type ColorConfig, ColorControl, type ControlMeta, type CreateDialOptions, type DialConfig, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, Folder, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type WaveformLoop, type WaveformMode, WaveformVisualization, createDialKit };
+export { type ActionConfig, ButtonGroup, type ColorConfig, ColorControl, type ControlMeta, type CreateDialOptions, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, type DialConfig, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, Folder, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type WaveformLoop, type WaveformMode, WaveformVisualization, createDialKit };

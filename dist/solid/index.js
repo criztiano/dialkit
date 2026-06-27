@@ -3696,9 +3696,827 @@ function WaveformVisualization(props) {
   })();
 }
 _$delegateEvents10(["click"]);
+
+// src/solid/components/CurveComposer.tsx
+import { template as _$template16 } from "solid-js/web";
+import { delegateEvents as _$delegateEvents11 } from "solid-js/web";
+import { setAttribute as _$setAttribute11 } from "solid-js/web";
+import { setStyleProperty as _$setStyleProperty6 } from "solid-js/web";
+import { effect as _$effect14 } from "solid-js/web";
+import { insert as _$insert16 } from "solid-js/web";
+import { memo as _$memo10 } from "solid-js/web";
+import { createComponent as _$createComponent15 } from "solid-js/web";
+import { use as _$use9 } from "solid-js/web";
+import { createMemo as createMemo2, createSignal as createSignal13, For as For7, mergeProps as mergeProps2, onCleanup as onCleanup11, onMount as onMount10, Show as Show10 } from "solid-js";
+
+// src/curve-composer-core.ts
+var CURVE_CYCLE = ["linear", "easeIn", "easeOut", "easeInOut", "spring"];
+var easingPresets = {
+  linear: [0, 0, 1, 1],
+  easeIn: [0.42, 0, 1, 1],
+  easeOut: [0, 0, 0.58, 1],
+  easeInOut: [0.42, 0, 0.58, 1]
+};
+var DRAG_THRESHOLD2 = 3;
+var EDGE_HIT2 = 6;
+var CURVE_MIN_WEIGHT_FRAC = 0.06;
+var lerp = (a, b, t) => a + (b - a) * t;
+var clamp01 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
+var clampBipolar = (v) => v < -1 ? -1 : v > 1 ? 1 : v;
+var SKEW_MAX = 0.45;
+function steepnessGain(steepness) {
+  const v = clampBipolar(steepness);
+  return v >= 0 ? 1 + v * 1.3 : 1 + v;
+}
+function deriveEase(type, curvature, steepness = 0) {
+  const base = type === "spring" ? easingPresets.linear : easingPresets[type];
+  const k = steepnessGain(steepness);
+  const x1 = base[0] * k;
+  const x2 = 1 + (base[2] - 1) * k;
+  const shift = clampBipolar(curvature) * SKEW_MAX;
+  return [clamp01(x1 + shift), base[1], clamp01(x2 + shift), base[3]];
+}
+function bezierAxis(p1, p2, s) {
+  const u = 1 - s;
+  return 3 * u * u * s * p1 + 3 * u * s * s * p2 + s * s * s;
+}
+function bezierAxisDeriv(p1, p2, s) {
+  const u = 1 - s;
+  return 3 * u * u * p1 + 6 * u * s * (p2 - p1) + 3 * s * s * (1 - p2);
+}
+function bezierY(ease, x) {
+  const tx = clamp01(x);
+  let s = tx;
+  for (let i = 0; i < 6; i++) {
+    const xs = bezierAxis(ease[0], ease[2], s) - tx;
+    if (Math.abs(xs) < 1e-5) break;
+    const d = bezierAxisDeriv(ease[0], ease[2], s);
+    if (Math.abs(d) < 1e-6) break;
+    s = clamp01(s - xs / d);
+  }
+  return bezierAxis(ease[1], ease[3], s);
+}
+var SPRING_SAMPLES = 72;
+function springPoints(curvature, steepness = 0) {
+  const visualDuration = 1;
+  const bounce = clamp01((clampBipolar(curvature) + 1) / 2) * 0.6;
+  const mass = 1;
+  let stiffness = 2 * Math.PI / visualDuration;
+  stiffness = stiffness * stiffness;
+  stiffness *= Math.max(0.2, 1 + clampBipolar(steepness) * 0.9);
+  const dampingRatio = 1 - bounce;
+  const damping = 2 * dampingRatio * Math.sqrt(stiffness * mass);
+  const raw = [];
+  const steps = SPRING_SAMPLES;
+  const dt = visualDuration / steps;
+  let position = 0;
+  let velocity = 0;
+  for (let i = 0; i <= steps; i++) {
+    raw.push(position);
+    const acceleration = (-stiffness * (position - 1) - damping * velocity) / mass;
+    velocity += acceleration * dt;
+    position += velocity * dt;
+  }
+  return raw;
+}
+function interp(points, t) {
+  const x = clamp01(t) * (points.length - 1);
+  const i = Math.floor(x);
+  if (i >= points.length - 1) return points[points.length - 1];
+  return lerp(points[i], points[i + 1], x - i);
+}
+function buildSampler(curve) {
+  if (curve.type === "spring") {
+    const pts = springPoints(curve.curvature, curve.steepness);
+    return (t) => interp(pts, t);
+  }
+  const ease = deriveEase(curve.type, curve.curvature, curve.steepness);
+  return (t) => bezierY(ease, t);
+}
+function boundaries(segments) {
+  const total = totalWeight(segments);
+  const out = [];
+  let acc = 0;
+  for (let i = 0; i < segments.length - 1; i++) {
+    acc += segments[i].weight;
+    out.push(acc / total);
+  }
+  return out;
+}
+function totalWeight(segments) {
+  let t = 0;
+  for (const s of segments) t += Math.max(0, s.weight);
+  return t || 1;
+}
+function segmentSpan(segments, index) {
+  const total = totalWeight(segments);
+  let acc = 0;
+  for (let i = 0; i < index; i++) acc += segments[i].weight;
+  return [acc / total, (acc + segments[index].weight) / total];
+}
+function segmentIndexAt(xNorm, segments) {
+  const total = totalWeight(segments);
+  const x = clamp01(xNorm) * total;
+  let acc = 0;
+  for (let i = 0; i < segments.length; i++) {
+    acc += segments[i].weight;
+    if (x <= acc) return i;
+  }
+  return segments.length - 1;
+}
+function boundaryAt(xNorm, segments, edgeHitNorm) {
+  if (segments.length < 2) return null;
+  const bs = boundaries(segments);
+  let best = null;
+  let bestDist = edgeHitNorm;
+  for (let i = 0; i < bs.length; i++) {
+    const d = Math.abs(xNorm - bs[i]);
+    if (d <= bestDist) {
+      bestDist = d;
+      best = i;
+    }
+  }
+  return best;
+}
+function cloneSegments(comp, segments) {
+  return { ...comp, segments };
+}
+function splitSegment(comp, index) {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const next = comp.segments.slice();
+  next.splice(index + 1, 0, { ...src });
+  return cloneSegments(comp, next.map((s) => ({ ...s, weight: 1 })));
+}
+function cycleSegmentType(comp, index) {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(src.type) + 1) % CURVE_CYCLE.length];
+  const next = comp.segments.slice();
+  next[index] = { ...src, type, curvature: 0, steepness: 0 };
+  return cloneSegments(comp, next);
+}
+function setSegmentCurvature(comp, index, curvature) {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const next = comp.segments.slice();
+  next[index] = { ...src, curvature: clampBipolar(curvature) };
+  return cloneSegments(comp, next);
+}
+function setSegmentSteepness(comp, index, steepness) {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const next = comp.segments.slice();
+  next[index] = { ...src, steepness: clampBipolar(steepness) };
+  return cloneSegments(comp, next);
+}
+function redistributeWeight(comp, boundaryIndex, deltaFrac) {
+  const segs = comp.segments;
+  const i = boundaryIndex;
+  if (i < 0 || i >= segs.length - 1) return comp;
+  const total = totalWeight(segs);
+  const span = segs[i].weight + segs[i + 1].weight;
+  const minW = CURVE_MIN_WEIGHT_FRAC * total;
+  let wi = segs[i].weight + deltaFrac * total;
+  wi = Math.max(minW, Math.min(span - minW, wi));
+  const next = segs.slice();
+  next[i] = { ...segs[i], weight: wi };
+  next[i + 1] = { ...segs[i + 1], weight: span - wi };
+  return cloneSegments(comp, next);
+}
+function cycleDriverType(comp) {
+  if (!comp.driver) return comp;
+  const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(comp.driver.type) + 1) % CURVE_CYCLE.length];
+  return { ...comp, driver: { ...comp.driver, type, curvature: 0, steepness: 0 } };
+}
+function setDriverCurvature(comp, curvature) {
+  if (!comp.driver) return comp;
+  return { ...comp, driver: { ...comp.driver, curvature: clampBipolar(curvature) } };
+}
+function setDriverSteepness(comp, steepness) {
+  if (!comp.driver) return comp;
+  return { ...comp, driver: { ...comp.driver, steepness: clampBipolar(steepness) } };
+}
+var DRAG_ENERGY_GAIN = 0.6;
+var DRAG_STEEP_GAIN = 0.6;
+function toLocalCoords(clientX, clientY, rect, totalH) {
+  const xN = clamp01((clientX - rect.left) / (rect.width || 1));
+  const py = (clientY - rect.top) / (rect.height || 1) * totalH;
+  return { xN, py };
+}
+function pointerTarget(xN, py, segments, layout, edgeHitNorm) {
+  if (layout.driverY != null && py >= layout.driverY) return { kind: "driver" };
+  const b = boundaryAt(xN, segments, edgeHitNorm);
+  if (b != null) return { kind: "boundary", index: b };
+  return { kind: "segment", index: segmentIndexAt(xN, segments) };
+}
+function applySegmentBodyDrag(comp, index, baseCurvature, baseSteepness, dxFrac, dyFrac) {
+  const next = setSegmentCurvature(comp, index, baseCurvature + dxFrac / DRAG_ENERGY_GAIN);
+  return setSegmentSteepness(next, index, baseSteepness - dyFrac / DRAG_STEEP_GAIN);
+}
+function applyDriverBodyDrag(comp, baseCurvature, baseSteepness, dxFrac, dyFrac) {
+  const next = setDriverCurvature(comp, baseCurvature + dxFrac / DRAG_ENERGY_GAIN);
+  return setDriverSteepness(next, baseSteepness - dyFrac / DRAG_STEEP_GAIN);
+}
+function buildSamplers(comp) {
+  return {
+    segments: comp.segments.map(buildSampler),
+    driver: comp.driver ? buildSampler(comp.driver) : null
+  };
+}
+function directionPhase(u, dir) {
+  const x = clamp01(u);
+  if (dir === "reverse") return 1 - x;
+  if (dir === "mirror") return 1 - Math.abs(1 - 2 * x);
+  return x;
+}
+function readComposition(comp, u, s) {
+  const inputPhase = directionPhase(u, comp.direction);
+  const warpedPhase = s.driver ? clamp01(s.driver(inputPhase)) : inputPhase;
+  const segIndex = segmentIndexAt(warpedPhase, comp.segments);
+  const [a, b] = segmentSpan(comp.segments, segIndex);
+  const localT = b > a ? (warpedPhase - a) / (b - a) : 0;
+  const value = s.segments[segIndex] ? s.segments[segIndex](localT) : 0;
+  return { inputPhase, warpedPhase, value, segIndex, localT };
+}
+var DEFAULT_TRIGGER_STEPS = 5;
+var TRIGGER_FLYBACK = 0.5;
+function triggersCrossed(prevValue, curValue, steps) {
+  const n = Math.max(2, Math.floor(steps));
+  const seg = 1 / (n - 1);
+  const p = clamp01(prevValue);
+  const c = clamp01(curValue);
+  const delta = c - p;
+  const fired = [];
+  if (Math.abs(delta) > TRIGGER_FLYBACK) {
+    fired.push(delta < 0 ? n - 1 : 0);
+  } else if (delta > 0) {
+    for (let k = 1; k <= n - 2; k++) {
+      const level = k * seg;
+      if (p < level && level <= c) fired.push(k);
+    }
+  } else if (delta < 0) {
+    for (let k = n - 2; k >= 1; k--) {
+      const level = k * seg;
+      if (c <= level && level < p) fired.push(k);
+    }
+  }
+  return fired;
+}
+
+// src/solid/components/CurveComposer.tsx
+var _tmpl$40 = /* @__PURE__ */ _$template16(`<div class=dialkit-cc-wrap><svg class=dialkit-cc><rect class=dialkit-cc-lane rx=8></rect><line class=dialkit-cc-playhead x1=0 x2=0></line><circle class=dialkit-cc-dot cx=0 r=3>`);
+var _tmpl$212 = /* @__PURE__ */ _$template16(`<svg><line class=dialkit-cc-grid></svg>`, false, true, false);
+var _tmpl$310 = /* @__PURE__ */ _$template16(`<svg><rect class=dialkit-cc-seg-hover rx=8></svg>`, false, true, false);
+var _tmpl$44 = /* @__PURE__ */ _$template16(`<svg><g><line class=dialkit-cc-diagonal></line><path class=dialkit-cc-curve></path><text class=dialkit-cc-label></svg>`, false, true, false);
+var _tmpl$52 = /* @__PURE__ */ _$template16(`<svg><line class=dialkit-cc-boundary></svg>`, false, true, false);
+var _tmpl$62 = /* @__PURE__ */ _$template16(`<svg><rect class=dialkit-cc-lane rx=8></svg>`, false, true, false);
+var _tmpl$72 = /* @__PURE__ */ _$template16(`<svg><rect class=dialkit-cc-seg-hover x=0 rx=8></svg>`, false, true, false);
+var _tmpl$82 = /* @__PURE__ */ _$template16(`<svg><line class=dialkit-cc-diagonal></svg>`, false, true, false);
+var _tmpl$92 = /* @__PURE__ */ _$template16(`<svg><path class="dialkit-cc-curve dialkit-cc-curve-driver"></svg>`, false, true, false);
+var _tmpl$0 = /* @__PURE__ */ _$template16(`<svg><text class=dialkit-cc-label>driver \xB7 </svg>`, false, true, false);
+var _tmpl$1 = /* @__PURE__ */ _$template16(`<svg><line class=dialkit-cc-playhead x1=0 x2=0></svg>`, false, true, false);
+var GAP = 10;
+var PAD_FRAC = 0.18;
+var DRIVER_FRAC = 0.55;
+function CurveComposer(props) {
+  const p = mergeProps2({
+    driver: null,
+    direction: "forward",
+    phase: 0,
+    mode: "continuous",
+    triggerSteps: DEFAULT_TRIGGER_STEPS,
+    grid: false,
+    gridSubdivisions: 8,
+    width: 256,
+    height: 140
+  }, props);
+  const W = () => p.width;
+  const laneH = () => p.height;
+  const driverH = () => p.driver ? Math.round(p.height * DRIVER_FRAC) : 0;
+  const totalH = () => laneH() + (p.driver ? GAP + driverH() : 0);
+  const mainRect = () => ({
+    x: 0,
+    y: 0,
+    w: W(),
+    h: laneH()
+  });
+  const driverRect = () => p.driver ? {
+    x: 0,
+    y: laneH() + GAP,
+    w: W(),
+    h: driverH()
+  } : null;
+  const composition = createMemo2(() => ({
+    segments: p.segments,
+    driver: p.driver,
+    direction: p.direction
+  }));
+  const samplers = createMemo2(() => buildSamplers(composition()));
+  let svgEl;
+  let seriesPlayheadEl;
+  let seriesDotEl;
+  let driverPlayheadEl;
+  let drag = null;
+  const [hover, setHover] = createSignal13(null);
+  const padY = (r) => r.h * PAD_FRAC;
+  const mapY = (r, ny) => {
+    const top = r.y + padY(r);
+    const bot = r.y + r.h - padY(r);
+    return bot - ny * (bot - top);
+  };
+  onMount10(() => {
+    let raf = 0;
+    let prevTrigValue = Number.NaN;
+    let armKey = "";
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const w = W();
+      const mr = mainRect();
+      const key = `${w}|${laneH()}|${driverH()}`;
+      if (key !== armKey) {
+        prevTrigValue = Number.NaN;
+        armKey = key;
+      }
+      const u = p.getPhase ? p.getPhase() : p.phase;
+      const read = readComposition(composition(), u, samplers());
+      const sx = read.warpedPhase * w;
+      if (seriesPlayheadEl) {
+        seriesPlayheadEl.setAttribute("x1", String(sx));
+        seriesPlayheadEl.setAttribute("x2", String(sx));
+      }
+      if (seriesDotEl) {
+        seriesDotEl.setAttribute("cx", String(sx));
+        seriesDotEl.setAttribute("cy", String(mapY(mr, read.value)));
+      }
+      if (driverPlayheadEl) {
+        const dx = read.inputPhase * w;
+        driverPlayheadEl.setAttribute("x1", String(dx));
+        driverPlayheadEl.setAttribute("x2", String(dx));
+      }
+      if (p.mode === "trigger") {
+        if (!Number.isNaN(prevTrigValue)) {
+          for (const idx of triggersCrossed(prevTrigValue, read.value, p.triggerSteps)) p.onTrigger?.(idx);
+        }
+        prevTrigValue = read.value;
+      } else {
+        prevTrigValue = Number.NaN;
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    onCleanup11(() => cancelAnimationFrame(raf));
+  });
+  const hitLayout = () => {
+    const dr = driverRect();
+    return {
+      totalH: totalH(),
+      driverY: dr ? dr.y : null
+    };
+  };
+  const localCoords = (clientX, clientY) => {
+    const rect = svgEl.getBoundingClientRect();
+    return {
+      ...toLocalCoords(clientX, clientY, rect, totalH()),
+      rectW: rect.width
+    };
+  };
+  const onPointerDown = (e) => {
+    const {
+      xN,
+      py,
+      rectW
+    } = localCoords(e.clientX, e.clientY);
+    try {
+      svgEl?.setPointerCapture(e.pointerId);
+    } catch {
+    }
+    const target = pointerTarget(xN, py, p.segments, hitLayout(), EDGE_HIT2 / rectW);
+    if (target.kind === "driver") {
+      drag = {
+        kind: "driver",
+        startX: e.clientX,
+        startY: e.clientY,
+        baseCurvature: p.driver.curvature,
+        baseSteepness: p.driver.steepness,
+        moved: false
+      };
+    } else if (target.kind === "boundary") {
+      drag = {
+        kind: "boundary",
+        index: target.index,
+        startX: e.clientX,
+        startY: e.clientY,
+        base: composition(),
+        moved: false
+      };
+    } else {
+      const seg = p.segments[target.index];
+      drag = {
+        kind: "segment",
+        index: target.index,
+        startX: e.clientX,
+        startY: e.clientY,
+        baseCurvature: seg?.curvature ?? 0,
+        baseSteepness: seg?.steepness ?? 0,
+        moved: false
+      };
+    }
+  };
+  const onPointerMove = (e) => {
+    const d = drag;
+    if (!d) {
+      const {
+        xN,
+        py,
+        rectW: rectW2
+      } = localCoords(e.clientX, e.clientY);
+      const t = pointerTarget(xN, py, p.segments, hitLayout(), EDGE_HIT2 / rectW2);
+      setHover(t.kind === "driver" ? {
+        kind: "driver",
+        index: 0
+      } : {
+        kind: t.kind,
+        index: t.index
+      });
+      return;
+    }
+    const svgRect = svgEl.getBoundingClientRect();
+    const rectW = svgRect.width;
+    const rectH = svgRect.height;
+    const moved = Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > DRAG_THRESHOLD2;
+    if (!moved) return;
+    if (d.kind === "boundary") {
+      const deltaFrac = (e.clientX - d.startX) / rectW;
+      const next = redistributeWeight(d.base, d.index, deltaFrac);
+      p.onSegmentsChange?.(next.segments);
+      d.moved = true;
+    } else if (d.kind === "segment") {
+      const dxFrac = (e.clientX - d.startX) / rectW;
+      const dyFrac = (e.clientY - d.startY) / rectH;
+      const next = applySegmentBodyDrag(composition(), d.index, d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
+      p.onSegmentsChange?.(next.segments);
+      d.moved = true;
+    } else {
+      const dxFrac = (e.clientX - d.startX) / rectW;
+      const dyFrac = (e.clientY - d.startY) / rectH;
+      const next = applyDriverBodyDrag(composition(), d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
+      if (next.driver) p.onDriverChange?.(next.driver);
+      d.moved = true;
+    }
+  };
+  const onPointerUp = (e) => {
+    const d = drag;
+    drag = null;
+    try {
+      svgEl?.releasePointerCapture(e.pointerId);
+    } catch {
+    }
+    if (!d || d.moved) return;
+    if (d.kind === "driver") {
+      const next = cycleDriverType(composition());
+      if (next.driver) p.onDriverChange?.(next.driver);
+    } else if (d.kind === "segment") {
+      p.onSegmentsChange?.(cycleSegmentType(composition(), d.index).segments);
+    }
+  };
+  const onPointerCancel = (e) => {
+    drag = null;
+    try {
+      svgEl?.releasePointerCapture(e.pointerId);
+    } catch {
+    }
+  };
+  const onDoubleClick = (e) => {
+    const {
+      xN,
+      py
+    } = localCoords(e.clientX, e.clientY);
+    const dr = driverRect();
+    if (dr && py >= dr.y) return;
+    p.onSegmentsChange?.(splitSegment(composition(), segmentIndexAt(xN, p.segments)).segments);
+  };
+  const cursor = () => {
+    const h = hover();
+    const activeKind = drag?.kind ?? h?.kind;
+    return activeKind === "boundary" ? "ew-resize" : activeKind === "segment" || activeKind === "driver" ? "move" : "default";
+  };
+  const curvePath = (curve, rect, span) => {
+    const w = W();
+    const x = (nx) => (span[0] + nx * (span[1] - span[0])) * w;
+    const y = (ny) => mapY(rect, ny);
+    if (curve.type === "spring") {
+      const sampler = buildSampler(curve);
+      const n = 40;
+      let d = `M ${x(0)} ${y(sampler(0))}`;
+      for (let i = 1; i <= n; i++) {
+        const t = i / n;
+        d += ` L ${x(t)} ${y(sampler(t))}`;
+      }
+      return d;
+    }
+    const e = deriveEase(curve.type, curve.curvature, curve.steepness);
+    return `M ${x(0)} ${y(0)} C ${x(e[0])} ${y(e[1])}, ${x(e[2])} ${y(e[3])}, ${x(1)} ${y(1)}`;
+  };
+  const interior = () => boundaries(p.segments);
+  const laneGridLines = (rect) => {
+    if (!p.grid) return [];
+    const n = Math.max(1, Math.round(p.gridSubdivisions));
+    const lines = [];
+    for (let i = 1; i < n; i++) {
+      lines.push({
+        gx: i / n * W(),
+        y1: rect.y,
+        y2: rect.y + rect.h
+      });
+    }
+    return lines;
+  };
+  return (() => {
+    var _el$ = _tmpl$40(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.nextSibling;
+    _el$2.$$dblclick = onDoubleClick;
+    _el$2.addEventListener("pointerleave", () => !drag && setHover(null));
+    _el$2.addEventListener("pointercancel", onPointerCancel);
+    _el$2.$$pointerup = onPointerUp;
+    _el$2.$$pointermove = onPointerMove;
+    _el$2.$$pointerdown = onPointerDown;
+    var _ref$ = svgEl;
+    typeof _ref$ === "function" ? _$use9(_ref$, _el$2) : svgEl = _el$2;
+    _$insert16(_el$2, _$createComponent15(For7, {
+      get each() {
+        return laneGridLines(mainRect());
+      },
+      children: (g) => (() => {
+        var _el$6 = _tmpl$212();
+        _$effect14((_p$) => {
+          var _v$16 = g.gx, _v$17 = g.y1, _v$18 = g.gx, _v$19 = g.y2;
+          _v$16 !== _p$.e && _$setAttribute11(_el$6, "x1", _p$.e = _v$16);
+          _v$17 !== _p$.t && _$setAttribute11(_el$6, "y1", _p$.t = _v$17);
+          _v$18 !== _p$.a && _$setAttribute11(_el$6, "x2", _p$.a = _v$18);
+          _v$19 !== _p$.o && _$setAttribute11(_el$6, "y2", _p$.o = _v$19);
+          return _p$;
+        }, {
+          e: void 0,
+          t: void 0,
+          a: void 0,
+          o: void 0
+        });
+        return _el$6;
+      })()
+    }), _el$4);
+    _$insert16(_el$2, _$createComponent15(Show10, {
+      get when() {
+        return hover()?.kind === "segment" && !drag;
+      },
+      get children() {
+        return (() => {
+          const span = segmentSpan(p.segments, hover().index);
+          const mr = mainRect();
+          return (() => {
+            var _el$7 = _tmpl$310();
+            _$effect14((_p$) => {
+              var _v$20 = span[0] * W(), _v$21 = mr.y, _v$22 = (span[1] - span[0]) * W(), _v$23 = mr.h;
+              _v$20 !== _p$.e && _$setAttribute11(_el$7, "x", _p$.e = _v$20);
+              _v$21 !== _p$.t && _$setAttribute11(_el$7, "y", _p$.t = _v$21);
+              _v$22 !== _p$.a && _$setAttribute11(_el$7, "width", _p$.a = _v$22);
+              _v$23 !== _p$.o && _$setAttribute11(_el$7, "height", _p$.o = _v$23);
+              return _p$;
+            }, {
+              e: void 0,
+              t: void 0,
+              a: void 0,
+              o: void 0
+            });
+            return _el$7;
+          })();
+        })();
+      }
+    }), _el$4);
+    _$insert16(_el$2, _$createComponent15(For7, {
+      get each() {
+        return p.segments;
+      },
+      children: (seg, i) => {
+        const span = () => segmentSpan(p.segments, i());
+        const mr = () => mainRect();
+        return (() => {
+          var _el$8 = _tmpl$44(), _el$9 = _el$8.firstChild, _el$0 = _el$9.nextSibling, _el$1 = _el$0.nextSibling;
+          _$insert16(_el$1, () => seg.type);
+          _$effect14((_p$) => {
+            var _v$24 = span()[0] * W(), _v$25 = mapY(mr(), 0), _v$26 = span()[1] * W(), _v$27 = mapY(mr(), 1), _v$28 = curvePath(seg, mr(), span()), _v$29 = (span()[0] + span()[1]) * 0.5 * W(), _v$30 = mr().y + 13;
+            _v$24 !== _p$.e && _$setAttribute11(_el$9, "x1", _p$.e = _v$24);
+            _v$25 !== _p$.t && _$setAttribute11(_el$9, "y1", _p$.t = _v$25);
+            _v$26 !== _p$.a && _$setAttribute11(_el$9, "x2", _p$.a = _v$26);
+            _v$27 !== _p$.o && _$setAttribute11(_el$9, "y2", _p$.o = _v$27);
+            _v$28 !== _p$.i && _$setAttribute11(_el$0, "d", _p$.i = _v$28);
+            _v$29 !== _p$.n && _$setAttribute11(_el$1, "x", _p$.n = _v$29);
+            _v$30 !== _p$.s && _$setAttribute11(_el$1, "y", _p$.s = _v$30);
+            return _p$;
+          }, {
+            e: void 0,
+            t: void 0,
+            a: void 0,
+            o: void 0,
+            i: void 0,
+            n: void 0,
+            s: void 0
+          });
+          return _el$8;
+        })();
+      }
+    }), _el$4);
+    _$insert16(_el$2, _$createComponent15(For7, {
+      get each() {
+        return interior();
+      },
+      children: (bx, i) => {
+        const mr = mainRect();
+        const active = () => {
+          const h = hover();
+          return h?.kind === "boundary" && h.index === i() || drag?.kind === "boundary" && drag.index === i();
+        };
+        return (() => {
+          var _el$10 = _tmpl$52();
+          _$effect14((_p$) => {
+            var _v$31 = String(active()), _v$32 = bx * W(), _v$33 = mr.y, _v$34 = bx * W(), _v$35 = mr.y + mr.h;
+            _v$31 !== _p$.e && _$setAttribute11(_el$10, "data-active", _p$.e = _v$31);
+            _v$32 !== _p$.t && _$setAttribute11(_el$10, "x1", _p$.t = _v$32);
+            _v$33 !== _p$.a && _$setAttribute11(_el$10, "y1", _p$.a = _v$33);
+            _v$34 !== _p$.o && _$setAttribute11(_el$10, "x2", _p$.o = _v$34);
+            _v$35 !== _p$.i && _$setAttribute11(_el$10, "y2", _p$.i = _v$35);
+            return _p$;
+          }, {
+            e: void 0,
+            t: void 0,
+            a: void 0,
+            o: void 0,
+            i: void 0
+          });
+          return _el$10;
+        })();
+      }
+    }), _el$4);
+    var _ref$2 = seriesPlayheadEl;
+    typeof _ref$2 === "function" ? _$use9(_ref$2, _el$4) : seriesPlayheadEl = _el$4;
+    var _ref$3 = seriesDotEl;
+    typeof _ref$3 === "function" ? _$use9(_ref$3, _el$5) : seriesDotEl = _el$5;
+    _$insert16(_el$2, _$createComponent15(Show10, {
+      get when() {
+        return driverRect();
+      },
+      children: (dr) => [(() => {
+        var _el$11 = _tmpl$62();
+        _$effect14((_p$) => {
+          var _v$36 = dr().x, _v$37 = dr().y, _v$38 = dr().w, _v$39 = dr().h;
+          _v$36 !== _p$.e && _$setAttribute11(_el$11, "x", _p$.e = _v$36);
+          _v$37 !== _p$.t && _$setAttribute11(_el$11, "y", _p$.t = _v$37);
+          _v$38 !== _p$.a && _$setAttribute11(_el$11, "width", _p$.a = _v$38);
+          _v$39 !== _p$.o && _$setAttribute11(_el$11, "height", _p$.o = _v$39);
+          return _p$;
+        }, {
+          e: void 0,
+          t: void 0,
+          a: void 0,
+          o: void 0
+        });
+        return _el$11;
+      })(), _$createComponent15(For7, {
+        get each() {
+          return laneGridLines(dr());
+        },
+        children: (g) => (() => {
+          var _el$18 = _tmpl$212();
+          _$effect14((_p$) => {
+            var _v$52 = g.gx, _v$53 = g.y1, _v$54 = g.gx, _v$55 = g.y2;
+            _v$52 !== _p$.e && _$setAttribute11(_el$18, "x1", _p$.e = _v$52);
+            _v$53 !== _p$.t && _$setAttribute11(_el$18, "y1", _p$.t = _v$53);
+            _v$54 !== _p$.a && _$setAttribute11(_el$18, "x2", _p$.a = _v$54);
+            _v$55 !== _p$.o && _$setAttribute11(_el$18, "y2", _p$.o = _v$55);
+            return _p$;
+          }, {
+            e: void 0,
+            t: void 0,
+            a: void 0,
+            o: void 0
+          });
+          return _el$18;
+        })()
+      }), _$createComponent15(Show10, {
+        get when() {
+          return hover()?.kind === "driver" && !drag;
+        },
+        get children() {
+          var _el$12 = _tmpl$72();
+          _$effect14((_p$) => {
+            var _v$40 = dr().y, _v$41 = W(), _v$42 = dr().h;
+            _v$40 !== _p$.e && _$setAttribute11(_el$12, "y", _p$.e = _v$40);
+            _v$41 !== _p$.t && _$setAttribute11(_el$12, "width", _p$.t = _v$41);
+            _v$42 !== _p$.a && _$setAttribute11(_el$12, "height", _p$.a = _v$42);
+            return _p$;
+          }, {
+            e: void 0,
+            t: void 0,
+            a: void 0
+          });
+          return _el$12;
+        }
+      }), (() => {
+        var _el$13 = _tmpl$82();
+        _$effect14((_p$) => {
+          var _v$43 = 0 * W(), _v$44 = mapY(dr(), 0), _v$45 = 1 * W(), _v$46 = mapY(dr(), 1);
+          _v$43 !== _p$.e && _$setAttribute11(_el$13, "x1", _p$.e = _v$43);
+          _v$44 !== _p$.t && _$setAttribute11(_el$13, "y1", _p$.t = _v$44);
+          _v$45 !== _p$.a && _$setAttribute11(_el$13, "x2", _p$.a = _v$45);
+          _v$46 !== _p$.o && _$setAttribute11(_el$13, "y2", _p$.o = _v$46);
+          return _p$;
+        }, {
+          e: void 0,
+          t: void 0,
+          a: void 0,
+          o: void 0
+        });
+        return _el$13;
+      })(), (() => {
+        var _el$14 = _tmpl$92();
+        _$effect14(() => _$setAttribute11(_el$14, "d", curvePath(p.driver, dr(), [0, 1])));
+        return _el$14;
+      })(), (() => {
+        var _el$15 = _tmpl$0(), _el$16 = _el$15.firstChild;
+        _$insert16(_el$15, () => p.driver.type, null);
+        _$effect14((_p$) => {
+          var _v$47 = W() * 0.5, _v$48 = dr().y + 13;
+          _v$47 !== _p$.e && _$setAttribute11(_el$15, "x", _p$.e = _v$47);
+          _v$48 !== _p$.t && _$setAttribute11(_el$15, "y", _p$.t = _v$48);
+          return _p$;
+        }, {
+          e: void 0,
+          t: void 0
+        });
+        return _el$15;
+      })(), (() => {
+        var _el$17 = _tmpl$1();
+        var _ref$4 = driverPlayheadEl;
+        typeof _ref$4 === "function" ? _$use9(_ref$4, _el$17) : driverPlayheadEl = _el$17;
+        _$effect14((_p$) => {
+          var _v$49 = dr().y, _v$50 = dr().y + dr().h, _v$51 = p.playheadColor;
+          _v$49 !== _p$.e && _$setAttribute11(_el$17, "y1", _p$.e = _v$49);
+          _v$50 !== _p$.t && _$setAttribute11(_el$17, "y2", _p$.t = _v$50);
+          _v$51 !== _p$.a && _$setStyleProperty6(_el$17, "stroke", _p$.a = _v$51);
+          return _p$;
+        }, {
+          e: void 0,
+          t: void 0,
+          a: void 0
+        });
+        return _el$17;
+      })()]
+    }), null);
+    _$effect14((_p$) => {
+      var _v$ = `${W()}px`, _v$2 = `0 0 ${W()} ${totalH()}`, _v$3 = W(), _v$4 = totalH(), _v$5 = `${W()}px`, _v$6 = `${totalH()}px`, _v$7 = cursor(), _v$8 = p.curveColor, _v$9 = mainRect().x, _v$0 = mainRect().y, _v$1 = mainRect().w, _v$10 = mainRect().h, _v$11 = mainRect().y, _v$12 = mainRect().y + mainRect().h, _v$13 = p.playheadColor, _v$14 = mapY(mainRect(), 0), _v$15 = p.playheadColor;
+      _v$ !== _p$.e && _$setStyleProperty6(_el$, "width", _p$.e = _v$);
+      _v$2 !== _p$.t && _$setAttribute11(_el$2, "viewBox", _p$.t = _v$2);
+      _v$3 !== _p$.a && _$setAttribute11(_el$2, "width", _p$.a = _v$3);
+      _v$4 !== _p$.o && _$setAttribute11(_el$2, "height", _p$.o = _v$4);
+      _v$5 !== _p$.i && _$setStyleProperty6(_el$2, "width", _p$.i = _v$5);
+      _v$6 !== _p$.n && _$setStyleProperty6(_el$2, "height", _p$.n = _v$6);
+      _v$7 !== _p$.s && _$setStyleProperty6(_el$2, "cursor", _p$.s = _v$7);
+      _v$8 !== _p$.h && _$setStyleProperty6(_el$2, "color", _p$.h = _v$8);
+      _v$9 !== _p$.r && _$setAttribute11(_el$3, "x", _p$.r = _v$9);
+      _v$0 !== _p$.d && _$setAttribute11(_el$3, "y", _p$.d = _v$0);
+      _v$1 !== _p$.l && _$setAttribute11(_el$3, "width", _p$.l = _v$1);
+      _v$10 !== _p$.u && _$setAttribute11(_el$3, "height", _p$.u = _v$10);
+      _v$11 !== _p$.c && _$setAttribute11(_el$4, "y1", _p$.c = _v$11);
+      _v$12 !== _p$.w && _$setAttribute11(_el$4, "y2", _p$.w = _v$12);
+      _v$13 !== _p$.m && _$setStyleProperty6(_el$4, "stroke", _p$.m = _v$13);
+      _v$14 !== _p$.f && _$setAttribute11(_el$5, "cy", _p$.f = _v$14);
+      _v$15 !== _p$.y && _$setStyleProperty6(_el$5, "fill", _p$.y = _v$15);
+      return _p$;
+    }, {
+      e: void 0,
+      t: void 0,
+      a: void 0,
+      o: void 0,
+      i: void 0,
+      n: void 0,
+      s: void 0,
+      h: void 0,
+      r: void 0,
+      d: void 0,
+      l: void 0,
+      u: void 0,
+      c: void 0,
+      w: void 0,
+      m: void 0,
+      f: void 0,
+      y: void 0
+    });
+    return _el$;
+  })();
+}
+_$delegateEvents11(["pointerdown", "pointermove", "pointerup", "dblclick"]);
 export {
   ButtonGroup,
   ColorControl,
+  CurveComposer,
   DialRoot,
   DialStore,
   Folder,

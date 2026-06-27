@@ -1,5 +1,5 @@
 import * as vue from 'vue';
-import { ComputedRef, ObjectDirective, InjectionKey, Ref, PropType, h } from 'vue';
+import { ComputedRef, ObjectDirective, InjectionKey, Ref, PropType, h, VNode } from 'vue';
 
 type SpringConfig = {
     type: 'spring';
@@ -921,6 +921,220 @@ declare const WaveformVisualization: vue.DefineComponent<vue.ExtractPropTypes<{
     autoZoomOnLoop: boolean;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
+/** The curve vocabulary a segment cycles through on quick-click. */
+type CurveType = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'spring';
+/** One curve in the series. `weight` is a relative duration share (normalized by the sum). */
+interface CurveSegment {
+    type: CurveType;
+    weight: number;
+    /**
+     * Bipolar -1..1 "energy" bias. 0 = the type's canonical shape; bezier types skew
+     * both x control points (−1 = energy to the onset, +1 = energy to the fall);
+     * spring maps it to bounce (−1 = none → +1 = max).
+     */
+    curvature: number;
+    /**
+     * Bipolar -1..1 steepness — how pronounced the ease is, independent of the energy bias.
+     * Scales each control point's deviation from the linear diagonal: 0 = canonical preset,
+     * +1 = sharper (e.g. easeInOut gets much slower start/end), −1 = flatter toward linear.
+     * Spring maps it to stiffness (snappier rise).
+     */
+    steepness: number;
+}
+/** The stacked driver curve (a single curve, no internal splits). */
+interface CurveDriver {
+    type: CurveType;
+    /** Bipolar -1..1 energy bias — see CurveSegment.curvature. */
+    curvature: number;
+    /** Bipolar -1..1 steepness — see CurveSegment.steepness. */
+    steepness: number;
+}
+type DriverDirection = 'forward' | 'mirror' | 'reverse';
+interface CurveComposition {
+    segments: CurveSegment[];
+    /** null → no driver lane (the component renders a single lane). */
+    driver: CurveDriver | null;
+    direction: DriverDirection;
+}
+
+declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
+    /** The curve series (controlled). */
+    segments: {
+        type: PropType<CurveSegment[]>;
+        required: true;
+    };
+    /** The stacked driver curve, or null for none (adds a second lane below). */
+    driver: {
+        type: PropType<CurveDriver | null>;
+        default: null;
+    };
+    /** Playback direction for the demo playhead (forward / mirror / reverse). */
+    direction: {
+        type: PropType<DriverDirection>;
+        default: string;
+    };
+    /** Commit a changed series — fired live during boundary/curvature drags and on click-cycle. */
+    onSegmentsChange: {
+        type: PropType<(segments: CurveSegment[]) => void>;
+        default: undefined;
+    };
+    /** Commit a changed driver — fired live during driver drags and on click-cycle. */
+    onDriverChange: {
+        type: PropType<(driver: CurveDriver) => void>;
+        default: undefined;
+    };
+    /** Raw transport phase 0..1, polled every frame for a smooth playhead (no parent re-render). */
+    getPhase: {
+        type: PropType<() => number>;
+        default: undefined;
+    };
+    /** Static transport phase 0..1 (used when `getPhase` is absent). */
+    phase: {
+        type: NumberConstructor;
+        default: number;
+    };
+    /** Output mode. 'continuous' reads the composed value each frame; 'trigger' emits via onTrigger. */
+    mode: {
+        type: PropType<"continuous" | "trigger">;
+        default: string;
+    };
+    /** Number of trigger levels in trigger mode. */
+    triggerSteps: {
+        type: NumberConstructor;
+        default: number;
+    };
+    /** Fired in trigger mode when the value crosses a trigger level. */
+    onTrigger: {
+        type: PropType<(index: number) => void>;
+        default: undefined;
+    };
+    /** Curve stroke color. Defaults to the theme text color. */
+    curveColor: {
+        type: StringConstructor;
+        default: undefined;
+    };
+    /** Playhead / marker color. Defaults to the theme text color. */
+    playheadColor: {
+        type: StringConstructor;
+        default: undefined;
+    };
+    /** Faint vertical reference grid behind each lane. */
+    grid: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    gridSubdivisions: {
+        type: NumberConstructor;
+        default: number;
+    };
+    width: {
+        type: NumberConstructor;
+        default: number;
+    };
+    /** Height of the main lane; the driver lane adds height below it. */
+    height: {
+        type: NumberConstructor;
+        default: number;
+    };
+}>, () => VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    /** The curve series (controlled). */
+    segments: {
+        type: PropType<CurveSegment[]>;
+        required: true;
+    };
+    /** The stacked driver curve, or null for none (adds a second lane below). */
+    driver: {
+        type: PropType<CurveDriver | null>;
+        default: null;
+    };
+    /** Playback direction for the demo playhead (forward / mirror / reverse). */
+    direction: {
+        type: PropType<DriverDirection>;
+        default: string;
+    };
+    /** Commit a changed series — fired live during boundary/curvature drags and on click-cycle. */
+    onSegmentsChange: {
+        type: PropType<(segments: CurveSegment[]) => void>;
+        default: undefined;
+    };
+    /** Commit a changed driver — fired live during driver drags and on click-cycle. */
+    onDriverChange: {
+        type: PropType<(driver: CurveDriver) => void>;
+        default: undefined;
+    };
+    /** Raw transport phase 0..1, polled every frame for a smooth playhead (no parent re-render). */
+    getPhase: {
+        type: PropType<() => number>;
+        default: undefined;
+    };
+    /** Static transport phase 0..1 (used when `getPhase` is absent). */
+    phase: {
+        type: NumberConstructor;
+        default: number;
+    };
+    /** Output mode. 'continuous' reads the composed value each frame; 'trigger' emits via onTrigger. */
+    mode: {
+        type: PropType<"continuous" | "trigger">;
+        default: string;
+    };
+    /** Number of trigger levels in trigger mode. */
+    triggerSteps: {
+        type: NumberConstructor;
+        default: number;
+    };
+    /** Fired in trigger mode when the value crosses a trigger level. */
+    onTrigger: {
+        type: PropType<(index: number) => void>;
+        default: undefined;
+    };
+    /** Curve stroke color. Defaults to the theme text color. */
+    curveColor: {
+        type: StringConstructor;
+        default: undefined;
+    };
+    /** Playhead / marker color. Defaults to the theme text color. */
+    playheadColor: {
+        type: StringConstructor;
+        default: undefined;
+    };
+    /** Faint vertical reference grid behind each lane. */
+    grid: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    gridSubdivisions: {
+        type: NumberConstructor;
+        default: number;
+    };
+    width: {
+        type: NumberConstructor;
+        default: number;
+    };
+    /** Height of the main lane; the driver lane adds height below it. */
+    height: {
+        type: NumberConstructor;
+        default: number;
+    };
+}>> & Readonly<{}>, {
+    mode: "continuous" | "trigger";
+    height: number;
+    width: number;
+    direction: DriverDirection;
+    grid: boolean;
+    driver: CurveDriver | null;
+    gridSubdivisions: number;
+    playheadColor: string;
+    onSegmentsChange: (segments: CurveSegment[]) => void;
+    onDriverChange: (driver: CurveDriver) => void;
+    getPhase: () => number;
+    phase: number;
+    triggerSteps: number;
+    onTrigger: (index: number) => void;
+    curveColor: string;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
 declare const TextControl: vue.DefineComponent<vue.ExtractPropTypes<{
     label: {
         type: StringConstructor;
@@ -1047,4 +1261,4 @@ declare const PresetManager: vue.DefineComponent<vue.ExtractPropTypes<{
     activePresetId: string | null;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
-export { type ActionConfig, ButtonGroup, type ColorConfig, ColorControl, type ControlMeta, type DialConfig, type DialKitDirectiveOptions, type DialKitDirectiveValue, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type EasingConfig, EasingVisualization, Folder, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, ShortcutKey, ShortcutListener, type ShortcutState, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, useDialKit, useShortcutContext, vDialKit };
+export { type ActionConfig, ButtonGroup, type ColorConfig, ColorControl, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, type DialConfig, type DialKitDirectiveOptions, type DialKitDirectiveValue, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, Folder, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, ShortcutKey, ShortcutListener, type ShortcutState, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, useDialKit, useShortcutContext, vDialKit };
