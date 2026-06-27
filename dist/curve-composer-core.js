@@ -197,6 +197,27 @@ function setDriverSteepness(comp, steepness) {
   if (!comp.driver) return comp;
   return { ...comp, driver: { ...comp.driver, steepness: clampBipolar(steepness) } };
 }
+var DRAG_ENERGY_GAIN = 0.6;
+var DRAG_STEEP_GAIN = 0.6;
+function toLocalCoords(clientX, clientY, rect, totalH) {
+  const xN = clamp01((clientX - rect.left) / (rect.width || 1));
+  const py = (clientY - rect.top) / (rect.height || 1) * totalH;
+  return { xN, py };
+}
+function pointerTarget(xN, py, segments, layout, edgeHitNorm) {
+  if (layout.driverY != null && py >= layout.driverY) return { kind: "driver" };
+  const b = boundaryAt(xN, segments, edgeHitNorm);
+  if (b != null) return { kind: "boundary", index: b };
+  return { kind: "segment", index: segmentIndexAt(xN, segments) };
+}
+function applySegmentBodyDrag(comp, index, baseCurvature, baseSteepness, dxFrac, dyFrac) {
+  const next = setSegmentCurvature(comp, index, baseCurvature + dxFrac / DRAG_ENERGY_GAIN);
+  return setSegmentSteepness(next, index, baseSteepness - dyFrac / DRAG_STEEP_GAIN);
+}
+function applyDriverBodyDrag(comp, baseCurvature, baseSteepness, dxFrac, dyFrac) {
+  const next = setDriverCurvature(comp, baseCurvature + dxFrac / DRAG_ENERGY_GAIN);
+  return setDriverSteepness(next, baseSteepness - dyFrac / DRAG_STEEP_GAIN);
+}
 function buildSamplers(comp) {
   return {
     segments: comp.segments.map(buildSampler),
@@ -262,9 +283,13 @@ export {
   CURVE_CYCLE,
   CURVE_MIN_WEIGHT_FRAC,
   DEFAULT_TRIGGER_STEPS,
+  DRAG_ENERGY_GAIN,
+  DRAG_STEEP_GAIN,
   DRAG_THRESHOLD,
   EDGE_HIT,
   addDriver,
+  applyDriverBodyDrag,
+  applySegmentBodyDrag,
   boundaries,
   boundaryAt,
   buildSampler,
@@ -275,6 +300,7 @@ export {
   deriveEase,
   directionPhase,
   easingPresets,
+  pointerTarget,
   readComposition,
   redistributeWeight,
   removeDriver,
@@ -286,6 +312,7 @@ export {
   setSegmentCurvature,
   setSegmentSteepness,
   splitSegment,
+  toLocalCoords,
   totalWeight,
   triggerLevels,
   triggersCrossed

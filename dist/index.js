@@ -3962,6 +3962,27 @@ function setDriverSteepness(comp, steepness) {
   if (!comp.driver) return comp;
   return { ...comp, driver: { ...comp.driver, steepness: clampBipolar(steepness) } };
 }
+var DRAG_ENERGY_GAIN = 0.6;
+var DRAG_STEEP_GAIN = 0.6;
+function toLocalCoords(clientX, clientY, rect, totalH) {
+  const xN = clamp01((clientX - rect.left) / (rect.width || 1));
+  const py = (clientY - rect.top) / (rect.height || 1) * totalH;
+  return { xN, py };
+}
+function pointerTarget(xN, py, segments, layout, edgeHitNorm) {
+  if (layout.driverY != null && py >= layout.driverY) return { kind: "driver" };
+  const b = boundaryAt(xN, segments, edgeHitNorm);
+  if (b != null) return { kind: "boundary", index: b };
+  return { kind: "segment", index: segmentIndexAt(xN, segments) };
+}
+function applySegmentBodyDrag(comp, index, baseCurvature, baseSteepness, dxFrac, dyFrac) {
+  const next = setSegmentCurvature(comp, index, baseCurvature + dxFrac / DRAG_ENERGY_GAIN);
+  return setSegmentSteepness(next, index, baseSteepness - dyFrac / DRAG_STEEP_GAIN);
+}
+function applyDriverBodyDrag(comp, baseCurvature, baseSteepness, dxFrac, dyFrac) {
+  const next = setDriverCurvature(comp, baseCurvature + dxFrac / DRAG_ENERGY_GAIN);
+  return setDriverSteepness(next, baseSteepness - dyFrac / DRAG_STEEP_GAIN);
+}
 function buildSamplers(comp) {
   return {
     segments: comp.segments.map(buildSampler),
@@ -4112,11 +4133,10 @@ function CurveComposer({
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [W, laneH, driverH]);
+  const hitLayout = () => ({ totalH, driverY: driverRect ? driverRect.y : null });
   const localCoords = (clientX, clientY) => {
     const rect = svgRef.current.getBoundingClientRect();
-    const xN = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    const py = (clientY - rect.top) / rect.height * totalH;
-    return { xN, py, rectW: rect.width };
+    return { ...toLocalCoords(clientX, clientY, rect, totalH), rectW: rect.width };
   };
   const onPointerDown = (e) => {
     const { xN, py, rectW } = localCoords(e.clientX, e.clientY);
@@ -4124,7 +4144,8 @@ function CurveComposer({
       svgRef.current?.setPointerCapture(e.pointerId);
     } catch {
     }
-    if (driverRect && py >= driverRect.y) {
+    const target = pointerTarget(xN, py, segments, hitLayout(), EDGE_HIT2 / rectW);
+    if (target.kind === "driver") {
       setDrag({
         kind: "driver",
         startX: e.clientX,
@@ -4133,36 +4154,27 @@ function CurveComposer({
         baseSteepness: driver.steepness,
         moved: false
       });
-      return;
+    } else if (target.kind === "boundary") {
+      setDrag({ kind: "boundary", index: target.index, startX: e.clientX, startY: e.clientY, base: composition, moved: false });
+    } else {
+      const seg = segments[target.index];
+      setDrag({
+        kind: "segment",
+        index: target.index,
+        startX: e.clientX,
+        startY: e.clientY,
+        baseCurvature: seg?.curvature ?? 0,
+        baseSteepness: seg?.steepness ?? 0,
+        moved: false
+      });
     }
-    const edgeHitNorm = EDGE_HIT2 / rectW;
-    const bIdx = boundaryAt(xN, segments, edgeHitNorm);
-    if (bIdx != null) {
-      setDrag({ kind: "boundary", index: bIdx, startX: e.clientX, startY: e.clientY, base: composition, moved: false });
-      return;
-    }
-    const sIdx = segmentIndexAt(xN, segments);
-    setDrag({
-      kind: "segment",
-      index: sIdx,
-      startX: e.clientX,
-      startY: e.clientY,
-      baseCurvature: segments[sIdx]?.curvature ?? 0,
-      baseSteepness: segments[sIdx]?.steepness ?? 0,
-      moved: false
-    });
   };
   const onPointerMove = (e) => {
     const d = dragRef.current;
     if (!d) {
       const { xN, py, rectW: rectW2 } = localCoords(e.clientX, e.clientY);
-      if (driverRect && py >= driverRect.y) {
-        setHover({ kind: "driver", index: 0 });
-      } else {
-        const bIdx = boundaryAt(xN, segments, EDGE_HIT2 / rectW2);
-        if (bIdx != null) setHover({ kind: "boundary", index: bIdx });
-        else setHover({ kind: "segment", index: segmentIndexAt(xN, segments) });
-      }
+      const t = pointerTarget(xN, py, segments, hitLayout(), EDGE_HIT2 / rectW2);
+      setHover(t.kind === "driver" ? { kind: "driver", index: 0 } : { kind: t.kind, index: t.index });
       return;
     }
     const svgRect = svgRef.current.getBoundingClientRect();
@@ -4176,17 +4188,15 @@ function CurveComposer({
       onSegmentsChange?.(next.segments);
       if (!d.moved) setDrag({ ...d, moved: true });
     } else if (d.kind === "segment") {
-      const dCurv = (e.clientX - d.startX) / (rectW * 0.6);
-      const dSteep = -(e.clientY - d.startY) / (rectH * 0.6);
-      let next = setSegmentCurvature(composition, d.index, d.baseCurvature + dCurv);
-      next = setSegmentSteepness(next, d.index, d.baseSteepness + dSteep);
+      const dxFrac = (e.clientX - d.startX) / rectW;
+      const dyFrac = (e.clientY - d.startY) / rectH;
+      const next = applySegmentBodyDrag(composition, d.index, d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
       onSegmentsChange?.(next.segments);
       if (!d.moved) setDrag({ ...d, moved: true });
     } else {
-      const dCurv = (e.clientX - d.startX) / (rectW * 0.6);
-      const dSteep = -(e.clientY - d.startY) / (rectH * 0.6);
-      let next = setDriverCurvature(composition, d.baseCurvature + dCurv);
-      next = setDriverSteepness(next, d.baseSteepness + dSteep);
+      const dxFrac = (e.clientX - d.startX) / rectW;
+      const dyFrac = (e.clientY - d.startY) / rectH;
+      const next = applyDriverBodyDrag(composition, d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
       if (next.driver) onDriverChange?.(next.driver);
       if (!d.moved) setDrag({ ...d, moved: true });
     }
@@ -4489,7 +4499,6 @@ export {
   cycleSegmentType,
   defaultComposition,
   defaultListItemParams,
-  directionPhase,
   normalizeListItems,
   parseListItemSchema,
   readComposition,

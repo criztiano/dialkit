@@ -325,6 +325,94 @@ export function setDriverSteepness(comp: CurveComposition, steepness: number): C
   return { ...comp, driver: { ...comp.driver, steepness: clampBipolar(steepness) } };
 }
 
+// --- pointer interaction (shared by every framework wrapper) ---
+//
+// The wrappers own only event binding, pointer capture, the in-progress drag state, and
+// the SVG/DOM writes. The hit-testing and the drag→state math live here so all four ports
+// behave identically. A full ±1 energy / steepness sweep spans this fraction of the lane.
+export const DRAG_ENERGY_GAIN = 0.6;
+export const DRAG_STEEP_GAIN = 0.6;
+
+/** The minimal rectangle a wrapper reads from `getBoundingClientRect()`. */
+export interface ClientRectLike {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/** Which lane regions exist, for hit-testing in viewBox (`py`) units. */
+export interface ComposerHitLayout {
+  /** Total composite height (the viewBox height). */
+  totalH: number;
+  /** y where the driver lane begins, or null when there is no driver lane. */
+  driverY: number | null;
+}
+
+/** A resolved press target inside the composer. */
+export type PointerTarget =
+  | { kind: 'driver' }
+  | { kind: 'boundary'; index: number }
+  | { kind: 'segment'; index: number };
+
+/** Normalize a client point to xN (0..1 across the width) + py (0..totalH down the height). */
+export function toLocalCoords(
+  clientX: number,
+  clientY: number,
+  rect: ClientRectLike,
+  totalH: number
+): { xN: number; py: number } {
+  const xN = clamp01((clientX - rect.left) / (rect.width || 1));
+  const py = ((clientY - rect.top) / (rect.height || 1)) * totalH;
+  return { xN, py };
+}
+
+/**
+ * Resolve what a press at (xN, py) targets: the driver lane, an interior boundary (when
+ * within `edgeHitNorm` of one — this takes priority over the body), else the segment body.
+ */
+export function pointerTarget(
+  xN: number,
+  py: number,
+  segments: CurveSegment[],
+  layout: ComposerHitLayout,
+  edgeHitNorm: number
+): PointerTarget {
+  if (layout.driverY != null && py >= layout.driverY) return { kind: 'driver' };
+  const b = boundaryAt(xN, segments, edgeHitNorm);
+  if (b != null) return { kind: 'boundary', index: b };
+  return { kind: 'segment', index: segmentIndexAt(xN, segments) };
+}
+
+/**
+ * Apply a segment body drag from its press-time baseline: horizontal fraction → energy
+ * bias, vertical fraction (up = more) → steepness. `dxFrac`/`dyFrac` are pixel deltas
+ * divided by the lane width/height.
+ */
+export function applySegmentBodyDrag(
+  comp: CurveComposition,
+  index: number,
+  baseCurvature: number,
+  baseSteepness: number,
+  dxFrac: number,
+  dyFrac: number
+): CurveComposition {
+  const next = setSegmentCurvature(comp, index, baseCurvature + dxFrac / DRAG_ENERGY_GAIN);
+  return setSegmentSteepness(next, index, baseSteepness - dyFrac / DRAG_STEEP_GAIN);
+}
+
+/** Driver-lane equivalent of {@link applySegmentBodyDrag}. */
+export function applyDriverBodyDrag(
+  comp: CurveComposition,
+  baseCurvature: number,
+  baseSteepness: number,
+  dxFrac: number,
+  dyFrac: number
+): CurveComposition {
+  const next = setDriverCurvature(comp, baseCurvature + dxFrac / DRAG_ENERGY_GAIN);
+  return setDriverSteepness(next, baseSteepness - dyFrac / DRAG_STEEP_GAIN);
+}
+
 // --- read pipeline (drives the demo transport + the playhead) ---
 
 export interface CompositionSamplers {

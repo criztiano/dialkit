@@ -37,7 +37,6 @@ export {
   setDriverSteepness,
   buildSamplers,
   readComposition,
-  directionPhase,
   triggerLevels,
   triggersCrossed,
   DEFAULT_TRIGGER_STEPS,

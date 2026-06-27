@@ -85,6 +85,50 @@ declare function removeDriver(comp: CurveComposition): CurveComposition;
 declare function cycleDriverType(comp: CurveComposition): CurveComposition;
 declare function setDriverCurvature(comp: CurveComposition, curvature: number): CurveComposition;
 declare function setDriverSteepness(comp: CurveComposition, steepness: number): CurveComposition;
+declare const DRAG_ENERGY_GAIN = 0.6;
+declare const DRAG_STEEP_GAIN = 0.6;
+/** The minimal rectangle a wrapper reads from `getBoundingClientRect()`. */
+interface ClientRectLike {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+}
+/** Which lane regions exist, for hit-testing in viewBox (`py`) units. */
+interface ComposerHitLayout {
+    /** Total composite height (the viewBox height). */
+    totalH: number;
+    /** y where the driver lane begins, or null when there is no driver lane. */
+    driverY: number | null;
+}
+/** A resolved press target inside the composer. */
+type PointerTarget = {
+    kind: 'driver';
+} | {
+    kind: 'boundary';
+    index: number;
+} | {
+    kind: 'segment';
+    index: number;
+};
+/** Normalize a client point to xN (0..1 across the width) + py (0..totalH down the height). */
+declare function toLocalCoords(clientX: number, clientY: number, rect: ClientRectLike, totalH: number): {
+    xN: number;
+    py: number;
+};
+/**
+ * Resolve what a press at (xN, py) targets: the driver lane, an interior boundary (when
+ * within `edgeHitNorm` of one — this takes priority over the body), else the segment body.
+ */
+declare function pointerTarget(xN: number, py: number, segments: CurveSegment[], layout: ComposerHitLayout, edgeHitNorm: number): PointerTarget;
+/**
+ * Apply a segment body drag from its press-time baseline: horizontal fraction → energy
+ * bias, vertical fraction (up = more) → steepness. `dxFrac`/`dyFrac` are pixel deltas
+ * divided by the lane width/height.
+ */
+declare function applySegmentBodyDrag(comp: CurveComposition, index: number, baseCurvature: number, baseSteepness: number, dxFrac: number, dyFrac: number): CurveComposition;
+/** Driver-lane equivalent of {@link applySegmentBodyDrag}. */
+declare function applyDriverBodyDrag(comp: CurveComposition, baseCurvature: number, baseSteepness: number, dxFrac: number, dyFrac: number): CurveComposition;
 interface CompositionSamplers {
     segments: Sampler[];
     driver: Sampler | null;
@@ -143,4 +187,4 @@ declare function triggersCrossed(prevValue: number, curValue: number, steps: num
 /** A reasonable starting composition for demos / uncontrolled mounts. */
 declare function defaultComposition(): CurveComposition;
 
-export { CURVE_CYCLE, CURVE_MIN_WEIGHT_FRAC, type CompositionRead, type CompositionSamplers, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, DRAG_THRESHOLD, type DriverDirection, EDGE_HIT, type Sampler, addDriver, boundaries, boundaryAt, buildSampler, buildSamplers, cycleDriverType, cycleSegmentType, defaultComposition, deriveEase, directionPhase, easingPresets, readComposition, redistributeWeight, removeDriver, removeSegment, segmentIndexAt, segmentSpan, setDriverCurvature, setDriverSteepness, setSegmentCurvature, setSegmentSteepness, splitSegment, totalWeight, triggerLevels, triggersCrossed };
+export { CURVE_CYCLE, CURVE_MIN_WEIGHT_FRAC, type ClientRectLike, type ComposerHitLayout, type CompositionRead, type CompositionSamplers, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, DRAG_ENERGY_GAIN, DRAG_STEEP_GAIN, DRAG_THRESHOLD, type DriverDirection, EDGE_HIT, type PointerTarget, type Sampler, addDriver, applyDriverBodyDrag, applySegmentBodyDrag, boundaries, boundaryAt, buildSampler, buildSamplers, cycleDriverType, cycleSegmentType, defaultComposition, deriveEase, directionPhase, easingPresets, pointerTarget, readComposition, redistributeWeight, removeDriver, removeSegment, segmentIndexAt, segmentSpan, setDriverCurvature, setDriverSteepness, setSegmentCurvature, setSegmentSteepness, splitSegment, toLocalCoords, totalWeight, triggerLevels, triggersCrossed };
