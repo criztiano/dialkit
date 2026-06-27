@@ -22,8 +22,10 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var index_exports = {};
 __export(index_exports, {
   ButtonGroup: () => ButtonGroup,
+  CURVE_CYCLE: () => CURVE_CYCLE,
   ChipsControl: () => ChipsControl,
   ColorControl: () => ColorControl,
+  CurveComposer: () => CurveComposer,
   DialRoot: () => DialRoot,
   DialStore: () => DialStore,
   EasingVisualization: () => EasingVisualization,
@@ -44,9 +46,22 @@ __export(index_exports, {
   Toggle: () => Toggle,
   TransitionControl: () => TransitionControl,
   WaveformVisualization: () => WaveformVisualization,
+  addDriver: () => addDriver,
+  buildSamplers: () => buildSamplers,
+  cycleDriverType: () => cycleDriverType,
+  cycleSegmentType: () => cycleSegmentType,
+  defaultComposition: () => defaultComposition,
   defaultListItemParams: () => defaultListItemParams,
+  directionPhase: () => directionPhase,
   normalizeListItems: () => normalizeListItems,
   parseListItemSchema: () => parseListItemSchema,
+  readComposition: () => readComposition,
+  redistributeWeight: () => redistributeWeight,
+  removeDriver: () => removeDriver,
+  removeSegment: () => removeSegment,
+  setDriverCurvature: () => setDriverCurvature,
+  setSegmentCurvature: () => setSegmentCurvature,
+  splitSegment: () => splitSegment,
   useDialKit: () => useDialKit
 });
 module.exports = __toCommonJS(index_exports);
@@ -3810,11 +3825,508 @@ function WaveformVisualization({
   ] });
 }
 
-// src/components/ShortcutsMenu.tsx
+// src/components/CurveComposer.tsx
 var import_react24 = require("react");
-var import_react_dom5 = require("react-dom");
-var import_react25 = require("motion/react");
+
+// src/curve-composer-core.ts
+var CURVE_CYCLE = ["linear", "easeIn", "easeOut", "easeInOut", "spring"];
+var easingPresets = {
+  linear: [0, 0, 1, 1],
+  easeIn: [0.42, 0, 1, 1],
+  easeOut: [0, 0, 0.58, 1],
+  easeInOut: [0.42, 0, 0.58, 1]
+};
+var DRAG_THRESHOLD2 = 3;
+var EDGE_HIT2 = 6;
+var CURVE_MIN_WEIGHT_FRAC = 0.06;
+var lerp = (a, b, t) => a + (b - a) * t;
+var clamp01 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
+function deriveEase(type, curvature) {
+  const preset = type === "spring" ? easingPresets.linear : easingPresets[type];
+  const k = clamp01(curvature);
+  const lin = easingPresets.linear;
+  return [
+    lerp(lin[0], preset[0], k),
+    lerp(lin[1], preset[1], k),
+    lerp(lin[2], preset[2], k),
+    lerp(lin[3], preset[3], k)
+  ];
+}
+function bezierAxis(p1, p2, s) {
+  const u = 1 - s;
+  return 3 * u * u * s * p1 + 3 * u * s * s * p2 + s * s * s;
+}
+function bezierAxisDeriv(p1, p2, s) {
+  const u = 1 - s;
+  return 3 * u * u * p1 + 6 * u * s * (p2 - p1) + 3 * s * s * (1 - p2);
+}
+function bezierY(ease, x) {
+  const tx = clamp01(x);
+  let s = tx;
+  for (let i = 0; i < 6; i++) {
+    const xs = bezierAxis(ease[0], ease[2], s) - tx;
+    if (Math.abs(xs) < 1e-5) break;
+    const d = bezierAxisDeriv(ease[0], ease[2], s);
+    if (Math.abs(d) < 1e-6) break;
+    s = clamp01(s - xs / d);
+  }
+  return bezierAxis(ease[1], ease[3], s);
+}
+var SPRING_SAMPLES = 64;
+function springPoints(curvature) {
+  const visualDuration = 1;
+  const bounce = clamp01(curvature);
+  const mass = 1;
+  let stiffness = 2 * Math.PI / visualDuration;
+  stiffness = stiffness * stiffness;
+  const dampingRatio = 1 - bounce;
+  const damping = 2 * dampingRatio * Math.sqrt(stiffness * mass);
+  const raw = [];
+  const steps = SPRING_SAMPLES;
+  const dt = visualDuration / steps;
+  let position = 0;
+  let velocity = 0;
+  for (let i = 0; i <= steps; i++) {
+    raw.push(position);
+    const acceleration = (-stiffness * (position - 1) - damping * velocity) / mass;
+    velocity += acceleration * dt;
+    position += velocity * dt;
+  }
+  let min = Infinity;
+  let max = -Infinity;
+  for (const v of raw) {
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  const span = max - min || 1;
+  return raw.map((v) => (v - min) / span);
+}
+function interp(points, t) {
+  const x = clamp01(t) * (points.length - 1);
+  const i = Math.floor(x);
+  if (i >= points.length - 1) return points[points.length - 1];
+  return lerp(points[i], points[i + 1], x - i);
+}
+function buildSampler(curve) {
+  if (curve.type === "spring") {
+    const pts = springPoints(curve.curvature);
+    return (t) => interp(pts, t);
+  }
+  const ease = deriveEase(curve.type, curve.curvature);
+  return (t) => bezierY(ease, t);
+}
+function boundaries(segments) {
+  const total = totalWeight(segments);
+  const out = [];
+  let acc = 0;
+  for (let i = 0; i < segments.length - 1; i++) {
+    acc += segments[i].weight;
+    out.push(acc / total);
+  }
+  return out;
+}
+function totalWeight(segments) {
+  let t = 0;
+  for (const s of segments) t += Math.max(0, s.weight);
+  return t || 1;
+}
+function segmentSpan(segments, index) {
+  const total = totalWeight(segments);
+  let acc = 0;
+  for (let i = 0; i < index; i++) acc += segments[i].weight;
+  return [acc / total, (acc + segments[index].weight) / total];
+}
+function segmentIndexAt(xNorm, segments) {
+  const total = totalWeight(segments);
+  const x = clamp01(xNorm) * total;
+  let acc = 0;
+  for (let i = 0; i < segments.length; i++) {
+    acc += segments[i].weight;
+    if (x <= acc) return i;
+  }
+  return segments.length - 1;
+}
+function boundaryAt(xNorm, segments, edgeHitNorm) {
+  if (segments.length < 2) return null;
+  const bs = boundaries(segments);
+  let best = null;
+  let bestDist = edgeHitNorm;
+  for (let i = 0; i < bs.length; i++) {
+    const d = Math.abs(xNorm - bs[i]);
+    if (d <= bestDist) {
+      bestDist = d;
+      best = i;
+    }
+  }
+  return best;
+}
+function cloneSegments(comp, segments) {
+  return { ...comp, segments };
+}
+function splitSegment(comp, index) {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const half = { ...src, weight: src.weight / 2 };
+  const next = comp.segments.slice();
+  next.splice(index, 1, half, { ...half });
+  return cloneSegments(comp, next);
+}
+function removeSegment(comp, index) {
+  if (comp.segments.length <= 1) return comp;
+  return cloneSegments(comp, comp.segments.filter((_, i) => i !== index));
+}
+function cycleSegmentType(comp, index) {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(src.type) + 1) % CURVE_CYCLE.length];
+  const next = comp.segments.slice();
+  next[index] = { ...src, type };
+  return cloneSegments(comp, next);
+}
+function setSegmentCurvature(comp, index, curvature) {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const next = comp.segments.slice();
+  next[index] = { ...src, curvature: clamp01(curvature) };
+  return cloneSegments(comp, next);
+}
+function redistributeWeight(comp, boundaryIndex, deltaFrac) {
+  const segs = comp.segments;
+  const i = boundaryIndex;
+  if (i < 0 || i >= segs.length - 1) return comp;
+  const total = totalWeight(segs);
+  const span = segs[i].weight + segs[i + 1].weight;
+  const minW = CURVE_MIN_WEIGHT_FRAC * total;
+  let wi = segs[i].weight + deltaFrac * total;
+  wi = Math.max(minW, Math.min(span - minW, wi));
+  const next = segs.slice();
+  next[i] = { ...segs[i], weight: wi };
+  next[i + 1] = { ...segs[i + 1], weight: span - wi };
+  return cloneSegments(comp, next);
+}
+function addDriver(comp) {
+  if (comp.driver) return comp;
+  return { ...comp, driver: { type: "easeInOut", curvature: 1 } };
+}
+function removeDriver(comp) {
+  return { ...comp, driver: null };
+}
+function cycleDriverType(comp) {
+  if (!comp.driver) return comp;
+  const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(comp.driver.type) + 1) % CURVE_CYCLE.length];
+  return { ...comp, driver: { ...comp.driver, type } };
+}
+function setDriverCurvature(comp, curvature) {
+  if (!comp.driver) return comp;
+  return { ...comp, driver: { ...comp.driver, curvature: clamp01(curvature) } };
+}
+function buildSamplers(comp) {
+  return {
+    segments: comp.segments.map(buildSampler),
+    driver: comp.driver ? buildSampler(comp.driver) : null
+  };
+}
+function directionPhase(u, dir) {
+  const x = clamp01(u);
+  if (dir === "reverse") return 1 - x;
+  if (dir === "mirror") return 1 - Math.abs(1 - 2 * x);
+  return x;
+}
+function readComposition(comp, u, s) {
+  const inputPhase = directionPhase(u, comp.direction);
+  const warpedPhase = s.driver ? clamp01(s.driver(inputPhase)) : inputPhase;
+  const segIndex = segmentIndexAt(warpedPhase, comp.segments);
+  const [a, b] = segmentSpan(comp.segments, segIndex);
+  const localT = b > a ? (warpedPhase - a) / (b - a) : 0;
+  const localValue = s.segments[segIndex] ? s.segments[segIndex](localT) : 0;
+  const value = a + localValue * (b - a);
+  return { inputPhase, warpedPhase, value, localValue, segIndex, localT };
+}
+function defaultComposition() {
+  return {
+    segments: [
+      { type: "easeOut", weight: 1, curvature: 1 },
+      { type: "easeInOut", weight: 1, curvature: 1 }
+    ],
+    driver: null,
+    direction: "forward"
+  };
+}
+
+// src/components/CurveComposer.tsx
 var import_jsx_runtime24 = require("react/jsx-runtime");
+var GAP = 10;
+var PAD_FRAC = 0.12;
+var DRIVER_FRAC = 0.55;
+function CurveComposer({
+  segments,
+  driver = null,
+  direction = "forward",
+  onSegmentsChange,
+  onDriverChange,
+  getPhase,
+  phase = 0,
+  curveColor,
+  playheadColor,
+  grid = false,
+  gridSubdivisions = 8,
+  width = 256,
+  height = 140
+}) {
+  const W = width;
+  const laneH = height;
+  const driverH = driver ? Math.round(height * DRIVER_FRAC) : 0;
+  const totalH = laneH + (driver ? GAP + driverH : 0);
+  const mainRect = { x: 0, y: 0, w: W, h: laneH };
+  const driverRect = driver ? { x: 0, y: laneH + GAP, w: W, h: driverH } : null;
+  const composition = (0, import_react24.useMemo)(
+    () => ({ segments, driver, direction }),
+    [segments, driver, direction]
+  );
+  const samplers = (0, import_react24.useMemo)(() => buildSamplers(composition), [composition]);
+  const liveRef = (0, import_react24.useRef)({ composition, samplers, getPhase, phase });
+  liveRef.current = { composition, samplers, getPhase, phase };
+  const svgRef = (0, import_react24.useRef)(null);
+  const seriesPlayheadRef = (0, import_react24.useRef)(null);
+  const seriesDotRef = (0, import_react24.useRef)(null);
+  const driverPlayheadRef = (0, import_react24.useRef)(null);
+  const [drag, setDrag] = (0, import_react24.useState)(null);
+  const [hover, setHover] = (0, import_react24.useState)(null);
+  const dragRef = (0, import_react24.useRef)(null);
+  dragRef.current = drag;
+  const padY = (r) => r.h * PAD_FRAC;
+  const mapY = (r, ny) => {
+    const top = r.y + padY(r);
+    const bot = r.y + r.h - padY(r);
+    return bot - ny * (bot - top);
+  };
+  (0, import_react24.useEffect)(() => {
+    let raf = 0;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const { composition: c, samplers: s, getPhase: gp, phase: p } = liveRef.current;
+      const u = gp ? gp() : p;
+      const read = readComposition(c, u, s);
+      const sx = read.warpedPhase * W;
+      if (seriesPlayheadRef.current) {
+        seriesPlayheadRef.current.setAttribute("x1", String(sx));
+        seriesPlayheadRef.current.setAttribute("x2", String(sx));
+      }
+      if (seriesDotRef.current) {
+        seriesDotRef.current.setAttribute("cx", String(sx));
+        seriesDotRef.current.setAttribute("cy", String(mapY(mainRect, read.localValue)));
+      }
+      if (driverPlayheadRef.current) {
+        const dx = read.inputPhase * W;
+        driverPlayheadRef.current.setAttribute("x1", String(dx));
+        driverPlayheadRef.current.setAttribute("x2", String(dx));
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [W, laneH, driverH]);
+  const localCoords = (clientX, clientY) => {
+    const rect = svgRef.current.getBoundingClientRect();
+    const xN = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const py = (clientY - rect.top) / rect.height * totalH;
+    return { xN, py, rectW: rect.width };
+  };
+  const onPointerDown = (e) => {
+    const { xN, py, rectW } = localCoords(e.clientX, e.clientY);
+    svgRef.current?.setPointerCapture(e.pointerId);
+    if (driverRect && py >= driverRect.y) {
+      setDrag({ kind: "driver", startX: e.clientX, baseCurvature: driver.curvature, moved: false });
+      return;
+    }
+    const edgeHitNorm = EDGE_HIT2 / rectW;
+    const bIdx = boundaryAt(xN, segments, edgeHitNorm);
+    if (bIdx != null) {
+      setDrag({ kind: "boundary", index: bIdx, startX: e.clientX, base: composition, moved: false });
+      return;
+    }
+    const sIdx = segmentIndexAt(xN, segments);
+    setDrag({
+      kind: "segment",
+      index: sIdx,
+      startX: e.clientX,
+      baseCurvature: segments[sIdx]?.curvature ?? 1,
+      moved: false
+    });
+  };
+  const onPointerMove = (e) => {
+    const d = dragRef.current;
+    if (!d) {
+      const { xN, py, rectW: rectW2 } = localCoords(e.clientX, e.clientY);
+      if (driverRect && py >= driverRect.y) {
+        setHover({ kind: "driver", index: 0 });
+      } else {
+        const bIdx = boundaryAt(xN, segments, EDGE_HIT2 / rectW2);
+        if (bIdx != null) setHover({ kind: "boundary", index: bIdx });
+        else setHover({ kind: "segment", index: segmentIndexAt(xN, segments) });
+      }
+      return;
+    }
+    const rectW = svgRef.current.getBoundingClientRect().width;
+    const moved = Math.abs(e.clientX - d.startX) > DRAG_THRESHOLD2;
+    if (!moved) return;
+    if (d.kind === "boundary") {
+      const deltaFrac = (e.clientX - d.startX) / rectW;
+      const next = redistributeWeight(d.base, d.index, deltaFrac);
+      onSegmentsChange?.(next.segments);
+      if (!d.moved) setDrag({ ...d, moved: true });
+    } else if (d.kind === "segment") {
+      const dCurv = (e.clientX - d.startX) / (rectW * 0.6);
+      const next = setSegmentCurvature(composition, d.index, d.baseCurvature + dCurv);
+      onSegmentsChange?.(next.segments);
+      if (!d.moved) setDrag({ ...d, moved: true });
+    } else {
+      const dCurv = (e.clientX - d.startX) / (rectW * 0.6);
+      const next = setDriverCurvature(composition, d.baseCurvature + dCurv);
+      if (next.driver) onDriverChange?.(next.driver);
+      if (!d.moved) setDrag({ ...d, moved: true });
+    }
+  };
+  const onPointerUp = (e) => {
+    const d = dragRef.current;
+    setDrag(null);
+    try {
+      svgRef.current?.releasePointerCapture(e.pointerId);
+    } catch {
+    }
+    if (!d || d.moved) return;
+    if (d.kind === "driver") {
+      const next = cycleDriverType(composition);
+      if (next.driver) onDriverChange?.(next.driver);
+    } else if (d.kind === "segment") {
+      onSegmentsChange?.(cycleSegmentType(composition, d.index).segments);
+    }
+  };
+  const onPointerCancel = () => setDrag(null);
+  const onDoubleClick = (e) => {
+    const { xN, py } = localCoords(e.clientX, e.clientY);
+    if (driverRect && py >= driverRect.y) return;
+    onSegmentsChange?.(splitSegment(composition, segmentIndexAt(xN, segments)).segments);
+  };
+  const cursor = drag ? drag.kind === "boundary" ? "ew-resize" : "ew-resize" : hover ? "ew-resize" : "default";
+  const curvePath = (0, import_react24.useCallback)(
+    (curve, rect, span) => {
+      const x = (nx) => (span[0] + nx * (span[1] - span[0])) * W;
+      const y = (ny) => mapY(rect, ny);
+      if (curve.type === "spring") {
+        const sampler = buildSampler(curve);
+        const n = 40;
+        let d = `M ${x(0)} ${y(sampler(0))}`;
+        for (let i = 1; i <= n; i++) {
+          const t = i / n;
+          d += ` L ${x(t)} ${y(sampler(t))}`;
+        }
+        return d;
+      }
+      const e = deriveEase(curve.type, curve.curvature);
+      return `M ${x(0)} ${y(0)} C ${x(e[0])} ${y(e[1])}, ${x(e[2])} ${y(e[3])}, ${x(1)} ${y(1)}`;
+    },
+    // mapY depends on the rect passed in; W is closed over.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [W, laneH, driverH]
+  );
+  const interior = boundaries(segments);
+  const renderLaneGrid = (rect) => {
+    if (!grid) return null;
+    const n = Math.max(1, Math.round(gridSubdivisions));
+    const lines = [];
+    for (let i = 1; i < n; i++) {
+      const gx = i / n * W;
+      lines.push(
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("line", { x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h, className: "dialkit-cc-grid" }, `g-${rect.y}-${i}`)
+      );
+    }
+    return lines;
+  };
+  const renderLaneBg = (rect, key) => /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("rect", { className: "dialkit-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 }, key);
+  const diagonal = (rect, span, key) => /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+    "line",
+    {
+      className: "dialkit-cc-diagonal",
+      x1: span[0] * W,
+      y1: mapY(rect, 0),
+      x2: span[1] * W,
+      y2: mapY(rect, 1)
+    },
+    key
+  );
+  return /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { className: "dialkit-cc-wrap", style: { width: W }, children: /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(
+    "svg",
+    {
+      ref: svgRef,
+      className: "dialkit-cc",
+      viewBox: `0 0 ${W} ${totalH}`,
+      width: W,
+      height: totalH,
+      style: { width: W, height: totalH, cursor, color: curveColor },
+      onPointerDown,
+      onPointerMove,
+      onPointerUp,
+      onPointerCancel,
+      onPointerLeave: () => !dragRef.current && setHover(null),
+      onDoubleClick,
+      children: [
+        renderLaneBg(mainRect, "main-bg"),
+        renderLaneGrid(mainRect),
+        hover?.kind === "segment" && !drag && (() => {
+          const span = segmentSpan(segments, hover.index);
+          return /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+            "rect",
+            {
+              className: "dialkit-cc-seg-hover",
+              x: span[0] * W,
+              y: mainRect.y,
+              width: (span[1] - span[0]) * W,
+              height: mainRect.h,
+              rx: 8
+            }
+          );
+        })(),
+        segments.map((seg, i) => {
+          const span = segmentSpan(segments, i);
+          return /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("g", { children: [
+            diagonal(mainRect, span, `diag-${i}`),
+            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("path", { className: "dialkit-cc-curve", d: curvePath(seg, mainRect, span) })
+          ] }, `seg-${i}`);
+        }),
+        interior.map((bx, i) => /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+          "line",
+          {
+            className: "dialkit-cc-boundary",
+            "data-active": String(
+              hover?.kind === "boundary" && hover.index === i || drag?.kind === "boundary" && drag.index === i
+            ),
+            x1: bx * W,
+            y1: mainRect.y,
+            x2: bx * W,
+            y2: mainRect.y + mainRect.h
+          },
+          `b-${i}`
+        )),
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("line", { ref: seriesPlayheadRef, className: "dialkit-cc-playhead", x1: 0, y1: mainRect.y, x2: 0, y2: mainRect.y + mainRect.h, style: { stroke: playheadColor } }),
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("circle", { ref: seriesDotRef, className: "dialkit-cc-dot", cx: 0, cy: mapY(mainRect, 0), r: 3, style: { fill: playheadColor } }),
+        driverRect && /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(import_jsx_runtime24.Fragment, { children: [
+          renderLaneBg(driverRect, "driver-bg"),
+          renderLaneGrid(driverRect),
+          hover?.kind === "driver" && !drag && /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("rect", { className: "dialkit-cc-seg-hover", x: 0, y: driverRect.y, width: W, height: driverRect.h, rx: 8 }),
+          diagonal(driverRect, [0, 1], "driver-diag"),
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("path", { className: "dialkit-cc-curve dialkit-cc-curve-driver", d: curvePath(driver, driverRect, [0, 1]) }),
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("line", { ref: driverPlayheadRef, className: "dialkit-cc-playhead", x1: 0, y1: driverRect.y, x2: 0, y2: driverRect.y + driverRect.h, style: { stroke: playheadColor } })
+        ] })
+      ]
+    }
+  ) });
+}
+
+// src/components/ShortcutsMenu.tsx
+var import_react25 = require("react");
+var import_react_dom5 = require("react-dom");
+var import_react26 = require("motion/react");
+var import_jsx_runtime25 = require("react/jsx-runtime");
 function formatShortcutKey(sc) {
   if (!sc.key) return "\u2014";
   const mod = sc.modifier === "alt" ? "\u2325" : sc.modifier === "shift" ? "\u21E7" : sc.modifier === "meta" ? "\u2318" : "";
@@ -3834,23 +4346,23 @@ function formatInteraction(sc) {
   }
 }
 function ShortcutsMenu({ panelId }) {
-  const [isOpen, setIsOpen] = (0, import_react24.useState)(false);
-  const triggerRef = (0, import_react24.useRef)(null);
-  const dropdownRef = (0, import_react24.useRef)(null);
-  const [pos, setPos] = (0, import_react24.useState)({ top: 0, right: 0 });
-  const open = (0, import_react24.useCallback)(() => {
+  const [isOpen, setIsOpen] = (0, import_react25.useState)(false);
+  const triggerRef = (0, import_react25.useRef)(null);
+  const dropdownRef = (0, import_react25.useRef)(null);
+  const [pos, setPos] = (0, import_react25.useState)({ top: 0, right: 0 });
+  const open = (0, import_react25.useCallback)(() => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
       setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
     }
     setIsOpen(true);
   }, []);
-  const close = (0, import_react24.useCallback)(() => setIsOpen(false), []);
-  const toggle = (0, import_react24.useCallback)(() => {
+  const close = (0, import_react25.useCallback)(() => setIsOpen(false), []);
+  const toggle = (0, import_react25.useCallback)(() => {
     if (isOpen) close();
     else open();
   }, [isOpen, open, close]);
-  (0, import_react24.useEffect)(() => {
+  (0, import_react25.useEffect)(() => {
     if (!isOpen) return;
     const handler = (e) => {
       const target = e.target;
@@ -3881,9 +4393,9 @@ function ShortcutsMenu({ panelId }) {
       label: findLabel(panel.controls)
     };
   });
-  return /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(import_jsx_runtime24.Fragment, { children: [
-    /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
-      import_react25.motion.button,
+  return /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(import_jsx_runtime25.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+      import_react26.motion.button,
       {
         ref: triggerRef,
         className: "dialkit-shortcuts-trigger",
@@ -3891,19 +4403,19 @@ function ShortcutsMenu({ panelId }) {
         title: "Keyboard shortcuts",
         whileTap: { scale: 0.9 },
         transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-        children: /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("path", { d: "M6 10H6.01" }),
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("path", { d: "M10 10H10.01" }),
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("path", { d: "M14 10H14.01" }),
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("path", { d: "M18 10H18.01" }),
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("path", { d: "M8 14H16" })
+        children: /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("path", { d: "M6 10H6.01" }),
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("path", { d: "M10 10H10.01" }),
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("path", { d: "M14 10H14.01" }),
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("path", { d: "M18 10H18.01" }),
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("path", { d: "M8 14H16" })
         ] })
       }
     ),
     (0, import_react_dom5.createPortal)(
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(import_react25.AnimatePresence, { children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(
-        import_react25.motion.div,
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(import_react26.AnimatePresence, { children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(
+        import_react26.motion.div,
         {
           ref: dropdownRef,
           className: "dialkit-root dialkit-shortcuts-dropdown",
@@ -3913,13 +4425,13 @@ function ShortcutsMenu({ panelId }) {
           exit: { opacity: 0, y: 4, scale: 0.97, pointerEvents: "none" },
           transition: { type: "spring", visualDuration: 0.15, bounce: 0 },
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { className: "dialkit-shortcuts-title", children: "Keyboard Shortcuts" }),
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { className: "dialkit-shortcuts-list", children: rows.map((row) => /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "dialkit-shortcuts-row", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "dialkit-shortcuts-row-key", children: formatShortcutKey(row.shortcut) }),
-              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "dialkit-shortcuts-row-label", children: row.label }),
-              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "dialkit-shortcuts-row-mode", children: formatInteraction(row.shortcut) })
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { className: "dialkit-shortcuts-title", children: "Keyboard Shortcuts" }),
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { className: "dialkit-shortcuts-list", children: rows.map((row) => /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "dialkit-shortcuts-row", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "dialkit-shortcuts-row-key", children: formatShortcutKey(row.shortcut) }),
+              /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "dialkit-shortcuts-row-label", children: row.label }),
+              /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "dialkit-shortcuts-row-mode", children: formatInteraction(row.shortcut) })
             ] }, row.path)) }),
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { className: "dialkit-shortcuts-hint", children: "See pill badges on controls for keys" })
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { className: "dialkit-shortcuts-hint", children: "See pill badges on controls for keys" })
           ]
         }
       ) }),
@@ -3930,8 +4442,10 @@ function ShortcutsMenu({ panelId }) {
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   ButtonGroup,
+  CURVE_CYCLE,
   ChipsControl,
   ColorControl,
+  CurveComposer,
   DialRoot,
   DialStore,
   EasingVisualization,
@@ -3952,9 +4466,22 @@ function ShortcutsMenu({ panelId }) {
   Toggle,
   TransitionControl,
   WaveformVisualization,
+  addDriver,
+  buildSamplers,
+  cycleDriverType,
+  cycleSegmentType,
+  defaultComposition,
   defaultListItemParams,
+  directionPhase,
   normalizeListItems,
   parseListItemSchema,
+  readComposition,
+  redistributeWeight,
+  removeDriver,
+  removeSegment,
+  setDriverCurvature,
+  setSegmentCurvature,
+  splitSegment,
   useDialKit
 });
 //# sourceMappingURL=index.cjs.map

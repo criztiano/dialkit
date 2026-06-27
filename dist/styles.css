@@ -2157,3 +2157,80 @@
   }
 
 }
+
+/* Curve Composer — SVG curve series + optional driver lane.
+   Strokes use currentColor + stroke-opacity so dark/light/system theme for free;
+   only the lane fills reference --dial-* tokens. */
+.dialkit-cc-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.dialkit-cc {
+  display: block;
+  color: var(--dial-text-root);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.dialkit-cc-lane {
+  fill: var(--dial-surface);
+}
+
+.dialkit-cc-seg-hover {
+  fill: var(--dial-surface-hover);
+  pointer-events: none;
+}
+
+.dialkit-cc-grid {
+  stroke: currentColor;
+  stroke-opacity: 0.08;
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+.dialkit-cc-diagonal {
+  stroke: currentColor;
+  stroke-opacity: 0.15;
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  pointer-events: none;
+}
+
+.dialkit-cc-curve {
+  fill: none;
+  stroke: currentColor;
+  stroke-opacity: 0.85;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.dialkit-cc-curve-driver {
+  stroke-opacity: 0.6;
+}
+
+.dialkit-cc-boundary {
+  stroke: currentColor;
+  stroke-opacity: 0.18;
+  stroke-width: 1;
+  transition: stroke-opacity 0.15s ease, stroke-width 0.15s ease;
+}
+
+.dialkit-cc-boundary[data-active="true"] {
+  stroke-opacity: 0.7;
+  stroke-width: 2;
+}
+
+.dialkit-cc-playhead {
+  stroke: currentColor;
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+.dialkit-cc-dot {
+  fill: currentColor;
+  pointer-events: none;
+}

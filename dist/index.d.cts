@@ -477,6 +477,107 @@ interface WaveformVisualizationProps {
 }
 declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, pixelSize, grid, gridSubdivisions, onSeek, loop, onLoopChange, waveColor, playheadColor, autoZoomOnLoop, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
 
+/** The curve vocabulary a segment cycles through on quick-click. */
+type CurveType = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'spring';
+/** Cycle order for quick-click (loops back to the start). */
+declare const CURVE_CYCLE: CurveType[];
+/** One curve in the series. `weight` is a relative duration share (normalized by the sum). */
+interface CurveSegment {
+    type: CurveType;
+    weight: number;
+    /** 0..1 intensity — bezier: lerp linear↔preset; spring: bounce amount. */
+    curvature: number;
+}
+/** The stacked driver curve (a single curve, no internal splits). */
+interface CurveDriver {
+    type: CurveType;
+    curvature: number;
+}
+type DriverDirection = 'forward' | 'mirror' | 'reverse';
+interface CurveComposition {
+    segments: CurveSegment[];
+    /** null → no driver lane (the component renders a single lane). */
+    driver: CurveDriver | null;
+    direction: DriverDirection;
+}
+/** A pure `(t) -> value` sampler over local time, both in 0..1 (value may overshoot for springs). */
+type Sampler = (t: number) => number;
+/** Halve the segment at `index` and insert a copy after it (inherits type + curvature). */
+declare function splitSegment(comp: CurveComposition, index: number): CurveComposition;
+/** Remove the segment at `index` (no-op when it's the only one). */
+declare function removeSegment(comp: CurveComposition, index: number): CurveComposition;
+declare function cycleSegmentType(comp: CurveComposition, index: number): CurveComposition;
+declare function setSegmentCurvature(comp: CurveComposition, index: number, curvature: number): CurveComposition;
+/**
+ * Move `deltaFrac` (0..1 of the whole series) across the boundary between segment
+ * `boundaryIndex` and the next, keeping the rest untouched and the pair's combined
+ * width constant. Each side is clamped to `CURVE_MIN_WEIGHT_FRAC`.
+ */
+declare function redistributeWeight(comp: CurveComposition, boundaryIndex: number, deltaFrac: number): CurveComposition;
+declare function addDriver(comp: CurveComposition): CurveComposition;
+declare function removeDriver(comp: CurveComposition): CurveComposition;
+declare function cycleDriverType(comp: CurveComposition): CurveComposition;
+declare function setDriverCurvature(comp: CurveComposition, curvature: number): CurveComposition;
+interface CompositionSamplers {
+    segments: Sampler[];
+    driver: Sampler | null;
+}
+declare function buildSamplers(comp: CurveComposition): CompositionSamplers;
+/** Apply playback direction to the raw loop phase u (0..1). */
+declare function directionPhase(u: number, dir: DriverDirection): number;
+interface CompositionRead {
+    /** Read position after direction, before the driver warps it (0..1) — the driver lane marker. */
+    inputPhase: number;
+    /** Read position after the driver warps it (0..1) — the series lane playhead. */
+    warpedPhase: number;
+    /**
+     * Composed output, 0..1 — a CONTINUOUS chain: each segment's shape plays within its
+     * own time band [a,b], so the output advances monotonically across dividers instead
+     * of resetting. Reduces to the identity diagonal when every segment is linear.
+     */
+    value: number;
+    /** The active segment's local eased value, 0..1 — rides the per-box visible curve (the dot). */
+    localValue: number;
+    segIndex: number;
+    localT: number;
+}
+/**
+ * Read the composition at raw loop phase `u`. direction reverses/ping-pongs the
+ * traversal of the whole composition; the driver then warps the reading pace. The
+ * segments render as independent 0..1 boxes but read as one continuous chain.
+ */
+declare function readComposition(comp: CurveComposition, u: number, s: CompositionSamplers): CompositionRead;
+/** A reasonable starting composition for demos / uncontrolled mounts. */
+declare function defaultComposition(): CurveComposition;
+
+interface CurveComposerProps {
+    /** The curve series (controlled). */
+    segments: CurveSegment[];
+    /** The stacked driver curve, or null for none (adds a second lane below). */
+    driver?: CurveDriver | null;
+    /** Playback direction for the demo playhead (forward / mirror / reverse). */
+    direction?: DriverDirection;
+    /** Commit a changed series — fired live during boundary/curvature drags and on click-cycle. */
+    onSegmentsChange?: (segments: CurveSegment[]) => void;
+    /** Commit a changed driver — fired live during driver drags and on click-cycle. */
+    onDriverChange?: (driver: CurveDriver) => void;
+    /** Raw transport phase 0..1, polled every frame for a smooth playhead (no parent re-render). */
+    getPhase?: () => number;
+    /** Static transport phase 0..1 (used when `getPhase` is absent). */
+    phase?: number;
+    /** Curve stroke color. Defaults to the theme text color. */
+    curveColor?: string;
+    /** Playhead / marker color. Defaults to the theme text color. */
+    playheadColor?: string;
+    /** Faint vertical reference grid behind each lane. */
+    grid?: boolean;
+    gridSubdivisions?: number;
+    width?: number;
+    /** Height of the main lane; the driver lane adds height below it. */
+    height?: number;
+}
+declare function CurveComposer({ segments, driver, direction, onSegmentsChange, onDriverChange, getPhase, phase, curveColor, playheadColor, grid, gridSubdivisions, width, height, }: CurveComposerProps): react_jsx_runtime.JSX.Element;
+
 interface TextControlProps {
     label: string;
     value: string;
@@ -566,4 +667,4 @@ interface ShortcutsMenuProps {
 }
 declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react_jsx_runtime.JSX.Element | null;
 
-export { type ActionConfig, ButtonGroup, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ControlMeta, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, defaultListItemParams, normalizeListItems, parseListItemSchema, useDialKit };
+export { type ActionConfig, ButtonGroup, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, addDriver, buildSamplers, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, directionPhase, normalizeListItems, parseListItemSchema, readComposition, redistributeWeight, removeDriver, removeSegment, setDriverCurvature, setSegmentCurvature, splitSegment, useDialKit };
