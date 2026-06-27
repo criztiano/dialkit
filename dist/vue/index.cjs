@@ -4064,8 +4064,17 @@ var CurveComposer = (0, import_vue22.defineComponent)({
     };
     let raf = 0;
     let prevTrigValue = Number.NaN;
+    let armW = Number.NaN;
+    let armLaneH = Number.NaN;
+    let armDriverH = Number.NaN;
     const tick = () => {
       raf = requestAnimationFrame(tick);
+      if (W.value !== armW || laneH.value !== armLaneH || driverH.value !== armDriverH) {
+        prevTrigValue = Number.NaN;
+        armW = W.value;
+        armLaneH = laneH.value;
+        armDriverH = driverH.value;
+      }
       const c = composition.value;
       const s = samplers.value;
       const u = props.getPhase ? props.getPhase() : props.phase;
@@ -4094,12 +4103,6 @@ var CurveComposer = (0, import_vue22.defineComponent)({
         prevTrigValue = Number.NaN;
       }
     };
-    (0, import_vue22.watch)(
-      [W, laneH, driverH],
-      () => {
-        prevTrigValue = Number.NaN;
-      }
-    );
     (0, import_vue22.onMounted)(() => {
       raf = requestAnimationFrame(tick);
     });

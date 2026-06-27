@@ -3700,7 +3700,6 @@ import {
   h as h21,
   ref as ref16,
   computed as computed5,
-  watch as watch7,
   onMounted as onMounted13,
   onBeforeUnmount as onBeforeUnmount2
 } from "vue";
@@ -4027,8 +4026,17 @@ var CurveComposer = defineComponent21({
     };
     let raf = 0;
     let prevTrigValue = Number.NaN;
+    let armW = Number.NaN;
+    let armLaneH = Number.NaN;
+    let armDriverH = Number.NaN;
     const tick = () => {
       raf = requestAnimationFrame(tick);
+      if (W.value !== armW || laneH.value !== armLaneH || driverH.value !== armDriverH) {
+        prevTrigValue = Number.NaN;
+        armW = W.value;
+        armLaneH = laneH.value;
+        armDriverH = driverH.value;
+      }
       const c = composition.value;
       const s = samplers.value;
       const u = props.getPhase ? props.getPhase() : props.phase;
@@ -4057,12 +4065,6 @@ var CurveComposer = defineComponent21({
         prevTrigValue = Number.NaN;
       }
     };
-    watch7(
-      [W, laneH, driverH],
-      () => {
-        prevTrigValue = Number.NaN;
-      }
-    );
     onMounted13(() => {
       raf = requestAnimationFrame(tick);
     });

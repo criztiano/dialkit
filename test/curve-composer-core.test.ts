@@ -84,6 +84,17 @@ describe('triggersCrossed — smooth crossings', () => {
     expect(triggersCrossed(0.6, 0.2, 5)).toEqual([2, 1]); // crossed 0.5 then 0.25
   });
 
+  it('locks the inclusive-endpoint convention: ascending includes a level it lands on, descending excludes the one it starts on', () => {
+    // ascending (p, c]: landing exactly on 0.5 fires it
+    expect(triggersCrossed(0.3, 0.5, 5)).toEqual([2]);
+    // descending [c, p): starting exactly on 0.5 does NOT re-fire it (already fired on the way up)
+    expect(triggersCrossed(0.5, 0.3, 5)).toEqual([]);
+  });
+
+  it('fires only the interior level when the first post-flyback frame jumps straight onto it', () => {
+    expect(triggersCrossed(0.0, 0.3, 5)).toEqual([1]); // no residual endpoint double-fire
+  });
+
   it('does not fire when the value is flat', () => {
     expect(triggersCrossed(0.5, 0.5, 5)).toEqual([]);
   });
@@ -166,12 +177,49 @@ describe('triggersCrossed — over a transport loop', () => {
     expect(counts[0] ?? 0).toBe(0); // floor never fires going forward
   });
 
-  it('reverse: interior levels still fire (descending) and the floor fires on flyback', () => {
+  it('reverse: interior levels fire equally (descending) and the floor fires on flyback', () => {
     const counts = loopFires({ ...oneSeg('linear'), direction: 'reverse' });
+    expect(counts[1]).toBe(counts[2]); // a per-segment double-fire on descent would break equality
+    expect(counts[2]).toBe(counts[3]);
+    expect(counts[1]).toBeGreaterThan(0);
+    expect(counts[0] ?? 0).toBeGreaterThan(0); // reverse walks bottom out → floor fires
+    expect(counts[4] ?? 0).toBe(0); // top never fires going in reverse
+  });
+
+  it('mirror: interior levels fire on BOTH legs and the smooth peak/trough fires no endpoint', () => {
+    const counts = loopFires({ ...oneSeg('linear'), direction: 'mirror' });
+    expect(counts[1]).toBe(counts[3]); // symmetric up-leg + down-leg
     expect(counts[1]).toBeGreaterThan(0);
     expect(counts[2]).toBeGreaterThan(0);
-    expect(counts[3]).toBeGreaterThan(0);
-    expect(counts[0] ?? 0).toBeGreaterThan(0); // reverse walks bottom out → floor fires
+    // the turnaround is a smooth peak (value 0→1→0), NOT a flyback → no endpoint must fire
+    expect(counts[0] ?? 0).toBe(0);
+    expect(counts[4] ?? 0).toBe(0);
+  });
+
+  it('spring through the loop: overshoot/settle never phantom-fires; top fires once per walk', () => {
+    const counts = loopFires(oneSeg('spring', 1)); // max bounce → overshoots past 1
+    expect(counts[1]).toBe(counts[2]); // interior levels fire once per walk, equally
+    expect(counts[2]).toBe(counts[3]);
+    expect(counts[4]).toBeGreaterThan(0); // top fires on the flyback (clamped overshoot, no extra)
+    expect(counts[0] ?? 0).toBe(0);
+  });
+
+  it('a non-linear driver re-paces trigger timing (the driver warp is exercised)', () => {
+    const firstFire = (comp: CurveComposition): number => {
+      const s = buildSamplers(comp);
+      let prev = Number.NaN;
+      for (let i = 0; i <= 1000; i++) {
+        const u = i / 1000;
+        const v = readComposition(comp, u, s).value;
+        if (!Number.isNaN(prev) && triggersCrossed(prev, v, 5).includes(1)) return u;
+        prev = v;
+      }
+      return Infinity;
+    };
+    const plain = firstFire(oneSeg('linear'));
+    const driven = firstFire({ ...oneSeg('linear'), driver: { type: 'easeIn', curvature: 0, steepness: 0 } });
+    // an easeIn driver dwells near 0 early, so level 1 (value 0.25) is reached later
+    expect(driven).toBeGreaterThan(plain + 0.1);
   });
 });
 

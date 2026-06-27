@@ -109,9 +109,11 @@ export function CurveComposer(props: CurveComposerProps) {
   const driverH = () => (p.driver ? Math.round(p.height * DRIVER_FRAC) : 0);
   const totalH = () => laneH() + (p.driver ? GAP + driverH() : 0);
 
-  const mainRect = (): Rect => ({ x: 0, y: 0, w: W(), h: laneH() });
-  const driverRect = (): Rect | null =>
-    p.driver ? { x: 0, y: laneH() + GAP, w: W(), h: driverH() } : null;
+  // Memoized so the rAF loop reads a cached object instead of allocating a Rect every frame.
+  const mainRect = createMemo<Rect>(() => ({ x: 0, y: 0, w: W(), h: laneH() }));
+  const driverRect = createMemo<Rect | null>(() =>
+    p.driver ? { x: 0, y: laneH() + GAP, w: W(), h: driverH() } : null
+  );
 
   const composition = createMemo<CurveComposition>(() => ({
     segments: p.segments,

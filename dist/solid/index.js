@@ -3995,18 +3995,18 @@ function CurveComposer(props) {
   const laneH = () => p.height;
   const driverH = () => p.driver ? Math.round(p.height * DRIVER_FRAC) : 0;
   const totalH = () => laneH() + (p.driver ? GAP + driverH() : 0);
-  const mainRect = () => ({
+  const mainRect = createMemo2(() => ({
     x: 0,
     y: 0,
     w: W(),
     h: laneH()
-  });
-  const driverRect = () => p.driver ? {
+  }));
+  const driverRect = createMemo2(() => p.driver ? {
     x: 0,
     y: laneH() + GAP,
     w: W(),
     h: driverH()
-  } : null;
+  } : null);
   const composition = createMemo2(() => ({
     segments: p.segments,
     driver: p.driver,

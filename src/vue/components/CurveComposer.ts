@@ -3,7 +3,6 @@ import {
   h,
   ref,
   computed,
-  watch,
   onMounted,
   onBeforeUnmount,
   type PropType,
@@ -136,9 +135,21 @@ export const CurveComposer = defineComponent({
     let raf = 0;
     // Tracks the composed value across frames to detect trigger-level crossings.
     let prevTrigValue = Number.NaN;
+    // Re-arm tracking: snapshot the geometry inside the tick so the reset is atomic with
+    // the read. A separate async `watch` would flush a frame late and could let one tick
+    // compare across two compositions (a phantom trigger).
+    let armW = Number.NaN;
+    let armLaneH = Number.NaN;
+    let armDriverH = Number.NaN;
 
     const tick = () => {
       raf = requestAnimationFrame(tick);
+      if (W.value !== armW || laneH.value !== armLaneH || driverH.value !== armDriverH) {
+        prevTrigValue = Number.NaN;
+        armW = W.value;
+        armLaneH = laneH.value;
+        armDriverH = driverH.value;
+      }
       const c = composition.value;
       const s = samplers.value;
       const u = props.getPhase ? props.getPhase() : props.phase;
@@ -169,15 +180,6 @@ export const CurveComposer = defineComponent({
         prevTrigValue = Number.NaN;
       }
     };
-
-    // Re-prime crossing detection whenever the geometry re-arms: a geometry-driven re-arm
-    // must not compare the first frame against a value from the previous composition.
-    watch(
-      [W, laneH, driverH],
-      () => {
-        prevTrigValue = Number.NaN;
-      }
-    );
 
     onMounted(() => {
       raf = requestAnimationFrame(tick);
