@@ -3934,6 +3934,55 @@ function readComposition(comp, u, s) {
   const value = s.segments[segIndex] ? s.segments[segIndex](localT) : 0;
   return { inputPhase, warpedPhase, value, segIndex, localT };
 }
+var COMPOSER_GAP = 10;
+var COMPOSER_PAD_FRAC = 0.18;
+var COMPOSER_DRIVER_FRAC = 0.55;
+function composerLayout(width, height, hasDriver) {
+  const driverH = hasDriver ? Math.round(height * COMPOSER_DRIVER_FRAC) : 0;
+  const totalH = height + (hasDriver ? COMPOSER_GAP + driverH : 0);
+  return {
+    W: width,
+    totalH,
+    mainRect: { x: 0, y: 0, w: width, h: height },
+    driverRect: hasDriver ? { x: 0, y: height + COMPOSER_GAP, w: width, h: driverH } : null
+  };
+}
+function mapY(rect, ny) {
+  const pad = rect.h * COMPOSER_PAD_FRAC;
+  const top = rect.y + pad;
+  const bot = rect.y + rect.h - pad;
+  return bot - ny * (bot - top);
+}
+function spanX(span, nx, W) {
+  return (span[0] + nx * (span[1] - span[0])) * W;
+}
+function curvePath(curve, rect, span, W, samples = 40) {
+  const x = (nx) => spanX(span, nx, W);
+  const y = (ny) => mapY(rect, ny);
+  if (curve.type === "spring") {
+    const sampler = buildSampler(curve);
+    let d = `M ${x(0)} ${y(sampler(0))}`;
+    for (let i = 1; i <= samples; i++) {
+      const t = i / samples;
+      d += ` L ${x(t)} ${y(sampler(t))}`;
+    }
+    return d;
+  }
+  const e = deriveEase(curve.type, curve.curvature, curve.steepness);
+  return `M ${x(0)} ${y(0)} C ${x(e[0])} ${y(e[1])}, ${x(e[2])} ${y(e[3])}, ${x(1)} ${y(1)}`;
+}
+function diagonalLine(rect, span, W) {
+  return { x1: span[0] * W, y1: mapY(rect, 0), x2: span[1] * W, y2: mapY(rect, 1) };
+}
+function playheadGeometry(read, layout) {
+  const seriesX = read.warpedPhase * layout.W;
+  return {
+    seriesX,
+    dotX: seriesX,
+    dotY: mapY(layout.mainRect, read.value),
+    driverX: read.inputPhase * layout.W
+  };
+}
 var DEFAULT_TRIGGER_STEPS = 5;
 var TRIGGER_FLYBACK = 0.5;
 function triggersCrossed(prevValue, curValue, steps) {
@@ -3960,9 +4009,6 @@ function triggersCrossed(prevValue, curValue, steps) {
 }
 
 // src/vue/components/CurveComposer.ts
-var GAP = 10;
-var PAD_FRAC = 0.18;
-var DRIVER_FRAC = 0.55;
 var CurveComposer = defineComponent21({
   name: "DialKitCurveComposer",
   props: {
@@ -4004,56 +4050,44 @@ var CurveComposer = defineComponent21({
     const driverPlayheadRef = ref16(null);
     const drag = ref16(null);
     const hover = ref16(null);
-    const W = computed5(() => props.width);
-    const laneH = computed5(() => props.height);
-    const driverH = computed5(() => props.driver ? Math.round(props.height * DRIVER_FRAC) : 0);
-    const totalH = computed5(() => laneH.value + (props.driver ? GAP + driverH.value : 0));
-    const mainRect = computed5(() => ({ x: 0, y: 0, w: W.value, h: laneH.value }));
-    const driverRect = computed5(
-      () => props.driver ? { x: 0, y: laneH.value + GAP, w: W.value, h: driverH.value } : null
-    );
+    const layout = computed5(() => composerLayout(props.width, props.height, props.driver != null));
+    const W = computed5(() => layout.value.W);
+    const totalH = computed5(() => layout.value.totalH);
+    const mainRect = computed5(() => layout.value.mainRect);
+    const driverRect = computed5(() => layout.value.driverRect);
     const composition = computed5(() => ({
       segments: props.segments,
       driver: props.driver,
       direction: props.direction
     }));
     const samplers = computed5(() => buildSamplers(composition.value));
-    const padY = (r) => r.h * PAD_FRAC;
-    const mapY = (r, ny) => {
-      const top = r.y + padY(r);
-      const bot = r.y + r.h - padY(r);
-      return bot - ny * (bot - top);
-    };
     let raf = 0;
     let prevTrigValue = Number.NaN;
     let armW = Number.NaN;
-    let armLaneH = Number.NaN;
-    let armDriverH = Number.NaN;
+    let armTotalH = Number.NaN;
     const tick = () => {
       raf = requestAnimationFrame(tick);
-      if (W.value !== armW || laneH.value !== armLaneH || driverH.value !== armDriverH) {
+      if (W.value !== armW || totalH.value !== armTotalH) {
         prevTrigValue = Number.NaN;
         armW = W.value;
-        armLaneH = laneH.value;
-        armDriverH = driverH.value;
+        armTotalH = totalH.value;
       }
       const c = composition.value;
       const s = samplers.value;
       const u = props.getPhase ? props.getPhase() : props.phase;
       const read = readComposition(c, u, s);
-      const sx = read.warpedPhase * W.value;
+      const geo = playheadGeometry(read, layout.value);
       if (seriesPlayheadRef.value) {
-        seriesPlayheadRef.value.setAttribute("x1", String(sx));
-        seriesPlayheadRef.value.setAttribute("x2", String(sx));
+        seriesPlayheadRef.value.setAttribute("x1", String(geo.seriesX));
+        seriesPlayheadRef.value.setAttribute("x2", String(geo.seriesX));
       }
       if (seriesDotRef.value) {
-        seriesDotRef.value.setAttribute("cx", String(sx));
-        seriesDotRef.value.setAttribute("cy", String(mapY(mainRect.value, read.value)));
+        seriesDotRef.value.setAttribute("cx", String(geo.dotX));
+        seriesDotRef.value.setAttribute("cy", String(geo.dotY));
       }
       if (driverPlayheadRef.value) {
-        const dx = read.inputPhase * W.value;
-        driverPlayheadRef.value.setAttribute("x1", String(dx));
-        driverPlayheadRef.value.setAttribute("x2", String(dx));
+        driverPlayheadRef.value.setAttribute("x1", String(geo.driverX));
+        driverPlayheadRef.value.setAttribute("x2", String(geo.driverX));
       }
       if (props.mode === "trigger") {
         const prev = prevTrigValue;
@@ -4174,22 +4208,6 @@ var CurveComposer = defineComponent21({
       if (driverRect.value && py >= driverRect.value.y) return;
       props.onSegmentsChange?.(splitSegment(composition.value, segmentIndexAt(xN, props.segments)).segments);
     };
-    const curvePath = (curve, rect, span) => {
-      const x = (nx) => (span[0] + nx * (span[1] - span[0])) * W.value;
-      const y = (ny) => mapY(rect, ny);
-      if (curve.type === "spring") {
-        const sampler = buildSampler(curve);
-        const n = 40;
-        let d = `M ${x(0)} ${y(sampler(0))}`;
-        for (let i = 1; i <= n; i++) {
-          const t = i / n;
-          d += ` L ${x(t)} ${y(sampler(t))}`;
-        }
-        return d;
-      }
-      const e = deriveEase(curve.type, curve.curvature, curve.steepness);
-      return `M ${x(0)} ${y(0)} C ${x(e[0])} ${y(e[1])}, ${x(e[2])} ${y(e[3])}, ${x(1)} ${y(1)}`;
-    };
     const renderLaneGrid = (rect) => {
       if (!props.grid) return [];
       const n = Math.max(1, Math.round(props.gridSubdivisions));
@@ -4203,14 +4221,10 @@ var CurveComposer = defineComponent21({
       return lines;
     };
     const renderLaneBg = (rect, key) => h21("rect", { key, class: "dialkit-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 });
-    const diagonal = (rect, span, key) => h21("line", {
-      key,
-      class: "dialkit-cc-diagonal",
-      x1: span[0] * W.value,
-      y1: mapY(rect, 0),
-      x2: span[1] * W.value,
-      y2: mapY(rect, 1)
-    });
+    const diagonal = (rect, span, key) => {
+      const d = diagonalLine(rect, span, W.value);
+      return h21("line", { key, class: "dialkit-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 });
+    };
     return () => {
       const main = mainRect.value;
       const dr = driverRect.value;
@@ -4238,7 +4252,7 @@ var CurveComposer = defineComponent21({
           const span = segmentSpan(props.segments, i);
           return h21("g", { key: `seg-${i}` }, [
             diagonal(main, span, `diag-${i}`),
-            h21("path", { class: "dialkit-cc-curve", d: curvePath(seg, main, span) }),
+            h21("path", { class: "dialkit-cc-curve", d: curvePath(seg, main, span, W.value) }),
             h21(
               "text",
               { class: "dialkit-cc-label", x: (span[0] + span[1]) * 0.5 * W.value, y: main.y + 13 },
@@ -4293,7 +4307,7 @@ var CurveComposer = defineComponent21({
         }
         children.push(diagonal(dr, [0, 1], "driver-diag"));
         children.push(
-          h21("path", { class: "dialkit-cc-curve dialkit-cc-curve-driver", d: curvePath(props.driver, dr, [0, 1]) })
+          h21("path", { class: "dialkit-cc-curve dialkit-cc-curve-driver", d: curvePath(props.driver, dr, [0, 1], W.value) })
         );
         children.push(
           h21("text", { class: "dialkit-cc-label", x: W.value * 0.5, y: dr.y + 13 }, `driver \xB7 ${props.driver.type}`)

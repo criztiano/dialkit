@@ -1849,7 +1849,7 @@ function EasingVisualization({ easing }) {
   const end = toSvg(1, 1);
   const p1 = toSvg(ease[0], ease[1]);
   const p2 = toSvg(ease[2], ease[3]);
-  const curvePath = `M ${start.x} ${start.y} C ${p1.x} ${p1.y}, ${p2.x} ${p2.y}, ${end.x} ${end.y}`;
+  const curvePath2 = `M ${start.x} ${start.y} C ${p1.x} ${p1.y}, ${p2.x} ${p2.y}, ${end.x} ${end.y}`;
   return /* @__PURE__ */ jsxs7(
     "svg",
     {
@@ -1869,7 +1869,7 @@ function EasingVisualization({ easing }) {
             strokeDasharray: "4,4"
           }
         ),
-        /* @__PURE__ */ jsx8("path", { d: curvePath, fill: "none", stroke: "rgba(255, 255, 255, 0.6)", strokeWidth: "2", strokeLinecap: "round" })
+        /* @__PURE__ */ jsx8("path", { d: curvePath2, fill: "none", stroke: "rgba(255, 255, 255, 0.6)", strokeWidth: "2", strokeLinecap: "round" })
       ]
     }
   );
@@ -3761,7 +3761,7 @@ function WaveformVisualization({
 }
 
 // src/components/CurveComposer.tsx
-import { useRef as useRef17, useEffect as useEffect13, useMemo, useState as useState15, useCallback as useCallback8 } from "react";
+import { useRef as useRef17, useEffect as useEffect13, useMemo, useState as useState15 } from "react";
 
 // src/curve-composer-core.ts
 var CURVE_CYCLE = ["linear", "easeIn", "easeOut", "easeInOut", "spring"];
@@ -4004,6 +4004,55 @@ function readComposition(comp, u, s) {
   const value = s.segments[segIndex] ? s.segments[segIndex](localT) : 0;
   return { inputPhase, warpedPhase, value, segIndex, localT };
 }
+var COMPOSER_GAP = 10;
+var COMPOSER_PAD_FRAC = 0.18;
+var COMPOSER_DRIVER_FRAC = 0.55;
+function composerLayout(width, height, hasDriver) {
+  const driverH = hasDriver ? Math.round(height * COMPOSER_DRIVER_FRAC) : 0;
+  const totalH = height + (hasDriver ? COMPOSER_GAP + driverH : 0);
+  return {
+    W: width,
+    totalH,
+    mainRect: { x: 0, y: 0, w: width, h: height },
+    driverRect: hasDriver ? { x: 0, y: height + COMPOSER_GAP, w: width, h: driverH } : null
+  };
+}
+function mapY(rect, ny) {
+  const pad = rect.h * COMPOSER_PAD_FRAC;
+  const top = rect.y + pad;
+  const bot = rect.y + rect.h - pad;
+  return bot - ny * (bot - top);
+}
+function spanX(span, nx, W) {
+  return (span[0] + nx * (span[1] - span[0])) * W;
+}
+function curvePath(curve, rect, span, W, samples = 40) {
+  const x = (nx) => spanX(span, nx, W);
+  const y = (ny) => mapY(rect, ny);
+  if (curve.type === "spring") {
+    const sampler = buildSampler(curve);
+    let d = `M ${x(0)} ${y(sampler(0))}`;
+    for (let i = 1; i <= samples; i++) {
+      const t = i / samples;
+      d += ` L ${x(t)} ${y(sampler(t))}`;
+    }
+    return d;
+  }
+  const e = deriveEase(curve.type, curve.curvature, curve.steepness);
+  return `M ${x(0)} ${y(0)} C ${x(e[0])} ${y(e[1])}, ${x(e[2])} ${y(e[3])}, ${x(1)} ${y(1)}`;
+}
+function diagonalLine(rect, span, W) {
+  return { x1: span[0] * W, y1: mapY(rect, 0), x2: span[1] * W, y2: mapY(rect, 1) };
+}
+function playheadGeometry(read, layout) {
+  const seriesX = read.warpedPhase * layout.W;
+  return {
+    seriesX,
+    dotX: seriesX,
+    dotY: mapY(layout.mainRect, read.value),
+    driverX: read.inputPhase * layout.W
+  };
+}
 var DEFAULT_TRIGGER_STEPS = 5;
 function triggerLevels(steps) {
   const n = Math.max(2, Math.floor(steps));
@@ -4047,9 +4096,6 @@ function defaultComposition() {
 
 // src/components/CurveComposer.tsx
 import { Fragment as Fragment4, jsx as jsx24, jsxs as jsxs21 } from "react/jsx-runtime";
-var GAP = 10;
-var PAD_FRAC = 0.18;
-var DRIVER_FRAC = 0.55;
 function CurveComposer({
   segments,
   driver = null,
@@ -4068,12 +4114,8 @@ function CurveComposer({
   width = 256,
   height = 140
 }) {
-  const W = width;
-  const laneH = height;
-  const driverH = driver ? Math.round(height * DRIVER_FRAC) : 0;
-  const totalH = laneH + (driver ? GAP + driverH : 0);
-  const mainRect = { x: 0, y: 0, w: W, h: laneH };
-  const driverRect = driver ? { x: 0, y: laneH + GAP, w: W, h: driverH } : null;
+  const layout = composerLayout(width, height, driver != null);
+  const { W, totalH, mainRect, driverRect } = layout;
   const composition = useMemo(
     () => ({ segments, driver, direction }),
     [segments, driver, direction]
@@ -4092,12 +4134,6 @@ function CurveComposer({
   const [hover, setHover] = useState15(null);
   const dragRef = useRef17(null);
   dragRef.current = drag;
-  const padY = (r) => r.h * PAD_FRAC;
-  const mapY = (r, ny) => {
-    const top = r.y + padY(r);
-    const bot = r.y + r.h - padY(r);
-    return bot - ny * (bot - top);
-  };
   useEffect13(() => {
     let raf = 0;
     prevTrigValue.current = Number.NaN;
@@ -4106,19 +4142,18 @@ function CurveComposer({
       const { composition: c, samplers: s, getPhase: gp, phase: p, mode: md, triggerSteps: ts } = liveRef.current;
       const u = gp ? gp() : p;
       const read = readComposition(c, u, s);
-      const sx = read.warpedPhase * W;
+      const geo = playheadGeometry(read, layout);
       if (seriesPlayheadRef.current) {
-        seriesPlayheadRef.current.setAttribute("x1", String(sx));
-        seriesPlayheadRef.current.setAttribute("x2", String(sx));
+        seriesPlayheadRef.current.setAttribute("x1", String(geo.seriesX));
+        seriesPlayheadRef.current.setAttribute("x2", String(geo.seriesX));
       }
       if (seriesDotRef.current) {
-        seriesDotRef.current.setAttribute("cx", String(sx));
-        seriesDotRef.current.setAttribute("cy", String(mapY(mainRect, read.value)));
+        seriesDotRef.current.setAttribute("cx", String(geo.dotX));
+        seriesDotRef.current.setAttribute("cy", String(geo.dotY));
       }
       if (driverPlayheadRef.current) {
-        const dx = read.inputPhase * W;
-        driverPlayheadRef.current.setAttribute("x1", String(dx));
-        driverPlayheadRef.current.setAttribute("x2", String(dx));
+        driverPlayheadRef.current.setAttribute("x1", String(geo.driverX));
+        driverPlayheadRef.current.setAttribute("x2", String(geo.driverX));
       }
       if (md === "trigger") {
         const prev = prevTrigValue.current;
@@ -4132,7 +4167,7 @@ function CurveComposer({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [W, laneH, driverH]);
+  }, [W, totalH]);
   const hitLayout = () => ({ totalH, driverY: driverRect ? driverRect.y : null });
   const localCoords = (clientX, clientY) => {
     const rect = svgRef.current.getBoundingClientRect();
@@ -4230,27 +4265,6 @@ function CurveComposer({
   };
   const activeKind = drag?.kind ?? hover?.kind;
   const cursor = activeKind === "boundary" ? "ew-resize" : activeKind === "segment" || activeKind === "driver" ? "move" : "default";
-  const curvePath = useCallback8(
-    (curve, rect, span) => {
-      const x = (nx) => (span[0] + nx * (span[1] - span[0])) * W;
-      const y = (ny) => mapY(rect, ny);
-      if (curve.type === "spring") {
-        const sampler = buildSampler(curve);
-        const n = 40;
-        let d = `M ${x(0)} ${y(sampler(0))}`;
-        for (let i = 1; i <= n; i++) {
-          const t = i / n;
-          d += ` L ${x(t)} ${y(sampler(t))}`;
-        }
-        return d;
-      }
-      const e = deriveEase(curve.type, curve.curvature, curve.steepness);
-      return `M ${x(0)} ${y(0)} C ${x(e[0])} ${y(e[1])}, ${x(e[2])} ${y(e[3])}, ${x(1)} ${y(1)}`;
-    },
-    // mapY depends on the rect passed in; W is closed over.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [W, laneH, driverH]
-  );
   const interior = boundaries(segments);
   const renderLaneGrid = (rect) => {
     if (!grid) return null;
@@ -4265,17 +4279,10 @@ function CurveComposer({
     return lines;
   };
   const renderLaneBg = (rect, key) => /* @__PURE__ */ jsx24("rect", { className: "dialkit-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 }, key);
-  const diagonal = (rect, span, key) => /* @__PURE__ */ jsx24(
-    "line",
-    {
-      className: "dialkit-cc-diagonal",
-      x1: span[0] * W,
-      y1: mapY(rect, 0),
-      x2: span[1] * W,
-      y2: mapY(rect, 1)
-    },
-    key
-  );
+  const diagonal = (rect, span, key) => {
+    const d = diagonalLine(rect, span, W);
+    return /* @__PURE__ */ jsx24("line", { className: "dialkit-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 }, key);
+  };
   return /* @__PURE__ */ jsx24("div", { className: "dialkit-cc-wrap", style: { width: W }, children: /* @__PURE__ */ jsxs21(
     "svg",
     {
@@ -4312,7 +4319,7 @@ function CurveComposer({
           const span = segmentSpan(segments, i);
           return /* @__PURE__ */ jsxs21("g", { children: [
             diagonal(mainRect, span, `diag-${i}`),
-            /* @__PURE__ */ jsx24("path", { className: "dialkit-cc-curve", d: curvePath(seg, mainRect, span) }),
+            /* @__PURE__ */ jsx24("path", { className: "dialkit-cc-curve", d: curvePath(seg, mainRect, span, W) }),
             /* @__PURE__ */ jsx24("text", { className: "dialkit-cc-label", x: (span[0] + span[1]) * 0.5 * W, y: mainRect.y + 13, children: seg.type })
           ] }, `seg-${i}`);
         }),
@@ -4337,7 +4344,7 @@ function CurveComposer({
           renderLaneGrid(driverRect),
           hover?.kind === "driver" && !drag && /* @__PURE__ */ jsx24("rect", { className: "dialkit-cc-seg-hover", x: 0, y: driverRect.y, width: W, height: driverRect.h, rx: 8 }),
           diagonal(driverRect, [0, 1], "driver-diag"),
-          /* @__PURE__ */ jsx24("path", { className: "dialkit-cc-curve dialkit-cc-curve-driver", d: curvePath(driver, driverRect, [0, 1]) }),
+          /* @__PURE__ */ jsx24("path", { className: "dialkit-cc-curve dialkit-cc-curve-driver", d: curvePath(driver, driverRect, [0, 1], W) }),
           /* @__PURE__ */ jsxs21("text", { className: "dialkit-cc-label", x: W * 0.5, y: driverRect.y + 13, children: [
             "driver \xB7 ",
             driver.type
@@ -4350,7 +4357,7 @@ function CurveComposer({
 }
 
 // src/components/ShortcutsMenu.tsx
-import { useState as useState16, useRef as useRef18, useEffect as useEffect14, useCallback as useCallback9 } from "react";
+import { useState as useState16, useRef as useRef18, useEffect as useEffect14, useCallback as useCallback8 } from "react";
 import { createPortal as createPortal5 } from "react-dom";
 import { motion as motion7, AnimatePresence as AnimatePresence6 } from "motion/react";
 import { Fragment as Fragment5, jsx as jsx25, jsxs as jsxs22 } from "react/jsx-runtime";
@@ -4377,15 +4384,15 @@ function ShortcutsMenu({ panelId }) {
   const triggerRef = useRef18(null);
   const dropdownRef = useRef18(null);
   const [pos, setPos] = useState16({ top: 0, right: 0 });
-  const open = useCallback9(() => {
+  const open = useCallback8(() => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
       setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
     }
     setIsOpen(true);
   }, []);
-  const close = useCallback9(() => setIsOpen(false), []);
-  const toggle = useCallback9(() => {
+  const close = useCallback8(() => setIsOpen(false), []);
+  const toggle = useCallback8(() => {
     if (isOpen) close();
     else open();
   }, [isOpen, open, close]);

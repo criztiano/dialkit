@@ -18,6 +18,13 @@ import {
   setSegmentCurvature,
   setSegmentSteepness,
   defaultComposition,
+  composerLayout,
+  mapY,
+  curvePath,
+  diagonalLine,
+  playheadGeometry,
+  COMPOSER_GAP,
+  COMPOSER_PAD_FRAC,
   type CurveComposition,
   type CurveSegment,
 } from '../src/curve-composer-core';
@@ -368,6 +375,75 @@ describe('state transitions', () => {
     const comp = defaultComposition();
     expect(setSegmentCurvature(comp, 0, 5).segments[0].curvature).toBe(1);
     expect(setSegmentSteepness(comp, 0, -5).segments[0].steepness).toBe(-1);
+  });
+});
+
+describe('geometry / layout', () => {
+  it('composerLayout: main lane only when there is no driver', () => {
+    const l = composerLayout(260, 150, false);
+    expect(l.W).toBe(260);
+    expect(l.totalH).toBe(150);
+    expect(l.mainRect).toEqual({ x: 0, y: 0, w: 260, h: 150 });
+    expect(l.driverRect).toBeNull();
+  });
+
+  it('composerLayout: driver lane stacks below the main lane with the gap', () => {
+    const l = composerLayout(260, 150, true);
+    const driverH = Math.round(150 * 0.55);
+    expect(l.driverRect).toEqual({ x: 0, y: 150 + COMPOSER_GAP, w: 260, h: driverH });
+    expect(l.totalH).toBe(150 + COMPOSER_GAP + driverH);
+  });
+
+  it('mapY maps 0→bottom and 1→top of the padded band', () => {
+    const rect = { x: 0, y: 0, w: 100, h: 100 };
+    const pad = 100 * COMPOSER_PAD_FRAC;
+    expect(mapY(rect, 0)).toBeCloseTo(100 - pad); // value 0 sits at the bottom inset
+    expect(mapY(rect, 1)).toBeCloseTo(pad); // value 1 at the top inset
+    expect(mapY(rect, 0.5)).toBeCloseTo(50); // mid is the lane centre
+  });
+
+  it('curvePath: a bezier ease is one cubic segment with endpoints at the band corners', () => {
+    const rect = { x: 0, y: 0, w: 100, h: 100 };
+    const d = curvePath({ type: 'easeInOut', weight: 1, curvature: 0, steepness: 0 }, rect, [0, 1], 100);
+    expect(d.startsWith('M ')).toBe(true);
+    expect(d).toContain(' C '); // cubic
+    expect((d.match(/C/g) ?? []).length).toBe(1);
+  });
+
+  it('curvePath: a spring is a multi-point polyline (overshoot a bezier cannot express)', () => {
+    const rect = { x: 0, y: 0, w: 100, h: 100 };
+    const d = curvePath({ type: 'spring', weight: 1, curvature: 1, steepness: 0 }, rect, [0, 1], 100, 40);
+    expect(d).not.toContain(' C ');
+    expect((d.match(/L/g) ?? []).length).toBe(40); // `samples` line segments after the move
+  });
+
+  it('curvePath: the span scales the x range (a half-width segment ends at half W)', () => {
+    const rect = { x: 0, y: 0, w: 100, h: 100 };
+    const d = curvePath({ type: 'linear', weight: 1, curvature: 0, steepness: 0 }, rect, [0, 0.5], 100);
+    // last command's x should be span[1]*W = 50
+    const lastX = Number(d.trim().split(/[\s,]+/).slice(-2)[0]);
+    expect(lastX).toBeCloseTo(50);
+  });
+
+  it('diagonalLine spans the segment corner-to-corner', () => {
+    const rect = { x: 0, y: 0, w: 100, h: 100 };
+    const diag = diagonalLine(rect, [0.25, 0.75], 100);
+    expect(diag.x1).toBe(25);
+    expect(diag.x2).toBe(75);
+    expect(diag.y1).toBeCloseTo(mapY(rect, 0));
+    expect(diag.y2).toBeCloseTo(mapY(rect, 1));
+  });
+
+  it('playheadGeometry derives the series/dot/driver positions from a read', () => {
+    const comp = defaultComposition();
+    const layout = composerLayout(200, 100, false);
+    const s = buildSamplers(comp);
+    const read = readComposition(comp, 0.25, s);
+    const g = playheadGeometry(read, layout);
+    expect(g.seriesX).toBeCloseTo(read.warpedPhase * 200);
+    expect(g.dotX).toBe(g.seriesX);
+    expect(g.dotY).toBeCloseTo(mapY(layout.mainRect, read.value));
+    expect(g.driverX).toBeCloseTo(read.inputPhase * 200);
   });
 });
 

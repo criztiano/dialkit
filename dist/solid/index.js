@@ -3939,6 +3939,55 @@ function readComposition(comp, u, s) {
   const value = s.segments[segIndex] ? s.segments[segIndex](localT) : 0;
   return { inputPhase, warpedPhase, value, segIndex, localT };
 }
+var COMPOSER_GAP = 10;
+var COMPOSER_PAD_FRAC = 0.18;
+var COMPOSER_DRIVER_FRAC = 0.55;
+function composerLayout(width, height, hasDriver) {
+  const driverH = hasDriver ? Math.round(height * COMPOSER_DRIVER_FRAC) : 0;
+  const totalH = height + (hasDriver ? COMPOSER_GAP + driverH : 0);
+  return {
+    W: width,
+    totalH,
+    mainRect: { x: 0, y: 0, w: width, h: height },
+    driverRect: hasDriver ? { x: 0, y: height + COMPOSER_GAP, w: width, h: driverH } : null
+  };
+}
+function mapY(rect, ny) {
+  const pad = rect.h * COMPOSER_PAD_FRAC;
+  const top = rect.y + pad;
+  const bot = rect.y + rect.h - pad;
+  return bot - ny * (bot - top);
+}
+function spanX(span, nx, W) {
+  return (span[0] + nx * (span[1] - span[0])) * W;
+}
+function curvePath(curve, rect, span, W, samples = 40) {
+  const x = (nx) => spanX(span, nx, W);
+  const y = (ny) => mapY(rect, ny);
+  if (curve.type === "spring") {
+    const sampler = buildSampler(curve);
+    let d = `M ${x(0)} ${y(sampler(0))}`;
+    for (let i = 1; i <= samples; i++) {
+      const t = i / samples;
+      d += ` L ${x(t)} ${y(sampler(t))}`;
+    }
+    return d;
+  }
+  const e = deriveEase(curve.type, curve.curvature, curve.steepness);
+  return `M ${x(0)} ${y(0)} C ${x(e[0])} ${y(e[1])}, ${x(e[2])} ${y(e[3])}, ${x(1)} ${y(1)}`;
+}
+function diagonalLine(rect, span, W) {
+  return { x1: span[0] * W, y1: mapY(rect, 0), x2: span[1] * W, y2: mapY(rect, 1) };
+}
+function playheadGeometry(read, layout) {
+  const seriesX = read.warpedPhase * layout.W;
+  return {
+    seriesX,
+    dotX: seriesX,
+    dotY: mapY(layout.mainRect, read.value),
+    driverX: read.inputPhase * layout.W
+  };
+}
 var DEFAULT_TRIGGER_STEPS = 5;
 var TRIGGER_FLYBACK = 0.5;
 function triggersCrossed(prevValue, curValue, steps) {
@@ -3972,13 +4021,10 @@ var _tmpl$44 = /* @__PURE__ */ _$template16(`<svg><g><line class=dialkit-cc-diag
 var _tmpl$52 = /* @__PURE__ */ _$template16(`<svg><line class=dialkit-cc-boundary></svg>`, false, true, false);
 var _tmpl$62 = /* @__PURE__ */ _$template16(`<svg><rect class=dialkit-cc-lane rx=8></svg>`, false, true, false);
 var _tmpl$72 = /* @__PURE__ */ _$template16(`<svg><rect class=dialkit-cc-seg-hover x=0 rx=8></svg>`, false, true, false);
-var _tmpl$82 = /* @__PURE__ */ _$template16(`<svg><line class=dialkit-cc-diagonal></svg>`, false, true, false);
-var _tmpl$92 = /* @__PURE__ */ _$template16(`<svg><path class="dialkit-cc-curve dialkit-cc-curve-driver"></svg>`, false, true, false);
-var _tmpl$0 = /* @__PURE__ */ _$template16(`<svg><text class=dialkit-cc-label>driver \xB7 </svg>`, false, true, false);
-var _tmpl$1 = /* @__PURE__ */ _$template16(`<svg><line class=dialkit-cc-playhead x1=0 x2=0></svg>`, false, true, false);
-var GAP = 10;
-var PAD_FRAC = 0.18;
-var DRIVER_FRAC = 0.55;
+var _tmpl$82 = /* @__PURE__ */ _$template16(`<svg><path class="dialkit-cc-curve dialkit-cc-curve-driver"></svg>`, false, true, false);
+var _tmpl$92 = /* @__PURE__ */ _$template16(`<svg><text class=dialkit-cc-label>driver \xB7 </svg>`, false, true, false);
+var _tmpl$0 = /* @__PURE__ */ _$template16(`<svg><line class=dialkit-cc-playhead x1=0 x2=0></svg>`, false, true, false);
+var _tmpl$1 = /* @__PURE__ */ _$template16(`<svg><line class=dialkit-cc-diagonal></svg>`, false, true, false);
 function CurveComposer(props) {
   const p = mergeProps2({
     driver: null,
@@ -3991,22 +4037,11 @@ function CurveComposer(props) {
     width: 256,
     height: 140
   }, props);
-  const W = () => p.width;
-  const laneH = () => p.height;
-  const driverH = () => p.driver ? Math.round(p.height * DRIVER_FRAC) : 0;
-  const totalH = () => laneH() + (p.driver ? GAP + driverH() : 0);
-  const mainRect = createMemo2(() => ({
-    x: 0,
-    y: 0,
-    w: W(),
-    h: laneH()
-  }));
-  const driverRect = createMemo2(() => p.driver ? {
-    x: 0,
-    y: laneH() + GAP,
-    w: W(),
-    h: driverH()
-  } : null);
+  const layout = createMemo2(() => composerLayout(p.width, p.height, p.driver != null));
+  const W = () => layout().W;
+  const totalH = () => layout().totalH;
+  const mainRect = () => layout().mainRect;
+  const driverRect = () => layout().driverRect;
   const composition = createMemo2(() => ({
     segments: p.segments,
     driver: p.driver,
@@ -4019,40 +4054,32 @@ function CurveComposer(props) {
   let driverPlayheadEl;
   let drag = null;
   const [hover, setHover] = createSignal13(null);
-  const padY = (r) => r.h * PAD_FRAC;
-  const mapY = (r, ny) => {
-    const top = r.y + padY(r);
-    const bot = r.y + r.h - padY(r);
-    return bot - ny * (bot - top);
-  };
   onMount10(() => {
     let raf = 0;
     let prevTrigValue = Number.NaN;
     let armKey = "";
     const tick = () => {
       raf = requestAnimationFrame(tick);
-      const w = W();
-      const mr = mainRect();
-      const key = `${w}|${laneH()}|${driverH()}`;
+      const lo = layout();
+      const key = `${lo.W}|${lo.totalH}`;
       if (key !== armKey) {
         prevTrigValue = Number.NaN;
         armKey = key;
       }
       const u = p.getPhase ? p.getPhase() : p.phase;
       const read = readComposition(composition(), u, samplers());
-      const sx = read.warpedPhase * w;
+      const geo = playheadGeometry(read, lo);
       if (seriesPlayheadEl) {
-        seriesPlayheadEl.setAttribute("x1", String(sx));
-        seriesPlayheadEl.setAttribute("x2", String(sx));
+        seriesPlayheadEl.setAttribute("x1", String(geo.seriesX));
+        seriesPlayheadEl.setAttribute("x2", String(geo.seriesX));
       }
       if (seriesDotEl) {
-        seriesDotEl.setAttribute("cx", String(sx));
-        seriesDotEl.setAttribute("cy", String(mapY(mr, read.value)));
+        seriesDotEl.setAttribute("cx", String(geo.dotX));
+        seriesDotEl.setAttribute("cy", String(geo.dotY));
       }
       if (driverPlayheadEl) {
-        const dx = read.inputPhase * w;
-        driverPlayheadEl.setAttribute("x1", String(dx));
-        driverPlayheadEl.setAttribute("x2", String(dx));
+        driverPlayheadEl.setAttribute("x1", String(geo.driverX));
+        driverPlayheadEl.setAttribute("x2", String(geo.driverX));
       }
       if (p.mode === "trigger") {
         if (!Number.isNaN(prevTrigValue)) {
@@ -4200,23 +4227,6 @@ function CurveComposer(props) {
     const activeKind = drag?.kind ?? h?.kind;
     return activeKind === "boundary" ? "ew-resize" : activeKind === "segment" || activeKind === "driver" ? "move" : "default";
   };
-  const curvePath = (curve, rect, span) => {
-    const w = W();
-    const x = (nx) => (span[0] + nx * (span[1] - span[0])) * w;
-    const y = (ny) => mapY(rect, ny);
-    if (curve.type === "spring") {
-      const sampler = buildSampler(curve);
-      const n = 40;
-      let d = `M ${x(0)} ${y(sampler(0))}`;
-      for (let i = 1; i <= n; i++) {
-        const t = i / n;
-        d += ` L ${x(t)} ${y(sampler(t))}`;
-      }
-      return d;
-    }
-    const e = deriveEase(curve.type, curve.curvature, curve.steepness);
-    return `M ${x(0)} ${y(0)} C ${x(e[0])} ${y(e[1])}, ${x(e[2])} ${y(e[3])}, ${x(1)} ${y(1)}`;
-  };
   const interior = () => boundaries(p.segments);
   const laneGridLines = (rect) => {
     if (!p.grid) return [];
@@ -4298,11 +4308,12 @@ function CurveComposer(props) {
       children: (seg, i) => {
         const span = () => segmentSpan(p.segments, i());
         const mr = () => mainRect();
+        const diag = () => diagonalLine(mr(), span(), W());
         return (() => {
           var _el$8 = _tmpl$44(), _el$9 = _el$8.firstChild, _el$0 = _el$9.nextSibling, _el$1 = _el$0.nextSibling;
           _$insert16(_el$1, () => seg.type);
           _$effect14((_p$) => {
-            var _v$24 = span()[0] * W(), _v$25 = mapY(mr(), 0), _v$26 = span()[1] * W(), _v$27 = mapY(mr(), 1), _v$28 = curvePath(seg, mr(), span()), _v$29 = (span()[0] + span()[1]) * 0.5 * W(), _v$30 = mr().y + 13;
+            var _v$24 = diag().x1, _v$25 = diag().y1, _v$26 = diag().x2, _v$27 = diag().y2, _v$28 = curvePath(seg, mr(), span(), W()), _v$29 = (span()[0] + span()[1]) * 0.5 * W(), _v$30 = mr().y + 13;
             _v$24 !== _p$.e && _$setAttribute11(_el$9, "x1", _p$.e = _v$24);
             _v$25 !== _p$.t && _$setAttribute11(_el$9, "y1", _p$.t = _v$25);
             _v$26 !== _p$.a && _$setAttribute11(_el$9, "x2", _p$.a = _v$26);
@@ -4384,13 +4395,13 @@ function CurveComposer(props) {
           return laneGridLines(dr());
         },
         children: (g) => (() => {
-          var _el$18 = _tmpl$212();
+          var _el$17 = _tmpl$212();
           _$effect14((_p$) => {
-            var _v$52 = g.gx, _v$53 = g.y1, _v$54 = g.gx, _v$55 = g.y2;
-            _v$52 !== _p$.e && _$setAttribute11(_el$18, "x1", _p$.e = _v$52);
-            _v$53 !== _p$.t && _$setAttribute11(_el$18, "y1", _p$.t = _v$53);
-            _v$54 !== _p$.a && _$setAttribute11(_el$18, "x2", _p$.a = _v$54);
-            _v$55 !== _p$.o && _$setAttribute11(_el$18, "y2", _p$.o = _v$55);
+            var _v$48 = g.gx, _v$49 = g.y1, _v$50 = g.gx, _v$51 = g.y2;
+            _v$48 !== _p$.e && _$setAttribute11(_el$17, "x1", _p$.e = _v$48);
+            _v$49 !== _p$.t && _$setAttribute11(_el$17, "y1", _p$.t = _v$49);
+            _v$50 !== _p$.a && _$setAttribute11(_el$17, "x2", _p$.a = _v$50);
+            _v$51 !== _p$.o && _$setAttribute11(_el$17, "y2", _p$.o = _v$51);
             return _p$;
           }, {
             e: void 0,
@@ -4398,7 +4409,7 @@ function CurveComposer(props) {
             a: void 0,
             o: void 0
           });
-          return _el$18;
+          return _el$17;
         })()
       }), _$createComponent15(Show10, {
         get when() {
@@ -4419,55 +4430,58 @@ function CurveComposer(props) {
           });
           return _el$12;
         }
+      }), _$memo10(() => {
+        const diag = diagonalLine(dr(), [0, 1], W());
+        return (() => {
+          var _el$18 = _tmpl$1();
+          _$effect14((_p$) => {
+            var _v$52 = diag.x1, _v$53 = diag.y1, _v$54 = diag.x2, _v$55 = diag.y2;
+            _v$52 !== _p$.e && _$setAttribute11(_el$18, "x1", _p$.e = _v$52);
+            _v$53 !== _p$.t && _$setAttribute11(_el$18, "y1", _p$.t = _v$53);
+            _v$54 !== _p$.a && _$setAttribute11(_el$18, "x2", _p$.a = _v$54);
+            _v$55 !== _p$.o && _$setAttribute11(_el$18, "y2", _p$.o = _v$55);
+            return _p$;
+          }, {
+            e: void 0,
+            t: void 0,
+            a: void 0,
+            o: void 0
+          });
+          return _el$18;
+        })();
       }), (() => {
         var _el$13 = _tmpl$82();
-        _$effect14((_p$) => {
-          var _v$43 = 0 * W(), _v$44 = mapY(dr(), 0), _v$45 = 1 * W(), _v$46 = mapY(dr(), 1);
-          _v$43 !== _p$.e && _$setAttribute11(_el$13, "x1", _p$.e = _v$43);
-          _v$44 !== _p$.t && _$setAttribute11(_el$13, "y1", _p$.t = _v$44);
-          _v$45 !== _p$.a && _$setAttribute11(_el$13, "x2", _p$.a = _v$45);
-          _v$46 !== _p$.o && _$setAttribute11(_el$13, "y2", _p$.o = _v$46);
-          return _p$;
-        }, {
-          e: void 0,
-          t: void 0,
-          a: void 0,
-          o: void 0
-        });
+        _$effect14(() => _$setAttribute11(_el$13, "d", curvePath(p.driver, dr(), [0, 1], W())));
         return _el$13;
       })(), (() => {
-        var _el$14 = _tmpl$92();
-        _$effect14(() => _$setAttribute11(_el$14, "d", curvePath(p.driver, dr(), [0, 1])));
-        return _el$14;
-      })(), (() => {
-        var _el$15 = _tmpl$0(), _el$16 = _el$15.firstChild;
-        _$insert16(_el$15, () => p.driver.type, null);
+        var _el$14 = _tmpl$92(), _el$15 = _el$14.firstChild;
+        _$insert16(_el$14, () => p.driver.type, null);
         _$effect14((_p$) => {
-          var _v$47 = W() * 0.5, _v$48 = dr().y + 13;
-          _v$47 !== _p$.e && _$setAttribute11(_el$15, "x", _p$.e = _v$47);
-          _v$48 !== _p$.t && _$setAttribute11(_el$15, "y", _p$.t = _v$48);
+          var _v$43 = W() * 0.5, _v$44 = dr().y + 13;
+          _v$43 !== _p$.e && _$setAttribute11(_el$14, "x", _p$.e = _v$43);
+          _v$44 !== _p$.t && _$setAttribute11(_el$14, "y", _p$.t = _v$44);
           return _p$;
         }, {
           e: void 0,
           t: void 0
         });
-        return _el$15;
+        return _el$14;
       })(), (() => {
-        var _el$17 = _tmpl$1();
+        var _el$16 = _tmpl$0();
         var _ref$4 = driverPlayheadEl;
-        typeof _ref$4 === "function" ? _$use9(_ref$4, _el$17) : driverPlayheadEl = _el$17;
+        typeof _ref$4 === "function" ? _$use9(_ref$4, _el$16) : driverPlayheadEl = _el$16;
         _$effect14((_p$) => {
-          var _v$49 = dr().y, _v$50 = dr().y + dr().h, _v$51 = p.playheadColor;
-          _v$49 !== _p$.e && _$setAttribute11(_el$17, "y1", _p$.e = _v$49);
-          _v$50 !== _p$.t && _$setAttribute11(_el$17, "y2", _p$.t = _v$50);
-          _v$51 !== _p$.a && _$setStyleProperty6(_el$17, "stroke", _p$.a = _v$51);
+          var _v$45 = dr().y, _v$46 = dr().y + dr().h, _v$47 = p.playheadColor;
+          _v$45 !== _p$.e && _$setAttribute11(_el$16, "y1", _p$.e = _v$45);
+          _v$46 !== _p$.t && _$setAttribute11(_el$16, "y2", _p$.t = _v$46);
+          _v$47 !== _p$.a && _$setStyleProperty6(_el$16, "stroke", _p$.a = _v$47);
           return _p$;
         }, {
           e: void 0,
           t: void 0,
           a: void 0
         });
-        return _el$17;
+        return _el$16;
       })()]
     }), null);
     _$effect14((_p$) => {
