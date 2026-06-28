@@ -465,6 +465,112 @@ export function readComposition(comp: CurveComposition, u: number, s: Compositio
   return { inputPhase, warpedPhase, value, segIndex, localT };
 }
 
+// --- geometry / SVG layout (pure; shared by every framework wrapper) ---
+//
+// These produce numbers and SVG path strings, never DOM, so the four wrappers render the
+// identical composer by calling them instead of each re-deriving the layout and paths.
+
+/** A lane rectangle in viewBox units. */
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** px between the main lane and the driver lane. */
+export const COMPOSER_GAP = 10;
+/** Vertical headroom inside a lane (room for spring overshoot), as a fraction of its height. */
+export const COMPOSER_PAD_FRAC = 0.18;
+/** Driver lane height relative to the main lane. */
+export const COMPOSER_DRIVER_FRAC = 0.55;
+
+/** Resolved lane geometry for a given size and driver presence. */
+export interface ComposerLayout {
+  /** Total width (the viewBox width). */
+  W: number;
+  /** Total height (the viewBox height): the main lane plus the driver lane when present. */
+  totalH: number;
+  mainRect: Rect;
+  /** The driver lane rect, or null when there is no driver. */
+  driverRect: Rect | null;
+}
+
+/** Compute the lane rectangles and total height for the composer. */
+export function composerLayout(width: number, height: number, hasDriver: boolean): ComposerLayout {
+  const driverH = hasDriver ? Math.round(height * COMPOSER_DRIVER_FRAC) : 0;
+  const totalH = height + (hasDriver ? COMPOSER_GAP + driverH : 0);
+  return {
+    W: width,
+    totalH,
+    mainRect: { x: 0, y: 0, w: width, h: height },
+    driverRect: hasDriver ? { x: 0, y: height + COMPOSER_GAP, w: width, h: driverH } : null,
+  };
+}
+
+/** Map a normalized value (0..1, may overshoot for springs) to a y inside a lane's padded band. */
+export function mapY(rect: Rect, ny: number): number {
+  const pad = rect.h * COMPOSER_PAD_FRAC;
+  const top = rect.y + pad;
+  const bot = rect.y + rect.h - pad;
+  return bot - ny * (bot - top);
+}
+
+/** The x (viewBox px) of normalized position `nx` within a segment's [start, end] span. */
+function spanX(span: [number, number], nx: number, W: number): number {
+  return (span[0] + nx * (span[1] - span[0])) * W;
+}
+
+/**
+ * Build the SVG path `d` for a curve within a lane + span: a single cubic-bezier for the
+ * eased types, or a `samples`-point polyline for springs (whose overshoot a bezier can't
+ * express). Pure string output — no DOM.
+ */
+export function curvePath(
+  curve: CurveSegment | CurveDriver,
+  rect: Rect,
+  span: [number, number],
+  W: number,
+  samples = 40
+): string {
+  const x = (nx: number) => spanX(span, nx, W);
+  const y = (ny: number) => mapY(rect, ny);
+  if (curve.type === 'spring') {
+    const sampler = buildSampler(curve);
+    let d = `M ${x(0)} ${y(sampler(0))}`;
+    for (let i = 1; i <= samples; i++) {
+      const t = i / samples;
+      d += ` L ${x(t)} ${y(sampler(t))}`;
+    }
+    return d;
+  }
+  const e = deriveEase(curve.type, curve.curvature, curve.steepness);
+  return `M ${x(0)} ${y(0)} C ${x(e[0])} ${y(e[1])}, ${x(e[2])} ${y(e[3])}, ${x(1)} ${y(1)}`;
+}
+
+/** Endpoints of the faint linear-reference diagonal behind a segment (or the driver lane). */
+export function diagonalLine(
+  rect: Rect,
+  span: [number, number],
+  W: number
+): { x1: number; y1: number; x2: number; y2: number } {
+  return { x1: span[0] * W, y1: mapY(rect, 0), x2: span[1] * W, y2: mapY(rect, 1) };
+}
+
+/** Per-frame playhead geometry from a read + layout: the series playhead/dot and driver marker. */
+export function playheadGeometry(
+  read: CompositionRead,
+  layout: ComposerLayout
+): { seriesX: number; dotX: number; dotY: number; driverX: number } {
+  const seriesX = read.warpedPhase * layout.W;
+  return {
+    seriesX,
+    dotX: seriesX,
+    dotY: mapY(layout.mainRect, read.value),
+    driverX: read.inputPhase * layout.W,
+  };
+}
+
 // --- trigger series (an alternative, discrete read of the SIGNAL) ---
 
 /** Default trigger count for a trigger series. */

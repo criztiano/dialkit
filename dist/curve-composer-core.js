@@ -239,6 +239,55 @@ function readComposition(comp, u, s) {
   const value = s.segments[segIndex] ? s.segments[segIndex](localT) : 0;
   return { inputPhase, warpedPhase, value, segIndex, localT };
 }
+var COMPOSER_GAP = 10;
+var COMPOSER_PAD_FRAC = 0.18;
+var COMPOSER_DRIVER_FRAC = 0.55;
+function composerLayout(width, height, hasDriver) {
+  const driverH = hasDriver ? Math.round(height * COMPOSER_DRIVER_FRAC) : 0;
+  const totalH = height + (hasDriver ? COMPOSER_GAP + driverH : 0);
+  return {
+    W: width,
+    totalH,
+    mainRect: { x: 0, y: 0, w: width, h: height },
+    driverRect: hasDriver ? { x: 0, y: height + COMPOSER_GAP, w: width, h: driverH } : null
+  };
+}
+function mapY(rect, ny) {
+  const pad = rect.h * COMPOSER_PAD_FRAC;
+  const top = rect.y + pad;
+  const bot = rect.y + rect.h - pad;
+  return bot - ny * (bot - top);
+}
+function spanX(span, nx, W) {
+  return (span[0] + nx * (span[1] - span[0])) * W;
+}
+function curvePath(curve, rect, span, W, samples = 40) {
+  const x = (nx) => spanX(span, nx, W);
+  const y = (ny) => mapY(rect, ny);
+  if (curve.type === "spring") {
+    const sampler = buildSampler(curve);
+    let d = `M ${x(0)} ${y(sampler(0))}`;
+    for (let i = 1; i <= samples; i++) {
+      const t = i / samples;
+      d += ` L ${x(t)} ${y(sampler(t))}`;
+    }
+    return d;
+  }
+  const e = deriveEase(curve.type, curve.curvature, curve.steepness);
+  return `M ${x(0)} ${y(0)} C ${x(e[0])} ${y(e[1])}, ${x(e[2])} ${y(e[3])}, ${x(1)} ${y(1)}`;
+}
+function diagonalLine(rect, span, W) {
+  return { x1: span[0] * W, y1: mapY(rect, 0), x2: span[1] * W, y2: mapY(rect, 1) };
+}
+function playheadGeometry(read, layout) {
+  const seriesX = read.warpedPhase * layout.W;
+  return {
+    seriesX,
+    dotX: seriesX,
+    dotY: mapY(layout.mainRect, read.value),
+    driverX: read.inputPhase * layout.W
+  };
+}
 var DEFAULT_TRIGGER_STEPS = 5;
 function triggerLevels(steps) {
   const n = Math.max(2, Math.floor(steps));
@@ -280,6 +329,9 @@ function defaultComposition() {
   };
 }
 export {
+  COMPOSER_DRIVER_FRAC,
+  COMPOSER_GAP,
+  COMPOSER_PAD_FRAC,
   CURVE_CYCLE,
   CURVE_MIN_WEIGHT_FRAC,
   DEFAULT_TRIGGER_STEPS,
@@ -294,12 +346,17 @@ export {
   boundaryAt,
   buildSampler,
   buildSamplers,
+  composerLayout,
+  curvePath,
   cycleDriverType,
   cycleSegmentType,
   defaultComposition,
   deriveEase,
+  diagonalLine,
   directionPhase,
   easingPresets,
+  mapY,
+  playheadGeometry,
   pointerTarget,
   readComposition,
   redistributeWeight,

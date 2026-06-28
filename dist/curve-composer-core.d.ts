@@ -156,6 +156,53 @@ interface CompositionRead {
  * playhead sweeps left→right once, while `value` is each segment's own full 0→1 walk.
  */
 declare function readComposition(comp: CurveComposition, u: number, s: CompositionSamplers): CompositionRead;
+/** A lane rectangle in viewBox units. */
+interface Rect {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
+/** px between the main lane and the driver lane. */
+declare const COMPOSER_GAP = 10;
+/** Vertical headroom inside a lane (room for spring overshoot), as a fraction of its height. */
+declare const COMPOSER_PAD_FRAC = 0.18;
+/** Driver lane height relative to the main lane. */
+declare const COMPOSER_DRIVER_FRAC = 0.55;
+/** Resolved lane geometry for a given size and driver presence. */
+interface ComposerLayout {
+    /** Total width (the viewBox width). */
+    W: number;
+    /** Total height (the viewBox height): the main lane plus the driver lane when present. */
+    totalH: number;
+    mainRect: Rect;
+    /** The driver lane rect, or null when there is no driver. */
+    driverRect: Rect | null;
+}
+/** Compute the lane rectangles and total height for the composer. */
+declare function composerLayout(width: number, height: number, hasDriver: boolean): ComposerLayout;
+/** Map a normalized value (0..1, may overshoot for springs) to a y inside a lane's padded band. */
+declare function mapY(rect: Rect, ny: number): number;
+/**
+ * Build the SVG path `d` for a curve within a lane + span: a single cubic-bezier for the
+ * eased types, or a `samples`-point polyline for springs (whose overshoot a bezier can't
+ * express). Pure string output — no DOM.
+ */
+declare function curvePath(curve: CurveSegment | CurveDriver, rect: Rect, span: [number, number], W: number, samples?: number): string;
+/** Endpoints of the faint linear-reference diagonal behind a segment (or the driver lane). */
+declare function diagonalLine(rect: Rect, span: [number, number], W: number): {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+};
+/** Per-frame playhead geometry from a read + layout: the series playhead/dot and driver marker. */
+declare function playheadGeometry(read: CompositionRead, layout: ComposerLayout): {
+    seriesX: number;
+    dotX: number;
+    dotY: number;
+    driverX: number;
+};
 /** Default trigger count for a trigger series. */
 declare const DEFAULT_TRIGGER_STEPS = 5;
 /**
@@ -187,4 +234,4 @@ declare function triggersCrossed(prevValue: number, curValue: number, steps: num
 /** A reasonable starting composition for demos / uncontrolled mounts. */
 declare function defaultComposition(): CurveComposition;
 
-export { CURVE_CYCLE, CURVE_MIN_WEIGHT_FRAC, type ClientRectLike, type ComposerHitLayout, type CompositionRead, type CompositionSamplers, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, DRAG_ENERGY_GAIN, DRAG_STEEP_GAIN, DRAG_THRESHOLD, type DriverDirection, EDGE_HIT, type PointerTarget, type Sampler, addDriver, applyDriverBodyDrag, applySegmentBodyDrag, boundaries, boundaryAt, buildSampler, buildSamplers, cycleDriverType, cycleSegmentType, defaultComposition, deriveEase, directionPhase, easingPresets, pointerTarget, readComposition, redistributeWeight, removeDriver, removeSegment, segmentIndexAt, segmentSpan, setDriverCurvature, setDriverSteepness, setSegmentCurvature, setSegmentSteepness, splitSegment, toLocalCoords, totalWeight, triggerLevels, triggersCrossed };
+export { COMPOSER_DRIVER_FRAC, COMPOSER_GAP, COMPOSER_PAD_FRAC, CURVE_CYCLE, CURVE_MIN_WEIGHT_FRAC, type ClientRectLike, type ComposerHitLayout, type ComposerLayout, type CompositionRead, type CompositionSamplers, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, DRAG_ENERGY_GAIN, DRAG_STEEP_GAIN, DRAG_THRESHOLD, type DriverDirection, EDGE_HIT, type PointerTarget, type Rect, type Sampler, addDriver, applyDriverBodyDrag, applySegmentBodyDrag, boundaries, boundaryAt, buildSampler, buildSamplers, composerLayout, curvePath, cycleDriverType, cycleSegmentType, defaultComposition, deriveEase, diagonalLine, directionPhase, easingPresets, mapY, playheadGeometry, pointerTarget, readComposition, redistributeWeight, removeDriver, removeSegment, segmentIndexAt, segmentSpan, setDriverCurvature, setDriverSteepness, setSegmentCurvature, setSegmentSteepness, splitSegment, toLocalCoords, totalWeight, triggerLevels, triggersCrossed };
