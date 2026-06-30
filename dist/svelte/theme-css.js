@@ -2220,8 +2220,8 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
 .dialkit-cc-connector {
   fill: none;
   stroke: currentColor;
-  stroke-opacity: 0.28;
-  stroke-width: 1.5;
+  stroke-opacity: 0.3;
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
   pointer-events: none;

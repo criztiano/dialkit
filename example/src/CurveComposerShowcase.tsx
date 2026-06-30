@@ -61,8 +61,9 @@ export function CurveComposerShowcase() {
     };
   }, []);
 
-  // Virtual transport: a clock-driven phase 0..1 (no parent re-render via getPhase).
-  const elapsedRef = useRef(0);
+  // Virtual transport: accumulate the phase 0..1 directly at rate 1/duration, so changing
+  // duration changes the loop's velocity rather than jumping/resetting the playhead.
+  const phaseRef = useRef(0);
   useEffect(() => {
     let raf = 0;
     let last: number | null = null;
@@ -73,14 +74,16 @@ export function CurveComposerShowcase() {
         last = null;
         return;
       }
-      if (last != null) elapsedRef.current += (now - last) / 1000;
+      if (last != null) {
+        phaseRef.current = (phaseRef.current + (now - last) / 1000 / durationRef.current) % 1;
+      }
       last = now;
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [playing]);
 
-  const getPhase = () => (elapsedRef.current % durationRef.current) / durationRef.current;
+  const getPhase = () => phaseRef.current;
 
   // Read the composed value each frame to drive the demo dot — each segment drives a
   // full min→max walk, so the dot walks the track once per segment (twice for two).

@@ -242,25 +242,27 @@ export interface TimelineSlot {
 }
 
 /**
- * The ordered timeline (0..1): each segment slot followed by its gap slot. Segments share
- * `1 - gap` of the width by weight; the `gap` fraction is split equally across the N gaps
- * (the last gap wraps to the first segment, closing the loop). At gap=0 the gap slots have
- * zero width, so the layout is exactly the contiguous segments.
+ * The ordered timeline (0..1): each segment slot, with a gap slot BETWEEN consecutive
+ * segments (never after the last — the loop wraps straight from the last to the first).
+ * Segments share `1 - gap` of the width by weight; the `gap` fraction is split equally
+ * across the N−1 interior gaps. At gap=0 the gaps have zero width (contiguous segments).
  */
 export function timelineSlots(segments: CurveSegment[], gap = 0): TimelineSlot[] {
   const n = segments.length;
-  const g = n > 1 ? clamp01(gap) : 0; // a single segment has no gap to fill
+  const g = n > 1 ? clamp01(gap) : 0; // a single segment has no interior gap
   const total = totalWeight(segments);
   const content = 1 - g;
-  const gapW = n > 0 ? g / n : 0;
+  const gapW = n > 1 ? g / (n - 1) : 0;
   const slots: TimelineSlot[] = [];
   let acc = 0;
   for (let i = 0; i < n; i++) {
     const sw = (Math.max(0, segments[i].weight) / total) * content;
     slots.push({ kind: 'segment', index: i, a: acc, b: acc + sw });
     acc += sw;
-    slots.push({ kind: 'gap', index: i, a: acc, b: acc + gapW });
-    acc += gapW;
+    if (i < n - 1) {
+      slots.push({ kind: 'gap', index: i, a: acc, b: acc + gapW });
+      acc += gapW;
+    }
   }
   return slots;
 }

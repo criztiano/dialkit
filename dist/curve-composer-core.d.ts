@@ -90,10 +90,10 @@ interface TimelineSlot {
     b: number;
 }
 /**
- * The ordered timeline (0..1): each segment slot followed by its gap slot. Segments share
- * `1 - gap` of the width by weight; the `gap` fraction is split equally across the N gaps
- * (the last gap wraps to the first segment, closing the loop). At gap=0 the gap slots have
- * zero width, so the layout is exactly the contiguous segments.
+ * The ordered timeline (0..1): each segment slot, with a gap slot BETWEEN consecutive
+ * segments (never after the last — the loop wraps straight from the last to the first).
+ * Segments share `1 - gap` of the width by weight; the `gap` fraction is split equally
+ * across the N−1 interior gaps. At gap=0 the gaps have zero width (contiguous segments).
  */
 declare function timelineSlots(segments: CurveSegment[], gap?: number): TimelineSlot[];
 /** Interior cumulative split positions (0..1) — the draggable dividers; none when gaps are open. */

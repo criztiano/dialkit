@@ -485,34 +485,35 @@ describe('gaps', () => {
     gap,
   });
 
-  it('timelineSlots: gap=0 is contiguous segments; gap>0 compresses them and inserts gap slots', () => {
+  it('timelineSlots: gaps sit only BETWEEN segments (N-1), never after the last', () => {
     const noGap = timelineSlots(twoLinear(0).segments, 0);
     expect(noGap.filter((s) => s.kind === 'segment').map((s) => [s.a, s.b])).toEqual([
       [0, 0.5],
       [0.5, 1],
     ]);
     const withGap = timelineSlots(twoLinear(0.3).segments, 0.3);
+    expect(withGap.filter((s) => s.kind === 'gap')).toHaveLength(1); // 2 segments → 1 interior gap
+    expect(withGap[withGap.length - 1].kind).toBe('segment'); // ends on a segment, no trailing gap
     const seg0 = withGap.find((s) => s.kind === 'segment' && s.index === 0)!;
     expect(seg0.b).toBeCloseTo(0.35); // 0.5 * (1 - 0.3)
-    const gap0 = withGap.find((s) => s.kind === 'gap' && s.index === 0)!;
-    expect(gap0.b - gap0.a).toBeCloseTo(0.15); // 0.3 / 2
+    const gap0 = withGap.find((s) => s.kind === 'gap')!;
+    expect(gap0.b - gap0.a).toBeCloseTo(0.3); // the whole gap budget across the one interior gap
   });
 
-  it('a single segment has no gap (nothing to span)', () => {
-    const one: CurveComposition = oneSeg('linear');
-    const slots = timelineSlots(one.segments, 0.5);
-    expect(slots.find((s) => s.kind === 'gap')!.b - slots.find((s) => s.kind === 'gap')!.a).toBe(0);
+  it('a single segment has no gap slots at all', () => {
+    const slots = timelineSlots(oneSeg('linear').segments, 0.5);
+    expect(slots.filter((s) => s.kind === 'gap')).toHaveLength(0);
   });
 
   it('readComposition glides smoothly across a gap (end → next start) instead of snapping', () => {
     const comp = twoLinear(0.3);
     const s = buildSamplers(comp);
-    // segment 1 spans [0, 0.35]; its gap [0.35, 0.5]
-    expect(readComposition(comp, 0.34, s).value).toBeGreaterThan(0.9); // still near the top of seg 0
-    const gapMid = readComposition(comp, 0.425, s).value; // middle of the gap
+    // seg 0 spans [0, 0.35]; the interior gap is [0.35, 0.65]; seg 1 [0.65, 1]
+    expect(readComposition(comp, 0.34, s).value).toBeGreaterThan(0.9); // near the top of seg 0
+    const gapMid = readComposition(comp, 0.5, s).value;
     expect(gapMid).toBeGreaterThan(0.05);
     expect(gapMid).toBeLessThan(0.95); // partway down, not snapped
-    expect(readComposition(comp, 0.5, s).value).toBeCloseTo(0, 1); // gap end = next segment start
+    expect(readComposition(comp, 0.65, s).value).toBeCloseTo(0, 1); // gap end = next segment start
   });
 
   it('smootherstep is a 0→1 ease with flat ends', () => {

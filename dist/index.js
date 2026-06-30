@@ -3871,15 +3871,17 @@ function timelineSlots(segments, gap = 0) {
   const g = n > 1 ? clamp01(gap) : 0;
   const total = totalWeight(segments);
   const content = 1 - g;
-  const gapW = n > 0 ? g / n : 0;
+  const gapW = n > 1 ? g / (n - 1) : 0;
   const slots = [];
   let acc = 0;
   for (let i = 0; i < n; i++) {
     const sw = Math.max(0, segments[i].weight) / total * content;
     slots.push({ kind: "segment", index: i, a: acc, b: acc + sw });
     acc += sw;
-    slots.push({ kind: "gap", index: i, a: acc, b: acc + gapW });
-    acc += gapW;
+    if (i < n - 1) {
+      slots.push({ kind: "gap", index: i, a: acc, b: acc + gapW });
+      acc += gapW;
+    }
   }
   return slots;
 }
