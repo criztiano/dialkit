@@ -3,9 +3,13 @@ import {
   CurveComposer,
   SegmentedControl,
   ColorControl,
+  Slider,
   defaultComposition,
   splitSegment,
   removeSegment,
+  flipSegment,
+  setSegmentOvershoot,
+  setSegmentAnticipate,
   addDriver,
   removeDriver,
   buildSamplers,
@@ -14,18 +18,20 @@ import {
 } from 'dialkit';
 import type { CurveSegment, CurveDriver, DriverDirection, CurveComposition } from 'dialkit';
 
-const PERIOD = 2.4; // seconds for one transport loop
-
 export function CurveComposerShowcase() {
   const [comp, setComp] = useState<CurveComposition>(() => defaultComposition());
   const [playing, setPlaying] = useState(true);
   const [selected, setSelected] = useState(0);
+  const [duration, setDuration] = useState(2.4); // seconds for one transport loop
+  const durationRef = useRef(duration);
+  durationRef.current = duration;
   const [curveColor, setCurveColor] = useState('#ffffff');
   const [playheadColor, setPlayheadColor] = useState('#6366f1');
   const [mode, setMode] = useState<'continuous' | 'trigger'>('continuous');
   const [triggerSteps, setTriggerSteps] = useState(5);
 
   const { segments, driver, direction } = comp;
+  const gap = comp.gap ?? 0;
 
   // The continuous dot's travel along the demo track: left 6 + radius 8 = center start,
   // then value * TRACK_TRAVEL. Trigger markers sit at the same per-value positions, so the
@@ -55,8 +61,9 @@ export function CurveComposerShowcase() {
     };
   }, []);
 
-  // Virtual transport: a clock-driven phase 0..1 (no parent re-render via getPhase).
-  const elapsedRef = useRef(0);
+  // Virtual transport: accumulate the phase 0..1 directly at rate 1/duration, so changing
+  // duration changes the loop's velocity rather than jumping/resetting the playhead.
+  const phaseRef = useRef(0);
   useEffect(() => {
     let raf = 0;
     let last: number | null = null;
@@ -67,14 +74,16 @@ export function CurveComposerShowcase() {
         last = null;
         return;
       }
-      if (last != null) elapsedRef.current += (now - last) / 1000;
+      if (last != null) {
+        phaseRef.current = (phaseRef.current + (now - last) / 1000 / durationRef.current) % 1;
+      }
       last = now;
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [playing]);
 
-  const getPhase = () => (elapsedRef.current % PERIOD) / PERIOD;
+  const getPhase = () => phaseRef.current;
 
   // Read the composed value each frame to drive the demo dot — each segment drives a
   // full min→max walk, so the dot walks the track once per segment (twice for two).
@@ -105,11 +114,22 @@ export function CurveComposerShowcase() {
     setComp((c) => removeSegment(c, Math.min(selected, c.segments.length - 1)));
     setSelected((s) => Math.max(0, s - 1));
   };
+  const doFlip = () => {
+    setComp((c) => flipSegment(c, Math.min(selected, c.segments.length - 1)));
+  };
   const doReset = () => {
     setComp(defaultComposition());
     setSelected(0);
   };
   const toggleDriver = () => setComp((c) => (c.driver ? removeDriver(c) : addDriver(c)));
+  // Overshoot (end, easeOutBack) and anticipate (start, easeInBack) are independent per-segment
+  // params; the demo applies each across all segments for a clear, visible sweep. Set both → easeInOutBack.
+  const overshoot = segments[0]?.overshoot ?? 0;
+  const anticipate = segments[0]?.anticipate ?? 0;
+  const setOvershoot = (v: number) =>
+    setComp((c) => c.segments.reduce((acc, _s, i) => setSegmentOvershoot(acc, i, v), c));
+  const setAnticipate = (v: number) =>
+    setComp((c) => c.segments.reduce((acc, _s, i) => setSegmentAnticipate(acc, i, v), c));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -117,6 +137,9 @@ export function CurveComposerShowcase() {
         segments={segments}
         driver={driver}
         direction={direction}
+        gap={gap}
+        selectedIndex={selected}
+        onSelect={setSelected}
         onSegmentsChange={onSegments}
         onDriverChange={onDriver}
         getPhase={getPhase}
@@ -131,8 +154,9 @@ export function CurveComposerShowcase() {
       />
 
       <div style={{ fontSize: 12, color: 'var(--dial-text-secondary)' }}>
-        {segments.length} segment{segments.length > 1 ? 's' : ''} · click a curve to change its shape · drag its body
-        — sideways for energy (onset ↔ fall), up/down for steepness · drag a divider to retime · double-click to split
+        {segments.length} segment{segments.length > 1 ? 's' : ''} · click a curve's header to select it (Split / Flip /
+        Remove act on it) · click the body to change shape · drag — sideways for energy, up/down for steepness (→ expo) ·
+        divider to retime · double-click to split
       </div>
 
       {/* output track: the continuous dot travels along it (position = value). In trigger mode,
@@ -186,6 +210,9 @@ export function CurveComposerShowcase() {
         <button type="button" className="lib-tab" onClick={doSplit}>
           + Split
         </button>
+        <button type="button" className="lib-tab" onClick={doFlip}>
+          ⇄ Flip
+        </button>
         <button type="button" className="lib-tab" onClick={doRemove} disabled={segments.length <= 1}>
           − Remove
         </button>
@@ -236,6 +263,43 @@ export function CurveComposerShowcase() {
           onChange={setDirection}
         />
       </div>
+
+      <Slider
+        label="duration"
+        value={duration}
+        onChange={setDuration}
+        min={0.4}
+        max={6}
+        step={0.1}
+        formatValue={(v) => `${v.toFixed(1)}s`}
+      />
+      <Slider
+        label="gap"
+        value={gap}
+        onChange={(v) => setComp((c) => ({ ...c, gap: v }))}
+        min={0}
+        max={0.6}
+        step={0.01}
+        formatValue={(v) => (v > 0.005 ? v.toFixed(2) : 'none')}
+      />
+      <Slider
+        label="anticipate"
+        value={anticipate}
+        onChange={setAnticipate}
+        min={0}
+        max={1}
+        step={0.01}
+        formatValue={(v) => (v > 0.02 ? `easeInBack ${v.toFixed(2)}` : 'none')}
+      />
+      <Slider
+        label="overshoot"
+        value={overshoot}
+        onChange={setOvershoot}
+        min={0}
+        max={1}
+        step={0.01}
+        formatValue={(v) => (v > 0.02 ? `easeOutBack ${v.toFixed(2)}` : 'none')}
+      />
 
       <ColorControl label="curve color" value={curveColor} onChange={setCurveColor} />
       <ColorControl label="playhead" value={playheadColor} onChange={setPlayheadColor} />

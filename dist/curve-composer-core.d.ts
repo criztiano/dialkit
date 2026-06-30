@@ -16,11 +16,22 @@ interface CurveSegment {
     curvature: number;
     /**
      * Bipolar -1..1 steepness — how pronounced the ease is, independent of the energy bias.
-     * Scales each control point's deviation from the linear diagonal: 0 = canonical preset,
-     * +1 = sharper (e.g. easeInOut gets much slower start/end), −1 = flatter toward linear.
-     * Spring maps it to stiffness (snappier rise).
+     * Sweeps linear (−1) ← canonical preset (0) → the explosive extreme (+1, expo-grade: the
+     * eased side's far control point drops to the floor). So steepness is the continuous power
+     * ladder (gentle → quad → … → expo), with circ reachable mid-range. Spring maps it to stiffness.
      */
     steepness: number;
+    /**
+     * 0..1 overshoot — pushes the curve above 1 at the END before settling (easeOutBack),
+     * 0 = none. Independent of `anticipate`; set both for easeInOutBack. Beyond ~1 is
+     * elastic/bounce — use spring. Optional; treated as 0 when absent. No-op for spring.
+     */
+    overshoot?: number;
+    /**
+     * 0..1 anticipation — dips the curve below 0 at the START before launching (easeInBack),
+     * 0 = none. Independent of `overshoot`. Optional; treated as 0 when absent. No-op for spring.
+     */
+    anticipate?: number;
 }
 /** The stacked driver curve (a single curve, no internal splits). */
 interface CurveDriver {
@@ -29,6 +40,10 @@ interface CurveDriver {
     curvature: number;
     /** Bipolar -1..1 steepness — see CurveSegment.steepness. */
     steepness: number;
+    /** 0..1 overshoot — see CurveSegment.overshoot. */
+    overshoot?: number;
+    /** 0..1 anticipation — see CurveSegment.anticipate. */
+    anticipate?: number;
 }
 type DriverDirection = 'forward' | 'mirror' | 'reverse';
 interface CurveComposition {
@@ -36,6 +51,13 @@ interface CurveComposition {
     /** null → no driver lane (the component renders a single lane). */
     driver: CurveDriver | null;
     direction: DriverDirection;
+    /**
+     * 0..1 — fraction of the timeline given to gaps between segments (distributed equally,
+     * one gap after each segment, the last wrapping to the first). In a gap the value glides
+     * smoothly from the segment's end down to the next segment's start (a faint connector)
+     * instead of snapping. 0 = contiguous (default). Optional.
+     */
+    gap?: number;
 }
 /** Pointer travel (CSS px) past which a press becomes a drag rather than a click. */
 declare const DRAG_THRESHOLD = 3;
@@ -46,24 +68,44 @@ declare const CURVE_MIN_WEIGHT_FRAC = 0.06;
 /** A pure `(t) -> value` sampler over local time, both in 0..1 (value may overshoot for springs). */
 type Sampler = (t: number) => number;
 /**
- * Derive the bezier control points for a type at a given energy bias + steepness.
- * Every preset shares y=(0,1) and differs only in its x control points. Steepness scales
- * each x's deviation from the linear diagonal (x1 from 0, x2 from 1) — intensifying or
- * relaxing the ease while keeping its character. Energy then shifts both x's in tandem:
- * bias>0 pushes the bend toward the fall (slow start, late rush), bias<0 toward the onset.
+ * Derive the cubic-bezier control points [x1,y1,x2,y2] for a curve. Three knobs span the
+ * whole easing space (P0=(0,0), P3=(1,1) implied):
+ * - steepness sweeps linear (−1) ← preset (0) → the expo-grade extreme (+1); it's the
+ *   continuous power ladder (quad→…→expo), with circ reachable mid-range.
+ * - energy shifts both x control points in tandem (onset ↔ fall).
+ * - overshoot (0..1) raises the end above 1 (easeOutBack); anticipate (0..1) drops the start
+ *   below 0 (easeInBack). They are independent — set both for easeInOutBack. x stays clamped
+ *   so time stays monotonic.
  */
-declare function deriveEase(type: CurveType, curvature: number, steepness?: number): [number, number, number, number];
+declare function deriveEase(type: CurveType, curvature: number, steepness?: number, overshoot?: number, anticipate?: number): [number, number, number, number];
 /** Build a reusable sampler for a segment/driver (precomputes spring points once). */
 declare function buildSampler(curve: CurveSegment | CurveDriver): Sampler;
-/** Interior cumulative split positions (0..1), excluding the 0 and 1 ends. */
-declare function boundaries(segments: CurveSegment[]): number[];
 declare function totalWeight(segments: CurveSegment[]): number;
-/** [start, end] of a segment's horizontal slice in 0..1. */
-declare function segmentSpan(segments: CurveSegment[], index: number): [number, number];
-/** Which segment slice an x (0..1) falls in. */
-declare function segmentIndexAt(xNorm: number, segments: CurveSegment[]): number;
-/** Nearest interior boundary within `edgeHitNorm` of x, or null. Returns the boundary index (between i and i+1). */
-declare function boundaryAt(xNorm: number, segments: CurveSegment[], edgeHitNorm: number): number | null;
+/** A slice of the timeline: a segment's curve, or a gap connector after it. */
+interface TimelineSlot {
+    kind: 'segment' | 'gap';
+    /** Segment index; for a gap, the segment it follows (its connector targets segment index+1). */
+    index: number;
+    a: number;
+    b: number;
+}
+/**
+ * The ordered timeline (0..1): each segment slot, with a gap slot BETWEEN consecutive
+ * segments (never after the last — the loop wraps straight from the last to the first).
+ * Segments share `1 - gap` of the width by weight; the `gap` fraction is split equally
+ * across the N−1 interior gaps. At gap=0 the gaps have zero width (contiguous segments).
+ */
+declare function timelineSlots(segments: CurveSegment[], gap?: number): TimelineSlot[];
+/** Interior cumulative split positions (0..1) — the draggable dividers; none when gaps are open. */
+declare function boundaries(segments: CurveSegment[], gap?: number): number[];
+/** [start, end] of a segment's horizontal slice in 0..1 (gap-aware). */
+declare function segmentSpan(segments: CurveSegment[], index: number, gap?: number): [number, number];
+/** Which segment an x (0..1) falls in (a gap maps to the segment it follows). */
+declare function segmentIndexAt(xNorm: number, segments: CurveSegment[], gap?: number): number;
+/** Nearest interior boundary within `edgeHitNorm` of x, or null (no dividers when gaps are open). */
+declare function boundaryAt(xNorm: number, segments: CurveSegment[], edgeHitNorm: number, gap?: number): number | null;
+/** Perlin smootherstep — a C2 ease used to glide the value across a gap. */
+declare function smootherstep(t: number): number;
 /**
  * Insert a copy of the segment at `index` after it, then re-divide ALL segments to
  * equal duration — split always yields evenly-spaced clips.
@@ -72,8 +114,12 @@ declare function splitSegment(comp: CurveComposition, index: number): CurveCompo
 /** Remove the segment at `index` (no-op when it's the only one). */
 declare function removeSegment(comp: CurveComposition, index: number): CurveComposition;
 declare function cycleSegmentType(comp: CurveComposition, index: number): CurveComposition;
+declare function flipSegment(comp: CurveComposition, index: number): CurveComposition;
+declare function flipDriver(comp: CurveComposition): CurveComposition;
 declare function setSegmentCurvature(comp: CurveComposition, index: number, curvature: number): CurveComposition;
 declare function setSegmentSteepness(comp: CurveComposition, index: number, steepness: number): CurveComposition;
+declare function setSegmentOvershoot(comp: CurveComposition, index: number, overshoot: number): CurveComposition;
+declare function setSegmentAnticipate(comp: CurveComposition, index: number, anticipate: number): CurveComposition;
 /**
  * Move `deltaFrac` (0..1 of the whole series) across the boundary between segment
  * `boundaryIndex` and the next, keeping the rest untouched and the pair's combined
@@ -85,6 +131,8 @@ declare function removeDriver(comp: CurveComposition): CurveComposition;
 declare function cycleDriverType(comp: CurveComposition): CurveComposition;
 declare function setDriverCurvature(comp: CurveComposition, curvature: number): CurveComposition;
 declare function setDriverSteepness(comp: CurveComposition, steepness: number): CurveComposition;
+declare function setDriverOvershoot(comp: CurveComposition, overshoot: number): CurveComposition;
+declare function setDriverAnticipate(comp: CurveComposition, anticipate: number): CurveComposition;
 declare const DRAG_ENERGY_GAIN = 0.6;
 declare const DRAG_STEEP_GAIN = 0.6;
 /** The minimal rectangle a wrapper reads from `getBoundingClientRect()`. */
@@ -100,6 +148,8 @@ interface ComposerHitLayout {
     totalH: number;
     /** y where the driver lane begins, or null when there is no driver lane. */
     driverY: number | null;
+    /** Composition gap (0..1) so hit-testing matches the gap-aware layout. Default 0. */
+    gap?: number;
 }
 /** A resolved press target inside the composer. */
 type PointerTarget = {
@@ -111,6 +161,14 @@ type PointerTarget = {
     kind: 'segment';
     index: number;
 };
+/** Height (viewBox px) of the header strip at the top of each lane — the curve's "select" zone. */
+declare const COMPOSER_HEADER_H = 16;
+/**
+ * If (xN, py) lands in a lane's header strip (the top band where the type label sits), the
+ * curve it selects: a segment index, or 'driver'. Else null. Check this before
+ * `pointerTarget` so a header click selects rather than cycles/drags.
+ */
+declare function headerHit(xN: number, py: number, segments: CurveSegment[], layout: ComposerHitLayout): number | 'driver' | null;
 /** Normalize a client point to xN (0..1 across the width) + py (0..totalH down the height). */
 declare function toLocalCoords(clientX: number, clientY: number, rect: ClientRectLike, totalH: number): {
     xN: number;
@@ -189,6 +247,11 @@ declare function mapY(rect: Rect, ny: number): number;
  * express). Pure string output — no DOM.
  */
 declare function curvePath(curve: CurveSegment | CurveDriver, rect: Rect, span: [number, number], W: number, samples?: number): string;
+/**
+ * The SVG path `d` for a gap connector slot — the faint line that glides (smootherstep) from
+ * the slot's segment end value down to the next segment's start value across the gap.
+ */
+declare function connectorPath(slot: TimelineSlot, samplers: CompositionSamplers, segCount: number, rect: Rect, W: number, samples?: number): string;
 /** Endpoints of the faint linear-reference diagonal behind a segment (or the driver lane). */
 declare function diagonalLine(rect: Rect, span: [number, number], W: number): {
     x1: number;
@@ -234,4 +297,4 @@ declare function triggersCrossed(prevValue: number, curValue: number, steps: num
 /** A reasonable starting composition for demos / uncontrolled mounts. */
 declare function defaultComposition(): CurveComposition;
 
-export { COMPOSER_DRIVER_FRAC, COMPOSER_GAP, COMPOSER_PAD_FRAC, CURVE_CYCLE, CURVE_MIN_WEIGHT_FRAC, type ClientRectLike, type ComposerHitLayout, type ComposerLayout, type CompositionRead, type CompositionSamplers, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, DRAG_ENERGY_GAIN, DRAG_STEEP_GAIN, DRAG_THRESHOLD, type DriverDirection, EDGE_HIT, type PointerTarget, type Rect, type Sampler, addDriver, applyDriverBodyDrag, applySegmentBodyDrag, boundaries, boundaryAt, buildSampler, buildSamplers, composerLayout, curvePath, cycleDriverType, cycleSegmentType, defaultComposition, deriveEase, diagonalLine, directionPhase, easingPresets, mapY, playheadGeometry, pointerTarget, readComposition, redistributeWeight, removeDriver, removeSegment, segmentIndexAt, segmentSpan, setDriverCurvature, setDriverSteepness, setSegmentCurvature, setSegmentSteepness, splitSegment, toLocalCoords, totalWeight, triggerLevels, triggersCrossed };
+export { COMPOSER_DRIVER_FRAC, COMPOSER_GAP, COMPOSER_HEADER_H, COMPOSER_PAD_FRAC, CURVE_CYCLE, CURVE_MIN_WEIGHT_FRAC, type ClientRectLike, type ComposerHitLayout, type ComposerLayout, type CompositionRead, type CompositionSamplers, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, DRAG_ENERGY_GAIN, DRAG_STEEP_GAIN, DRAG_THRESHOLD, type DriverDirection, EDGE_HIT, type PointerTarget, type Rect, type Sampler, type TimelineSlot, addDriver, applyDriverBodyDrag, applySegmentBodyDrag, boundaries, boundaryAt, buildSampler, buildSamplers, composerLayout, connectorPath, curvePath, cycleDriverType, cycleSegmentType, defaultComposition, deriveEase, diagonalLine, directionPhase, easingPresets, flipDriver, flipSegment, headerHit, mapY, playheadGeometry, pointerTarget, readComposition, redistributeWeight, removeDriver, removeSegment, segmentIndexAt, segmentSpan, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, smootherstep, splitSegment, timelineSlots, toLocalCoords, totalWeight, triggerLevels, triggersCrossed };

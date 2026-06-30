@@ -2184,6 +2184,14 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
   pointer-events: none;
 }
 
+.dialkit-cc-seg-selected {
+  fill: var(--dial-surface-hover);
+  stroke: currentColor;
+  stroke-opacity: 0.5;
+  stroke-width: 1;
+  pointer-events: none;
+}
+
 .dialkit-cc-grid {
   stroke: currentColor;
   stroke-opacity: 0.08;
@@ -2203,6 +2211,16 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
   fill: none;
   stroke: currentColor;
   stroke-opacity: 0.85;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.dialkit-cc-connector {
+  fill: none;
+  stroke: currentColor;
+  stroke-opacity: 0.3;
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;

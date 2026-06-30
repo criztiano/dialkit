@@ -13,6 +13,7 @@
     triggersCrossed,
     toLocalCoords,
     pointerTarget,
+    headerHit,
     applySegmentBodyDrag,
     applyDriverBodyDrag,
     composerLayout,
@@ -20,6 +21,8 @@
     curvePath,
     diagonalLine,
     playheadGeometry,
+    timelineSlots,
+    connectorPath,
     DEFAULT_TRIGGER_STEPS,
     DRAG_THRESHOLD,
     EDGE_HIT,
@@ -43,6 +46,9 @@
     mode = 'continuous',
     triggerSteps = DEFAULT_TRIGGER_STEPS,
     onTrigger = undefined,
+    selectedIndex = null,
+    onSelect = undefined,
+    gap = 0,
     curveColor = undefined,
     playheadColor = undefined,
     grid = false,
@@ -60,6 +66,9 @@
     mode?: 'continuous' | 'trigger';
     triggerSteps?: number;
     onTrigger?: (index: number) => void;
+    selectedIndex?: number | null;
+    onSelect?: (index: number) => void;
+    gap?: number;
     curveColor?: string;
     playheadColor?: string;
     grid?: boolean;
@@ -73,7 +82,8 @@
   type Drag =
     | { kind: 'boundary'; index: number; startX: number; startY: number; base: CurveComposition; moved: boolean }
     | { kind: 'segment'; index: number; startX: number; startY: number; baseCurvature: number; baseSteepness: number; moved: boolean }
-    | { kind: 'driver'; startX: number; startY: number; baseCurvature: number; baseSteepness: number; moved: boolean };
+    | { kind: 'driver'; startX: number; startY: number; baseCurvature: number; baseSteepness: number; moved: boolean }
+    | { kind: 'select'; index: number; startX: number; startY: number; moved: boolean };
 
   // --- derived geometry (shared layout from the core) ---
   const layout = $derived(composerLayout(width, height, driver != null));
@@ -82,9 +92,9 @@
   const mainRect = $derived(layout.mainRect);
   const driverRect = $derived(layout.driverRect);
 
-  const composition = $derived<CurveComposition>({ segments, driver, direction });
+  const composition = $derived<CurveComposition>({ segments, driver, direction, gap });
   const samplers = $derived(buildSamplers(composition));
-  const interior = $derived(boundaries(segments));
+  const interior = $derived(boundaries(segments, gap));
 
   // --- element refs for direct per-frame DOM writes ---
   let svgEl: SVGSVGElement;
@@ -94,7 +104,7 @@
   let driverPlayheadEl = $state<SVGLineElement | undefined>(undefined);
 
   let drag = $state<Drag | null>(null);
-  let hover = $state<{ kind: 'boundary' | 'segment' | 'driver'; index: number } | null>(null);
+  let hover = $state<{ kind: 'boundary' | 'segment' | 'driver' | 'header'; index: number } | null>(null);
 
   // --- playhead loop (direct DOM writes, like the waveform's polled playhead) ---
   onMount(() => {
@@ -148,7 +158,7 @@
   });
 
   // --- pointer interaction ---
-  const hitLayout = () => ({ totalH, driverY: driverRect ? driverRect.y : null });
+  const hitLayout = () => ({ totalH, driverY: driverRect ? driverRect.y : null, gap });
 
   const localCoords = (clientX: number, clientY: number) => {
     const rect = svgEl.getBoundingClientRect();
@@ -161,6 +171,13 @@
       svgEl.setPointerCapture(e.pointerId);
     } catch {
       // No active pointer (e.g. a synthetic event) — capture is a nicety, not required.
+    }
+
+    // A press in a segment's header strip selects it (rather than cycling/dragging).
+    const header = headerHit(xN, py, segments, hitLayout());
+    if (typeof header === 'number') {
+      drag = { kind: 'select', index: header, startX: e.clientX, startY: e.clientY, moved: false };
+      return;
     }
 
     const target = pointerTarget(xN, py, segments, hitLayout(), EDGE_HIT / rectW);
@@ -194,6 +211,10 @@
     if (!d) {
       // Hover affordance only.
       const { xN, py, rectW } = localCoords(e.clientX, e.clientY);
+      if (typeof headerHit(xN, py, segments, hitLayout()) === 'number') {
+        hover = { kind: 'header', index: 0 };
+        return;
+      }
       const t = pointerTarget(xN, py, segments, hitLayout(), EDGE_HIT / rectW);
       hover = t.kind === 'driver' ? { kind: 'driver', index: 0 } : { kind: t.kind, index: t.index };
       return;
@@ -218,11 +239,14 @@
       const next = applySegmentBodyDrag(composition, d.index, d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
       onSegmentsChange?.(next.segments);
       if (!d.moved) drag = { ...d, moved: true };
-    } else {
+    } else if (d.kind === 'driver') {
       const dxFrac = (e.clientX - d.startX) / rectW;
       const dyFrac = (e.clientY - d.startY) / rectH;
       const next = applyDriverBodyDrag(composition, d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
       if (next.driver) onDriverChange?.(next.driver);
+      if (!d.moved) drag = { ...d, moved: true };
+    } else {
+      // 'select': moving past the threshold cancels the click so it won't select on release.
       if (!d.moved) drag = { ...d, moved: true };
     }
   }
@@ -236,8 +260,10 @@
       // Capture may not be held — ignore.
     }
     if (!d || d.moved) return;
-    // An un-moved press is a click → cycle the curve type.
-    if (d.kind === 'driver') {
+    // An un-moved press is a click → select (header) or cycle the curve type (body).
+    if (d.kind === 'select') {
+      onSelect?.(d.index);
+    } else if (d.kind === 'driver') {
       const next = cycleDriverType(composition);
       if (next.driver) onDriverChange?.(next.driver);
     } else if (d.kind === 'segment') {
@@ -257,7 +283,7 @@
   function onDoubleClick(e: MouseEvent) {
     const { xN, py } = localCoords(e.clientX, e.clientY);
     if (driverRect && py >= driverRect.y) return; // driver is a single curve
-    onSegmentsChange?.(splitSegment(composition, segmentIndexAt(xN, segments)).segments);
+    onSegmentsChange?.(splitSegment(composition, segmentIndexAt(xN, segments, gap)).segments);
   }
 
   function onPointerLeave() {
@@ -270,7 +296,9 @@
       ? 'ew-resize'
       : activeKind === 'segment' || activeKind === 'driver'
         ? 'move'
-        : 'default';
+        : activeKind === 'select' || activeKind === 'header'
+          ? 'pointer'
+          : 'default';
   });
 
   // --- path builders (geometry + path strings come from the shared core) ---
@@ -282,7 +310,7 @@
     return out;
   };
 
-  const segmentSpans = $derived(segments.map((_: CurveSegment, i: number) => segmentSpan(segments, i)));
+  const segmentSpans = $derived(segments.map((_: CurveSegment, i: number) => segmentSpan(segments, i, gap)));
 </script>
 
 <div class="dialkit-cc-wrap" style={`width:${W}px`}>
@@ -308,9 +336,22 @@
       <line class="dialkit-cc-grid" x1={gx} y1={mainRect.y} x2={gx} y2={mainRect.y + mainRect.h} />
     {/each}
 
+    <!-- selected segment highlight -->
+    {#if selectedIndex != null && selectedIndex >= 0 && selectedIndex < segments.length}
+      {@const span = segmentSpan(segments, selectedIndex, gap)}
+      <rect
+        class="dialkit-cc-seg-selected"
+        x={span[0] * W}
+        y={mainRect.y}
+        width={(span[1] - span[0]) * W}
+        height={mainRect.h}
+        rx={8}
+      />
+    {/if}
+
     <!-- hovered segment highlight -->
     {#if hover?.kind === 'segment' && !drag}
-      {@const span = segmentSpan(segments, hover.index)}
+      {@const span = segmentSpan(segments, hover.index, gap)}
       <rect
         class="dialkit-cc-seg-hover"
         x={span[0] * W}
@@ -330,6 +371,13 @@
         <text class="dialkit-cc-label" x={(span[0] + span[1]) * 0.5 * W} y={mainRect.y + 13}>{seg.type}</text>
       </g>
     {/each}
+
+    <!-- gap connectors: faint lines that glide each segment's end down to the next's start -->
+    {#if gap > 0}
+      {#each timelineSlots(segments, gap).filter((slot) => slot.kind === 'gap' && slot.b > slot.a) as slot}
+        <path class="dialkit-cc-connector" d={connectorPath(slot, samplers, segments.length, mainRect, W)} />
+      {/each}
+    {/if}
 
     <!-- interior boundaries -->
     {#each interior as bx, i}

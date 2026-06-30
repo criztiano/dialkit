@@ -935,11 +935,22 @@ interface CurveSegment {
     curvature: number;
     /**
      * Bipolar -1..1 steepness — how pronounced the ease is, independent of the energy bias.
-     * Scales each control point's deviation from the linear diagonal: 0 = canonical preset,
-     * +1 = sharper (e.g. easeInOut gets much slower start/end), −1 = flatter toward linear.
-     * Spring maps it to stiffness (snappier rise).
+     * Sweeps linear (−1) ← canonical preset (0) → the explosive extreme (+1, expo-grade: the
+     * eased side's far control point drops to the floor). So steepness is the continuous power
+     * ladder (gentle → quad → … → expo), with circ reachable mid-range. Spring maps it to stiffness.
      */
     steepness: number;
+    /**
+     * 0..1 overshoot — pushes the curve above 1 at the END before settling (easeOutBack),
+     * 0 = none. Independent of `anticipate`; set both for easeInOutBack. Beyond ~1 is
+     * elastic/bounce — use spring. Optional; treated as 0 when absent. No-op for spring.
+     */
+    overshoot?: number;
+    /**
+     * 0..1 anticipation — dips the curve below 0 at the START before launching (easeInBack),
+     * 0 = none. Independent of `overshoot`. Optional; treated as 0 when absent. No-op for spring.
+     */
+    anticipate?: number;
 }
 /** The stacked driver curve (a single curve, no internal splits). */
 interface CurveDriver {
@@ -948,6 +959,10 @@ interface CurveDriver {
     curvature: number;
     /** Bipolar -1..1 steepness — see CurveSegment.steepness. */
     steepness: number;
+    /** 0..1 overshoot — see CurveSegment.overshoot. */
+    overshoot?: number;
+    /** 0..1 anticipation — see CurveSegment.anticipate. */
+    anticipate?: number;
 }
 type DriverDirection = 'forward' | 'mirror' | 'reverse';
 interface CurveComposition {
@@ -955,6 +970,13 @@ interface CurveComposition {
     /** null → no driver lane (the component renders a single lane). */
     driver: CurveDriver | null;
     direction: DriverDirection;
+    /**
+     * 0..1 — fraction of the timeline given to gaps between segments (distributed equally,
+     * one gap after each segment, the last wrapping to the first). In a gap the value glides
+     * smoothly from the segment's end down to the next segment's start (a faint connector)
+     * instead of snapping. 0 = contiguous (default). Optional.
+     */
+    gap?: number;
 }
 
 declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
@@ -1008,6 +1030,16 @@ declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
         type: PropType<(index: number) => void>;
         default: undefined;
     };
+    /** Index of the currently selected segment (highlighted); null/undefined for none. */
+    selectedIndex: {
+        type: PropType<number | null>;
+        default: null;
+    };
+    /** Fired when a segment's header strip is clicked — lets the consumer target it (flip/remove/…). */
+    onSelect: {
+        type: PropType<(index: number) => void>;
+        default: undefined;
+    };
     /** Curve stroke color. Defaults to the theme text color. */
     curveColor: {
         type: StringConstructor;
@@ -1017,6 +1049,11 @@ declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
     playheadColor: {
         type: StringConstructor;
         default: undefined;
+    };
+    /** 0..1 — space between segments; the value glides smoothly across each gap (faint connector). */
+    gap: {
+        type: NumberConstructor;
+        default: number;
     };
     /** Faint vertical reference grid behind each lane. */
     grid: {
@@ -1089,6 +1126,16 @@ declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
         type: PropType<(index: number) => void>;
         default: undefined;
     };
+    /** Index of the currently selected segment (highlighted); null/undefined for none. */
+    selectedIndex: {
+        type: PropType<number | null>;
+        default: null;
+    };
+    /** Fired when a segment's header strip is clicked — lets the consumer target it (flip/remove/…). */
+    onSelect: {
+        type: PropType<(index: number) => void>;
+        default: undefined;
+    };
     /** Curve stroke color. Defaults to the theme text color. */
     curveColor: {
         type: StringConstructor;
@@ -1098,6 +1145,11 @@ declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
     playheadColor: {
         type: StringConstructor;
         default: undefined;
+    };
+    /** 0..1 — space between segments; the value glides smoothly across each gap (faint connector). */
+    gap: {
+        type: NumberConstructor;
+        default: number;
     };
     /** Faint vertical reference grid behind each lane. */
     grid: {
@@ -1119,9 +1171,11 @@ declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
     };
 }>> & Readonly<{}>, {
     mode: "continuous" | "trigger";
+    onSelect: (index: number) => void;
     height: number;
     width: number;
     direction: DriverDirection;
+    gap: number;
     grid: boolean;
     driver: CurveDriver | null;
     gridSubdivisions: number;
@@ -1132,6 +1186,7 @@ declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
     phase: number;
     triggerSteps: number;
     onTrigger: (index: number) => void;
+    selectedIndex: number | null;
     curveColor: string;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 

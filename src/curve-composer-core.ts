@@ -31,11 +31,22 @@ export interface CurveSegment {
   curvature: number;
   /**
    * Bipolar -1..1 steepness — how pronounced the ease is, independent of the energy bias.
-   * Scales each control point's deviation from the linear diagonal: 0 = canonical preset,
-   * +1 = sharper (e.g. easeInOut gets much slower start/end), −1 = flatter toward linear.
-   * Spring maps it to stiffness (snappier rise).
+   * Sweeps linear (−1) ← canonical preset (0) → the explosive extreme (+1, expo-grade: the
+   * eased side's far control point drops to the floor). So steepness is the continuous power
+   * ladder (gentle → quad → … → expo), with circ reachable mid-range. Spring maps it to stiffness.
    */
   steepness: number;
+  /**
+   * 0..1 overshoot — pushes the curve above 1 at the END before settling (easeOutBack),
+   * 0 = none. Independent of `anticipate`; set both for easeInOutBack. Beyond ~1 is
+   * elastic/bounce — use spring. Optional; treated as 0 when absent. No-op for spring.
+   */
+  overshoot?: number;
+  /**
+   * 0..1 anticipation — dips the curve below 0 at the START before launching (easeInBack),
+   * 0 = none. Independent of `overshoot`. Optional; treated as 0 when absent. No-op for spring.
+   */
+  anticipate?: number;
 }
 
 /** The stacked driver curve (a single curve, no internal splits). */
@@ -45,6 +56,10 @@ export interface CurveDriver {
   curvature: number;
   /** Bipolar -1..1 steepness — see CurveSegment.steepness. */
   steepness: number;
+  /** 0..1 overshoot — see CurveSegment.overshoot. */
+  overshoot?: number;
+  /** 0..1 anticipation — see CurveSegment.anticipate. */
+  anticipate?: number;
 }
 
 export type DriverDirection = 'forward' | 'mirror' | 'reverse';
@@ -54,6 +69,13 @@ export interface CurveComposition {
   /** null → no driver lane (the component renders a single lane). */
   driver: CurveDriver | null;
   direction: DriverDirection;
+  /**
+   * 0..1 — fraction of the timeline given to gaps between segments (distributed equally,
+   * one gap after each segment, the last wrapping to the first). In a gap the value glides
+   * smoothly from the segment's end down to the next segment's start (a faint connector)
+   * instead of snapping. 0 = contiguous (default). Optional.
+   */
+  gap?: number;
 }
 
 // --- interaction constants (shared with the wrappers, mirroring the waveform) ---
@@ -74,34 +96,63 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const clampBipolar = (v: number) => (v < -1 ? -1 : v > 1 ? 1 : v);
 
-/** How far (in x) a full ±1 bias shifts the control points. */
+/** How far (in x) a full ±1 energy bias shifts the control points. */
 const SKEW_MAX = 0.45;
-
-/** Multiplier on a preset's deviation from linear at full ±1 steepness. */
-function steepnessGain(steepness: number): number {
-  const v = clampBipolar(steepness);
-  // +1 → 2.3× deviation (sharper, slower ends); 0 → preset; −1 → 0× (linear/flat).
-  return v >= 0 ? 1 + v * 1.3 : 1 + v;
-}
+/** How far past the [0,1] band a full overshoot / anticipation pushes a y control point. */
+const BACK_MAX = 0.8;
 
 /**
- * Derive the bezier control points for a type at a given energy bias + steepness.
- * Every preset shares y=(0,1) and differs only in its x control points. Steepness scales
- * each x's deviation from the linear diagonal (x1 from 0, x2 from 1) — intensifying or
- * relaxing the ease while keeping its character. Energy then shifts both x's in tandem:
- * bias>0 pushes the bend toward the fall (slow start, late rush), bias<0 toward the onset.
+ * The explosive extreme each preset reaches at steepness +1 — full [x1,y1,x2,y2] control
+ * points. The eased side's far y drops to the floor (expo-grade): easeIn → easeInExpo,
+ * easeOut → its mirror, easeInOut → a sharp symmetric S; linear stays linear.
+ */
+const easingExtremes: Record<Exclude<CurveType, 'spring'>, [number, number, number, number]> = {
+  linear: [0, 0, 1, 1],
+  easeIn: [0.7, 0, 0.84, 0],
+  easeOut: [0.16, 1, 0.3, 1],
+  easeInOut: [0.87, 0, 0.13, 1],
+};
+
+const lerp4 = (
+  a: [number, number, number, number],
+  b: [number, number, number, number],
+  t: number
+): [number, number, number, number] => [
+  lerp(a[0], b[0], t),
+  lerp(a[1], b[1], t),
+  lerp(a[2], b[2], t),
+  lerp(a[3], b[3], t),
+];
+
+/**
+ * Derive the cubic-bezier control points [x1,y1,x2,y2] for a curve. Three knobs span the
+ * whole easing space (P0=(0,0), P3=(1,1) implied):
+ * - steepness sweeps linear (−1) ← preset (0) → the expo-grade extreme (+1); it's the
+ *   continuous power ladder (quad→…→expo), with circ reachable mid-range.
+ * - energy shifts both x control points in tandem (onset ↔ fall).
+ * - overshoot (0..1) raises the end above 1 (easeOutBack); anticipate (0..1) drops the start
+ *   below 0 (easeInBack). They are independent — set both for easeInOutBack. x stays clamped
+ *   so time stays monotonic.
  */
 export function deriveEase(
   type: CurveType,
   curvature: number,
-  steepness = 0
+  steepness = 0,
+  overshoot = 0,
+  anticipate = 0
 ): [number, number, number, number] {
-  const base = type === 'spring' ? easingPresets.linear : easingPresets[type];
-  const k = steepnessGain(steepness);
-  const x1 = base[0] * k; // linear x1 is 0, so the deviation is base[0]
-  const x2 = 1 + (base[2] - 1) * k; // linear x2 is 1
+  const key = type === 'spring' ? 'linear' : type;
+  const base = easingPresets[key];
+  const s = clampBipolar(steepness);
+  // steepness: relax toward linear below 0, intensify toward the extreme above 0.
+  const pts = s >= 0 ? lerp4(base, easingExtremes[key], s) : lerp4(easingPresets.linear, base, s + 1);
+  let [x1, y1, x2, y2] = pts;
   const shift = clampBipolar(curvature) * SKEW_MAX;
-  return [clamp01(x1 + shift), base[1], clamp01(x2 + shift), base[3]];
+  x1 = clamp01(x1 + shift);
+  x2 = clamp01(x2 + shift);
+  y2 += clamp01(overshoot) * BACK_MAX; // end overshoot, above 1
+  y1 -= clamp01(anticipate) * BACK_MAX; // start anticipation, below 0
+  return [x1, y1, x2, y2];
 }
 
 // Solve the cubic-bezier for `y` given `x`, with P0=(0,0), P3=(1,1).
@@ -169,14 +220,56 @@ export function buildSampler(curve: CurveSegment | CurveDriver): Sampler {
     const pts = springPoints(curve.curvature, curve.steepness);
     return (t) => interp(pts, t);
   }
-  const ease = deriveEase(curve.type, curve.curvature, curve.steepness);
+  const ease = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot, curve.anticipate);
   return (t) => bezierY(ease, t);
 }
 
 // --- geometry / layout ---
 
-/** Interior cumulative split positions (0..1), excluding the 0 and 1 ends. */
-export function boundaries(segments: CurveSegment[]): number[] {
+export function totalWeight(segments: CurveSegment[]): number {
+  let t = 0;
+  for (const s of segments) t += Math.max(0, s.weight);
+  return t || 1;
+}
+
+/** A slice of the timeline: a segment's curve, or a gap connector after it. */
+export interface TimelineSlot {
+  kind: 'segment' | 'gap';
+  /** Segment index; for a gap, the segment it follows (its connector targets segment index+1). */
+  index: number;
+  a: number;
+  b: number;
+}
+
+/**
+ * The ordered timeline (0..1): each segment slot, with a gap slot BETWEEN consecutive
+ * segments (never after the last — the loop wraps straight from the last to the first).
+ * Segments share `1 - gap` of the width by weight; the `gap` fraction is split equally
+ * across the N−1 interior gaps. At gap=0 the gaps have zero width (contiguous segments).
+ */
+export function timelineSlots(segments: CurveSegment[], gap = 0): TimelineSlot[] {
+  const n = segments.length;
+  const g = n > 1 ? clamp01(gap) : 0; // a single segment has no interior gap
+  const total = totalWeight(segments);
+  const content = 1 - g;
+  const gapW = n > 1 ? g / (n - 1) : 0;
+  const slots: TimelineSlot[] = [];
+  let acc = 0;
+  for (let i = 0; i < n; i++) {
+    const sw = (Math.max(0, segments[i].weight) / total) * content;
+    slots.push({ kind: 'segment', index: i, a: acc, b: acc + sw });
+    acc += sw;
+    if (i < n - 1) {
+      slots.push({ kind: 'gap', index: i, a: acc, b: acc + gapW });
+      acc += gapW;
+    }
+  }
+  return slots;
+}
+
+/** Interior cumulative split positions (0..1) — the draggable dividers; none when gaps are open. */
+export function boundaries(segments: CurveSegment[], gap = 0): number[] {
+  if (gap > 0 && segments.length > 1) return []; // gaps replace the contiguous dividers
   const total = totalWeight(segments);
   const out: number[] = [];
   let acc = 0;
@@ -187,22 +280,26 @@ export function boundaries(segments: CurveSegment[]): number[] {
   return out;
 }
 
-export function totalWeight(segments: CurveSegment[]): number {
-  let t = 0;
-  for (const s of segments) t += Math.max(0, s.weight);
-  return t || 1;
-}
-
-/** [start, end] of a segment's horizontal slice in 0..1. */
-export function segmentSpan(segments: CurveSegment[], index: number): [number, number] {
+/** [start, end] of a segment's horizontal slice in 0..1 (gap-aware). */
+export function segmentSpan(segments: CurveSegment[], index: number, gap = 0): [number, number] {
+  if (gap > 0) {
+    const slot = timelineSlots(segments, gap).find((s) => s.kind === 'segment' && s.index === index);
+    if (slot) return [slot.a, slot.b];
+  }
   const total = totalWeight(segments);
   let acc = 0;
   for (let i = 0; i < index; i++) acc += segments[i].weight;
   return [acc / total, (acc + segments[index].weight) / total];
 }
 
-/** Which segment slice an x (0..1) falls in. */
-export function segmentIndexAt(xNorm: number, segments: CurveSegment[]): number {
+/** Which segment an x (0..1) falls in (a gap maps to the segment it follows). */
+export function segmentIndexAt(xNorm: number, segments: CurveSegment[], gap = 0): number {
+  if (gap > 0) {
+    const x = clamp01(xNorm);
+    const slots = timelineSlots(segments, gap);
+    for (const s of slots) if (x < s.b) return s.index;
+    return segments.length - 1;
+  }
   const total = totalWeight(segments);
   const x = clamp01(xNorm) * total;
   let acc = 0;
@@ -213,10 +310,10 @@ export function segmentIndexAt(xNorm: number, segments: CurveSegment[]): number 
   return segments.length - 1;
 }
 
-/** Nearest interior boundary within `edgeHitNorm` of x, or null. Returns the boundary index (between i and i+1). */
-export function boundaryAt(xNorm: number, segments: CurveSegment[], edgeHitNorm: number): number | null {
+/** Nearest interior boundary within `edgeHitNorm` of x, or null (no dividers when gaps are open). */
+export function boundaryAt(xNorm: number, segments: CurveSegment[], edgeHitNorm: number, gap = 0): number | null {
   if (segments.length < 2) return null;
-  const bs = boundaries(segments);
+  const bs = boundaries(segments, gap);
   let best: number | null = null;
   let bestDist = edgeHitNorm;
   for (let i = 0; i < bs.length; i++) {
@@ -227,6 +324,12 @@ export function boundaryAt(xNorm: number, segments: CurveSegment[], edgeHitNorm:
     }
   }
   return best;
+}
+
+/** Perlin smootherstep — a C2 ease used to glide the value across a gap. */
+export function smootherstep(t: number): number {
+  const x = clamp01(t);
+  return x * x * x * (x * (x * 6 - 15) + 10);
 }
 
 // --- pure state transitions ---
@@ -259,8 +362,31 @@ export function cycleSegmentType(comp: CurveComposition, index: number): CurveCo
   const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(src.type) + 1) % CURVE_CYCLE.length];
   const next = comp.segments.slice();
   // Cycling picks a fresh curve, so drop the applied energy + steepness — show the canonical shape.
-  next[index] = { ...src, type, curvature: 0, steepness: 0 };
+  next[index] = { ...src, type, curvature: 0, steepness: 0, overshoot: 0, anticipate: 0 };
   return cloneSegments(comp, next);
+}
+
+/**
+ * Mirror a curve left↔right (point-reflection through its centre) — the standard easing flip:
+ * easeIn↔easeOut, the energy bias negates, and overshoot↔anticipate swap (a mirror turns an
+ * end overshoot into a start anticipation). Steepness (intensity) is preserved.
+ */
+function flipCurve<T extends CurveSegment | CurveDriver>(c: T): T {
+  const type = c.type === 'easeIn' ? 'easeOut' : c.type === 'easeOut' ? 'easeIn' : c.type;
+  return { ...c, type, curvature: -c.curvature, overshoot: c.anticipate ?? 0, anticipate: c.overshoot ?? 0 };
+}
+
+export function flipSegment(comp: CurveComposition, index: number): CurveComposition {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const next = comp.segments.slice();
+  next[index] = flipCurve(src);
+  return cloneSegments(comp, next);
+}
+
+export function flipDriver(comp: CurveComposition): CurveComposition {
+  if (!comp.driver) return comp;
+  return { ...comp, driver: flipCurve(comp.driver) };
 }
 
 export function setSegmentCurvature(comp: CurveComposition, index: number, curvature: number): CurveComposition {
@@ -276,6 +402,22 @@ export function setSegmentSteepness(comp: CurveComposition, index: number, steep
   if (!src) return comp;
   const next = comp.segments.slice();
   next[index] = { ...src, steepness: clampBipolar(steepness) };
+  return cloneSegments(comp, next);
+}
+
+export function setSegmentOvershoot(comp: CurveComposition, index: number, overshoot: number): CurveComposition {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const next = comp.segments.slice();
+  next[index] = { ...src, overshoot: clamp01(overshoot) };
+  return cloneSegments(comp, next);
+}
+
+export function setSegmentAnticipate(comp: CurveComposition, index: number, anticipate: number): CurveComposition {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const next = comp.segments.slice();
+  next[index] = { ...src, anticipate: clamp01(anticipate) };
   return cloneSegments(comp, next);
 }
 
@@ -301,7 +443,7 @@ export function redistributeWeight(comp: CurveComposition, boundaryIndex: number
 
 export function addDriver(comp: CurveComposition): CurveComposition {
   if (comp.driver) return comp;
-  return { ...comp, driver: { type: 'easeInOut', curvature: 0, steepness: 0 } };
+  return { ...comp, driver: { type: 'easeInOut', curvature: 0, steepness: 0, overshoot: 0, anticipate: 0 } };
 }
 
 export function removeDriver(comp: CurveComposition): CurveComposition {
@@ -312,7 +454,7 @@ export function cycleDriverType(comp: CurveComposition): CurveComposition {
   if (!comp.driver) return comp;
   const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(comp.driver.type) + 1) % CURVE_CYCLE.length];
   // Reset the energy + steepness on cycle so the new curve shows in its canonical form.
-  return { ...comp, driver: { ...comp.driver, type, curvature: 0, steepness: 0 } };
+  return { ...comp, driver: { ...comp.driver, type, curvature: 0, steepness: 0, overshoot: 0, anticipate: 0 } };
 }
 
 export function setDriverCurvature(comp: CurveComposition, curvature: number): CurveComposition {
@@ -323,6 +465,16 @@ export function setDriverCurvature(comp: CurveComposition, curvature: number): C
 export function setDriverSteepness(comp: CurveComposition, steepness: number): CurveComposition {
   if (!comp.driver) return comp;
   return { ...comp, driver: { ...comp.driver, steepness: clampBipolar(steepness) } };
+}
+
+export function setDriverOvershoot(comp: CurveComposition, overshoot: number): CurveComposition {
+  if (!comp.driver) return comp;
+  return { ...comp, driver: { ...comp.driver, overshoot: clamp01(overshoot) } };
+}
+
+export function setDriverAnticipate(comp: CurveComposition, anticipate: number): CurveComposition {
+  if (!comp.driver) return comp;
+  return { ...comp, driver: { ...comp.driver, anticipate: clamp01(anticipate) } };
 }
 
 // --- pointer interaction (shared by every framework wrapper) ---
@@ -347,6 +499,8 @@ export interface ComposerHitLayout {
   totalH: number;
   /** y where the driver lane begins, or null when there is no driver lane. */
   driverY: number | null;
+  /** Composition gap (0..1) so hit-testing matches the gap-aware layout. Default 0. */
+  gap?: number;
 }
 
 /** A resolved press target inside the composer. */
@@ -354,6 +508,25 @@ export type PointerTarget =
   | { kind: 'driver' }
   | { kind: 'boundary'; index: number }
   | { kind: 'segment'; index: number };
+
+/** Height (viewBox px) of the header strip at the top of each lane — the curve's "select" zone. */
+export const COMPOSER_HEADER_H = 16;
+
+/**
+ * If (xN, py) lands in a lane's header strip (the top band where the type label sits), the
+ * curve it selects: a segment index, or 'driver'. Else null. Check this before
+ * `pointerTarget` so a header click selects rather than cycles/drags.
+ */
+export function headerHit(
+  xN: number,
+  py: number,
+  segments: CurveSegment[],
+  layout: ComposerHitLayout
+): number | 'driver' | null {
+  if (py >= 0 && py < COMPOSER_HEADER_H) return segmentIndexAt(xN, segments, layout.gap ?? 0);
+  if (layout.driverY != null && py >= layout.driverY && py < layout.driverY + COMPOSER_HEADER_H) return 'driver';
+  return null;
+}
 
 /** Normalize a client point to xN (0..1 across the width) + py (0..totalH down the height). */
 export function toLocalCoords(
@@ -378,10 +551,11 @@ export function pointerTarget(
   layout: ComposerHitLayout,
   edgeHitNorm: number
 ): PointerTarget {
+  const gap = layout.gap ?? 0;
   if (layout.driverY != null && py >= layout.driverY) return { kind: 'driver' };
-  const b = boundaryAt(xN, segments, edgeHitNorm);
+  const b = boundaryAt(xN, segments, edgeHitNorm, gap);
   if (b != null) return { kind: 'boundary', index: b };
-  return { kind: 'segment', index: segmentIndexAt(xN, segments) };
+  return { kind: 'segment', index: segmentIndexAt(xN, segments, gap) };
 }
 
 /**
@@ -458,6 +632,22 @@ export interface CompositionRead {
 export function readComposition(comp: CurveComposition, u: number, s: CompositionSamplers): CompositionRead {
   const inputPhase = directionPhase(u, comp.direction);
   const warpedPhase = s.driver ? clamp01(s.driver(inputPhase)) : inputPhase;
+  const gap = comp.gap ?? 0;
+  if (gap > 0 && comp.segments.length > 1) {
+    const slots = timelineSlots(comp.segments, gap);
+    const slot = slots.find((sl) => warpedPhase < sl.b) ?? slots[slots.length - 1];
+    const localT = slot.b > slot.a ? (warpedPhase - slot.a) / (slot.b - slot.a) : 0;
+    if (slot.kind === 'segment') {
+      const value = s.segments[slot.index] ? s.segments[slot.index](localT) : 0;
+      return { inputPhase, warpedPhase, value, segIndex: slot.index, localT };
+    }
+    // gap: glide from this segment's end down to the next segment's start.
+    const n = comp.segments.length;
+    const endVal = s.segments[slot.index] ? s.segments[slot.index](1) : 0;
+    const startVal = s.segments[(slot.index + 1) % n] ? s.segments[(slot.index + 1) % n](0) : 0;
+    const value = lerp(endVal, startVal, smootherstep(localT));
+    return { inputPhase, warpedPhase, value, segIndex: slot.index, localT };
+  }
   const segIndex = segmentIndexAt(warpedPhase, comp.segments);
   const [a, b] = segmentSpan(comp.segments, segIndex);
   const localT = b > a ? (warpedPhase - a) / (b - a) : 0;
@@ -544,8 +734,32 @@ export function curvePath(
     }
     return d;
   }
-  const e = deriveEase(curve.type, curve.curvature, curve.steepness);
+  const e = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot, curve.anticipate);
   return `M ${x(0)} ${y(0)} C ${x(e[0])} ${y(e[1])}, ${x(e[2])} ${y(e[3])}, ${x(1)} ${y(1)}`;
+}
+
+/**
+ * The SVG path `d` for a gap connector slot — the faint line that glides (smootherstep) from
+ * the slot's segment end value down to the next segment's start value across the gap.
+ */
+export function connectorPath(
+  slot: TimelineSlot,
+  samplers: CompositionSamplers,
+  segCount: number,
+  rect: Rect,
+  W: number,
+  samples = 24
+): string {
+  const endVal = samplers.segments[slot.index] ? samplers.segments[slot.index](1) : 0;
+  const next = (slot.index + 1) % segCount;
+  const startVal = samplers.segments[next] ? samplers.segments[next](0) : 0;
+  let d = `M ${slot.a * W} ${mapY(rect, endVal)}`;
+  for (let i = 1; i <= samples; i++) {
+    const t = i / samples;
+    const v = lerp(endVal, startVal, smootherstep(t));
+    d += ` L ${(slot.a + (slot.b - slot.a) * t) * W} ${mapY(rect, v)}`;
+  }
+  return d;
 }
 
 /** Endpoints of the faint linear-reference diagonal behind a segment (or the driver lane). */
@@ -637,8 +851,8 @@ export function triggersCrossed(prevValue: number, curValue: number, steps: numb
 export function defaultComposition(): CurveComposition {
   return {
     segments: [
-      { type: 'easeOut', weight: 1, curvature: 0, steepness: 0 },
-      { type: 'easeInOut', weight: 1, curvature: 0, steepness: 0 },
+      { type: 'easeOut', weight: 1, curvature: 0, steepness: 0, overshoot: 0, anticipate: 0 },
+      { type: 'easeInOut', weight: 1, curvature: 0, steepness: 0, overshoot: 0, anticipate: 0 },
     ],
     driver: null,
     direction: 'forward',
