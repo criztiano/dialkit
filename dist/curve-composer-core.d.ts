@@ -16,11 +16,18 @@ interface CurveSegment {
     curvature: number;
     /**
      * Bipolar -1..1 steepness — how pronounced the ease is, independent of the energy bias.
-     * Scales each control point's deviation from the linear diagonal: 0 = canonical preset,
-     * +1 = sharper (e.g. easeInOut gets much slower start/end), −1 = flatter toward linear.
-     * Spring maps it to stiffness (snappier rise).
+     * Sweeps linear (−1) ← canonical preset (0) → the explosive extreme (+1, expo-grade: the
+     * eased side's far control point drops to the floor). So steepness is the continuous power
+     * ladder (gentle → quad → … → expo), with circ reachable mid-range. Spring maps it to stiffness.
      */
     steepness: number;
+    /**
+     * Bipolar -1..1 overshoot — pushes the curve past the [0,1] band (the `back` family):
+     * +1 overshoots above 1 at the end (easeOutBack), −1 dips below 0 at the start
+     * (easeInBack anticipation), 0 = none. Beyond this is elastic/bounce — use spring.
+     * Optional; treated as 0 when absent. No-op for spring.
+     */
+    overshoot?: number;
 }
 /** The stacked driver curve (a single curve, no internal splits). */
 interface CurveDriver {
@@ -29,6 +36,8 @@ interface CurveDriver {
     curvature: number;
     /** Bipolar -1..1 steepness — see CurveSegment.steepness. */
     steepness: number;
+    /** Bipolar -1..1 overshoot — see CurveSegment.overshoot. */
+    overshoot?: number;
 }
 type DriverDirection = 'forward' | 'mirror' | 'reverse';
 interface CurveComposition {
@@ -46,13 +55,15 @@ declare const CURVE_MIN_WEIGHT_FRAC = 0.06;
 /** A pure `(t) -> value` sampler over local time, both in 0..1 (value may overshoot for springs). */
 type Sampler = (t: number) => number;
 /**
- * Derive the bezier control points for a type at a given energy bias + steepness.
- * Every preset shares y=(0,1) and differs only in its x control points. Steepness scales
- * each x's deviation from the linear diagonal (x1 from 0, x2 from 1) — intensifying or
- * relaxing the ease while keeping its character. Energy then shifts both x's in tandem:
- * bias>0 pushes the bend toward the fall (slow start, late rush), bias<0 toward the onset.
+ * Derive the cubic-bezier control points [x1,y1,x2,y2] for a curve. Three knobs span the
+ * whole easing space (P0=(0,0), P3=(1,1) implied):
+ * - steepness sweeps linear (−1) ← preset (0) → the expo-grade extreme (+1); it's the
+ *   continuous power ladder (quad→…→expo), with circ reachable mid-range.
+ * - energy shifts both x control points in tandem (onset ↔ fall).
+ * - overshoot pushes a y control point past the band: +raises the end above 1 (easeOutBack),
+ *   −drops the start below 0 (easeInBack anticipation). x stays clamped so time stays monotonic.
  */
-declare function deriveEase(type: CurveType, curvature: number, steepness?: number): [number, number, number, number];
+declare function deriveEase(type: CurveType, curvature: number, steepness?: number, overshoot?: number): [number, number, number, number];
 /** Build a reusable sampler for a segment/driver (precomputes spring points once). */
 declare function buildSampler(curve: CurveSegment | CurveDriver): Sampler;
 /** Interior cumulative split positions (0..1), excluding the 0 and 1 ends. */
@@ -74,6 +85,7 @@ declare function removeSegment(comp: CurveComposition, index: number): CurveComp
 declare function cycleSegmentType(comp: CurveComposition, index: number): CurveComposition;
 declare function setSegmentCurvature(comp: CurveComposition, index: number, curvature: number): CurveComposition;
 declare function setSegmentSteepness(comp: CurveComposition, index: number, steepness: number): CurveComposition;
+declare function setSegmentOvershoot(comp: CurveComposition, index: number, overshoot: number): CurveComposition;
 /**
  * Move `deltaFrac` (0..1 of the whole series) across the boundary between segment
  * `boundaryIndex` and the next, keeping the rest untouched and the pair's combined
@@ -85,6 +97,7 @@ declare function removeDriver(comp: CurveComposition): CurveComposition;
 declare function cycleDriverType(comp: CurveComposition): CurveComposition;
 declare function setDriverCurvature(comp: CurveComposition, curvature: number): CurveComposition;
 declare function setDriverSteepness(comp: CurveComposition, steepness: number): CurveComposition;
+declare function setDriverOvershoot(comp: CurveComposition, overshoot: number): CurveComposition;
 declare const DRAG_ENERGY_GAIN = 0.6;
 declare const DRAG_STEEP_GAIN = 0.6;
 /** The minimal rectangle a wrapper reads from `getBoundingClientRect()`. */
@@ -234,4 +247,4 @@ declare function triggersCrossed(prevValue: number, curValue: number, steps: num
 /** A reasonable starting composition for demos / uncontrolled mounts. */
 declare function defaultComposition(): CurveComposition;
 
-export { COMPOSER_DRIVER_FRAC, COMPOSER_GAP, COMPOSER_PAD_FRAC, CURVE_CYCLE, CURVE_MIN_WEIGHT_FRAC, type ClientRectLike, type ComposerHitLayout, type ComposerLayout, type CompositionRead, type CompositionSamplers, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, DRAG_ENERGY_GAIN, DRAG_STEEP_GAIN, DRAG_THRESHOLD, type DriverDirection, EDGE_HIT, type PointerTarget, type Rect, type Sampler, addDriver, applyDriverBodyDrag, applySegmentBodyDrag, boundaries, boundaryAt, buildSampler, buildSamplers, composerLayout, curvePath, cycleDriverType, cycleSegmentType, defaultComposition, deriveEase, diagonalLine, directionPhase, easingPresets, mapY, playheadGeometry, pointerTarget, readComposition, redistributeWeight, removeDriver, removeSegment, segmentIndexAt, segmentSpan, setDriverCurvature, setDriverSteepness, setSegmentCurvature, setSegmentSteepness, splitSegment, toLocalCoords, totalWeight, triggerLevels, triggersCrossed };
+export { COMPOSER_DRIVER_FRAC, COMPOSER_GAP, COMPOSER_PAD_FRAC, CURVE_CYCLE, CURVE_MIN_WEIGHT_FRAC, type ClientRectLike, type ComposerHitLayout, type ComposerLayout, type CompositionRead, type CompositionSamplers, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, DRAG_ENERGY_GAIN, DRAG_STEEP_GAIN, DRAG_THRESHOLD, type DriverDirection, EDGE_HIT, type PointerTarget, type Rect, type Sampler, addDriver, applyDriverBodyDrag, applySegmentBodyDrag, boundaries, boundaryAt, buildSampler, buildSamplers, composerLayout, curvePath, cycleDriverType, cycleSegmentType, defaultComposition, deriveEase, diagonalLine, directionPhase, easingPresets, mapY, playheadGeometry, pointerTarget, readComposition, redistributeWeight, removeDriver, removeSegment, segmentIndexAt, segmentSpan, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, splitSegment, toLocalCoords, totalWeight, triggerLevels, triggersCrossed };

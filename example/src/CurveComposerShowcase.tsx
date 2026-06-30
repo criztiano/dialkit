@@ -3,9 +3,11 @@ import {
   CurveComposer,
   SegmentedControl,
   ColorControl,
+  Slider,
   defaultComposition,
   splitSegment,
   removeSegment,
+  setSegmentOvershoot,
   addDriver,
   removeDriver,
   buildSamplers,
@@ -110,6 +112,11 @@ export function CurveComposerShowcase() {
     setSelected(0);
   };
   const toggleDriver = () => setComp((c) => (c.driver ? removeDriver(c) : addDriver(c)));
+  // Overshoot is a per-segment param; the demo applies it across all segments for a clear,
+  // visible sweep (+ = easeOutBack overshoot, − = easeInBack anticipation).
+  const overshoot = segments[0]?.overshoot ?? 0;
+  const setOvershoot = (v: number) =>
+    setComp((c) => c.segments.reduce((acc, _s, i) => setSegmentOvershoot(acc, i, v), c));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -131,8 +138,8 @@ export function CurveComposerShowcase() {
       />
 
       <div style={{ fontSize: 12, color: 'var(--dial-text-secondary)' }}>
-        {segments.length} segment{segments.length > 1 ? 's' : ''} · click a curve to change its shape · drag its body
-        — sideways for energy (onset ↔ fall), up/down for steepness · drag a divider to retime · double-click to split
+        {segments.length} segment{segments.length > 1 ? 's' : ''} · click to change shape · drag the body — sideways
+        for energy (onset ↔ fall), up/down for steepness (push it for expo) · divider to retime · double-click to split
       </div>
 
       {/* output track: the continuous dot travels along it (position = value). In trigger mode,
@@ -236,6 +243,17 @@ export function CurveComposerShowcase() {
           onChange={setDirection}
         />
       </div>
+
+      <Slider
+        label="overshoot"
+        value={overshoot}
+        onChange={setOvershoot}
+        min={-1}
+        max={1}
+        step={0.01}
+        origin={0}
+        formatValue={(v) => (v > 0.02 ? `back ${v.toFixed(2)}` : v < -0.02 ? `anticipate ${v.toFixed(2)}` : 'none')}
+      />
 
       <ColorControl label="curve color" value={curveColor} onChange={setCurveColor} />
       <ColorControl label="playhead" value={playheadColor} onChange={setPlayheadColor} />
