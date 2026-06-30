@@ -37,12 +37,16 @@ export interface CurveSegment {
    */
   steepness: number;
   /**
-   * Bipolar -1..1 overshoot — pushes the curve past the [0,1] band (the `back` family):
-   * +1 overshoots above 1 at the end (easeOutBack), −1 dips below 0 at the start
-   * (easeInBack anticipation), 0 = none. Beyond this is elastic/bounce — use spring.
-   * Optional; treated as 0 when absent. No-op for spring.
+   * 0..1 overshoot — pushes the curve above 1 at the END before settling (easeOutBack),
+   * 0 = none. Independent of `anticipate`; set both for easeInOutBack. Beyond ~1 is
+   * elastic/bounce — use spring. Optional; treated as 0 when absent. No-op for spring.
    */
   overshoot?: number;
+  /**
+   * 0..1 anticipation — dips the curve below 0 at the START before launching (easeInBack),
+   * 0 = none. Independent of `overshoot`. Optional; treated as 0 when absent. No-op for spring.
+   */
+  anticipate?: number;
 }
 
 /** The stacked driver curve (a single curve, no internal splits). */
@@ -52,8 +56,10 @@ export interface CurveDriver {
   curvature: number;
   /** Bipolar -1..1 steepness — see CurveSegment.steepness. */
   steepness: number;
-  /** Bipolar -1..1 overshoot — see CurveSegment.overshoot. */
+  /** 0..1 overshoot — see CurveSegment.overshoot. */
   overshoot?: number;
+  /** 0..1 anticipation — see CurveSegment.anticipate. */
+  anticipate?: number;
 }
 
 export type DriverDirection = 'forward' | 'mirror' | 'reverse';
@@ -85,8 +91,8 @@ const clampBipolar = (v: number) => (v < -1 ? -1 : v > 1 ? 1 : v);
 
 /** How far (in x) a full ±1 energy bias shifts the control points. */
 const SKEW_MAX = 0.45;
-/** How far past the [0,1] band a full ±1 overshoot pushes a y control point. */
-const OVERSHOOT_MAX = 0.8;
+/** How far past the [0,1] band a full overshoot / anticipation pushes a y control point. */
+const BACK_MAX = 0.8;
 
 /**
  * The explosive extreme each preset reaches at steepness +1 — full [x1,y1,x2,y2] control
@@ -117,14 +123,16 @@ const lerp4 = (
  * - steepness sweeps linear (−1) ← preset (0) → the expo-grade extreme (+1); it's the
  *   continuous power ladder (quad→…→expo), with circ reachable mid-range.
  * - energy shifts both x control points in tandem (onset ↔ fall).
- * - overshoot pushes a y control point past the band: +raises the end above 1 (easeOutBack),
- *   −drops the start below 0 (easeInBack anticipation). x stays clamped so time stays monotonic.
+ * - overshoot (0..1) raises the end above 1 (easeOutBack); anticipate (0..1) drops the start
+ *   below 0 (easeInBack). They are independent — set both for easeInOutBack. x stays clamped
+ *   so time stays monotonic.
  */
 export function deriveEase(
   type: CurveType,
   curvature: number,
   steepness = 0,
-  overshoot = 0
+  overshoot = 0,
+  anticipate = 0
 ): [number, number, number, number] {
   const key = type === 'spring' ? 'linear' : type;
   const base = easingPresets[key];
@@ -135,9 +143,8 @@ export function deriveEase(
   const shift = clampBipolar(curvature) * SKEW_MAX;
   x1 = clamp01(x1 + shift);
   x2 = clamp01(x2 + shift);
-  const o = clampBipolar(overshoot) * OVERSHOOT_MAX;
-  if (o > 0) y2 += o;
-  else y1 += o;
+  y2 += clamp01(overshoot) * BACK_MAX; // end overshoot, above 1
+  y1 -= clamp01(anticipate) * BACK_MAX; // start anticipation, below 0
   return [x1, y1, x2, y2];
 }
 
@@ -206,7 +213,7 @@ export function buildSampler(curve: CurveSegment | CurveDriver): Sampler {
     const pts = springPoints(curve.curvature, curve.steepness);
     return (t) => interp(pts, t);
   }
-  const ease = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot);
+  const ease = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot, curve.anticipate);
   return (t) => bezierY(ease, t);
 }
 
@@ -296,7 +303,7 @@ export function cycleSegmentType(comp: CurveComposition, index: number): CurveCo
   const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(src.type) + 1) % CURVE_CYCLE.length];
   const next = comp.segments.slice();
   // Cycling picks a fresh curve, so drop the applied energy + steepness — show the canonical shape.
-  next[index] = { ...src, type, curvature: 0, steepness: 0, overshoot: 0 };
+  next[index] = { ...src, type, curvature: 0, steepness: 0, overshoot: 0, anticipate: 0 };
   return cloneSegments(comp, next);
 }
 
@@ -320,7 +327,15 @@ export function setSegmentOvershoot(comp: CurveComposition, index: number, overs
   const src = comp.segments[index];
   if (!src) return comp;
   const next = comp.segments.slice();
-  next[index] = { ...src, overshoot: clampBipolar(overshoot) };
+  next[index] = { ...src, overshoot: clamp01(overshoot) };
+  return cloneSegments(comp, next);
+}
+
+export function setSegmentAnticipate(comp: CurveComposition, index: number, anticipate: number): CurveComposition {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const next = comp.segments.slice();
+  next[index] = { ...src, anticipate: clamp01(anticipate) };
   return cloneSegments(comp, next);
 }
 
@@ -346,7 +361,7 @@ export function redistributeWeight(comp: CurveComposition, boundaryIndex: number
 
 export function addDriver(comp: CurveComposition): CurveComposition {
   if (comp.driver) return comp;
-  return { ...comp, driver: { type: 'easeInOut', curvature: 0, steepness: 0, overshoot: 0 } };
+  return { ...comp, driver: { type: 'easeInOut', curvature: 0, steepness: 0, overshoot: 0, anticipate: 0 } };
 }
 
 export function removeDriver(comp: CurveComposition): CurveComposition {
@@ -357,7 +372,7 @@ export function cycleDriverType(comp: CurveComposition): CurveComposition {
   if (!comp.driver) return comp;
   const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(comp.driver.type) + 1) % CURVE_CYCLE.length];
   // Reset the energy + steepness on cycle so the new curve shows in its canonical form.
-  return { ...comp, driver: { ...comp.driver, type, curvature: 0, steepness: 0, overshoot: 0 } };
+  return { ...comp, driver: { ...comp.driver, type, curvature: 0, steepness: 0, overshoot: 0, anticipate: 0 } };
 }
 
 export function setDriverCurvature(comp: CurveComposition, curvature: number): CurveComposition {
@@ -372,7 +387,12 @@ export function setDriverSteepness(comp: CurveComposition, steepness: number): C
 
 export function setDriverOvershoot(comp: CurveComposition, overshoot: number): CurveComposition {
   if (!comp.driver) return comp;
-  return { ...comp, driver: { ...comp.driver, overshoot: clampBipolar(overshoot) } };
+  return { ...comp, driver: { ...comp.driver, overshoot: clamp01(overshoot) } };
+}
+
+export function setDriverAnticipate(comp: CurveComposition, anticipate: number): CurveComposition {
+  if (!comp.driver) return comp;
+  return { ...comp, driver: { ...comp.driver, anticipate: clamp01(anticipate) } };
 }
 
 // --- pointer interaction (shared by every framework wrapper) ---
@@ -594,7 +614,7 @@ export function curvePath(
     }
     return d;
   }
-  const e = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot);
+  const e = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot, curve.anticipate);
   return `M ${x(0)} ${y(0)} C ${x(e[0])} ${y(e[1])}, ${x(e[2])} ${y(e[3])}, ${x(1)} ${y(1)}`;
 }
 
@@ -687,8 +707,8 @@ export function triggersCrossed(prevValue: number, curValue: number, steps: numb
 export function defaultComposition(): CurveComposition {
   return {
     segments: [
-      { type: 'easeOut', weight: 1, curvature: 0, steepness: 0, overshoot: 0 },
-      { type: 'easeInOut', weight: 1, curvature: 0, steepness: 0, overshoot: 0 },
+      { type: 'easeOut', weight: 1, curvature: 0, steepness: 0, overshoot: 0, anticipate: 0 },
+      { type: 'easeInOut', weight: 1, curvature: 0, steepness: 0, overshoot: 0, anticipate: 0 },
     ],
     driver: null,
     direction: 'forward',

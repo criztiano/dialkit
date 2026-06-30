@@ -18,6 +18,7 @@ import {
   setSegmentCurvature,
   setSegmentSteepness,
   setSegmentOvershoot,
+  setSegmentAnticipate,
   defaultComposition,
   composerLayout,
   mapY,
@@ -292,28 +293,43 @@ describe('full easing coverage (steepness → expo, overshoot → back)', () => 
     expect(best).toBeLessThan(0.03);
   });
 
-  it('positive overshoot pushes the END above 1 (easeOutBack)', () => {
+  it('overshoot pushes the END above 1 (easeOutBack); the start stays put', () => {
     const f = buildSampler({ type: 'easeOut', weight: 1, curvature: 0, steepness: 0, overshoot: 1 });
     expect(Math.max(...TS.map(f))).toBeGreaterThan(1.1);
+    expect(Math.min(...TS.map(f))).toBeGreaterThanOrEqual(-0.0001); // no dip
     expect(f(1)).toBeCloseTo(1, 5); // still settles exactly at 1
   });
 
-  it('negative overshoot dips the START below 0 (easeInBack anticipation)', () => {
-    const f = buildSampler({ type: 'easeIn', weight: 1, curvature: 0, steepness: 0, overshoot: -1 });
+  it('anticipate dips the START below 0 (easeInBack); the end stays put', () => {
+    const f = buildSampler({ type: 'easeIn', weight: 1, curvature: 0, steepness: 0, anticipate: 1 });
     expect(Math.min(...TS.map(f))).toBeLessThan(-0.1);
+    expect(Math.max(...TS.map(f))).toBeLessThanOrEqual(1.0001); // no overshoot
     expect(f(0)).toBeCloseTo(0, 5);
   });
 
-  it('overshoot absent behaves as 0 (stays within the band)', () => {
-    const f = buildSampler({ type: 'easeOut', weight: 1, curvature: 0, steepness: 0 });
-    expect(Math.max(...TS.map(f))).toBeLessThanOrEqual(1.0001);
+  it('overshoot and anticipate combine independently (easeInOutBack: dip then overshoot)', () => {
+    const f = buildSampler({ type: 'easeInOut', weight: 1, curvature: 0, steepness: 0, overshoot: 1, anticipate: 1 });
+    expect(Math.min(...TS.map(f))).toBeLessThan(-0.05); // anticipation dip at the start
+    expect(Math.max(...TS.map(f))).toBeGreaterThan(1.05); // overshoot at the end
+    expect(f(0)).toBeCloseTo(0, 5);
+    expect(f(1)).toBeCloseTo(1, 5);
   });
 
-  it('setSegmentOvershoot clamps to [-1, 1]; cycle resets it', () => {
+  it('both absent behave as 0 (stays within the band)', () => {
+    const f = buildSampler({ type: 'easeOut', weight: 1, curvature: 0, steepness: 0 });
+    expect(Math.max(...TS.map(f))).toBeLessThanOrEqual(1.0001);
+    expect(Math.min(...TS.map(f))).toBeGreaterThanOrEqual(-0.0001);
+  });
+
+  it('overshoot/anticipate setters clamp to [0, 1]; cycle resets both', () => {
     let comp = defaultComposition();
     expect(setSegmentOvershoot(comp, 0, 5).segments[0].overshoot).toBe(1);
-    comp = setSegmentOvershoot(comp, 0, -0.6);
-    expect(cycleSegmentType(comp, 0).segments[0].overshoot).toBe(0);
+    expect(setSegmentOvershoot(comp, 0, -3).segments[0].overshoot).toBe(0);
+    expect(setSegmentAnticipate(comp, 0, 5).segments[0].anticipate).toBe(1);
+    comp = setSegmentOvershoot(setSegmentAnticipate(comp, 0, 0.6), 0, 0.6);
+    const cycled = cycleSegmentType(comp, 0).segments[0];
+    expect(cycled.overshoot).toBe(0);
+    expect(cycled.anticipate).toBe(0);
   });
 });
 

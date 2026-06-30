@@ -3719,7 +3719,7 @@ var lerp = (a, b, t) => a + (b - a) * t;
 var clamp01 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
 var clampBipolar = (v) => v < -1 ? -1 : v > 1 ? 1 : v;
 var SKEW_MAX = 0.45;
-var OVERSHOOT_MAX = 0.8;
+var BACK_MAX = 0.8;
 var easingExtremes = {
   linear: [0, 0, 1, 1],
   easeIn: [0.7, 0, 0.84, 0],
@@ -3732,7 +3732,7 @@ var lerp4 = (a, b, t) => [
   lerp(a[2], b[2], t),
   lerp(a[3], b[3], t)
 ];
-function deriveEase(type, curvature, steepness = 0, overshoot = 0) {
+function deriveEase(type, curvature, steepness = 0, overshoot = 0, anticipate = 0) {
   const key = type === "spring" ? "linear" : type;
   const base = easingPresets[key];
   const s = clampBipolar(steepness);
@@ -3741,9 +3741,8 @@ function deriveEase(type, curvature, steepness = 0, overshoot = 0) {
   const shift = clampBipolar(curvature) * SKEW_MAX;
   x1 = clamp01(x1 + shift);
   x2 = clamp01(x2 + shift);
-  const o = clampBipolar(overshoot) * OVERSHOOT_MAX;
-  if (o > 0) y2 += o;
-  else y1 += o;
+  y2 += clamp01(overshoot) * BACK_MAX;
+  y1 -= clamp01(anticipate) * BACK_MAX;
   return [x1, y1, x2, y2];
 }
 function bezierAxis(p1, p2, s) {
@@ -3800,7 +3799,7 @@ function buildSampler(curve) {
     const pts = springPoints(curve.curvature, curve.steepness);
     return (t) => interp(pts, t);
   }
-  const ease = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot);
+  const ease = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot, curve.anticipate);
   return (t) => bezierY(ease, t);
 }
 function boundaries(segments) {
@@ -3863,7 +3862,7 @@ function cycleSegmentType(comp, index) {
   if (!src) return comp;
   const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(src.type) + 1) % CURVE_CYCLE.length];
   const next = comp.segments.slice();
-  next[index] = { ...src, type, curvature: 0, steepness: 0, overshoot: 0 };
+  next[index] = { ...src, type, curvature: 0, steepness: 0, overshoot: 0, anticipate: 0 };
   return cloneSegments(comp, next);
 }
 function setSegmentCurvature(comp, index, curvature) {
@@ -3897,7 +3896,7 @@ function redistributeWeight(comp, boundaryIndex, deltaFrac) {
 function cycleDriverType(comp) {
   if (!comp.driver) return comp;
   const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(comp.driver.type) + 1) % CURVE_CYCLE.length];
-  return { ...comp, driver: { ...comp.driver, type, curvature: 0, steepness: 0, overshoot: 0 } };
+  return { ...comp, driver: { ...comp.driver, type, curvature: 0, steepness: 0, overshoot: 0, anticipate: 0 } };
 }
 function setDriverCurvature(comp, curvature) {
   if (!comp.driver) return comp;
@@ -3983,7 +3982,7 @@ function curvePath(curve, rect, span, W, samples = 40) {
     }
     return d;
   }
-  const e = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot);
+  const e = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot, curve.anticipate);
   return `M ${x(0)} ${y(0)} C ${x(e[0])} ${y(e[1])}, ${x(e[2])} ${y(e[3])}, ${x(1)} ${y(1)}`;
 }
 function diagonalLine(rect, span, W) {

@@ -8,6 +8,7 @@ import {
   splitSegment,
   removeSegment,
   setSegmentOvershoot,
+  setSegmentAnticipate,
   addDriver,
   removeDriver,
   buildSamplers,
@@ -112,11 +113,14 @@ export function CurveComposerShowcase() {
     setSelected(0);
   };
   const toggleDriver = () => setComp((c) => (c.driver ? removeDriver(c) : addDriver(c)));
-  // Overshoot is a per-segment param; the demo applies it across all segments for a clear,
-  // visible sweep (+ = easeOutBack overshoot, − = easeInBack anticipation).
+  // Overshoot (end, easeOutBack) and anticipate (start, easeInBack) are independent per-segment
+  // params; the demo applies each across all segments for a clear, visible sweep. Set both → easeInOutBack.
   const overshoot = segments[0]?.overshoot ?? 0;
+  const anticipate = segments[0]?.anticipate ?? 0;
   const setOvershoot = (v: number) =>
     setComp((c) => c.segments.reduce((acc, _s, i) => setSegmentOvershoot(acc, i, v), c));
+  const setAnticipate = (v: number) =>
+    setComp((c) => c.segments.reduce((acc, _s, i) => setSegmentAnticipate(acc, i, v), c));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -245,14 +249,22 @@ export function CurveComposerShowcase() {
       </div>
 
       <Slider
+        label="anticipate"
+        value={anticipate}
+        onChange={setAnticipate}
+        min={0}
+        max={1}
+        step={0.01}
+        formatValue={(v) => (v > 0.02 ? `easeInBack ${v.toFixed(2)}` : 'none')}
+      />
+      <Slider
         label="overshoot"
         value={overshoot}
         onChange={setOvershoot}
-        min={-1}
+        min={0}
         max={1}
         step={0.01}
-        origin={0}
-        formatValue={(v) => (v > 0.02 ? `back ${v.toFixed(2)}` : v < -0.02 ? `anticipate ${v.toFixed(2)}` : 'none')}
+        formatValue={(v) => (v > 0.02 ? `easeOutBack ${v.toFixed(2)}` : 'none')}
       />
 
       <ColorControl label="curve color" value={curveColor} onChange={setCurveColor} />
