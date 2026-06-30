@@ -307,6 +307,29 @@ export function cycleSegmentType(comp: CurveComposition, index: number): CurveCo
   return cloneSegments(comp, next);
 }
 
+/**
+ * Mirror a curve left↔right (point-reflection through its centre) — the standard easing flip:
+ * easeIn↔easeOut, the energy bias negates, and overshoot↔anticipate swap (a mirror turns an
+ * end overshoot into a start anticipation). Steepness (intensity) is preserved.
+ */
+function flipCurve<T extends CurveSegment | CurveDriver>(c: T): T {
+  const type = c.type === 'easeIn' ? 'easeOut' : c.type === 'easeOut' ? 'easeIn' : c.type;
+  return { ...c, type, curvature: -c.curvature, overshoot: c.anticipate ?? 0, anticipate: c.overshoot ?? 0 };
+}
+
+export function flipSegment(comp: CurveComposition, index: number): CurveComposition {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const next = comp.segments.slice();
+  next[index] = flipCurve(src);
+  return cloneSegments(comp, next);
+}
+
+export function flipDriver(comp: CurveComposition): CurveComposition {
+  if (!comp.driver) return comp;
+  return { ...comp, driver: flipCurve(comp.driver) };
+}
+
 export function setSegmentCurvature(comp: CurveComposition, index: number, curvature: number): CurveComposition {
   const src = comp.segments[index];
   if (!src) return comp;
@@ -424,6 +447,25 @@ export type PointerTarget =
   | { kind: 'driver' }
   | { kind: 'boundary'; index: number }
   | { kind: 'segment'; index: number };
+
+/** Height (viewBox px) of the header strip at the top of each lane — the curve's "select" zone. */
+export const COMPOSER_HEADER_H = 16;
+
+/**
+ * If (xN, py) lands in a lane's header strip (the top band where the type label sits), the
+ * curve it selects: a segment index, or 'driver'. Else null. Check this before
+ * `pointerTarget` so a header click selects rather than cycles/drags.
+ */
+export function headerHit(
+  xN: number,
+  py: number,
+  segments: CurveSegment[],
+  layout: ComposerHitLayout
+): number | 'driver' | null {
+  if (py >= 0 && py < COMPOSER_HEADER_H) return segmentIndexAt(xN, segments);
+  if (layout.driverY != null && py >= layout.driverY && py < layout.driverY + COMPOSER_HEADER_H) return 'driver';
+  return null;
+}
 
 /** Normalize a client point to xN (0..1 across the width) + py (0..totalH down the height). */
 export function toLocalCoords(

@@ -90,6 +90,8 @@ declare function splitSegment(comp: CurveComposition, index: number): CurveCompo
 /** Remove the segment at `index` (no-op when it's the only one). */
 declare function removeSegment(comp: CurveComposition, index: number): CurveComposition;
 declare function cycleSegmentType(comp: CurveComposition, index: number): CurveComposition;
+declare function flipSegment(comp: CurveComposition, index: number): CurveComposition;
+declare function flipDriver(comp: CurveComposition): CurveComposition;
 declare function setSegmentCurvature(comp: CurveComposition, index: number, curvature: number): CurveComposition;
 declare function setSegmentSteepness(comp: CurveComposition, index: number, steepness: number): CurveComposition;
 declare function setSegmentOvershoot(comp: CurveComposition, index: number, overshoot: number): CurveComposition;
@@ -133,6 +135,14 @@ type PointerTarget = {
     kind: 'segment';
     index: number;
 };
+/** Height (viewBox px) of the header strip at the top of each lane — the curve's "select" zone. */
+declare const COMPOSER_HEADER_H = 16;
+/**
+ * If (xN, py) lands in a lane's header strip (the top band where the type label sits), the
+ * curve it selects: a segment index, or 'driver'. Else null. Check this before
+ * `pointerTarget` so a header click selects rather than cycles/drags.
+ */
+declare function headerHit(xN: number, py: number, segments: CurveSegment[], layout: ComposerHitLayout): number | 'driver' | null;
 /** Normalize a client point to xN (0..1 across the width) + py (0..totalH down the height). */
 declare function toLocalCoords(clientX: number, clientY: number, rect: ClientRectLike, totalH: number): {
     xN: number;
@@ -256,4 +266,4 @@ declare function triggersCrossed(prevValue: number, curValue: number, steps: num
 /** A reasonable starting composition for demos / uncontrolled mounts. */
 declare function defaultComposition(): CurveComposition;
 
-export { COMPOSER_DRIVER_FRAC, COMPOSER_GAP, COMPOSER_PAD_FRAC, CURVE_CYCLE, CURVE_MIN_WEIGHT_FRAC, type ClientRectLike, type ComposerHitLayout, type ComposerLayout, type CompositionRead, type CompositionSamplers, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, DRAG_ENERGY_GAIN, DRAG_STEEP_GAIN, DRAG_THRESHOLD, type DriverDirection, EDGE_HIT, type PointerTarget, type Rect, type Sampler, addDriver, applyDriverBodyDrag, applySegmentBodyDrag, boundaries, boundaryAt, buildSampler, buildSamplers, composerLayout, curvePath, cycleDriverType, cycleSegmentType, defaultComposition, deriveEase, diagonalLine, directionPhase, easingPresets, mapY, playheadGeometry, pointerTarget, readComposition, redistributeWeight, removeDriver, removeSegment, segmentIndexAt, segmentSpan, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, splitSegment, toLocalCoords, totalWeight, triggerLevels, triggersCrossed };
+export { COMPOSER_DRIVER_FRAC, COMPOSER_GAP, COMPOSER_HEADER_H, COMPOSER_PAD_FRAC, CURVE_CYCLE, CURVE_MIN_WEIGHT_FRAC, type ClientRectLike, type ComposerHitLayout, type ComposerLayout, type CompositionRead, type CompositionSamplers, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, DRAG_ENERGY_GAIN, DRAG_STEEP_GAIN, DRAG_THRESHOLD, type DriverDirection, EDGE_HIT, type PointerTarget, type Rect, type Sampler, addDriver, applyDriverBodyDrag, applySegmentBodyDrag, boundaries, boundaryAt, buildSampler, buildSamplers, composerLayout, curvePath, cycleDriverType, cycleSegmentType, defaultComposition, deriveEase, diagonalLine, directionPhase, easingPresets, flipDriver, flipSegment, headerHit, mapY, playheadGeometry, pointerTarget, readComposition, redistributeWeight, removeDriver, removeSegment, segmentIndexAt, segmentSpan, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, splitSegment, toLocalCoords, totalWeight, triggerLevels, triggersCrossed };

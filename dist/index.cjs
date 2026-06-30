@@ -53,6 +53,8 @@ __export(index_exports, {
   cycleSegmentType: () => cycleSegmentType,
   defaultComposition: () => defaultComposition,
   defaultListItemParams: () => defaultListItemParams,
+  flipDriver: () => flipDriver,
+  flipSegment: () => flipSegment,
   normalizeListItems: () => normalizeListItems,
   parseListItemSchema: () => parseListItemSchema,
   readComposition: () => readComposition,
@@ -4003,6 +4005,21 @@ function cycleSegmentType(comp, index) {
   next[index] = { ...src, type, curvature: 0, steepness: 0, overshoot: 0, anticipate: 0 };
   return cloneSegments(comp, next);
 }
+function flipCurve(c) {
+  const type = c.type === "easeIn" ? "easeOut" : c.type === "easeOut" ? "easeIn" : c.type;
+  return { ...c, type, curvature: -c.curvature, overshoot: c.anticipate ?? 0, anticipate: c.overshoot ?? 0 };
+}
+function flipSegment(comp, index) {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const next = comp.segments.slice();
+  next[index] = flipCurve(src);
+  return cloneSegments(comp, next);
+}
+function flipDriver(comp) {
+  if (!comp.driver) return comp;
+  return { ...comp, driver: flipCurve(comp.driver) };
+}
 function setSegmentCurvature(comp, index, curvature) {
   const src = comp.segments[index];
   if (!src) return comp;
@@ -4075,6 +4092,12 @@ function setDriverAnticipate(comp, anticipate) {
 }
 var DRAG_ENERGY_GAIN = 0.6;
 var DRAG_STEEP_GAIN = 0.6;
+var COMPOSER_HEADER_H = 16;
+function headerHit(xN, py, segments, layout) {
+  if (py >= 0 && py < COMPOSER_HEADER_H) return segmentIndexAt(xN, segments);
+  if (layout.driverY != null && py >= layout.driverY && py < layout.driverY + COMPOSER_HEADER_H) return "driver";
+  return null;
+}
 function toLocalCoords(clientX, clientY, rect, totalH) {
   const xN = clamp01((clientX - rect.left) / (rect.width || 1));
   const py = (clientY - rect.top) / (rect.height || 1) * totalH;
@@ -4218,6 +4241,8 @@ function CurveComposer({
   mode = "continuous",
   triggerSteps = DEFAULT_TRIGGER_STEPS,
   onTrigger,
+  selectedIndex = null,
+  onSelect,
   curveColor,
   playheadColor,
   grid = false,
@@ -4290,6 +4315,11 @@ function CurveComposer({
       svgRef.current?.setPointerCapture(e.pointerId);
     } catch {
     }
+    const header = headerHit(xN, py, segments, hitLayout());
+    if (typeof header === "number") {
+      setDrag({ kind: "select", index: header, startX: e.clientX, startY: e.clientY, moved: false });
+      return;
+    }
     const target = pointerTarget(xN, py, segments, hitLayout(), EDGE_HIT2 / rectW);
     if (target.kind === "driver") {
       setDrag({
@@ -4319,6 +4349,10 @@ function CurveComposer({
     const d = dragRef.current;
     if (!d) {
       const { xN, py, rectW: rectW2 } = localCoords(e.clientX, e.clientY);
+      if (typeof headerHit(xN, py, segments, hitLayout()) === "number") {
+        setHover({ kind: "header", index: 0 });
+        return;
+      }
       const t = pointerTarget(xN, py, segments, hitLayout(), EDGE_HIT2 / rectW2);
       setHover(t.kind === "driver" ? { kind: "driver", index: 0 } : { kind: t.kind, index: t.index });
       return;
@@ -4339,11 +4373,13 @@ function CurveComposer({
       const next = applySegmentBodyDrag(composition, d.index, d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
       onSegmentsChange?.(next.segments);
       if (!d.moved) setDrag({ ...d, moved: true });
-    } else {
+    } else if (d.kind === "driver") {
       const dxFrac = (e.clientX - d.startX) / rectW;
       const dyFrac = (e.clientY - d.startY) / rectH;
       const next = applyDriverBodyDrag(composition, d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
       if (next.driver) onDriverChange?.(next.driver);
+      if (!d.moved) setDrag({ ...d, moved: true });
+    } else {
       if (!d.moved) setDrag({ ...d, moved: true });
     }
   };
@@ -4355,7 +4391,9 @@ function CurveComposer({
     } catch {
     }
     if (!d || d.moved) return;
-    if (d.kind === "driver") {
+    if (d.kind === "select") {
+      onSelect?.(d.index);
+    } else if (d.kind === "driver") {
       const next = cycleDriverType(composition);
       if (next.driver) onDriverChange?.(next.driver);
     } else if (d.kind === "segment") {
@@ -4375,7 +4413,7 @@ function CurveComposer({
     onSegmentsChange?.(splitSegment(composition, segmentIndexAt(xN, segments)).segments);
   };
   const activeKind = drag?.kind ?? hover?.kind;
-  const cursor = activeKind === "boundary" ? "ew-resize" : activeKind === "segment" || activeKind === "driver" ? "move" : "default";
+  const cursor = activeKind === "boundary" ? "ew-resize" : activeKind === "segment" || activeKind === "driver" ? "move" : activeKind === "select" || activeKind === "header" ? "pointer" : "default";
   const interior = boundaries(segments);
   const renderLaneGrid = (rect) => {
     if (!grid) return null;
@@ -4412,6 +4450,20 @@ function CurveComposer({
       children: [
         renderLaneBg(mainRect, "main-bg"),
         renderLaneGrid(mainRect),
+        selectedIndex != null && selectedIndex >= 0 && selectedIndex < segments.length && (() => {
+          const span = segmentSpan(segments, selectedIndex);
+          return /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+            "rect",
+            {
+              className: "dialkit-cc-seg-selected",
+              x: span[0] * W,
+              y: mainRect.y,
+              width: (span[1] - span[0]) * W,
+              height: mainRect.h,
+              rx: 8
+            }
+          );
+        })(),
         hover?.kind === "segment" && !drag && (() => {
           const span = segmentSpan(segments, hover.index);
           return /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
@@ -4618,6 +4670,8 @@ function ShortcutsMenu({ panelId }) {
   cycleSegmentType,
   defaultComposition,
   defaultListItemParams,
+  flipDriver,
+  flipSegment,
   normalizeListItems,
   parseListItemSchema,
   readComposition,

@@ -15,6 +15,7 @@ import {
   splitSegment,
   removeSegment,
   cycleSegmentType,
+  flipSegment,
   setSegmentCurvature,
   setSegmentSteepness,
   setSegmentOvershoot,
@@ -426,6 +427,37 @@ describe('state transitions', () => {
     expect(after.type).not.toBe(before);
     expect(after.curvature).toBe(0);
     expect(after.steepness).toBe(0);
+  });
+
+  it('flipSegment mirrors the curve (easeIn↔easeOut, energy negates, overshoot↔anticipate swap)', () => {
+    const comp: CurveComposition = {
+      segments: [{ type: 'easeIn', weight: 1, curvature: 0.4, steepness: 0.3, overshoot: 0.5, anticipate: 0 }],
+      driver: null,
+      direction: 'forward',
+    };
+    const f = flipSegment(comp, 0).segments[0];
+    expect(f.type).toBe('easeOut');
+    expect(f.curvature).toBe(-0.4);
+    expect(f.steepness).toBe(0.3); // intensity preserved
+    expect(f.overshoot).toBe(0); // was anticipate (0)
+    expect(f.anticipate).toBe(0.5); // was overshoot
+    // and the sampled curve is the left↔right mirror: flipped(t) ≈ 1 - original(1-t)
+    const orig = buildSampler(comp.segments[0]);
+    const flipped = buildSampler(f);
+    for (const t of [0.2, 0.5, 0.8]) expect(flipped(t)).toBeCloseTo(1 - orig(1 - t), 5);
+  });
+
+  it('flipping twice returns to the original shape', () => {
+    const comp: CurveComposition = {
+      segments: [{ type: 'easeIn', weight: 1, curvature: 0.6, steepness: -0.2, overshoot: 0.3, anticipate: 0.1 }],
+      driver: null,
+      direction: 'forward',
+    };
+    const twice = flipSegment(flipSegment(comp, 0), 0).segments[0];
+    expect(twice.type).toBe('easeIn');
+    expect(twice.curvature).toBeCloseTo(0.6, 5);
+    expect(twice.overshoot).toBe(0.3);
+    expect(twice.anticipate).toBe(0.1);
   });
 
   it('removeSegment is a no-op on the last remaining segment', () => {

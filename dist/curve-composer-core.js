@@ -163,6 +163,21 @@ function cycleSegmentType(comp, index) {
   next[index] = { ...src, type, curvature: 0, steepness: 0, overshoot: 0, anticipate: 0 };
   return cloneSegments(comp, next);
 }
+function flipCurve(c) {
+  const type = c.type === "easeIn" ? "easeOut" : c.type === "easeOut" ? "easeIn" : c.type;
+  return { ...c, type, curvature: -c.curvature, overshoot: c.anticipate ?? 0, anticipate: c.overshoot ?? 0 };
+}
+function flipSegment(comp, index) {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const next = comp.segments.slice();
+  next[index] = flipCurve(src);
+  return cloneSegments(comp, next);
+}
+function flipDriver(comp) {
+  if (!comp.driver) return comp;
+  return { ...comp, driver: flipCurve(comp.driver) };
+}
 function setSegmentCurvature(comp, index, curvature) {
   const src = comp.segments[index];
   if (!src) return comp;
@@ -235,6 +250,12 @@ function setDriverAnticipate(comp, anticipate) {
 }
 var DRAG_ENERGY_GAIN = 0.6;
 var DRAG_STEEP_GAIN = 0.6;
+var COMPOSER_HEADER_H = 16;
+function headerHit(xN, py, segments, layout) {
+  if (py >= 0 && py < COMPOSER_HEADER_H) return segmentIndexAt(xN, segments);
+  if (layout.driverY != null && py >= layout.driverY && py < layout.driverY + COMPOSER_HEADER_H) return "driver";
+  return null;
+}
 function toLocalCoords(clientX, clientY, rect, totalH) {
   const xN = clamp01((clientX - rect.left) / (rect.width || 1));
   const py = (clientY - rect.top) / (rect.height || 1) * totalH;
@@ -367,6 +388,7 @@ function defaultComposition() {
 export {
   COMPOSER_DRIVER_FRAC,
   COMPOSER_GAP,
+  COMPOSER_HEADER_H,
   COMPOSER_PAD_FRAC,
   CURVE_CYCLE,
   CURVE_MIN_WEIGHT_FRAC,
@@ -391,6 +413,9 @@ export {
   diagonalLine,
   directionPhase,
   easingPresets,
+  flipDriver,
+  flipSegment,
+  headerHit,
   mapY,
   playheadGeometry,
   pointerTarget,

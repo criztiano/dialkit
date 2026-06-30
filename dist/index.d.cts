@@ -539,6 +539,8 @@ declare function splitSegment(comp: CurveComposition, index: number): CurveCompo
 /** Remove the segment at `index` (no-op when it's the only one). */
 declare function removeSegment(comp: CurveComposition, index: number): CurveComposition;
 declare function cycleSegmentType(comp: CurveComposition, index: number): CurveComposition;
+declare function flipSegment(comp: CurveComposition, index: number): CurveComposition;
+declare function flipDriver(comp: CurveComposition): CurveComposition;
 declare function setSegmentCurvature(comp: CurveComposition, index: number, curvature: number): CurveComposition;
 declare function setSegmentSteepness(comp: CurveComposition, index: number, steepness: number): CurveComposition;
 declare function setSegmentOvershoot(comp: CurveComposition, index: number, overshoot: number): CurveComposition;
@@ -641,6 +643,10 @@ interface CurveComposerProps {
     triggerSteps?: number;
     /** Fired in trigger mode when the value crosses a trigger level; `index` is into `triggerLevels`. */
     onTrigger?: (index: number) => void;
+    /** Index of the currently selected segment (highlighted); null/undefined for none. */
+    selectedIndex?: number | null;
+    /** Fired when a segment's header strip is clicked — lets the consumer target it (flip/remove/…). */
+    onSelect?: (index: number) => void;
     /** Curve stroke color. Defaults to the theme text color. */
     curveColor?: string;
     /** Playhead / marker color. Defaults to the theme text color. */
@@ -652,7 +658,7 @@ interface CurveComposerProps {
     /** Height of the main lane; the driver lane adds height below it. */
     height?: number;
 }
-declare function CurveComposer({ segments, driver, direction, onSegmentsChange, onDriverChange, getPhase, phase, mode, triggerSteps, onTrigger, curveColor, playheadColor, grid, gridSubdivisions, width, height, }: CurveComposerProps): react_jsx_runtime.JSX.Element;
+declare function CurveComposer({ segments, driver, direction, onSegmentsChange, onDriverChange, getPhase, phase, mode, triggerSteps, onTrigger, selectedIndex, onSelect, curveColor, playheadColor, grid, gridSubdivisions, width, height, }: CurveComposerProps): react_jsx_runtime.JSX.Element;
 
 interface TextControlProps {
     label: string;
@@ -743,4 +749,4 @@ interface ShortcutsMenuProps {
 }
 declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react_jsx_runtime.JSX.Element | null;
 
-export { type ActionConfig, ButtonGroup, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, addDriver, buildSamplers, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, normalizeListItems, parseListItemSchema, readComposition, redistributeWeight, removeDriver, removeSegment, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, splitSegment, triggerLevels, triggersCrossed, useDialKit };
+export { type ActionConfig, ButtonGroup, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, addDriver, buildSamplers, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, flipDriver, flipSegment, normalizeListItems, parseListItemSchema, readComposition, redistributeWeight, removeDriver, removeSegment, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, splitSegment, triggerLevels, triggersCrossed, useDialKit };

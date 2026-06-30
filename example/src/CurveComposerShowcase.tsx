@@ -7,6 +7,7 @@ import {
   defaultComposition,
   splitSegment,
   removeSegment,
+  flipSegment,
   setSegmentOvershoot,
   setSegmentAnticipate,
   addDriver,
@@ -108,6 +109,9 @@ export function CurveComposerShowcase() {
     setComp((c) => removeSegment(c, Math.min(selected, c.segments.length - 1)));
     setSelected((s) => Math.max(0, s - 1));
   };
+  const doFlip = () => {
+    setComp((c) => flipSegment(c, Math.min(selected, c.segments.length - 1)));
+  };
   const doReset = () => {
     setComp(defaultComposition());
     setSelected(0);
@@ -128,6 +132,8 @@ export function CurveComposerShowcase() {
         segments={segments}
         driver={driver}
         direction={direction}
+        selectedIndex={selected}
+        onSelect={setSelected}
         onSegmentsChange={onSegments}
         onDriverChange={onDriver}
         getPhase={getPhase}
@@ -142,8 +148,9 @@ export function CurveComposerShowcase() {
       />
 
       <div style={{ fontSize: 12, color: 'var(--dial-text-secondary)' }}>
-        {segments.length} segment{segments.length > 1 ? 's' : ''} · click to change shape · drag the body — sideways
-        for energy (onset ↔ fall), up/down for steepness (push it for expo) · divider to retime · double-click to split
+        {segments.length} segment{segments.length > 1 ? 's' : ''} · click a curve's header to select it (Split / Flip /
+        Remove act on it) · click the body to change shape · drag — sideways for energy, up/down for steepness (→ expo) ·
+        divider to retime · double-click to split
       </div>
 
       {/* output track: the continuous dot travels along it (position = value). In trigger mode,
@@ -196,6 +203,9 @@ export function CurveComposerShowcase() {
         </button>
         <button type="button" className="lib-tab" onClick={doSplit}>
           + Split
+        </button>
+        <button type="button" className="lib-tab" onClick={doFlip}>
+          ⇄ Flip
         </button>
         <button type="button" className="lib-tab" onClick={doRemove} disabled={segments.length <= 1}>
           − Remove

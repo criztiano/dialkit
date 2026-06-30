@@ -26,6 +26,8 @@ export {
   defaultComposition,
   splitSegment,
   removeSegment,
+  flipSegment,
+  flipDriver,
   cycleSegmentType,
   setSegmentCurvature,
   setSegmentSteepness,
