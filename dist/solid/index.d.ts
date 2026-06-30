@@ -439,6 +439,13 @@ interface CurveComposition {
     /** null → no driver lane (the component renders a single lane). */
     driver: CurveDriver | null;
     direction: DriverDirection;
+    /**
+     * 0..1 — fraction of the timeline given to gaps between segments (distributed equally,
+     * one gap after each segment, the last wrapping to the first). In a gap the value glides
+     * smoothly from the segment's end down to the next segment's start (a faint connector)
+     * instead of snapping. 0 = contiguous (default). Optional.
+     */
+    gap?: number;
 }
 
 interface CurveComposerProps {

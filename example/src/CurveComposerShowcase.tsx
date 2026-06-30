@@ -18,18 +18,20 @@ import {
 } from 'dialkit';
 import type { CurveSegment, CurveDriver, DriverDirection, CurveComposition } from 'dialkit';
 
-const PERIOD = 2.4; // seconds for one transport loop
-
 export function CurveComposerShowcase() {
   const [comp, setComp] = useState<CurveComposition>(() => defaultComposition());
   const [playing, setPlaying] = useState(true);
   const [selected, setSelected] = useState(0);
+  const [duration, setDuration] = useState(2.4); // seconds for one transport loop
+  const durationRef = useRef(duration);
+  durationRef.current = duration;
   const [curveColor, setCurveColor] = useState('#ffffff');
   const [playheadColor, setPlayheadColor] = useState('#6366f1');
   const [mode, setMode] = useState<'continuous' | 'trigger'>('continuous');
   const [triggerSteps, setTriggerSteps] = useState(5);
 
   const { segments, driver, direction } = comp;
+  const gap = comp.gap ?? 0;
 
   // The continuous dot's travel along the demo track: left 6 + radius 8 = center start,
   // then value * TRACK_TRAVEL. Trigger markers sit at the same per-value positions, so the
@@ -78,7 +80,7 @@ export function CurveComposerShowcase() {
     return () => cancelAnimationFrame(raf);
   }, [playing]);
 
-  const getPhase = () => (elapsedRef.current % PERIOD) / PERIOD;
+  const getPhase = () => (elapsedRef.current % durationRef.current) / durationRef.current;
 
   // Read the composed value each frame to drive the demo dot — each segment drives a
   // full min→max walk, so the dot walks the track once per segment (twice for two).
@@ -132,6 +134,7 @@ export function CurveComposerShowcase() {
         segments={segments}
         driver={driver}
         direction={direction}
+        gap={gap}
         selectedIndex={selected}
         onSelect={setSelected}
         onSegmentsChange={onSegments}
@@ -258,6 +261,24 @@ export function CurveComposerShowcase() {
         />
       </div>
 
+      <Slider
+        label="duration"
+        value={duration}
+        onChange={setDuration}
+        min={0.4}
+        max={6}
+        step={0.1}
+        formatValue={(v) => `${v.toFixed(1)}s`}
+      />
+      <Slider
+        label="gap"
+        value={gap}
+        onChange={(v) => setComp((c) => ({ ...c, gap: v }))}
+        min={0}
+        max={0.6}
+        step={0.01}
+        formatValue={(v) => (v > 0.005 ? v.toFixed(2) : 'none')}
+      />
       <Slider
         label="anticipate"
         value={anticipate}

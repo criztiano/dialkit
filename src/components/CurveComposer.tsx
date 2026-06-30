@@ -25,6 +25,8 @@ import {
   curvePath,
   diagonalLine,
   playheadGeometry,
+  timelineSlots,
+  connectorPath,
   DEFAULT_TRIGGER_STEPS,
   DRAG_THRESHOLD,
   EDGE_HIT,
@@ -75,6 +77,8 @@ interface CurveComposerProps {
   curveColor?: string;
   /** Playhead / marker color. Defaults to the theme text color. */
   playheadColor?: string;
+  /** 0..1 — space between segments; the value glides smoothly across each gap (faint connector). */
+  gap?: number;
   /** Faint vertical reference grid behind each lane. */
   grid?: boolean;
   gridSubdivisions?: number;
@@ -104,6 +108,7 @@ export function CurveComposer({
   onTrigger,
   selectedIndex = null,
   onSelect,
+  gap = 0,
   curveColor,
   playheadColor,
   grid = false,
@@ -115,8 +120,8 @@ export function CurveComposer({
   const { W, totalH, mainRect, driverRect } = layout;
 
   const composition: CurveComposition = useMemo(
-    () => ({ segments, driver, direction }),
-    [segments, driver, direction]
+    () => ({ segments, driver, direction, gap }),
+    [segments, driver, direction, gap]
   );
 
   // Samplers + latest state for the rAF-driven playhead (read without re-rendering).
@@ -186,7 +191,7 @@ export function CurveComposer({
 
   // --- pointer interaction ---
 
-  const hitLayout = () => ({ totalH, driverY: driverRect ? driverRect.y : null });
+  const hitLayout = () => ({ totalH, driverY: driverRect ? driverRect.y : null, gap });
 
   const localCoords = (clientX: number, clientY: number) => {
     const rect = svgRef.current!.getBoundingClientRect();
@@ -311,7 +316,7 @@ export function CurveComposer({
   const onDoubleClick = (e: React.MouseEvent) => {
     const { xN, py } = localCoords(e.clientX, e.clientY);
     if (driverRect && py >= driverRect.y) return; // driver is a single curve
-    onSegmentsChange?.(splitSegment(composition, segmentIndexAt(xN, segments)).segments);
+    onSegmentsChange?.(splitSegment(composition, segmentIndexAt(xN, segments, gap)).segments);
   };
 
   const activeKind = drag?.kind ?? hover?.kind;
@@ -326,7 +331,7 @@ export function CurveComposer({
 
   // --- path builders (geometry + path strings come from the shared core) ---
 
-  const interior = boundaries(segments);
+  const interior = boundaries(segments, gap);
 
   const renderLaneGrid = (rect: Rect) => {
     if (!grid) return null;
@@ -375,7 +380,7 @@ export function CurveComposer({
           selectedIndex >= 0 &&
           selectedIndex < segments.length &&
           (() => {
-            const span = segmentSpan(segments, selectedIndex);
+            const span = segmentSpan(segments, selectedIndex, gap);
             return (
               <rect
                 className="dialkit-cc-seg-selected"
@@ -392,7 +397,7 @@ export function CurveComposer({
         {hover?.kind === 'segment' &&
           !drag &&
           (() => {
-            const span = segmentSpan(segments, hover.index);
+            const span = segmentSpan(segments, hover.index, gap);
             return (
               <rect
                 className="dialkit-cc-seg-hover"
@@ -406,7 +411,7 @@ export function CurveComposer({
           })()}
 
         {segments.map((seg, i) => {
-          const span = segmentSpan(segments, i);
+          const span = segmentSpan(segments, i, gap);
           return (
             <g key={`seg-${i}`}>
               {diagonal(mainRect, span, `diag-${i}`)}
@@ -417,6 +422,18 @@ export function CurveComposer({
             </g>
           );
         })}
+
+        {/* gap connectors: faint lines that glide each segment's end down to the next's start */}
+        {gap > 0 &&
+          timelineSlots(segments, gap)
+            .filter((slot) => slot.kind === 'gap' && slot.b > slot.a)
+            .map((slot) => (
+              <path
+                key={`conn-${slot.index}`}
+                className="dialkit-cc-connector"
+                d={connectorPath(slot, samplers, segments.length, mainRect, W)}
+              />
+            ))}
 
         {/* interior boundaries */}
         {interior.map((bx, i) => (

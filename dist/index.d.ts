@@ -528,6 +528,13 @@ interface CurveComposition {
     /** null → no driver lane (the component renders a single lane). */
     driver: CurveDriver | null;
     direction: DriverDirection;
+    /**
+     * 0..1 — fraction of the timeline given to gaps between segments (distributed equally,
+     * one gap after each segment, the last wrapping to the first). In a gap the value glides
+     * smoothly from the segment's end down to the next segment's start (a faint connector)
+     * instead of snapping. 0 = contiguous (default). Optional.
+     */
+    gap?: number;
 }
 /** A pure `(t) -> value` sampler over local time, both in 0..1 (value may overshoot for springs). */
 type Sampler = (t: number) => number;
@@ -651,6 +658,8 @@ interface CurveComposerProps {
     curveColor?: string;
     /** Playhead / marker color. Defaults to the theme text color. */
     playheadColor?: string;
+    /** 0..1 — space between segments; the value glides smoothly across each gap (faint connector). */
+    gap?: number;
     /** Faint vertical reference grid behind each lane. */
     grid?: boolean;
     gridSubdivisions?: number;
@@ -658,7 +667,7 @@ interface CurveComposerProps {
     /** Height of the main lane; the driver lane adds height below it. */
     height?: number;
 }
-declare function CurveComposer({ segments, driver, direction, onSegmentsChange, onDriverChange, getPhase, phase, mode, triggerSteps, onTrigger, selectedIndex, onSelect, curveColor, playheadColor, grid, gridSubdivisions, width, height, }: CurveComposerProps): react_jsx_runtime.JSX.Element;
+declare function CurveComposer({ segments, driver, direction, onSegmentsChange, onDriverChange, getPhase, phase, mode, triggerSteps, onTrigger, selectedIndex, onSelect, gap, curveColor, playheadColor, grid, gridSubdivisions, width, height, }: CurveComposerProps): react_jsx_runtime.JSX.Element;
 
 interface TextControlProps {
     label: string;

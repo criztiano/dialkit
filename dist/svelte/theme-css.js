@@ -2217,6 +2217,16 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
   pointer-events: none;
 }
 
+.dialkit-cc-connector {
+  fill: none;
+  stroke: currentColor;
+  stroke-opacity: 0.28;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
 .dialkit-cc-curve-driver {
   stroke-opacity: 0.6;
 }

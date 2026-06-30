@@ -3861,7 +3861,30 @@ function buildSampler(curve) {
   const ease = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot, curve.anticipate);
   return (t) => bezierY(ease, t);
 }
-function boundaries(segments) {
+function totalWeight(segments) {
+  let t = 0;
+  for (const s of segments) t += Math.max(0, s.weight);
+  return t || 1;
+}
+function timelineSlots(segments, gap = 0) {
+  const n = segments.length;
+  const g = n > 1 ? clamp01(gap) : 0;
+  const total = totalWeight(segments);
+  const content = 1 - g;
+  const gapW = n > 0 ? g / n : 0;
+  const slots = [];
+  let acc = 0;
+  for (let i = 0; i < n; i++) {
+    const sw = Math.max(0, segments[i].weight) / total * content;
+    slots.push({ kind: "segment", index: i, a: acc, b: acc + sw });
+    acc += sw;
+    slots.push({ kind: "gap", index: i, a: acc, b: acc + gapW });
+    acc += gapW;
+  }
+  return slots;
+}
+function boundaries(segments, gap = 0) {
+  if (gap > 0 && segments.length > 1) return [];
   const total = totalWeight(segments);
   const out = [];
   let acc = 0;
@@ -3871,18 +3894,23 @@ function boundaries(segments) {
   }
   return out;
 }
-function totalWeight(segments) {
-  let t = 0;
-  for (const s of segments) t += Math.max(0, s.weight);
-  return t || 1;
-}
-function segmentSpan(segments, index) {
+function segmentSpan(segments, index, gap = 0) {
+  if (gap > 0) {
+    const slot = timelineSlots(segments, gap).find((s) => s.kind === "segment" && s.index === index);
+    if (slot) return [slot.a, slot.b];
+  }
   const total = totalWeight(segments);
   let acc = 0;
   for (let i = 0; i < index; i++) acc += segments[i].weight;
   return [acc / total, (acc + segments[index].weight) / total];
 }
-function segmentIndexAt(xNorm, segments) {
+function segmentIndexAt(xNorm, segments, gap = 0) {
+  if (gap > 0) {
+    const x2 = clamp01(xNorm);
+    const slots = timelineSlots(segments, gap);
+    for (const s of slots) if (x2 < s.b) return s.index;
+    return segments.length - 1;
+  }
   const total = totalWeight(segments);
   const x = clamp01(xNorm) * total;
   let acc = 0;
@@ -3892,9 +3920,9 @@ function segmentIndexAt(xNorm, segments) {
   }
   return segments.length - 1;
 }
-function boundaryAt(xNorm, segments, edgeHitNorm) {
+function boundaryAt(xNorm, segments, edgeHitNorm, gap = 0) {
   if (segments.length < 2) return null;
-  const bs = boundaries(segments);
+  const bs = boundaries(segments, gap);
   let best = null;
   let bestDist = edgeHitNorm;
   for (let i = 0; i < bs.length; i++) {
@@ -3905,6 +3933,10 @@ function boundaryAt(xNorm, segments, edgeHitNorm) {
     }
   }
   return best;
+}
+function smootherstep(t) {
+  const x = clamp01(t);
+  return x * x * x * (x * (x * 6 - 15) + 10);
 }
 function cloneSegments(comp, segments) {
   return { ...comp, segments };
@@ -4017,7 +4049,7 @@ var DRAG_ENERGY_GAIN = 0.6;
 var DRAG_STEEP_GAIN = 0.6;
 var COMPOSER_HEADER_H = 16;
 function headerHit(xN, py, segments, layout) {
-  if (py >= 0 && py < COMPOSER_HEADER_H) return segmentIndexAt(xN, segments);
+  if (py >= 0 && py < COMPOSER_HEADER_H) return segmentIndexAt(xN, segments, layout.gap ?? 0);
   if (layout.driverY != null && py >= layout.driverY && py < layout.driverY + COMPOSER_HEADER_H) return "driver";
   return null;
 }
@@ -4027,10 +4059,11 @@ function toLocalCoords(clientX, clientY, rect, totalH) {
   return { xN, py };
 }
 function pointerTarget(xN, py, segments, layout, edgeHitNorm) {
+  const gap = layout.gap ?? 0;
   if (layout.driverY != null && py >= layout.driverY) return { kind: "driver" };
-  const b = boundaryAt(xN, segments, edgeHitNorm);
+  const b = boundaryAt(xN, segments, edgeHitNorm, gap);
   if (b != null) return { kind: "boundary", index: b };
-  return { kind: "segment", index: segmentIndexAt(xN, segments) };
+  return { kind: "segment", index: segmentIndexAt(xN, segments, gap) };
 }
 function applySegmentBodyDrag(comp, index, baseCurvature, baseSteepness, dxFrac, dyFrac) {
   const next = setSegmentCurvature(comp, index, baseCurvature + dxFrac / DRAG_ENERGY_GAIN);
@@ -4055,6 +4088,21 @@ function directionPhase(u, dir) {
 function readComposition(comp, u, s) {
   const inputPhase = directionPhase(u, comp.direction);
   const warpedPhase = s.driver ? clamp01(s.driver(inputPhase)) : inputPhase;
+  const gap = comp.gap ?? 0;
+  if (gap > 0 && comp.segments.length > 1) {
+    const slots = timelineSlots(comp.segments, gap);
+    const slot = slots.find((sl) => warpedPhase < sl.b) ?? slots[slots.length - 1];
+    const localT2 = slot.b > slot.a ? (warpedPhase - slot.a) / (slot.b - slot.a) : 0;
+    if (slot.kind === "segment") {
+      const value3 = s.segments[slot.index] ? s.segments[slot.index](localT2) : 0;
+      return { inputPhase, warpedPhase, value: value3, segIndex: slot.index, localT: localT2 };
+    }
+    const n = comp.segments.length;
+    const endVal = s.segments[slot.index] ? s.segments[slot.index](1) : 0;
+    const startVal = s.segments[(slot.index + 1) % n] ? s.segments[(slot.index + 1) % n](0) : 0;
+    const value2 = lerp(endVal, startVal, smootherstep(localT2));
+    return { inputPhase, warpedPhase, value: value2, segIndex: slot.index, localT: localT2 };
+  }
   const segIndex = segmentIndexAt(warpedPhase, comp.segments);
   const [a, b] = segmentSpan(comp.segments, segIndex);
   const localT = b > a ? (warpedPhase - a) / (b - a) : 0;
@@ -4097,6 +4145,18 @@ function curvePath(curve, rect, span, W, samples = 40) {
   }
   const e = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot, curve.anticipate);
   return `M ${x(0)} ${y(0)} C ${x(e[0])} ${y(e[1])}, ${x(e[2])} ${y(e[3])}, ${x(1)} ${y(1)}`;
+}
+function connectorPath(slot, samplers, segCount, rect, W, samples = 24) {
+  const endVal = samplers.segments[slot.index] ? samplers.segments[slot.index](1) : 0;
+  const next = (slot.index + 1) % segCount;
+  const startVal = samplers.segments[next] ? samplers.segments[next](0) : 0;
+  let d = `M ${slot.a * W} ${mapY(rect, endVal)}`;
+  for (let i = 1; i <= samples; i++) {
+    const t = i / samples;
+    const v = lerp(endVal, startVal, smootherstep(t));
+    d += ` L ${(slot.a + (slot.b - slot.a) * t) * W} ${mapY(rect, v)}`;
+  }
+  return d;
 }
 function diagonalLine(rect, span, W) {
   return { x1: span[0] * W, y1: mapY(rect, 0), x2: span[1] * W, y2: mapY(rect, 1) };
@@ -4166,6 +4226,7 @@ function CurveComposer({
   onTrigger,
   selectedIndex = null,
   onSelect,
+  gap = 0,
   curveColor,
   playheadColor,
   grid = false,
@@ -4176,8 +4237,8 @@ function CurveComposer({
   const layout = composerLayout(width, height, driver != null);
   const { W, totalH, mainRect, driverRect } = layout;
   const composition = useMemo(
-    () => ({ segments, driver, direction }),
-    [segments, driver, direction]
+    () => ({ segments, driver, direction, gap }),
+    [segments, driver, direction, gap]
   );
   const samplers = useMemo(() => buildSamplers(composition), [composition]);
   const liveRef = useRef17({ composition, samplers, getPhase, phase, mode, triggerSteps });
@@ -4227,7 +4288,7 @@ function CurveComposer({
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [W, totalH]);
-  const hitLayout = () => ({ totalH, driverY: driverRect ? driverRect.y : null });
+  const hitLayout = () => ({ totalH, driverY: driverRect ? driverRect.y : null, gap });
   const localCoords = (clientX, clientY) => {
     const rect = svgRef.current.getBoundingClientRect();
     return { ...toLocalCoords(clientX, clientY, rect, totalH), rectW: rect.width };
@@ -4333,11 +4394,11 @@ function CurveComposer({
   const onDoubleClick = (e) => {
     const { xN, py } = localCoords(e.clientX, e.clientY);
     if (driverRect && py >= driverRect.y) return;
-    onSegmentsChange?.(splitSegment(composition, segmentIndexAt(xN, segments)).segments);
+    onSegmentsChange?.(splitSegment(composition, segmentIndexAt(xN, segments, gap)).segments);
   };
   const activeKind = drag?.kind ?? hover?.kind;
   const cursor = activeKind === "boundary" ? "ew-resize" : activeKind === "segment" || activeKind === "driver" ? "move" : activeKind === "select" || activeKind === "header" ? "pointer" : "default";
-  const interior = boundaries(segments);
+  const interior = boundaries(segments, gap);
   const renderLaneGrid = (rect) => {
     if (!grid) return null;
     const n = Math.max(1, Math.round(gridSubdivisions));
@@ -4374,7 +4435,7 @@ function CurveComposer({
         renderLaneBg(mainRect, "main-bg"),
         renderLaneGrid(mainRect),
         selectedIndex != null && selectedIndex >= 0 && selectedIndex < segments.length && (() => {
-          const span = segmentSpan(segments, selectedIndex);
+          const span = segmentSpan(segments, selectedIndex, gap);
           return /* @__PURE__ */ jsx24(
             "rect",
             {
@@ -4388,7 +4449,7 @@ function CurveComposer({
           );
         })(),
         hover?.kind === "segment" && !drag && (() => {
-          const span = segmentSpan(segments, hover.index);
+          const span = segmentSpan(segments, hover.index, gap);
           return /* @__PURE__ */ jsx24(
             "rect",
             {
@@ -4402,13 +4463,21 @@ function CurveComposer({
           );
         })(),
         segments.map((seg, i) => {
-          const span = segmentSpan(segments, i);
+          const span = segmentSpan(segments, i, gap);
           return /* @__PURE__ */ jsxs21("g", { children: [
             diagonal(mainRect, span, `diag-${i}`),
             /* @__PURE__ */ jsx24("path", { className: "dialkit-cc-curve", d: curvePath(seg, mainRect, span, W) }),
             /* @__PURE__ */ jsx24("text", { className: "dialkit-cc-label", x: (span[0] + span[1]) * 0.5 * W, y: mainRect.y + 13, children: seg.type })
           ] }, `seg-${i}`);
         }),
+        gap > 0 && timelineSlots(segments, gap).filter((slot) => slot.kind === "gap" && slot.b > slot.a).map((slot) => /* @__PURE__ */ jsx24(
+          "path",
+          {
+            className: "dialkit-cc-connector",
+            d: connectorPath(slot, samplers, segments.length, mainRect, W)
+          },
+          `conn-${slot.index}`
+        )),
         interior.map((bx, i) => /* @__PURE__ */ jsx24(
           "line",
           {

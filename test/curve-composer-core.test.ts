@@ -22,6 +22,8 @@ import {
   setSegmentAnticipate,
   defaultComposition,
   composerLayout,
+  timelineSlots,
+  smootherstep,
   mapY,
   curvePath,
   diagonalLine,
@@ -469,6 +471,55 @@ describe('state transitions', () => {
     const comp = defaultComposition();
     expect(setSegmentCurvature(comp, 0, 5).segments[0].curvature).toBe(1);
     expect(setSegmentSteepness(comp, 0, -5).segments[0].steepness).toBe(-1);
+  });
+});
+
+describe('gaps', () => {
+  const twoLinear = (gap: number): CurveComposition => ({
+    segments: [
+      { type: 'linear', weight: 1, curvature: 0, steepness: 0 },
+      { type: 'linear', weight: 1, curvature: 0, steepness: 0 },
+    ],
+    driver: null,
+    direction: 'forward',
+    gap,
+  });
+
+  it('timelineSlots: gap=0 is contiguous segments; gap>0 compresses them and inserts gap slots', () => {
+    const noGap = timelineSlots(twoLinear(0).segments, 0);
+    expect(noGap.filter((s) => s.kind === 'segment').map((s) => [s.a, s.b])).toEqual([
+      [0, 0.5],
+      [0.5, 1],
+    ]);
+    const withGap = timelineSlots(twoLinear(0.3).segments, 0.3);
+    const seg0 = withGap.find((s) => s.kind === 'segment' && s.index === 0)!;
+    expect(seg0.b).toBeCloseTo(0.35); // 0.5 * (1 - 0.3)
+    const gap0 = withGap.find((s) => s.kind === 'gap' && s.index === 0)!;
+    expect(gap0.b - gap0.a).toBeCloseTo(0.15); // 0.3 / 2
+  });
+
+  it('a single segment has no gap (nothing to span)', () => {
+    const one: CurveComposition = oneSeg('linear');
+    const slots = timelineSlots(one.segments, 0.5);
+    expect(slots.find((s) => s.kind === 'gap')!.b - slots.find((s) => s.kind === 'gap')!.a).toBe(0);
+  });
+
+  it('readComposition glides smoothly across a gap (end → next start) instead of snapping', () => {
+    const comp = twoLinear(0.3);
+    const s = buildSamplers(comp);
+    // segment 1 spans [0, 0.35]; its gap [0.35, 0.5]
+    expect(readComposition(comp, 0.34, s).value).toBeGreaterThan(0.9); // still near the top of seg 0
+    const gapMid = readComposition(comp, 0.425, s).value; // middle of the gap
+    expect(gapMid).toBeGreaterThan(0.05);
+    expect(gapMid).toBeLessThan(0.95); // partway down, not snapped
+    expect(readComposition(comp, 0.5, s).value).toBeCloseTo(0, 1); // gap end = next segment start
+  });
+
+  it('smootherstep is a 0→1 ease with flat ends', () => {
+    expect(smootherstep(0)).toBe(0);
+    expect(smootherstep(1)).toBe(1);
+    expect(smootherstep(0.5)).toBeCloseTo(0.5);
+    expect(smootherstep(0.1)).toBeLessThan(0.1); // flat near the start
   });
 });
 

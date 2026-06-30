@@ -69,6 +69,13 @@ export interface CurveComposition {
   /** null → no driver lane (the component renders a single lane). */
   driver: CurveDriver | null;
   direction: DriverDirection;
+  /**
+   * 0..1 — fraction of the timeline given to gaps between segments (distributed equally,
+   * one gap after each segment, the last wrapping to the first). In a gap the value glides
+   * smoothly from the segment's end down to the next segment's start (a faint connector)
+   * instead of snapping. 0 = contiguous (default). Optional.
+   */
+  gap?: number;
 }
 
 // --- interaction constants (shared with the wrappers, mirroring the waveform) ---
@@ -219,8 +226,48 @@ export function buildSampler(curve: CurveSegment | CurveDriver): Sampler {
 
 // --- geometry / layout ---
 
-/** Interior cumulative split positions (0..1), excluding the 0 and 1 ends. */
-export function boundaries(segments: CurveSegment[]): number[] {
+export function totalWeight(segments: CurveSegment[]): number {
+  let t = 0;
+  for (const s of segments) t += Math.max(0, s.weight);
+  return t || 1;
+}
+
+/** A slice of the timeline: a segment's curve, or a gap connector after it. */
+export interface TimelineSlot {
+  kind: 'segment' | 'gap';
+  /** Segment index; for a gap, the segment it follows (its connector targets segment index+1). */
+  index: number;
+  a: number;
+  b: number;
+}
+
+/**
+ * The ordered timeline (0..1): each segment slot followed by its gap slot. Segments share
+ * `1 - gap` of the width by weight; the `gap` fraction is split equally across the N gaps
+ * (the last gap wraps to the first segment, closing the loop). At gap=0 the gap slots have
+ * zero width, so the layout is exactly the contiguous segments.
+ */
+export function timelineSlots(segments: CurveSegment[], gap = 0): TimelineSlot[] {
+  const n = segments.length;
+  const g = n > 1 ? clamp01(gap) : 0; // a single segment has no gap to fill
+  const total = totalWeight(segments);
+  const content = 1 - g;
+  const gapW = n > 0 ? g / n : 0;
+  const slots: TimelineSlot[] = [];
+  let acc = 0;
+  for (let i = 0; i < n; i++) {
+    const sw = (Math.max(0, segments[i].weight) / total) * content;
+    slots.push({ kind: 'segment', index: i, a: acc, b: acc + sw });
+    acc += sw;
+    slots.push({ kind: 'gap', index: i, a: acc, b: acc + gapW });
+    acc += gapW;
+  }
+  return slots;
+}
+
+/** Interior cumulative split positions (0..1) — the draggable dividers; none when gaps are open. */
+export function boundaries(segments: CurveSegment[], gap = 0): number[] {
+  if (gap > 0 && segments.length > 1) return []; // gaps replace the contiguous dividers
   const total = totalWeight(segments);
   const out: number[] = [];
   let acc = 0;
@@ -231,22 +278,26 @@ export function boundaries(segments: CurveSegment[]): number[] {
   return out;
 }
 
-export function totalWeight(segments: CurveSegment[]): number {
-  let t = 0;
-  for (const s of segments) t += Math.max(0, s.weight);
-  return t || 1;
-}
-
-/** [start, end] of a segment's horizontal slice in 0..1. */
-export function segmentSpan(segments: CurveSegment[], index: number): [number, number] {
+/** [start, end] of a segment's horizontal slice in 0..1 (gap-aware). */
+export function segmentSpan(segments: CurveSegment[], index: number, gap = 0): [number, number] {
+  if (gap > 0) {
+    const slot = timelineSlots(segments, gap).find((s) => s.kind === 'segment' && s.index === index);
+    if (slot) return [slot.a, slot.b];
+  }
   const total = totalWeight(segments);
   let acc = 0;
   for (let i = 0; i < index; i++) acc += segments[i].weight;
   return [acc / total, (acc + segments[index].weight) / total];
 }
 
-/** Which segment slice an x (0..1) falls in. */
-export function segmentIndexAt(xNorm: number, segments: CurveSegment[]): number {
+/** Which segment an x (0..1) falls in (a gap maps to the segment it follows). */
+export function segmentIndexAt(xNorm: number, segments: CurveSegment[], gap = 0): number {
+  if (gap > 0) {
+    const x = clamp01(xNorm);
+    const slots = timelineSlots(segments, gap);
+    for (const s of slots) if (x < s.b) return s.index;
+    return segments.length - 1;
+  }
   const total = totalWeight(segments);
   const x = clamp01(xNorm) * total;
   let acc = 0;
@@ -257,10 +308,10 @@ export function segmentIndexAt(xNorm: number, segments: CurveSegment[]): number 
   return segments.length - 1;
 }
 
-/** Nearest interior boundary within `edgeHitNorm` of x, or null. Returns the boundary index (between i and i+1). */
-export function boundaryAt(xNorm: number, segments: CurveSegment[], edgeHitNorm: number): number | null {
+/** Nearest interior boundary within `edgeHitNorm` of x, or null (no dividers when gaps are open). */
+export function boundaryAt(xNorm: number, segments: CurveSegment[], edgeHitNorm: number, gap = 0): number | null {
   if (segments.length < 2) return null;
-  const bs = boundaries(segments);
+  const bs = boundaries(segments, gap);
   let best: number | null = null;
   let bestDist = edgeHitNorm;
   for (let i = 0; i < bs.length; i++) {
@@ -271,6 +322,12 @@ export function boundaryAt(xNorm: number, segments: CurveSegment[], edgeHitNorm:
     }
   }
   return best;
+}
+
+/** Perlin smootherstep — a C2 ease used to glide the value across a gap. */
+export function smootherstep(t: number): number {
+  const x = clamp01(t);
+  return x * x * x * (x * (x * 6 - 15) + 10);
 }
 
 // --- pure state transitions ---
@@ -440,6 +497,8 @@ export interface ComposerHitLayout {
   totalH: number;
   /** y where the driver lane begins, or null when there is no driver lane. */
   driverY: number | null;
+  /** Composition gap (0..1) so hit-testing matches the gap-aware layout. Default 0. */
+  gap?: number;
 }
 
 /** A resolved press target inside the composer. */
@@ -462,7 +521,7 @@ export function headerHit(
   segments: CurveSegment[],
   layout: ComposerHitLayout
 ): number | 'driver' | null {
-  if (py >= 0 && py < COMPOSER_HEADER_H) return segmentIndexAt(xN, segments);
+  if (py >= 0 && py < COMPOSER_HEADER_H) return segmentIndexAt(xN, segments, layout.gap ?? 0);
   if (layout.driverY != null && py >= layout.driverY && py < layout.driverY + COMPOSER_HEADER_H) return 'driver';
   return null;
 }
@@ -490,10 +549,11 @@ export function pointerTarget(
   layout: ComposerHitLayout,
   edgeHitNorm: number
 ): PointerTarget {
+  const gap = layout.gap ?? 0;
   if (layout.driverY != null && py >= layout.driverY) return { kind: 'driver' };
-  const b = boundaryAt(xN, segments, edgeHitNorm);
+  const b = boundaryAt(xN, segments, edgeHitNorm, gap);
   if (b != null) return { kind: 'boundary', index: b };
-  return { kind: 'segment', index: segmentIndexAt(xN, segments) };
+  return { kind: 'segment', index: segmentIndexAt(xN, segments, gap) };
 }
 
 /**
@@ -570,6 +630,22 @@ export interface CompositionRead {
 export function readComposition(comp: CurveComposition, u: number, s: CompositionSamplers): CompositionRead {
   const inputPhase = directionPhase(u, comp.direction);
   const warpedPhase = s.driver ? clamp01(s.driver(inputPhase)) : inputPhase;
+  const gap = comp.gap ?? 0;
+  if (gap > 0 && comp.segments.length > 1) {
+    const slots = timelineSlots(comp.segments, gap);
+    const slot = slots.find((sl) => warpedPhase < sl.b) ?? slots[slots.length - 1];
+    const localT = slot.b > slot.a ? (warpedPhase - slot.a) / (slot.b - slot.a) : 0;
+    if (slot.kind === 'segment') {
+      const value = s.segments[slot.index] ? s.segments[slot.index](localT) : 0;
+      return { inputPhase, warpedPhase, value, segIndex: slot.index, localT };
+    }
+    // gap: glide from this segment's end down to the next segment's start.
+    const n = comp.segments.length;
+    const endVal = s.segments[slot.index] ? s.segments[slot.index](1) : 0;
+    const startVal = s.segments[(slot.index + 1) % n] ? s.segments[(slot.index + 1) % n](0) : 0;
+    const value = lerp(endVal, startVal, smootherstep(localT));
+    return { inputPhase, warpedPhase, value, segIndex: slot.index, localT };
+  }
   const segIndex = segmentIndexAt(warpedPhase, comp.segments);
   const [a, b] = segmentSpan(comp.segments, segIndex);
   const localT = b > a ? (warpedPhase - a) / (b - a) : 0;
@@ -658,6 +734,30 @@ export function curvePath(
   }
   const e = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot, curve.anticipate);
   return `M ${x(0)} ${y(0)} C ${x(e[0])} ${y(e[1])}, ${x(e[2])} ${y(e[3])}, ${x(1)} ${y(1)}`;
+}
+
+/**
+ * The SVG path `d` for a gap connector slot — the faint line that glides (smootherstep) from
+ * the slot's segment end value down to the next segment's start value across the gap.
+ */
+export function connectorPath(
+  slot: TimelineSlot,
+  samplers: CompositionSamplers,
+  segCount: number,
+  rect: Rect,
+  W: number,
+  samples = 24
+): string {
+  const endVal = samplers.segments[slot.index] ? samplers.segments[slot.index](1) : 0;
+  const next = (slot.index + 1) % segCount;
+  const startVal = samplers.segments[next] ? samplers.segments[next](0) : 0;
+  let d = `M ${slot.a * W} ${mapY(rect, endVal)}`;
+  for (let i = 1; i <= samples; i++) {
+    const t = i / samples;
+    const v = lerp(endVal, startVal, smootherstep(t));
+    d += ` L ${(slot.a + (slot.b - slot.a) * t) * W} ${mapY(rect, v)}`;
+  }
+  return d;
 }
 
 /** Endpoints of the faint linear-reference diagonal behind a segment (or the driver lane). */
