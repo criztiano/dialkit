@@ -3956,6 +3956,12 @@ function setDriverSteepness(comp, steepness) {
 }
 var DRAG_ENERGY_GAIN = 0.6;
 var DRAG_STEEP_GAIN = 0.6;
+var COMPOSER_HEADER_H = 16;
+function headerHit(xN, py, segments, layout) {
+  if (py >= 0 && py < COMPOSER_HEADER_H) return segmentIndexAt(xN, segments);
+  if (layout.driverY != null && py >= layout.driverY && py < layout.driverY + COMPOSER_HEADER_H) return "driver";
+  return null;
+}
 function toLocalCoords(clientX, clientY, rect, totalH) {
   const xN = clamp01((clientX - rect.left) / (rect.width || 1));
   const py = (clientY - rect.top) / (rect.height || 1) * totalH;
@@ -4073,15 +4079,16 @@ function triggersCrossed(prevValue, curValue, steps) {
 // src/solid/components/CurveComposer.tsx
 var _tmpl$40 = /* @__PURE__ */ (0, import_web109.template)(`<div class=dialkit-cc-wrap><svg class=dialkit-cc><rect class=dialkit-cc-lane rx=8></rect><line class=dialkit-cc-playhead x1=0 x2=0></line><circle class=dialkit-cc-dot cx=0 r=3>`);
 var _tmpl$212 = /* @__PURE__ */ (0, import_web109.template)(`<svg><line class=dialkit-cc-grid></svg>`, false, true, false);
-var _tmpl$310 = /* @__PURE__ */ (0, import_web109.template)(`<svg><rect class=dialkit-cc-seg-hover rx=8></svg>`, false, true, false);
-var _tmpl$44 = /* @__PURE__ */ (0, import_web109.template)(`<svg><g><line class=dialkit-cc-diagonal></line><path class=dialkit-cc-curve></path><text class=dialkit-cc-label></svg>`, false, true, false);
-var _tmpl$52 = /* @__PURE__ */ (0, import_web109.template)(`<svg><line class=dialkit-cc-boundary></svg>`, false, true, false);
-var _tmpl$62 = /* @__PURE__ */ (0, import_web109.template)(`<svg><rect class=dialkit-cc-lane rx=8></svg>`, false, true, false);
-var _tmpl$72 = /* @__PURE__ */ (0, import_web109.template)(`<svg><rect class=dialkit-cc-seg-hover x=0 rx=8></svg>`, false, true, false);
-var _tmpl$82 = /* @__PURE__ */ (0, import_web109.template)(`<svg><path class="dialkit-cc-curve dialkit-cc-curve-driver"></svg>`, false, true, false);
-var _tmpl$92 = /* @__PURE__ */ (0, import_web109.template)(`<svg><text class=dialkit-cc-label>driver \xB7 </svg>`, false, true, false);
-var _tmpl$0 = /* @__PURE__ */ (0, import_web109.template)(`<svg><line class=dialkit-cc-playhead x1=0 x2=0></svg>`, false, true, false);
-var _tmpl$1 = /* @__PURE__ */ (0, import_web109.template)(`<svg><line class=dialkit-cc-diagonal></svg>`, false, true, false);
+var _tmpl$310 = /* @__PURE__ */ (0, import_web109.template)(`<svg><rect class=dialkit-cc-seg-selected rx=8></svg>`, false, true, false);
+var _tmpl$44 = /* @__PURE__ */ (0, import_web109.template)(`<svg><rect class=dialkit-cc-seg-hover rx=8></svg>`, false, true, false);
+var _tmpl$52 = /* @__PURE__ */ (0, import_web109.template)(`<svg><g><line class=dialkit-cc-diagonal></line><path class=dialkit-cc-curve></path><text class=dialkit-cc-label></svg>`, false, true, false);
+var _tmpl$62 = /* @__PURE__ */ (0, import_web109.template)(`<svg><line class=dialkit-cc-boundary></svg>`, false, true, false);
+var _tmpl$72 = /* @__PURE__ */ (0, import_web109.template)(`<svg><rect class=dialkit-cc-lane rx=8></svg>`, false, true, false);
+var _tmpl$82 = /* @__PURE__ */ (0, import_web109.template)(`<svg><rect class=dialkit-cc-seg-hover x=0 rx=8></svg>`, false, true, false);
+var _tmpl$92 = /* @__PURE__ */ (0, import_web109.template)(`<svg><path class="dialkit-cc-curve dialkit-cc-curve-driver"></svg>`, false, true, false);
+var _tmpl$0 = /* @__PURE__ */ (0, import_web109.template)(`<svg><text class=dialkit-cc-label>driver \xB7 </svg>`, false, true, false);
+var _tmpl$1 = /* @__PURE__ */ (0, import_web109.template)(`<svg><line class=dialkit-cc-playhead x1=0 x2=0></svg>`, false, true, false);
+var _tmpl$102 = /* @__PURE__ */ (0, import_web109.template)(`<svg><line class=dialkit-cc-diagonal></svg>`, false, true, false);
 function CurveComposer(props) {
   const p = (0, import_solid_js16.mergeProps)({
     driver: null,
@@ -4089,6 +4096,7 @@ function CurveComposer(props) {
     phase: 0,
     mode: "continuous",
     triggerSteps: DEFAULT_TRIGGER_STEPS,
+    selectedIndex: null,
     grid: false,
     gridSubdivisions: 8,
     width: 256,
@@ -4174,6 +4182,17 @@ function CurveComposer(props) {
       svgEl?.setPointerCapture(e.pointerId);
     } catch {
     }
+    const header = headerHit(xN, py, p.segments, hitLayout());
+    if (typeof header === "number") {
+      drag = {
+        kind: "select",
+        index: header,
+        startX: e.clientX,
+        startY: e.clientY,
+        moved: false
+      };
+      return;
+    }
     const target = pointerTarget(xN, py, p.segments, hitLayout(), EDGE_HIT2 / rectW);
     if (target.kind === "driver") {
       drag = {
@@ -4214,6 +4233,13 @@ function CurveComposer(props) {
         py,
         rectW: rectW2
       } = localCoords(e.clientX, e.clientY);
+      if (typeof headerHit(xN, py, p.segments, hitLayout()) === "number") {
+        setHover({
+          kind: "header",
+          index: 0
+        });
+        return;
+      }
       const t = pointerTarget(xN, py, p.segments, hitLayout(), EDGE_HIT2 / rectW2);
       setHover(t.kind === "driver" ? {
         kind: "driver",
@@ -4240,11 +4266,13 @@ function CurveComposer(props) {
       const next = applySegmentBodyDrag(composition(), d.index, d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
       p.onSegmentsChange?.(next.segments);
       d.moved = true;
-    } else {
+    } else if (d.kind === "driver") {
       const dxFrac = (e.clientX - d.startX) / rectW;
       const dyFrac = (e.clientY - d.startY) / rectH;
       const next = applyDriverBodyDrag(composition(), d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
       if (next.driver) p.onDriverChange?.(next.driver);
+      d.moved = true;
+    } else {
       d.moved = true;
     }
   };
@@ -4256,7 +4284,9 @@ function CurveComposer(props) {
     } catch {
     }
     if (!d || d.moved) return;
-    if (d.kind === "driver") {
+    if (d.kind === "select") {
+      p.onSelect?.(d.index);
+    } else if (d.kind === "driver") {
       const next = cycleDriverType(composition());
       if (next.driver) p.onDriverChange?.(next.driver);
     } else if (d.kind === "segment") {
@@ -4282,7 +4312,7 @@ function CurveComposer(props) {
   const cursor = () => {
     const h = hover();
     const activeKind = drag?.kind ?? h?.kind;
-    return activeKind === "boundary" ? "ew-resize" : activeKind === "segment" || activeKind === "driver" ? "move" : "default";
+    return activeKind === "boundary" ? "ew-resize" : activeKind === "segment" || activeKind === "driver" ? "move" : activeKind === "select" || activeKind === "header" ? "pointer" : "default";
   };
   const interior = () => boundaries(p.segments);
   const laneGridLines = (rect) => {
@@ -4332,11 +4362,11 @@ function CurveComposer(props) {
     }), _el$4);
     (0, import_web114.insert)(_el$2, (0, import_web116.createComponent)(import_solid_js16.Show, {
       get when() {
-        return hover()?.kind === "segment" && !drag;
+        return (0, import_web115.memo)(() => !!(p.selectedIndex != null && p.selectedIndex >= 0))() && p.selectedIndex < p.segments.length;
       },
       get children() {
         return (() => {
-          const span = segmentSpan(p.segments, hover().index);
+          const span = segmentSpan(p.segments, p.selectedIndex);
           const mr = mainRect();
           return (() => {
             var _el$7 = _tmpl$310();
@@ -4358,6 +4388,34 @@ function CurveComposer(props) {
         })();
       }
     }), _el$4);
+    (0, import_web114.insert)(_el$2, (0, import_web116.createComponent)(import_solid_js16.Show, {
+      get when() {
+        return hover()?.kind === "segment" && !drag;
+      },
+      get children() {
+        return (() => {
+          const span = segmentSpan(p.segments, hover().index);
+          const mr = mainRect();
+          return (() => {
+            var _el$8 = _tmpl$44();
+            (0, import_web113.effect)((_p$) => {
+              var _v$24 = span[0] * W(), _v$25 = mr.y, _v$26 = (span[1] - span[0]) * W(), _v$27 = mr.h;
+              _v$24 !== _p$.e && (0, import_web111.setAttribute)(_el$8, "x", _p$.e = _v$24);
+              _v$25 !== _p$.t && (0, import_web111.setAttribute)(_el$8, "y", _p$.t = _v$25);
+              _v$26 !== _p$.a && (0, import_web111.setAttribute)(_el$8, "width", _p$.a = _v$26);
+              _v$27 !== _p$.o && (0, import_web111.setAttribute)(_el$8, "height", _p$.o = _v$27);
+              return _p$;
+            }, {
+              e: void 0,
+              t: void 0,
+              a: void 0,
+              o: void 0
+            });
+            return _el$8;
+          })();
+        })();
+      }
+    }), _el$4);
     (0, import_web114.insert)(_el$2, (0, import_web116.createComponent)(import_solid_js16.For, {
       get each() {
         return p.segments;
@@ -4367,17 +4425,17 @@ function CurveComposer(props) {
         const mr = () => mainRect();
         const diag = () => diagonalLine(mr(), span(), W());
         return (() => {
-          var _el$8 = _tmpl$44(), _el$9 = _el$8.firstChild, _el$0 = _el$9.nextSibling, _el$1 = _el$0.nextSibling;
-          (0, import_web114.insert)(_el$1, () => seg.type);
+          var _el$9 = _tmpl$52(), _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling, _el$10 = _el$1.nextSibling;
+          (0, import_web114.insert)(_el$10, () => seg.type);
           (0, import_web113.effect)((_p$) => {
-            var _v$24 = diag().x1, _v$25 = diag().y1, _v$26 = diag().x2, _v$27 = diag().y2, _v$28 = curvePath(seg, mr(), span(), W()), _v$29 = (span()[0] + span()[1]) * 0.5 * W(), _v$30 = mr().y + 13;
-            _v$24 !== _p$.e && (0, import_web111.setAttribute)(_el$9, "x1", _p$.e = _v$24);
-            _v$25 !== _p$.t && (0, import_web111.setAttribute)(_el$9, "y1", _p$.t = _v$25);
-            _v$26 !== _p$.a && (0, import_web111.setAttribute)(_el$9, "x2", _p$.a = _v$26);
-            _v$27 !== _p$.o && (0, import_web111.setAttribute)(_el$9, "y2", _p$.o = _v$27);
-            _v$28 !== _p$.i && (0, import_web111.setAttribute)(_el$0, "d", _p$.i = _v$28);
-            _v$29 !== _p$.n && (0, import_web111.setAttribute)(_el$1, "x", _p$.n = _v$29);
-            _v$30 !== _p$.s && (0, import_web111.setAttribute)(_el$1, "y", _p$.s = _v$30);
+            var _v$28 = diag().x1, _v$29 = diag().y1, _v$30 = diag().x2, _v$31 = diag().y2, _v$32 = curvePath(seg, mr(), span(), W()), _v$33 = (span()[0] + span()[1]) * 0.5 * W(), _v$34 = mr().y + 13;
+            _v$28 !== _p$.e && (0, import_web111.setAttribute)(_el$0, "x1", _p$.e = _v$28);
+            _v$29 !== _p$.t && (0, import_web111.setAttribute)(_el$0, "y1", _p$.t = _v$29);
+            _v$30 !== _p$.a && (0, import_web111.setAttribute)(_el$0, "x2", _p$.a = _v$30);
+            _v$31 !== _p$.o && (0, import_web111.setAttribute)(_el$0, "y2", _p$.o = _v$31);
+            _v$32 !== _p$.i && (0, import_web111.setAttribute)(_el$1, "d", _p$.i = _v$32);
+            _v$33 !== _p$.n && (0, import_web111.setAttribute)(_el$10, "x", _p$.n = _v$33);
+            _v$34 !== _p$.s && (0, import_web111.setAttribute)(_el$10, "y", _p$.s = _v$34);
             return _p$;
           }, {
             e: void 0,
@@ -4388,7 +4446,7 @@ function CurveComposer(props) {
             n: void 0,
             s: void 0
           });
-          return _el$8;
+          return _el$9;
         })();
       }
     }), _el$4);
@@ -4403,14 +4461,14 @@ function CurveComposer(props) {
           return h?.kind === "boundary" && h.index === i() || drag?.kind === "boundary" && drag.index === i();
         };
         return (() => {
-          var _el$10 = _tmpl$52();
+          var _el$11 = _tmpl$62();
           (0, import_web113.effect)((_p$) => {
-            var _v$31 = String(active()), _v$32 = bx * W(), _v$33 = mr.y, _v$34 = bx * W(), _v$35 = mr.y + mr.h;
-            _v$31 !== _p$.e && (0, import_web111.setAttribute)(_el$10, "data-active", _p$.e = _v$31);
-            _v$32 !== _p$.t && (0, import_web111.setAttribute)(_el$10, "x1", _p$.t = _v$32);
-            _v$33 !== _p$.a && (0, import_web111.setAttribute)(_el$10, "y1", _p$.a = _v$33);
-            _v$34 !== _p$.o && (0, import_web111.setAttribute)(_el$10, "x2", _p$.o = _v$34);
-            _v$35 !== _p$.i && (0, import_web111.setAttribute)(_el$10, "y2", _p$.i = _v$35);
+            var _v$35 = String(active()), _v$36 = bx * W(), _v$37 = mr.y, _v$38 = bx * W(), _v$39 = mr.y + mr.h;
+            _v$35 !== _p$.e && (0, import_web111.setAttribute)(_el$11, "data-active", _p$.e = _v$35);
+            _v$36 !== _p$.t && (0, import_web111.setAttribute)(_el$11, "x1", _p$.t = _v$36);
+            _v$37 !== _p$.a && (0, import_web111.setAttribute)(_el$11, "y1", _p$.a = _v$37);
+            _v$38 !== _p$.o && (0, import_web111.setAttribute)(_el$11, "x2", _p$.o = _v$38);
+            _v$39 !== _p$.i && (0, import_web111.setAttribute)(_el$11, "y2", _p$.i = _v$39);
             return _p$;
           }, {
             e: void 0,
@@ -4419,7 +4477,7 @@ function CurveComposer(props) {
             o: void 0,
             i: void 0
           });
-          return _el$10;
+          return _el$11;
         })();
       }
     }), _el$4);
@@ -4432,13 +4490,13 @@ function CurveComposer(props) {
         return driverRect();
       },
       children: (dr) => [(() => {
-        var _el$11 = _tmpl$62();
+        var _el$12 = _tmpl$72();
         (0, import_web113.effect)((_p$) => {
-          var _v$36 = dr().x, _v$37 = dr().y, _v$38 = dr().w, _v$39 = dr().h;
-          _v$36 !== _p$.e && (0, import_web111.setAttribute)(_el$11, "x", _p$.e = _v$36);
-          _v$37 !== _p$.t && (0, import_web111.setAttribute)(_el$11, "y", _p$.t = _v$37);
-          _v$38 !== _p$.a && (0, import_web111.setAttribute)(_el$11, "width", _p$.a = _v$38);
-          _v$39 !== _p$.o && (0, import_web111.setAttribute)(_el$11, "height", _p$.o = _v$39);
+          var _v$40 = dr().x, _v$41 = dr().y, _v$42 = dr().w, _v$43 = dr().h;
+          _v$40 !== _p$.e && (0, import_web111.setAttribute)(_el$12, "x", _p$.e = _v$40);
+          _v$41 !== _p$.t && (0, import_web111.setAttribute)(_el$12, "y", _p$.t = _v$41);
+          _v$42 !== _p$.a && (0, import_web111.setAttribute)(_el$12, "width", _p$.a = _v$42);
+          _v$43 !== _p$.o && (0, import_web111.setAttribute)(_el$12, "height", _p$.o = _v$43);
           return _p$;
         }, {
           e: void 0,
@@ -4446,53 +4504,15 @@ function CurveComposer(props) {
           a: void 0,
           o: void 0
         });
-        return _el$11;
+        return _el$12;
       })(), (0, import_web116.createComponent)(import_solid_js16.For, {
         get each() {
           return laneGridLines(dr());
         },
         children: (g) => (() => {
-          var _el$17 = _tmpl$212();
+          var _el$18 = _tmpl$212();
           (0, import_web113.effect)((_p$) => {
-            var _v$48 = g.gx, _v$49 = g.y1, _v$50 = g.gx, _v$51 = g.y2;
-            _v$48 !== _p$.e && (0, import_web111.setAttribute)(_el$17, "x1", _p$.e = _v$48);
-            _v$49 !== _p$.t && (0, import_web111.setAttribute)(_el$17, "y1", _p$.t = _v$49);
-            _v$50 !== _p$.a && (0, import_web111.setAttribute)(_el$17, "x2", _p$.a = _v$50);
-            _v$51 !== _p$.o && (0, import_web111.setAttribute)(_el$17, "y2", _p$.o = _v$51);
-            return _p$;
-          }, {
-            e: void 0,
-            t: void 0,
-            a: void 0,
-            o: void 0
-          });
-          return _el$17;
-        })()
-      }), (0, import_web116.createComponent)(import_solid_js16.Show, {
-        get when() {
-          return hover()?.kind === "driver" && !drag;
-        },
-        get children() {
-          var _el$12 = _tmpl$72();
-          (0, import_web113.effect)((_p$) => {
-            var _v$40 = dr().y, _v$41 = W(), _v$42 = dr().h;
-            _v$40 !== _p$.e && (0, import_web111.setAttribute)(_el$12, "y", _p$.e = _v$40);
-            _v$41 !== _p$.t && (0, import_web111.setAttribute)(_el$12, "width", _p$.t = _v$41);
-            _v$42 !== _p$.a && (0, import_web111.setAttribute)(_el$12, "height", _p$.a = _v$42);
-            return _p$;
-          }, {
-            e: void 0,
-            t: void 0,
-            a: void 0
-          });
-          return _el$12;
-        }
-      }), (0, import_web115.memo)(() => {
-        const diag = diagonalLine(dr(), [0, 1], W());
-        return (() => {
-          var _el$18 = _tmpl$1();
-          (0, import_web113.effect)((_p$) => {
-            var _v$52 = diag.x1, _v$53 = diag.y1, _v$54 = diag.x2, _v$55 = diag.y2;
+            var _v$52 = g.gx, _v$53 = g.y1, _v$54 = g.gx, _v$55 = g.y2;
             _v$52 !== _p$.e && (0, import_web111.setAttribute)(_el$18, "x1", _p$.e = _v$52);
             _v$53 !== _p$.t && (0, import_web111.setAttribute)(_el$18, "y1", _p$.t = _v$53);
             _v$54 !== _p$.a && (0, import_web111.setAttribute)(_el$18, "x2", _p$.a = _v$54);
@@ -4505,40 +4525,78 @@ function CurveComposer(props) {
             o: void 0
           });
           return _el$18;
+        })()
+      }), (0, import_web116.createComponent)(import_solid_js16.Show, {
+        get when() {
+          return hover()?.kind === "driver" && !drag;
+        },
+        get children() {
+          var _el$13 = _tmpl$82();
+          (0, import_web113.effect)((_p$) => {
+            var _v$44 = dr().y, _v$45 = W(), _v$46 = dr().h;
+            _v$44 !== _p$.e && (0, import_web111.setAttribute)(_el$13, "y", _p$.e = _v$44);
+            _v$45 !== _p$.t && (0, import_web111.setAttribute)(_el$13, "width", _p$.t = _v$45);
+            _v$46 !== _p$.a && (0, import_web111.setAttribute)(_el$13, "height", _p$.a = _v$46);
+            return _p$;
+          }, {
+            e: void 0,
+            t: void 0,
+            a: void 0
+          });
+          return _el$13;
+        }
+      }), (0, import_web115.memo)(() => {
+        const diag = diagonalLine(dr(), [0, 1], W());
+        return (() => {
+          var _el$19 = _tmpl$102();
+          (0, import_web113.effect)((_p$) => {
+            var _v$56 = diag.x1, _v$57 = diag.y1, _v$58 = diag.x2, _v$59 = diag.y2;
+            _v$56 !== _p$.e && (0, import_web111.setAttribute)(_el$19, "x1", _p$.e = _v$56);
+            _v$57 !== _p$.t && (0, import_web111.setAttribute)(_el$19, "y1", _p$.t = _v$57);
+            _v$58 !== _p$.a && (0, import_web111.setAttribute)(_el$19, "x2", _p$.a = _v$58);
+            _v$59 !== _p$.o && (0, import_web111.setAttribute)(_el$19, "y2", _p$.o = _v$59);
+            return _p$;
+          }, {
+            e: void 0,
+            t: void 0,
+            a: void 0,
+            o: void 0
+          });
+          return _el$19;
         })();
       }), (() => {
-        var _el$13 = _tmpl$82();
-        (0, import_web113.effect)(() => (0, import_web111.setAttribute)(_el$13, "d", curvePath(p.driver, dr(), [0, 1], W())));
-        return _el$13;
+        var _el$14 = _tmpl$92();
+        (0, import_web113.effect)(() => (0, import_web111.setAttribute)(_el$14, "d", curvePath(p.driver, dr(), [0, 1], W())));
+        return _el$14;
       })(), (() => {
-        var _el$14 = _tmpl$92(), _el$15 = _el$14.firstChild;
-        (0, import_web114.insert)(_el$14, () => p.driver.type, null);
+        var _el$15 = _tmpl$0(), _el$16 = _el$15.firstChild;
+        (0, import_web114.insert)(_el$15, () => p.driver.type, null);
         (0, import_web113.effect)((_p$) => {
-          var _v$43 = W() * 0.5, _v$44 = dr().y + 13;
-          _v$43 !== _p$.e && (0, import_web111.setAttribute)(_el$14, "x", _p$.e = _v$43);
-          _v$44 !== _p$.t && (0, import_web111.setAttribute)(_el$14, "y", _p$.t = _v$44);
+          var _v$47 = W() * 0.5, _v$48 = dr().y + 13;
+          _v$47 !== _p$.e && (0, import_web111.setAttribute)(_el$15, "x", _p$.e = _v$47);
+          _v$48 !== _p$.t && (0, import_web111.setAttribute)(_el$15, "y", _p$.t = _v$48);
           return _p$;
         }, {
           e: void 0,
           t: void 0
         });
-        return _el$14;
+        return _el$15;
       })(), (() => {
-        var _el$16 = _tmpl$0();
+        var _el$17 = _tmpl$1();
         var _ref$4 = driverPlayheadEl;
-        typeof _ref$4 === "function" ? (0, import_web117.use)(_ref$4, _el$16) : driverPlayheadEl = _el$16;
+        typeof _ref$4 === "function" ? (0, import_web117.use)(_ref$4, _el$17) : driverPlayheadEl = _el$17;
         (0, import_web113.effect)((_p$) => {
-          var _v$45 = dr().y, _v$46 = dr().y + dr().h, _v$47 = p.playheadColor;
-          _v$45 !== _p$.e && (0, import_web111.setAttribute)(_el$16, "y1", _p$.e = _v$45);
-          _v$46 !== _p$.t && (0, import_web111.setAttribute)(_el$16, "y2", _p$.t = _v$46);
-          _v$47 !== _p$.a && (0, import_web112.setStyleProperty)(_el$16, "stroke", _p$.a = _v$47);
+          var _v$49 = dr().y, _v$50 = dr().y + dr().h, _v$51 = p.playheadColor;
+          _v$49 !== _p$.e && (0, import_web111.setAttribute)(_el$17, "y1", _p$.e = _v$49);
+          _v$50 !== _p$.t && (0, import_web111.setAttribute)(_el$17, "y2", _p$.t = _v$50);
+          _v$51 !== _p$.a && (0, import_web112.setStyleProperty)(_el$17, "stroke", _p$.a = _v$51);
           return _p$;
         }, {
           e: void 0,
           t: void 0,
           a: void 0
         });
-        return _el$16;
+        return _el$17;
       })()]
     }), null);
     (0, import_web113.effect)((_p$) => {

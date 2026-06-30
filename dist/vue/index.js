@@ -3908,6 +3908,12 @@ function setDriverSteepness(comp, steepness) {
 }
 var DRAG_ENERGY_GAIN = 0.6;
 var DRAG_STEEP_GAIN = 0.6;
+var COMPOSER_HEADER_H = 16;
+function headerHit(xN, py, segments, layout) {
+  if (py >= 0 && py < COMPOSER_HEADER_H) return segmentIndexAt(xN, segments);
+  if (layout.driverY != null && py >= layout.driverY && py < layout.driverY + COMPOSER_HEADER_H) return "driver";
+  return null;
+}
 function toLocalCoords(clientX, clientY, rect, totalH) {
   const xN = clamp01((clientX - rect.left) / (rect.width || 1));
   const py = (clientY - rect.top) / (rect.height || 1) * totalH;
@@ -4046,6 +4052,10 @@ var CurveComposer = defineComponent21({
     triggerSteps: { type: Number, default: DEFAULT_TRIGGER_STEPS },
     /** Fired in trigger mode when the value crosses a trigger level. */
     onTrigger: { type: Function, default: void 0 },
+    /** Index of the currently selected segment (highlighted); null/undefined for none. */
+    selectedIndex: { type: Number, default: null },
+    /** Fired when a segment's header strip is clicked — lets the consumer target it (flip/remove/…). */
+    onSelect: { type: Function, default: void 0 },
     /** Curve stroke color. Defaults to the theme text color. */
     curveColor: { type: String, default: void 0 },
     /** Playhead / marker color. Defaults to the theme text color. */
@@ -4128,6 +4138,11 @@ var CurveComposer = defineComponent21({
         svgRef.value?.setPointerCapture(e.pointerId);
       } catch {
       }
+      const header = headerHit(xN, py, props.segments, hitLayout());
+      if (typeof header === "number") {
+        drag.value = { kind: "select", index: header, startX: e.clientX, startY: e.clientY, moved: false };
+        return;
+      }
       const target = pointerTarget(xN, py, props.segments, hitLayout(), EDGE_HIT2 / rectW);
       if (target.kind === "driver") {
         drag.value = {
@@ -4164,6 +4179,10 @@ var CurveComposer = defineComponent21({
       const d = drag.value;
       if (!d) {
         const { xN, py, rectW: rectW2 } = localCoords(e.clientX, e.clientY);
+        if (typeof headerHit(xN, py, props.segments, hitLayout()) === "number") {
+          hover.value = { kind: "header", index: 0 };
+          return;
+        }
         const t = pointerTarget(xN, py, props.segments, hitLayout(), EDGE_HIT2 / rectW2);
         hover.value = t.kind === "driver" ? { kind: "driver", index: 0 } : { kind: t.kind, index: t.index };
         return;
@@ -4184,11 +4203,13 @@ var CurveComposer = defineComponent21({
         const next = applySegmentBodyDrag(composition.value, d.index, d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
         props.onSegmentsChange?.(next.segments);
         if (!d.moved) drag.value = { ...d, moved: true };
-      } else {
+      } else if (d.kind === "driver") {
         const dxFrac = (e.clientX - d.startX) / rectW;
         const dyFrac = (e.clientY - d.startY) / rectH;
         const next = applyDriverBodyDrag(composition.value, d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
         if (next.driver) props.onDriverChange?.(next.driver);
+        if (!d.moved) drag.value = { ...d, moved: true };
+      } else {
         if (!d.moved) drag.value = { ...d, moved: true };
       }
     };
@@ -4200,7 +4221,9 @@ var CurveComposer = defineComponent21({
       } catch {
       }
       if (!d || d.moved) return;
-      if (d.kind === "driver") {
+      if (d.kind === "select") {
+        props.onSelect?.(d.index);
+      } else if (d.kind === "driver") {
         const next = cycleDriverType(composition.value);
         if (next.driver) props.onDriverChange?.(next.driver);
       } else if (d.kind === "segment") {
@@ -4244,10 +4267,23 @@ var CurveComposer = defineComponent21({
       const dr = driverRect.value;
       const interior = boundaries(props.segments);
       const activeKind = drag.value?.kind ?? hover.value?.kind;
-      const cursor = activeKind === "boundary" ? "ew-resize" : activeKind === "segment" || activeKind === "driver" ? "move" : "default";
+      const cursor = activeKind === "boundary" ? "ew-resize" : activeKind === "segment" || activeKind === "driver" ? "move" : activeKind === "select" || activeKind === "header" ? "pointer" : "default";
       const children = [];
       children.push(renderLaneBg(main, "main-bg"));
       children.push(renderLaneGrid(main));
+      if (props.selectedIndex != null && props.selectedIndex >= 0 && props.selectedIndex < props.segments.length) {
+        const span = segmentSpan(props.segments, props.selectedIndex);
+        children.push(
+          h21("rect", {
+            class: "dialkit-cc-seg-selected",
+            x: span[0] * W.value,
+            y: main.y,
+            width: (span[1] - span[0]) * W.value,
+            height: main.h,
+            rx: 8
+          })
+        );
+      }
       if (hover.value?.kind === "segment" && !drag.value) {
         const span = segmentSpan(props.segments, hover.value.index);
         children.push(

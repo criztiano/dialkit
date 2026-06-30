@@ -27,6 +27,7 @@ import {
   triggersCrossed,
   toLocalCoords,
   pointerTarget,
+  headerHit,
   applySegmentBodyDrag,
   applyDriverBodyDrag,
   composerLayout,
@@ -52,9 +53,10 @@ export type {
 type Drag =
   | { kind: 'boundary'; index: number; startX: number; startY: number; base: CurveComposition; moved: boolean }
   | { kind: 'segment'; index: number; startX: number; startY: number; baseCurvature: number; baseSteepness: number; moved: boolean }
-  | { kind: 'driver'; startX: number; startY: number; baseCurvature: number; baseSteepness: number; moved: boolean };
+  | { kind: 'driver'; startX: number; startY: number; baseCurvature: number; baseSteepness: number; moved: boolean }
+  | { kind: 'select'; index: number; startX: number; startY: number; moved: boolean };
 
-type Hover = { kind: 'boundary' | 'segment' | 'driver'; index: number };
+type Hover = { kind: 'boundary' | 'segment' | 'driver' | 'header'; index: number };
 
 export const CurveComposer = defineComponent({
   name: 'DialKitCurveComposer',
@@ -79,6 +81,10 @@ export const CurveComposer = defineComponent({
     triggerSteps: { type: Number, default: DEFAULT_TRIGGER_STEPS },
     /** Fired in trigger mode when the value crosses a trigger level. */
     onTrigger: { type: Function as PropType<(index: number) => void>, default: undefined },
+    /** Index of the currently selected segment (highlighted); null/undefined for none. */
+    selectedIndex: { type: Number as PropType<number | null>, default: null },
+    /** Fired when a segment's header strip is clicked — lets the consumer target it (flip/remove/…). */
+    onSelect: { type: Function as PropType<(index: number) => void>, default: undefined },
     /** Curve stroke color. Defaults to the theme text color. */
     curveColor: { type: String, default: undefined },
     /** Playhead / marker color. Defaults to the theme text color. */
@@ -185,6 +191,13 @@ export const CurveComposer = defineComponent({
         // No active pointer (e.g. a synthetic event) — capture is a nicety, not required.
       }
 
+      // A press in a segment's header strip selects it (rather than cycling/dragging).
+      const header = headerHit(xN, py, props.segments, hitLayout());
+      if (typeof header === 'number') {
+        drag.value = { kind: 'select', index: header, startX: e.clientX, startY: e.clientY, moved: false };
+        return;
+      }
+
       const target = pointerTarget(xN, py, props.segments, hitLayout(), EDGE_HIT / rectW);
       if (target.kind === 'driver') {
         drag.value = {
@@ -223,6 +236,10 @@ export const CurveComposer = defineComponent({
       if (!d) {
         // Hover affordance only.
         const { xN, py, rectW } = localCoords(e.clientX, e.clientY);
+        if (typeof headerHit(xN, py, props.segments, hitLayout()) === 'number') {
+          hover.value = { kind: 'header', index: 0 };
+          return;
+        }
         const t = pointerTarget(xN, py, props.segments, hitLayout(), EDGE_HIT / rectW);
         hover.value = t.kind === 'driver' ? { kind: 'driver', index: 0 } : { kind: t.kind, index: t.index };
         return;
@@ -246,11 +263,14 @@ export const CurveComposer = defineComponent({
         const next = applySegmentBodyDrag(composition.value, d.index, d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
         props.onSegmentsChange?.(next.segments);
         if (!d.moved) drag.value = { ...d, moved: true };
-      } else {
+      } else if (d.kind === 'driver') {
         const dxFrac = (e.clientX - d.startX) / rectW;
         const dyFrac = (e.clientY - d.startY) / rectH;
         const next = applyDriverBodyDrag(composition.value, d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
         if (next.driver) props.onDriverChange?.(next.driver);
+        if (!d.moved) drag.value = { ...d, moved: true };
+      } else {
+        // 'select': moving past the threshold cancels the click so it won't select on release.
         if (!d.moved) drag.value = { ...d, moved: true };
       }
     };
@@ -264,8 +284,10 @@ export const CurveComposer = defineComponent({
         // Capture may not be held — ignore.
       }
       if (!d || d.moved) return;
-      // An un-moved press is a click → cycle the curve type.
-      if (d.kind === 'driver') {
+      // An un-moved press is a click → select (header) or cycle the curve type (body).
+      if (d.kind === 'select') {
+        props.onSelect?.(d.index);
+      } else if (d.kind === 'driver') {
         const next = cycleDriverType(composition.value);
         if (next.driver) props.onDriverChange?.(next.driver);
       } else if (d.kind === 'segment') {
@@ -325,13 +347,34 @@ export const CurveComposer = defineComponent({
           ? 'ew-resize'
           : activeKind === 'segment' || activeKind === 'driver'
             ? 'move'
-            : 'default';
+            : activeKind === 'select' || activeKind === 'header'
+              ? 'pointer'
+              : 'default';
 
       const children: (VNode | VNode[] | null)[] = [];
 
       // main lane
       children.push(renderLaneBg(main, 'main-bg'));
       children.push(renderLaneGrid(main));
+
+      // selected segment highlight
+      if (
+        props.selectedIndex != null &&
+        props.selectedIndex >= 0 &&
+        props.selectedIndex < props.segments.length
+      ) {
+        const span = segmentSpan(props.segments, props.selectedIndex);
+        children.push(
+          h('rect', {
+            class: 'dialkit-cc-seg-selected',
+            x: span[0] * W.value,
+            y: main.y,
+            width: (span[1] - span[0]) * W.value,
+            height: main.h,
+            rx: 8,
+          })
+        );
+      }
 
       // hovered segment highlight
       if (hover.value?.kind === 'segment' && !drag.value) {

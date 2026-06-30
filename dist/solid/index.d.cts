@@ -470,6 +470,10 @@ interface CurveComposerProps {
     triggerSteps?: number;
     /** Fired in trigger mode when the value crosses a trigger level; `index` is into `triggerLevels`. */
     onTrigger?: (index: number) => void;
+    /** Index of the currently selected segment (highlighted); null/undefined for none. */
+    selectedIndex?: number | null;
+    /** Fired when a segment's header strip is clicked — lets the consumer target it (flip/remove/…). */
+    onSelect?: (index: number) => void;
     /** Curve stroke color. Defaults to the theme text color. */
     curveColor?: string;
     /** Playhead / marker color. Defaults to the theme text color. */

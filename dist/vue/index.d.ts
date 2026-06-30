@@ -1023,6 +1023,16 @@ declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
         type: PropType<(index: number) => void>;
         default: undefined;
     };
+    /** Index of the currently selected segment (highlighted); null/undefined for none. */
+    selectedIndex: {
+        type: PropType<number | null>;
+        default: null;
+    };
+    /** Fired when a segment's header strip is clicked — lets the consumer target it (flip/remove/…). */
+    onSelect: {
+        type: PropType<(index: number) => void>;
+        default: undefined;
+    };
     /** Curve stroke color. Defaults to the theme text color. */
     curveColor: {
         type: StringConstructor;
@@ -1104,6 +1114,16 @@ declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
         type: PropType<(index: number) => void>;
         default: undefined;
     };
+    /** Index of the currently selected segment (highlighted); null/undefined for none. */
+    selectedIndex: {
+        type: PropType<number | null>;
+        default: null;
+    };
+    /** Fired when a segment's header strip is clicked — lets the consumer target it (flip/remove/…). */
+    onSelect: {
+        type: PropType<(index: number) => void>;
+        default: undefined;
+    };
     /** Curve stroke color. Defaults to the theme text color. */
     curveColor: {
         type: StringConstructor;
@@ -1134,6 +1154,7 @@ declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
     };
 }>> & Readonly<{}>, {
     mode: "continuous" | "trigger";
+    onSelect: (index: number) => void;
     height: number;
     width: number;
     direction: DriverDirection;
@@ -1147,6 +1168,7 @@ declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
     phase: number;
     triggerSteps: number;
     onTrigger: (index: number) => void;
+    selectedIndex: number | null;
     curveColor: string;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 

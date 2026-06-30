@@ -13,6 +13,7 @@
     triggersCrossed,
     toLocalCoords,
     pointerTarget,
+    headerHit,
     applySegmentBodyDrag,
     applyDriverBodyDrag,
     composerLayout,
@@ -43,6 +44,8 @@
     mode = 'continuous',
     triggerSteps = DEFAULT_TRIGGER_STEPS,
     onTrigger = undefined,
+    selectedIndex = null,
+    onSelect = undefined,
     curveColor = undefined,
     playheadColor = undefined,
     grid = false,
@@ -60,6 +63,8 @@
     mode?: 'continuous' | 'trigger';
     triggerSteps?: number;
     onTrigger?: (index: number) => void;
+    selectedIndex?: number | null;
+    onSelect?: (index: number) => void;
     curveColor?: string;
     playheadColor?: string;
     grid?: boolean;
@@ -73,7 +78,8 @@
   type Drag =
     | { kind: 'boundary'; index: number; startX: number; startY: number; base: CurveComposition; moved: boolean }
     | { kind: 'segment'; index: number; startX: number; startY: number; baseCurvature: number; baseSteepness: number; moved: boolean }
-    | { kind: 'driver'; startX: number; startY: number; baseCurvature: number; baseSteepness: number; moved: boolean };
+    | { kind: 'driver'; startX: number; startY: number; baseCurvature: number; baseSteepness: number; moved: boolean }
+    | { kind: 'select'; index: number; startX: number; startY: number; moved: boolean };
 
   // --- derived geometry (shared layout from the core) ---
   const layout = $derived(composerLayout(width, height, driver != null));
@@ -94,7 +100,7 @@
   let driverPlayheadEl = $state<SVGLineElement | undefined>(undefined);
 
   let drag = $state<Drag | null>(null);
-  let hover = $state<{ kind: 'boundary' | 'segment' | 'driver'; index: number } | null>(null);
+  let hover = $state<{ kind: 'boundary' | 'segment' | 'driver' | 'header'; index: number } | null>(null);
 
   // --- playhead loop (direct DOM writes, like the waveform's polled playhead) ---
   onMount(() => {
@@ -163,6 +169,13 @@
       // No active pointer (e.g. a synthetic event) — capture is a nicety, not required.
     }
 
+    // A press in a segment's header strip selects it (rather than cycling/dragging).
+    const header = headerHit(xN, py, segments, hitLayout());
+    if (typeof header === 'number') {
+      drag = { kind: 'select', index: header, startX: e.clientX, startY: e.clientY, moved: false };
+      return;
+    }
+
     const target = pointerTarget(xN, py, segments, hitLayout(), EDGE_HIT / rectW);
     if (target.kind === 'driver') {
       drag = {
@@ -194,6 +207,10 @@
     if (!d) {
       // Hover affordance only.
       const { xN, py, rectW } = localCoords(e.clientX, e.clientY);
+      if (typeof headerHit(xN, py, segments, hitLayout()) === 'number') {
+        hover = { kind: 'header', index: 0 };
+        return;
+      }
       const t = pointerTarget(xN, py, segments, hitLayout(), EDGE_HIT / rectW);
       hover = t.kind === 'driver' ? { kind: 'driver', index: 0 } : { kind: t.kind, index: t.index };
       return;
@@ -218,11 +235,14 @@
       const next = applySegmentBodyDrag(composition, d.index, d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
       onSegmentsChange?.(next.segments);
       if (!d.moved) drag = { ...d, moved: true };
-    } else {
+    } else if (d.kind === 'driver') {
       const dxFrac = (e.clientX - d.startX) / rectW;
       const dyFrac = (e.clientY - d.startY) / rectH;
       const next = applyDriverBodyDrag(composition, d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
       if (next.driver) onDriverChange?.(next.driver);
+      if (!d.moved) drag = { ...d, moved: true };
+    } else {
+      // 'select': moving past the threshold cancels the click so it won't select on release.
       if (!d.moved) drag = { ...d, moved: true };
     }
   }
@@ -236,8 +256,10 @@
       // Capture may not be held — ignore.
     }
     if (!d || d.moved) return;
-    // An un-moved press is a click → cycle the curve type.
-    if (d.kind === 'driver') {
+    // An un-moved press is a click → select (header) or cycle the curve type (body).
+    if (d.kind === 'select') {
+      onSelect?.(d.index);
+    } else if (d.kind === 'driver') {
       const next = cycleDriverType(composition);
       if (next.driver) onDriverChange?.(next.driver);
     } else if (d.kind === 'segment') {
@@ -270,7 +292,9 @@
       ? 'ew-resize'
       : activeKind === 'segment' || activeKind === 'driver'
         ? 'move'
-        : 'default';
+        : activeKind === 'select' || activeKind === 'header'
+          ? 'pointer'
+          : 'default';
   });
 
   // --- path builders (geometry + path strings come from the shared core) ---
@@ -307,6 +331,19 @@
     {#each laneGrid(mainRect) as gx}
       <line class="dialkit-cc-grid" x1={gx} y1={mainRect.y} x2={gx} y2={mainRect.y + mainRect.h} />
     {/each}
+
+    <!-- selected segment highlight -->
+    {#if selectedIndex != null && selectedIndex >= 0 && selectedIndex < segments.length}
+      {@const span = segmentSpan(segments, selectedIndex)}
+      <rect
+        class="dialkit-cc-seg-selected"
+        x={span[0] * W}
+        y={mainRect.y}
+        width={(span[1] - span[0]) * W}
+        height={mainRect.h}
+        rx={8}
+      />
+    {/if}
 
     <!-- hovered segment highlight -->
     {#if hover?.kind === 'segment' && !drag}

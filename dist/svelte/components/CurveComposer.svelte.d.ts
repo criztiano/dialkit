@@ -10,6 +10,8 @@ type $$ComponentProps = {
     mode?: 'continuous' | 'trigger';
     triggerSteps?: number;
     onTrigger?: (index: number) => void;
+    selectedIndex?: number | null;
+    onSelect?: (index: number) => void;
     curveColor?: string;
     playheadColor?: string;
     grid?: boolean;
