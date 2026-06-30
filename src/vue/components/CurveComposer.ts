@@ -35,6 +35,8 @@ import {
   curvePath,
   diagonalLine,
   playheadGeometry,
+  timelineSlots,
+  connectorPath,
   DEFAULT_TRIGGER_STEPS,
   DRAG_THRESHOLD,
   EDGE_HIT,
@@ -89,6 +91,8 @@ export const CurveComposer = defineComponent({
     curveColor: { type: String, default: undefined },
     /** Playhead / marker color. Defaults to the theme text color. */
     playheadColor: { type: String, default: undefined },
+    /** 0..1 — space between segments; the value glides smoothly across each gap (faint connector). */
+    gap: { type: Number, default: 0 },
     /** Faint vertical reference grid behind each lane. */
     grid: { type: Boolean, default: false },
     gridSubdivisions: { type: Number, default: 8 },
@@ -117,6 +121,7 @@ export const CurveComposer = defineComponent({
       segments: props.segments,
       driver: props.driver,
       direction: props.direction,
+      gap: props.gap,
     }));
 
     // Samplers for the rAF-driven playhead, rebuilt when the composition changes.
@@ -176,7 +181,7 @@ export const CurveComposer = defineComponent({
     onBeforeUnmount(() => cancelAnimationFrame(raf));
 
     // --- pointer interaction ---
-    const hitLayout = () => ({ totalH: totalH.value, driverY: driverRect.value ? driverRect.value.y : null });
+    const hitLayout = () => ({ totalH: totalH.value, driverY: driverRect.value ? driverRect.value.y : null, gap: props.gap });
 
     const localCoords = (clientX: number, clientY: number) => {
       const rect = svgRef.value!.getBoundingClientRect();
@@ -311,7 +316,7 @@ export const CurveComposer = defineComponent({
     const onDoubleClick = (e: MouseEvent) => {
       const { xN, py } = localCoords(e.clientX, e.clientY);
       if (driverRect.value && py >= driverRect.value.y) return; // driver is a single curve
-      props.onSegmentsChange?.(splitSegment(composition.value, segmentIndexAt(xN, props.segments)).segments);
+      props.onSegmentsChange?.(splitSegment(composition.value, segmentIndexAt(xN, props.segments, props.gap)).segments);
     };
 
     // --- path builders (geometry + path strings come from the shared core) ---
@@ -339,7 +344,7 @@ export const CurveComposer = defineComponent({
     return () => {
       const main = mainRect.value;
       const dr = driverRect.value;
-      const interior = boundaries(props.segments);
+      const interior = boundaries(props.segments, props.gap);
 
       const activeKind = drag.value?.kind ?? hover.value?.kind;
       const cursor =
@@ -363,7 +368,7 @@ export const CurveComposer = defineComponent({
         props.selectedIndex >= 0 &&
         props.selectedIndex < props.segments.length
       ) {
-        const span = segmentSpan(props.segments, props.selectedIndex);
+        const span = segmentSpan(props.segments, props.selectedIndex, props.gap);
         children.push(
           h('rect', {
             class: 'dialkit-cc-seg-selected',
@@ -378,7 +383,7 @@ export const CurveComposer = defineComponent({
 
       // hovered segment highlight
       if (hover.value?.kind === 'segment' && !drag.value) {
-        const span = segmentSpan(props.segments, hover.value.index);
+        const span = segmentSpan(props.segments, hover.value.index, props.gap);
         children.push(
           h('rect', {
             class: 'dialkit-cc-seg-hover',
@@ -394,7 +399,7 @@ export const CurveComposer = defineComponent({
       // segments
       children.push(
         props.segments.map((seg, i) => {
-          const span = segmentSpan(props.segments, i);
+          const span = segmentSpan(props.segments, i, props.gap);
           return h('g', { key: `seg-${i}` }, [
             diagonal(main, span, `diag-${i}`),
             h('path', { class: 'dialkit-cc-curve', d: curvePath(seg, main, span, W.value) }),
@@ -406,6 +411,21 @@ export const CurveComposer = defineComponent({
           ]);
         })
       );
+
+      // gap connectors: faint lines that glide each segment's end down to the next's start
+      if (props.gap > 0) {
+        children.push(
+          timelineSlots(props.segments, props.gap)
+            .filter((slot) => slot.kind === 'gap' && slot.b > slot.a)
+            .map((slot) =>
+              h('path', {
+                key: `conn-${slot.index}`,
+                class: 'dialkit-cc-connector',
+                d: connectorPath(slot, samplers.value, props.segments.length, main, W.value),
+              })
+            )
+        );
+      }
 
       // interior boundaries
       children.push(

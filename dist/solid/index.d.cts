@@ -485,6 +485,8 @@ interface CurveComposerProps {
     curveColor?: string;
     /** Playhead / marker color. Defaults to the theme text color. */
     playheadColor?: string;
+    /** 0..1 — space between segments; the value glides smoothly across each gap (faint connector). */
+    gap?: number;
     /** Faint vertical reference grid behind each lane. */
     grid?: boolean;
     gridSubdivisions?: number;

@@ -12,6 +12,7 @@ type $$ComponentProps = {
     onTrigger?: (index: number) => void;
     selectedIndex?: number | null;
     onSelect?: (index: number) => void;
+    gap?: number;
     curveColor?: string;
     playheadColor?: string;
     grid?: boolean;

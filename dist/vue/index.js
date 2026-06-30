@@ -4039,6 +4039,18 @@ function curvePath(curve, rect, span, W, samples = 40) {
   const e = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot, curve.anticipate);
   return `M ${x(0)} ${y(0)} C ${x(e[0])} ${y(e[1])}, ${x(e[2])} ${y(e[3])}, ${x(1)} ${y(1)}`;
 }
+function connectorPath(slot, samplers, segCount, rect, W, samples = 24) {
+  const endVal = samplers.segments[slot.index] ? samplers.segments[slot.index](1) : 0;
+  const next = (slot.index + 1) % segCount;
+  const startVal = samplers.segments[next] ? samplers.segments[next](0) : 0;
+  let d = `M ${slot.a * W} ${mapY(rect, endVal)}`;
+  for (let i = 1; i <= samples; i++) {
+    const t = i / samples;
+    const v = lerp(endVal, startVal, smootherstep(t));
+    d += ` L ${(slot.a + (slot.b - slot.a) * t) * W} ${mapY(rect, v)}`;
+  }
+  return d;
+}
 function diagonalLine(rect, span, W) {
   return { x1: span[0] * W, y1: mapY(rect, 0), x2: span[1] * W, y2: mapY(rect, 1) };
 }
@@ -4108,6 +4120,8 @@ var CurveComposer = defineComponent21({
     curveColor: { type: String, default: void 0 },
     /** Playhead / marker color. Defaults to the theme text color. */
     playheadColor: { type: String, default: void 0 },
+    /** 0..1 — space between segments; the value glides smoothly across each gap (faint connector). */
+    gap: { type: Number, default: 0 },
     /** Faint vertical reference grid behind each lane. */
     grid: { type: Boolean, default: false },
     gridSubdivisions: { type: Number, default: 8 },
@@ -4130,7 +4144,8 @@ var CurveComposer = defineComponent21({
     const composition = computed5(() => ({
       segments: props.segments,
       driver: props.driver,
-      direction: props.direction
+      direction: props.direction,
+      gap: props.gap
     }));
     const samplers = computed5(() => buildSamplers(composition.value));
     let raf = 0;
@@ -4175,7 +4190,7 @@ var CurveComposer = defineComponent21({
       raf = requestAnimationFrame(tick);
     });
     onBeforeUnmount2(() => cancelAnimationFrame(raf));
-    const hitLayout = () => ({ totalH: totalH.value, driverY: driverRect.value ? driverRect.value.y : null });
+    const hitLayout = () => ({ totalH: totalH.value, driverY: driverRect.value ? driverRect.value.y : null, gap: props.gap });
     const localCoords = (clientX, clientY) => {
       const rect = svgRef.value.getBoundingClientRect();
       return { ...toLocalCoords(clientX, clientY, rect, totalH.value), rectW: rect.width };
@@ -4291,7 +4306,7 @@ var CurveComposer = defineComponent21({
     const onDoubleClick = (e) => {
       const { xN, py } = localCoords(e.clientX, e.clientY);
       if (driverRect.value && py >= driverRect.value.y) return;
-      props.onSegmentsChange?.(splitSegment(composition.value, segmentIndexAt(xN, props.segments)).segments);
+      props.onSegmentsChange?.(splitSegment(composition.value, segmentIndexAt(xN, props.segments, props.gap)).segments);
     };
     const renderLaneGrid = (rect) => {
       if (!props.grid) return [];
@@ -4313,14 +4328,14 @@ var CurveComposer = defineComponent21({
     return () => {
       const main = mainRect.value;
       const dr = driverRect.value;
-      const interior = boundaries(props.segments);
+      const interior = boundaries(props.segments, props.gap);
       const activeKind = drag.value?.kind ?? hover.value?.kind;
       const cursor = activeKind === "boundary" ? "ew-resize" : activeKind === "segment" || activeKind === "driver" ? "move" : activeKind === "select" || activeKind === "header" ? "pointer" : "default";
       const children = [];
       children.push(renderLaneBg(main, "main-bg"));
       children.push(renderLaneGrid(main));
       if (props.selectedIndex != null && props.selectedIndex >= 0 && props.selectedIndex < props.segments.length) {
-        const span = segmentSpan(props.segments, props.selectedIndex);
+        const span = segmentSpan(props.segments, props.selectedIndex, props.gap);
         children.push(
           h21("rect", {
             class: "dialkit-cc-seg-selected",
@@ -4333,7 +4348,7 @@ var CurveComposer = defineComponent21({
         );
       }
       if (hover.value?.kind === "segment" && !drag.value) {
-        const span = segmentSpan(props.segments, hover.value.index);
+        const span = segmentSpan(props.segments, hover.value.index, props.gap);
         children.push(
           h21("rect", {
             class: "dialkit-cc-seg-hover",
@@ -4347,7 +4362,7 @@ var CurveComposer = defineComponent21({
       }
       children.push(
         props.segments.map((seg, i) => {
-          const span = segmentSpan(props.segments, i);
+          const span = segmentSpan(props.segments, i, props.gap);
           return h21("g", { key: `seg-${i}` }, [
             diagonal(main, span, `diag-${i}`),
             h21("path", { class: "dialkit-cc-curve", d: curvePath(seg, main, span, W.value) }),
@@ -4359,6 +4374,17 @@ var CurveComposer = defineComponent21({
           ]);
         })
       );
+      if (props.gap > 0) {
+        children.push(
+          timelineSlots(props.segments, props.gap).filter((slot) => slot.kind === "gap" && slot.b > slot.a).map(
+            (slot) => h21("path", {
+              key: `conn-${slot.index}`,
+              class: "dialkit-cc-connector",
+              d: connectorPath(slot, samplers.value, props.segments.length, main, W.value)
+            })
+          )
+        );
+      }
       children.push(
         interior.map(
           (bx, i) => h21("line", {

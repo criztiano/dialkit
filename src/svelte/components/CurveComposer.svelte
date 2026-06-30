@@ -21,6 +21,8 @@
     curvePath,
     diagonalLine,
     playheadGeometry,
+    timelineSlots,
+    connectorPath,
     DEFAULT_TRIGGER_STEPS,
     DRAG_THRESHOLD,
     EDGE_HIT,
@@ -46,6 +48,7 @@
     onTrigger = undefined,
     selectedIndex = null,
     onSelect = undefined,
+    gap = 0,
     curveColor = undefined,
     playheadColor = undefined,
     grid = false,
@@ -65,6 +68,7 @@
     onTrigger?: (index: number) => void;
     selectedIndex?: number | null;
     onSelect?: (index: number) => void;
+    gap?: number;
     curveColor?: string;
     playheadColor?: string;
     grid?: boolean;
@@ -88,9 +92,9 @@
   const mainRect = $derived(layout.mainRect);
   const driverRect = $derived(layout.driverRect);
 
-  const composition = $derived<CurveComposition>({ segments, driver, direction });
+  const composition = $derived<CurveComposition>({ segments, driver, direction, gap });
   const samplers = $derived(buildSamplers(composition));
-  const interior = $derived(boundaries(segments));
+  const interior = $derived(boundaries(segments, gap));
 
   // --- element refs for direct per-frame DOM writes ---
   let svgEl: SVGSVGElement;
@@ -154,7 +158,7 @@
   });
 
   // --- pointer interaction ---
-  const hitLayout = () => ({ totalH, driverY: driverRect ? driverRect.y : null });
+  const hitLayout = () => ({ totalH, driverY: driverRect ? driverRect.y : null, gap });
 
   const localCoords = (clientX: number, clientY: number) => {
     const rect = svgEl.getBoundingClientRect();
@@ -279,7 +283,7 @@
   function onDoubleClick(e: MouseEvent) {
     const { xN, py } = localCoords(e.clientX, e.clientY);
     if (driverRect && py >= driverRect.y) return; // driver is a single curve
-    onSegmentsChange?.(splitSegment(composition, segmentIndexAt(xN, segments)).segments);
+    onSegmentsChange?.(splitSegment(composition, segmentIndexAt(xN, segments, gap)).segments);
   }
 
   function onPointerLeave() {
@@ -306,7 +310,7 @@
     return out;
   };
 
-  const segmentSpans = $derived(segments.map((_: CurveSegment, i: number) => segmentSpan(segments, i)));
+  const segmentSpans = $derived(segments.map((_: CurveSegment, i: number) => segmentSpan(segments, i, gap)));
 </script>
 
 <div class="dialkit-cc-wrap" style={`width:${W}px`}>
@@ -334,7 +338,7 @@
 
     <!-- selected segment highlight -->
     {#if selectedIndex != null && selectedIndex >= 0 && selectedIndex < segments.length}
-      {@const span = segmentSpan(segments, selectedIndex)}
+      {@const span = segmentSpan(segments, selectedIndex, gap)}
       <rect
         class="dialkit-cc-seg-selected"
         x={span[0] * W}
@@ -347,7 +351,7 @@
 
     <!-- hovered segment highlight -->
     {#if hover?.kind === 'segment' && !drag}
-      {@const span = segmentSpan(segments, hover.index)}
+      {@const span = segmentSpan(segments, hover.index, gap)}
       <rect
         class="dialkit-cc-seg-hover"
         x={span[0] * W}
@@ -367,6 +371,13 @@
         <text class="dialkit-cc-label" x={(span[0] + span[1]) * 0.5 * W} y={mainRect.y + 13}>{seg.type}</text>
       </g>
     {/each}
+
+    <!-- gap connectors: faint lines that glide each segment's end down to the next's start -->
+    {#if gap > 0}
+      {#each timelineSlots(segments, gap).filter((slot) => slot.kind === 'gap' && slot.b > slot.a) as slot}
+        <path class="dialkit-cc-connector" d={connectorPath(slot, samplers, segments.length, mainRect, W)} />
+      {/each}
+    {/if}
 
     <!-- interior boundaries -->
     {#each interior as bx, i}

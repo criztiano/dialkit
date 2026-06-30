@@ -25,6 +25,8 @@ import {
   curvePath,
   diagonalLine,
   playheadGeometry,
+  timelineSlots,
+  connectorPath,
   DEFAULT_TRIGGER_STEPS,
   DRAG_THRESHOLD,
   EDGE_HIT,
@@ -75,6 +77,8 @@ interface CurveComposerProps {
   curveColor?: string;
   /** Playhead / marker color. Defaults to the theme text color. */
   playheadColor?: string;
+  /** 0..1 — space between segments; the value glides smoothly across each gap (faint connector). */
+  gap?: number;
   /** Faint vertical reference grid behind each lane. */
   grid?: boolean;
   gridSubdivisions?: number;
@@ -100,6 +104,7 @@ export function CurveComposer(props: CurveComposerProps) {
       mode: 'continuous' as 'continuous' | 'trigger',
       triggerSteps: DEFAULT_TRIGGER_STEPS,
       selectedIndex: null as number | null,
+      gap: 0,
       grid: false,
       gridSubdivisions: 8,
       width: 256,
@@ -120,6 +125,7 @@ export function CurveComposer(props: CurveComposerProps) {
     segments: p.segments,
     driver: p.driver,
     direction: p.direction,
+    gap: p.gap,
   }));
   // Samplers for the rAF-driven playhead, rebuilt reactively when the composition changes.
   const samplers = createMemo(() => buildSamplers(composition()));
@@ -185,7 +191,7 @@ export function CurveComposer(props: CurveComposerProps) {
 
   const hitLayout = () => {
     const dr = driverRect();
-    return { totalH: totalH(), driverY: dr ? dr.y : null };
+    return { totalH: totalH(), driverY: dr ? dr.y : null, gap: p.gap };
   };
 
   const localCoords = (clientX: number, clientY: number) => {
@@ -312,7 +318,7 @@ export function CurveComposer(props: CurveComposerProps) {
     const { xN, py } = localCoords(e.clientX, e.clientY);
     const dr = driverRect();
     if (dr && py >= dr.y) return; // driver is a single curve
-    p.onSegmentsChange?.(splitSegment(composition(), segmentIndexAt(xN, p.segments)).segments);
+    p.onSegmentsChange?.(splitSegment(composition(), segmentIndexAt(xN, p.segments, p.gap)).segments);
   };
 
   const cursor = () => {
@@ -329,7 +335,7 @@ export function CurveComposer(props: CurveComposerProps) {
 
   // --- path builders (geometry + path strings come from the shared core) ---
 
-  const interior = () => boundaries(p.segments);
+  const interior = () => boundaries(p.segments, p.gap);
 
   const laneGridLines = (rect: Rect) => {
     if (!p.grid) return [];
@@ -372,7 +378,7 @@ export function CurveComposer(props: CurveComposerProps) {
           }
         >
           {(() => {
-            const span = segmentSpan(p.segments, p.selectedIndex!);
+            const span = segmentSpan(p.segments, p.selectedIndex!, p.gap);
             const mr = mainRect();
             return (
               <rect
@@ -390,7 +396,7 @@ export function CurveComposer(props: CurveComposerProps) {
         {/* hovered segment highlight */}
         <Show when={hover()?.kind === 'segment' && !drag}>
           {(() => {
-            const span = segmentSpan(p.segments, hover()!.index);
+            const span = segmentSpan(p.segments, hover()!.index, p.gap);
             const mr = mainRect();
             return (
               <rect
@@ -407,7 +413,7 @@ export function CurveComposer(props: CurveComposerProps) {
 
         <For each={p.segments}>
           {(seg, i) => {
-            const span = () => segmentSpan(p.segments, i());
+            const span = () => segmentSpan(p.segments, i(), p.gap);
             const mr = () => mainRect();
             const diag = () => diagonalLine(mr(), span(), W());
             return (
@@ -427,6 +433,18 @@ export function CurveComposer(props: CurveComposerProps) {
             );
           }}
         </For>
+
+        {/* gap connectors: faint lines that glide each segment's end down to the next's start */}
+        <Show when={p.gap > 0}>
+          <For each={timelineSlots(p.segments, p.gap).filter((slot) => slot.kind === 'gap' && slot.b > slot.a)}>
+            {(slot) => (
+              <path
+                class="dialkit-cc-connector"
+                d={connectorPath(slot, samplers(), p.segments.length, mainRect(), W())}
+              />
+            )}
+          </For>
+        </Show>
 
         {/* interior boundaries */}
         <For each={interior()}>

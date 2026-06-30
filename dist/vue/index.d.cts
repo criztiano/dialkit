@@ -1050,6 +1050,11 @@ declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
         type: StringConstructor;
         default: undefined;
     };
+    /** 0..1 — space between segments; the value glides smoothly across each gap (faint connector). */
+    gap: {
+        type: NumberConstructor;
+        default: number;
+    };
     /** Faint vertical reference grid behind each lane. */
     grid: {
         type: BooleanConstructor;
@@ -1141,6 +1146,11 @@ declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
         type: StringConstructor;
         default: undefined;
     };
+    /** 0..1 — space between segments; the value glides smoothly across each gap (faint connector). */
+    gap: {
+        type: NumberConstructor;
+        default: number;
+    };
     /** Faint vertical reference grid behind each lane. */
     grid: {
         type: BooleanConstructor;
@@ -1165,6 +1175,7 @@ declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
     height: number;
     width: number;
     direction: DriverDirection;
+    gap: number;
     grid: boolean;
     driver: CurveDriver | null;
     gridSubdivisions: number;
