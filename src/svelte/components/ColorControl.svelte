@@ -2,7 +2,7 @@
   import Portal from '../Portal.svelte';
   import { dropdownTransition } from './transitions';
   import ColorPickerPanel from './ColorPickerPanel.svelte';
-  import { parseHex, normalizeHex, bareHex, opacityPercent } from '../../color-core';
+  import { parseHex, normalizeHexEdit, bareHex, opacityPercent } from '../../color-core';
 
   let { label, value, onChange, alpha = false, palette = false } = $props<{
     label: string;
@@ -98,7 +98,9 @@
 
   const handleTextSubmit = () => {
     isEditing = false;
-    const normalized = normalizeHex(editValue, alpha);
+    // A bare 6-digit entry keeps the current opacity — the alpha digits are
+    // deliberately absent from the edit field (they have their own readout).
+    const normalized = normalizeHexEdit(editValue, alpha, rgba?.a ?? 1);
     if (normalized) {
       onChange(normalized);
     } else {
@@ -128,12 +130,14 @@
 <div class="dialkit-color-control">
   <span class="dialkit-color-label">{label}</span>
   <div class="dialkit-color-inputs">
-    <span class="dialkit-color-hex-wrap">
+    <!-- The whole token (hash included) is the click target for editing. -->
+    <span class="dialkit-color-hex-wrap" onclick={() => (isEditing = true)}>
       <span class="dialkit-color-hash" aria-hidden="true">#</span>
       {#if isEditing}
         <input
           type="text"
           class="dialkit-color-hex-input"
+          aria-label={`Hex color for ${label}`}
           value={editValue}
           oninput={(e) => (editValue = (e.currentTarget as HTMLInputElement).value)}
           onblur={handleTextSubmit}
@@ -141,7 +145,7 @@
           use:focusOnMount
         />
       {:else}
-        <span class="dialkit-color-hex" onclick={() => (isEditing = true)}>
+        <span class="dialkit-color-hex" aria-label={`Hex color for ${label}`}>
           {bareHex(value)}
         </span>
       {/if}

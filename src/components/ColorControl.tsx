@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { ColorPickerPanel } from './ColorPickerPanel';
-import { parseHex, normalizeHex, bareHex, opacityPercent } from '../color-core';
+import { parseHex, normalizeHexEdit, bareHex, opacityPercent } from '../color-core';
 
 interface ColorControlProps {
   label: string;
@@ -21,7 +21,22 @@ const PICKER_PALETTE_HEIGHT = 30;
 export function ColorControl({ label, value, onChange, alpha = false, palette = false }: ColorControlProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(() => bareHex(value));
+  const [isOpen, setIsOpen] = useState(false);
+  const swatchRef = useRef<HTMLButtonElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; above: boolean } | null>(null);
+
   const hexInputRef = useRef<HTMLInputElement>(null);
+  const rgba = parseHex(value);
+
+  // Sync editValue when value changes externally (edited without the '#' —
+  // it renders as a fixed symbol; a pasted '#…' still parses on commit)
+  useEffect(() => {
+    if (!isEditing) {
+      setEditValue(bareHex(value));
+    }
+  }, [value, isEditing]);
 
   // Focus + select-all on edit start so a paste replaces the value outright.
   useEffect(() => {
@@ -30,21 +45,6 @@ export function ColorControl({ label, value, onChange, alpha = false, palette = 
       hexInputRef.current?.select();
     }
   }, [isEditing]);
-  const [isOpen, setIsOpen] = useState(false);
-  const swatchRef = useRef<HTMLButtonElement>(null);
-  const pickerRef = useRef<HTMLDivElement>(null);
-  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
-  const [pos, setPos] = useState<{ top: number; left: number; above: boolean } | null>(null);
-
-  const rgba = parseHex(value);
-
-  // Sync editValue when value changes externally (edited without the '#' —
-  // it renders as a fixed symbol; normalizeHex tolerates pasted '#…' anyway)
-  useEffect(() => {
-    if (!isEditing) {
-      setEditValue(bareHex(value));
-    }
-  }, [value, isEditing]);
 
   const updatePos = useCallback(() => {
     const el = swatchRef.current;
@@ -97,7 +97,9 @@ export function ColorControl({ label, value, onChange, alpha = false, palette = 
 
   function handleTextSubmit() {
     setIsEditing(false);
-    const normalized = normalizeHex(editValue, alpha);
+    // A bare 6-digit entry keeps the current opacity — the alpha digits are
+    // deliberately absent from the edit field (they have their own readout).
+    const normalized = normalizeHexEdit(editValue, alpha, rgba?.a ?? 1);
     if (normalized) {
       onChange(normalized);
     } else {
@@ -120,23 +122,22 @@ export function ColorControl({ label, value, onChange, alpha = false, palette = 
     <div className="dialkit-color-control">
       <span className="dialkit-color-label">{label}</span>
       <div className="dialkit-color-inputs">
-        <span className="dialkit-color-hex-wrap">
+        {/* The whole token (hash included) is the click target for editing. */}
+        <span className="dialkit-color-hex-wrap" onClick={() => setIsEditing(true)}>
           <span className="dialkit-color-hash" aria-hidden="true">#</span>
           {isEditing ? (
             <input
               ref={hexInputRef}
               type="text"
               className="dialkit-color-hex-input"
+              aria-label={`Hex color for ${label}`}
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
               onBlur={handleTextSubmit}
               onKeyDown={handleKeyDown}
             />
           ) : (
-            <span
-              className="dialkit-color-hex"
-              onClick={() => setIsEditing(true)}
-            >
+            <span className="dialkit-color-hex" aria-label={`Hex color for ${label}`}>
               {bareHex(value)}
             </span>
           )}

@@ -3,7 +3,9 @@ import {
   parseHex,
   formatHex,
   normalizeHex,
+  normalizeHexEdit,
   displayHex,
+  bareHex,
   opacityPercent,
   rgbToHsv,
   hsvToRgb,
@@ -88,9 +90,40 @@ describe('normalizeHex', () => {
   });
 });
 
+describe('normalizeHexEdit', () => {
+  it('preserves the current alpha for 6-digit entry (click-and-blur regression)', () => {
+    expect(normalizeHexEdit('3B82F6', true, 0.5)).toBe('#3b82f680');
+    expect(normalizeHexEdit('#abc', true, 0.25)).toBe('#aabbcc40');
+  });
+
+  it('lets explicit 8/4-digit entry override the alpha', () => {
+    expect(normalizeHexEdit('#3b82f6cc', true, 0.5)).toBe('#3b82f6cc');
+    expect(normalizeHexEdit('f008', true, 0.5)).toBe('#ff000088');
+  });
+
+  it('ignores the fallback when alpha is off', () => {
+    expect(normalizeHexEdit('3b82f680', false, 0.5)).toBe('#3b82f6');
+    expect(normalizeHexEdit('3b82f6', false, 0.5)).toBe('#3b82f6');
+  });
+
+  it('returns null on invalid input', () => {
+    expect(normalizeHexEdit('nope', true, 0.5)).toBeNull();
+  });
+});
+
 describe('displayHex / opacityPercent', () => {
   it('uppercases and hides alpha digits for the trigger row', () => {
     expect(displayHex('#310b0299')).toBe('#310B02');
+  });
+
+  it('falls back to the raw uppercased value when unparseable', () => {
+    expect(displayHex('garbage')).toBe('GARBAGE');
+  });
+
+  it('bareHex strips only a leading hash', () => {
+    expect(bareHex('#310b0299')).toBe('310B02');
+    expect(bareHex('310b02')).toBe('310B02');
+    expect(bareHex('#zzz')).toBe('ZZZ');
   });
 
   it('rounds opacity to whole percent', () => {

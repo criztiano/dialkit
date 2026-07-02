@@ -1,7 +1,7 @@
 import { Teleport, defineComponent, h, nextTick, onMounted, ref, watch } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
 import { ColorPickerPanel } from './ColorPickerPanel';
-import { parseHex, normalizeHex, bareHex, opacityPercent } from '../../color-core';
+import { parseHex, normalizeHexEdit, bareHex, opacityPercent } from '../../color-core';
 
 const PICKER_WIDTH = 240;
 // Estimated open heights for the above/below flip (SV area + sliders + fields + padding).
@@ -123,7 +123,9 @@ export const ColorControl = defineComponent({
 
     const submitText = () => {
       isEditing.value = false;
-      const normalized = normalizeHex(editValue.value, props.alpha);
+      // A bare 6-digit entry keeps the current opacity — the alpha digits are
+      // deliberately absent from the edit field (they have their own readout).
+      const normalized = normalizeHexEdit(editValue.value, props.alpha, parseHex(props.value)?.a ?? 1);
       if (normalized) {
         emit('change', normalized);
       } else {
@@ -137,13 +139,20 @@ export const ColorControl = defineComponent({
       return h('div', { class: 'dialkit-color-control' }, [
         h('span', { class: 'dialkit-color-label' }, props.label),
         h('div', { class: 'dialkit-color-inputs' }, [
-          h('span', { class: 'dialkit-color-hex-wrap' }, [
+          // The whole token (hash included) is the click target for editing.
+          h('span', {
+            class: 'dialkit-color-hex-wrap',
+            onClick: () => {
+              isEditing.value = true;
+            },
+          }, [
             h('span', { class: 'dialkit-color-hash', 'aria-hidden': 'true' }, '#'),
             isEditing.value
               ? h('input', {
                 ref: hexInputRef,
                 type: 'text',
                 class: 'dialkit-color-hex-input',
+                'aria-label': `Hex color for ${props.label}`,
                 value: editValue.value,
                 onInput: (event: Event) => {
                   editValue.value = (event.target as HTMLInputElement).value;
@@ -162,9 +171,7 @@ export const ColorControl = defineComponent({
               })
               : h('span', {
                 class: 'dialkit-color-hex',
-                onClick: () => {
-                  isEditing.value = true;
-                },
+                'aria-label': `Hex color for ${props.label}`,
               }, bareHex(props.value)),
           ]),
           ...(props.alpha && rgba

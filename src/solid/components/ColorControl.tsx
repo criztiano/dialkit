@@ -2,7 +2,7 @@ import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { animate } from 'motion';
 import { ColorPickerPanel } from './ColorPickerPanel';
-import { parseHex, normalizeHex, bareHex, opacityPercent } from '../../color-core';
+import { parseHex, normalizeHexEdit, bareHex, opacityPercent } from '../../color-core';
 
 interface ColorControlProps {
   label: string;
@@ -120,7 +120,9 @@ export function ColorControl(props: ColorControlProps) {
 
   const handleTextSubmit = () => {
     setIsEditing(false);
-    const normalized = normalizeHex(editValue(), alpha());
+    // A bare 6-digit entry keeps the current opacity — the alpha digits are
+    // deliberately absent from the edit field (they have their own readout).
+    const normalized = normalizeHexEdit(editValue(), alpha(), rgba()?.a ?? 1);
     if (normalized) {
       props.onChange(normalized);
     } else {
@@ -155,21 +157,25 @@ export function ColorControl(props: ColorControlProps) {
     <div class="dialkit-color-control">
       <span class="dialkit-color-label">{props.label}</span>
       <div class="dialkit-color-inputs">
-        <span class="dialkit-color-hex-wrap">
+        {/* The whole token (hash included) is the click target for editing. */}
+        <span class="dialkit-color-hex-wrap" onClick={() => setIsEditing(true)}>
           <span class="dialkit-color-hash" aria-hidden="true">#</span>
           <Show
             when={isEditing()}
             fallback={
-              <span class="dialkit-color-hex" onClick={() => setIsEditing(true)}>
+              <span class="dialkit-color-hex" aria-label={`Hex color for ${props.label}`}>
                 {bareHex(props.value)}
               </span>
             }
           >
             <input
-              // Focus + select-all on edit start so a paste replaces the value outright.
+              // Focus + select-all on edit start so a paste replaces the value
+              // outright. Solid refs fire pre-insertion, hence the microtask —
+              // focusing a not-yet-connected input is a silent no-op.
               ref={(el) => queueMicrotask(() => { el.focus(); el.select(); })}
               type="text"
               class="dialkit-color-hex-input"
+              aria-label={`Hex color for ${props.label}`}
               value={editValue()}
               onInput={(e) => setEditValue(e.currentTarget.value)}
               onBlur={handleTextSubmit}

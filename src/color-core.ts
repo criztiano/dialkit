@@ -78,6 +78,19 @@ export function bareHex(value: string): string {
   return displayHex(value).replace(/^#/, '');
 }
 
+/**
+ * Commits a typed hex edit. The edit field shows only the RGB digits (alpha
+ * has its own readout), so a 3/6-digit entry inherits `currentAlpha` instead
+ * of silently resetting to opaque; explicit 4/8-digit input overrides it.
+ */
+export function normalizeHexEdit(input: string, alphaEnabled: boolean, currentAlpha: number): string | null {
+  const rgba = parseHex(input);
+  if (!rgba) return null;
+  const digits = input.trim().replace(/^#/, '').length;
+  if (alphaEnabled && (digits === 3 || digits === 6)) rgba.a = clamp01(currentAlpha);
+  return formatHex(rgba, alphaEnabled);
+}
+
 /** 0–100 readout for the trigger row ("60 %"). */
 export function opacityPercent(rgba: RGBA): number {
   return Math.round(clamp01(rgba.a) * 100);
