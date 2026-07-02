@@ -31,6 +31,10 @@ export type SelectConfig = {
 export type ColorConfig = {
   type: 'color';
   default?: string;
+  /** Enables the alpha slider; the emitted value becomes #rrggbbaa. Default false. */
+  alpha?: boolean;
+  /** Shows the shared saved-swatches row (persisted per machine). Default false. */
+  palette?: boolean;
 };
 
 export type TextConfig = {
@@ -209,6 +213,8 @@ export type ControlMeta = {
   itemTypes?: Record<string, ListItemType>;
   addLabel?: string;
   maxItems?: number;
+  alpha?: boolean;
+  palette?: boolean;
   shortcut?: ShortcutConfig;
 };
 
@@ -637,7 +643,7 @@ class DialStoreClass {
       } else if (this.isSelectConfig(value)) {
         controls.push({ type: 'select', path, label, options: value.options });
       } else if (this.isColorConfig(value)) {
-        controls.push({ type: 'color', path, label });
+        controls.push({ type: 'color', path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: 'text', path, label, placeholder: value.placeholder });
       } else if (this.isGalleryConfig(value)) {
@@ -651,9 +657,11 @@ class DialStoreClass {
       } else if (this.isListConfig(value)) {
         controls.push({ type: 'list', path, label, itemTypes: value.itemTypes, addLabel: value.addLabel, maxItems: value.max });
       } else if (typeof value === 'string') {
-        // Auto-detect: hex color vs text
+        // Auto-detect: hex color vs text. Alpha digits in the default
+        // (#rgba / #rrggbbaa) opt the control into the alpha slider.
         if (this.isHexColor(value)) {
-          controls.push({ type: 'color', path, label });
+          const hasAlpha = value.length === 5 || value.length === 9;
+          controls.push({ type: 'color', path, label, alpha: hasAlpha || undefined });
         } else {
           controls.push({ type: 'text', path, label });
         }
@@ -829,7 +837,7 @@ class DialStoreClass {
   }
 
   private isHexColor(value: string): boolean {
-    return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(value);
+    return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(value);
   }
 
   private formatLabel(key: string): string {
@@ -913,7 +921,16 @@ class DialStoreClass {
         const validValues = new Set((control.chipOptions ?? []).map((option) => option.value));
         return validValues.has(existingValue) ? existingValue : defaultValue;
       }
-      case 'color':
+      case 'color': {
+        if (typeof existingValue !== 'string' || !this.isHexColor(existingValue)) {
+          return defaultValue;
+        }
+        // Config dropped alpha: reconcile stored 8-digit values back to opaque hex.
+        if (!control.alpha && (existingValue.length === 5 || existingValue.length === 9)) {
+          return existingValue.length === 9 ? existingValue.slice(0, 7) : existingValue.slice(0, 4);
+        }
+        return existingValue;
+      }
       case 'text':
       case 'file':
         return typeof existingValue === 'string' ? existingValue : defaultValue;
