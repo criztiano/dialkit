@@ -3134,7 +3134,7 @@ _$delegateEvents6(["input", "keydown", "contextmenu", "pointerdown", "pointermov
 // src/solid/components/ColorControl.tsx
 var _tmpl$18 = /* @__PURE__ */ _$template10(`<input type=text class=dialkit-color-hex-input>`);
 var _tmpl$28 = /* @__PURE__ */ _$template10(`<div class=dialkit-color-picker-popover>`);
-var _tmpl$37 = /* @__PURE__ */ _$template10(`<div class=dialkit-color-control><span class=dialkit-color-label></span><div class=dialkit-color-inputs><button class=dialkit-color-swatch title="Pick color"></button><span class=dialkit-color-hex-wrap><span class=dialkit-color-hash aria-hidden=true>#`);
+var _tmpl$37 = /* @__PURE__ */ _$template10(`<div class=dialkit-color-control><span class=dialkit-color-label></span><div class=dialkit-color-inputs><span class=dialkit-color-hex-wrap><span class=dialkit-color-hash aria-hidden=true>#</span></span><button class=dialkit-color-swatch title="Pick color">`);
 var _tmpl$44 = /* @__PURE__ */ _$template10(`<span class=dialkit-color-hex>`);
 var _tmpl$53 = /* @__PURE__ */ _$template10(`<span class=dialkit-color-divider aria-hidden=true>`);
 var _tmpl$63 = /* @__PURE__ */ _$template10(`<span class=dialkit-color-opacity> <span class=dialkit-color-opacity-unit>%`);
@@ -3282,12 +3282,9 @@ function ColorControl(props) {
     };
   };
   return (() => {
-    var _el$ = _tmpl$37(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$4 = _el$3.firstChild, _el$5 = _el$4.nextSibling, _el$6 = _el$5.firstChild;
+    var _el$ = _tmpl$37(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$4 = _el$3.firstChild, _el$5 = _el$4.firstChild, _el$7 = _el$4.nextSibling;
     _$insert10(_el$2, () => props.label);
-    _el$4.$$click = () => isOpen() ? closePopover() : openPopover();
-    var _ref$ = swatchRef;
-    typeof _ref$ === "function" ? _$use6(_ref$, _el$4) : swatchRef = _el$4;
-    _$insert10(_el$5, _$createComponent9(Show7, {
+    _$insert10(_el$4, _$createComponent9(Show7, {
       get when() {
         return isEditing();
       },
@@ -3300,16 +3297,16 @@ function ColorControl(props) {
         })();
       },
       get children() {
-        var _el$7 = _tmpl$18();
-        _el$7.$$keydown = handleKeyDown;
-        _el$7.addEventListener("blur", handleTextSubmit);
-        _el$7.$$input = (e) => setEditValue(e.currentTarget.value);
+        var _el$6 = _tmpl$18();
+        _el$6.$$keydown = handleKeyDown;
+        _el$6.addEventListener("blur", handleTextSubmit);
+        _el$6.$$input = (e) => setEditValue(e.currentTarget.value);
         _$use6((el) => queueMicrotask(() => {
           el.focus();
           el.select();
-        }), _el$7);
-        _$effect9(() => _el$7.value = editValue());
-        return _el$7;
+        }), _el$6);
+        _$effect9(() => _el$6.value = editValue());
+        return _el$6;
       }
     }), null);
     _$insert10(_el$3, _$createComponent9(Show7, {
@@ -3321,7 +3318,10 @@ function ColorControl(props) {
         _$insert10(_el$1, () => opacityPercent(r()), _el$10);
         return _el$1;
       })()]
-    }), null);
+    }), _el$7);
+    _el$7.$$click = () => isOpen() ? closePopover() : openPopover();
+    var _ref$ = swatchRef;
+    typeof _ref$ === "function" ? _$use6(_ref$, _el$7) : swatchRef = _el$7;
     _$insert10(_el$, _$createComponent9(Show7, {
       get when() {
         return !!portalTarget();
@@ -3373,10 +3373,10 @@ function ColorControl(props) {
     }), null);
     _$effect9((_p$) => {
       var _v$ = props.value, _v$2 = String(isOpen()), _v$3 = `Pick color for ${props.label}`, _v$4 = isOpen();
-      _v$ !== _p$.e && _$setStyleProperty4(_el$4, "--swatch-color", _p$.e = _v$);
-      _v$2 !== _p$.t && _$setAttribute7(_el$4, "data-open", _p$.t = _v$2);
-      _v$3 !== _p$.a && _$setAttribute7(_el$4, "aria-label", _p$.a = _v$3);
-      _v$4 !== _p$.o && _$setAttribute7(_el$4, "aria-expanded", _p$.o = _v$4);
+      _v$ !== _p$.e && _$setStyleProperty4(_el$7, "--swatch-color", _p$.e = _v$);
+      _v$2 !== _p$.t && _$setAttribute7(_el$7, "data-open", _p$.t = _v$2);
+      _v$3 !== _p$.a && _$setAttribute7(_el$7, "aria-label", _p$.a = _v$3);
+      _v$4 !== _p$.o && _$setAttribute7(_el$7, "aria-expanded", _p$.o = _v$4);
       return _p$;
     }, {
       e: void 0,
@@ -3387,7 +3387,7 @@ function ColorControl(props) {
     return _el$;
   })();
 }
-_$delegateEvents7(["click", "input", "keydown"]);
+_$delegateEvents7(["input", "keydown", "click"]);
 
 // src/solid/components/PresetManager.tsx
 import { template as _$template11 } from "solid-js/web";

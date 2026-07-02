@@ -2861,19 +2861,6 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
   return /* @__PURE__ */ jsxs12("div", { className: "dialkit-color-control", children: [
     /* @__PURE__ */ jsx13("span", { className: "dialkit-color-label", children: label }),
     /* @__PURE__ */ jsxs12("div", { className: "dialkit-color-inputs", children: [
-      /* @__PURE__ */ jsx13(
-        "button",
-        {
-          ref: swatchRef,
-          className: "dialkit-color-swatch",
-          style: { "--swatch-color": value },
-          onClick: () => isOpen ? setIsOpen(false) : open(),
-          "data-open": String(isOpen),
-          title: "Pick color",
-          "aria-label": `Pick color for ${label}`,
-          "aria-expanded": isOpen
-        }
-      ),
       /* @__PURE__ */ jsxs12("span", { className: "dialkit-color-hex-wrap", children: [
         /* @__PURE__ */ jsx13("span", { className: "dialkit-color-hash", "aria-hidden": "true", children: "#" }),
         isEditing ? /* @__PURE__ */ jsx13(
@@ -2903,7 +2890,20 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
           " ",
           /* @__PURE__ */ jsx13("span", { className: "dialkit-color-opacity-unit", children: "%" })
         ] })
-      ] })
+      ] }),
+      /* @__PURE__ */ jsx13(
+        "button",
+        {
+          ref: swatchRef,
+          className: "dialkit-color-swatch",
+          style: { "--swatch-color": value },
+          onClick: () => isOpen ? setIsOpen(false) : open(),
+          "data-open": String(isOpen),
+          title: "Pick color",
+          "aria-label": `Pick color for ${label}`,
+          "aria-expanded": isOpen
+        }
+      )
     ] }),
     portalTarget && createPortal2(
       /* @__PURE__ */ jsx13(AnimatePresence3, { children: isOpen && pos && /* @__PURE__ */ jsx13(

@@ -2981,16 +2981,6 @@ var ColorControl = (0, import_vue13.defineComponent)({
       return (0, import_vue13.h)("div", { class: "dialkit-color-control" }, [
         (0, import_vue13.h)("span", { class: "dialkit-color-label" }, props.label),
         (0, import_vue13.h)("div", { class: "dialkit-color-inputs" }, [
-          (0, import_vue13.h)("button", {
-            ref: swatchRef,
-            class: "dialkit-color-swatch",
-            style: { "--swatch-color": props.value },
-            "data-open": String(isOpen.value),
-            title: "Pick color",
-            "aria-label": `Pick color for ${props.label}`,
-            "aria-expanded": isOpen.value,
-            onClick: togglePicker
-          }),
           (0, import_vue13.h)("span", { class: "dialkit-color-hex-wrap" }, [
             (0, import_vue13.h)("span", { class: "dialkit-color-hash", "aria-hidden": "true" }, "#"),
             isEditing.value ? (0, import_vue13.h)("input", {
@@ -3024,7 +3014,17 @@ var ColorControl = (0, import_vue13.defineComponent)({
               `${opacityPercent(rgba)} `,
               (0, import_vue13.h)("span", { class: "dialkit-color-opacity-unit" }, "%")
             ])
-          ] : []
+          ] : [],
+          (0, import_vue13.h)("button", {
+            ref: swatchRef,
+            class: "dialkit-color-swatch",
+            style: { "--swatch-color": props.value },
+            "data-open": String(isOpen.value),
+            title: "Pick color",
+            "aria-label": `Pick color for ${props.label}`,
+            "aria-expanded": isOpen.value,
+            onClick: togglePicker
+          })
         ]),
         portalTarget.value ? (0, import_vue13.h)(import_vue13.Teleport, { to: portalTarget.value }, [
           (0, import_vue13.h)(import_motion_v4.AnimatePresence, null, {

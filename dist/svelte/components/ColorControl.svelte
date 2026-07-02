@@ -128,16 +128,6 @@
 <div class="dialkit-color-control">
   <span class="dialkit-color-label">{label}</span>
   <div class="dialkit-color-inputs">
-    <button
-      bind:this={swatchRef}
-      class="dialkit-color-swatch"
-      style:--swatch-color={value}
-      onclick={() => (isOpen ? (isOpen = false) : openPicker())}
-      data-open={String(isOpen)}
-      title="Pick color"
-      aria-label={`Pick color for ${label}`}
-      aria-expanded={isOpen}
-    ></button>
     <span class="dialkit-color-hex-wrap">
       <span class="dialkit-color-hash" aria-hidden="true">#</span>
       {#if isEditing}
@@ -162,6 +152,16 @@
         {opacityPercent(rgba)} <span class="dialkit-color-opacity-unit">%</span>
       </span>
     {/if}
+    <button
+      bind:this={swatchRef}
+      class="dialkit-color-swatch"
+      style:--swatch-color={value}
+      onclick={() => (isOpen ? (isOpen = false) : openPicker())}
+      data-open={String(isOpen)}
+      title="Pick color"
+      aria-label={`Pick color for ${label}`}
+      aria-expanded={isOpen}
+    ></button>
   </div>
 
   {#if portalTarget}

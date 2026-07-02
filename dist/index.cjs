@@ -2945,19 +2945,6 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
   return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "dialkit-color-control", children: [
     /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "dialkit-color-label", children: label }),
     /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "dialkit-color-inputs", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
-        "button",
-        {
-          ref: swatchRef,
-          className: "dialkit-color-swatch",
-          style: { "--swatch-color": value },
-          onClick: () => isOpen ? setIsOpen(false) : open(),
-          "data-open": String(isOpen),
-          title: "Pick color",
-          "aria-label": `Pick color for ${label}`,
-          "aria-expanded": isOpen
-        }
-      ),
       /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { className: "dialkit-color-hex-wrap", children: [
         /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "dialkit-color-hash", "aria-hidden": "true", children: "#" }),
         isEditing ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
@@ -2987,7 +2974,20 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
           " ",
           /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "dialkit-color-opacity-unit", children: "%" })
         ] })
-      ] })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+        "button",
+        {
+          ref: swatchRef,
+          className: "dialkit-color-swatch",
+          style: { "--swatch-color": value },
+          onClick: () => isOpen ? setIsOpen(false) : open(),
+          "data-open": String(isOpen),
+          title: "Pick color",
+          "aria-label": `Pick color for ${label}`,
+          "aria-expanded": isOpen
+        }
+      )
     ] }),
     portalTarget && (0, import_react_dom2.createPortal)(
       /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(import_react14.AnimatePresence, { children: isOpen && pos && /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(

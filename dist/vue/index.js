@@ -2936,16 +2936,6 @@ var ColorControl = defineComponent12({
       return h12("div", { class: "dialkit-color-control" }, [
         h12("span", { class: "dialkit-color-label" }, props.label),
         h12("div", { class: "dialkit-color-inputs" }, [
-          h12("button", {
-            ref: swatchRef,
-            class: "dialkit-color-swatch",
-            style: { "--swatch-color": props.value },
-            "data-open": String(isOpen.value),
-            title: "Pick color",
-            "aria-label": `Pick color for ${props.label}`,
-            "aria-expanded": isOpen.value,
-            onClick: togglePicker
-          }),
           h12("span", { class: "dialkit-color-hex-wrap" }, [
             h12("span", { class: "dialkit-color-hash", "aria-hidden": "true" }, "#"),
             isEditing.value ? h12("input", {
@@ -2979,7 +2969,17 @@ var ColorControl = defineComponent12({
               `${opacityPercent(rgba)} `,
               h12("span", { class: "dialkit-color-opacity-unit" }, "%")
             ])
-          ] : []
+          ] : [],
+          h12("button", {
+            ref: swatchRef,
+            class: "dialkit-color-swatch",
+            style: { "--swatch-color": props.value },
+            "data-open": String(isOpen.value),
+            title: "Pick color",
+            "aria-label": `Pick color for ${props.label}`,
+            "aria-expanded": isOpen.value,
+            onClick: togglePicker
+          })
         ]),
         portalTarget.value ? h12(Teleport2, { to: portalTarget.value }, [
           h12(AnimatePresence3, null, {
