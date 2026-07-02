@@ -45,6 +45,23 @@ export type { Sampler, CompositionSamplers, CompositionRead } from './curve-comp
 export { TextControl } from './components/TextControl';
 export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';
+export { ColorPickerPanel } from './components/ColorPickerPanel';
+export {
+  COLOR_FORMATS,
+  parseHex,
+  formatHex,
+  normalizeHex,
+  displayHex,
+  opacityPercent,
+  rgbToHsv,
+  hsvToRgb,
+  rgbToHsl,
+  hslToRgb,
+  rgbToOklch,
+  oklchToRgb,
+  clampOklchToSrgb,
+} from './color-core';
+export type { RGBA, HSVA, HSLA, OKLCH, ColorFormat } from './color-core';
 export { GalleryControl } from './components/GalleryControl';
 export { FileControl } from './components/FileControl';
 export { SwatchControl } from './components/SwatchControl';

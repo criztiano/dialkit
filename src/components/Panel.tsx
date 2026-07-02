@@ -152,6 +152,8 @@ Apply these values as the new defaults in the useDialKit call.`;
             key={control.path}
             label={control.label}
             value={value as string}
+            alpha={control.alpha}
+            palette={control.palette}
             onChange={(v) => DialStore.updateValue(panel.id, control.path, v)}
           />
         );

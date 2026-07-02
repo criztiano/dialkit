@@ -6,6 +6,7 @@ import {
   SelectControl,
   Toggle,
   TextControl,
+  ColorControl,
   GalleryControl,
   ButtonGroup,
   Folder,
@@ -102,6 +103,9 @@ export function Library() {
   const [selectValue, setSelectValue] = useState('stack');
   const [toggleValue, setToggleValue] = useState(true);
   const [textValue, setTextValue] = useState('Japan');
+  const [colorBasic, setColorBasic] = useState('#6366f1');
+  const [colorAlpha, setColorAlpha] = useState('#310b0299');
+  const [colorPalette, setColorPalette] = useState('#10b981ff');
   const [galleryValue, setGalleryValue] = useState('ember');
   const [lastAction, setLastAction] = useState('—');
 
@@ -254,13 +258,25 @@ export function Library() {
           </Card>
         </Section>
 
-        <Section index="05" title="Gallery" hint="Tap the trigger to reveal a masonry grid; scroll it (the edges rubber-band). Pick a tile to select it; tap the trigger again to close." single>
+        <Section index="05" title="Color" count={3} hint="Hex strings become a color row — click the swatch for the full picker: SV area, hue, optional alpha, HEX / RGB / HSL / OKLCH, and a saved palette.">
+          <Card title="Basic" desc="A hex string auto-detects as a color control. The picker emits plain #rrggbb." code="color: '#6366f1'">
+            <ColorControl label="color" value={colorBasic} onChange={setColorBasic} />
+          </Card>
+          <Card title="Alpha" desc="With `alpha` on (or an 8-digit default), the row shows the opacity readout and the picker gains an alpha slider. Values are #rrggbbaa." code="tint: { type: 'color', default: '#310b0299', alpha: true }">
+            <ColorControl label="tint" value={colorAlpha} onChange={setColorAlpha} alpha />
+          </Card>
+          <Card title="Palette" desc="`palette` adds a row of slots shared by every picker on this machine. Click an empty slot to save, a filled one to apply — hold to clear." code="accent: { type: 'color', alpha: true, palette: true }">
+            <ColorControl label="accent" value={colorPalette} onChange={setColorPalette} alpha palette />
+          </Card>
+        </Section>
+
+        <Section index="06" title="Gallery" hint="Tap the trigger to reveal a masonry grid; scroll it (the edges rubber-band). Pick a tile to select it; tap the trigger again to close." single>
           <Card title="Masonry picker" desc="A trigger expands a 3:4 surface of masonry items and stays lit while open. Scrolling overshoots and springs at the edges; images load through a shimmer skeleton then blur-fade in. Mixes real photos with custom gradient tiles." code="cover: { type: 'gallery', items, default }">
             <GalleryControl label="cover" value={galleryValue} items={GALLERY_ITEMS} onChange={setGalleryValue} columns={3} />
           </Card>
         </Section>
 
-        <Section index="06" title="Actions & Structure" count={5} hint="Action buttons fire callbacks; folders group controls; visualizations preview motion.">
+        <Section index="07" title="Actions & Structure" count={5} hint="Action buttons fire callbacks; folders group controls; visualizations preview motion.">
           <Card title="Action button" desc="A single { type: 'action' } fires a callback with no stored value." code="shuffle: { type: 'action' }">
             <ButtonGroup buttons={[{ label: 'Shuffle', onClick: () => setLastAction('shuffle') }]} />
             <ActionLog value={lastAction} />
@@ -290,7 +306,7 @@ export function Library() {
           </Card>
         </Section>
 
-        <Section index="07" title="Motion editors" count={2} hint="Spring and transition editors with a live animation-curve preview. Toggle their modes.">
+        <Section index="08" title="Motion editors" count={2} hint="Spring and transition editors with a live animation-curve preview. Toggle their modes.">
           {liveId ? (
             <>
               <Card title="SpringControl" desc="Time (visualDuration + bounce) or Physics (stiffness, damping, mass)." code="{ type: 'spring', bounce: 0.25 }">
@@ -305,13 +321,13 @@ export function Library() {
           )}
         </Section>
 
-        <Section index="08" title="Waveform" hint="The whole waveform of a sample, drawn once and fixed — a playhead sweeps across it at the display's refresh rate. Press Play, then toggle smooth / pixelated, the 3-band EQ split, the grid, and zoom in (top-right). Click the waveform to set the playhead; drag to mark a loop." single>
+        <Section index="09" title="Waveform" hint="The whole waveform of a sample, drawn once and fixed — a playhead sweeps across it at the display's refresh rate. Press Play, then toggle smooth / pixelated, the 3-band EQ split, the grid, and zoom in (top-right). Click the waveform to set the playhead; drag to mark a loop." single>
           <Card title="WaveformVisualization" desc="Renders a decoded AudioBuffer's entire waveform (fixed); the playhead marks the play position. Smooth is a simplified, interpolated solid fill (or translucent + outline via the border prop); pixelated is chunky per-column bars. EQ bands splits into low/mid/high, color-coded purple/cyan/lime. The top-right + / − buttons zoom the time axis (the window follows the playhead); grid overlays gridSubdivisions vertical time-lines. With onSeek/onLoopChange wired, click sets the playhead and drag defines a loop — drag either edge to resize it, click clears it. waveColor and playheadColor are themable (the loop band derives from the playhead color); autoZoomOnLoop frames the loop on selection." code="<WaveformVisualization buffer loop onSeek onLoopChange waveColor playheadColor autoZoomOnLoop />">
             <WaveformShowcase />
           </Card>
         </Section>
 
-        <Section index="09" title="Curve Composer" hint="Compose several curves into one. Split divides the time axis into more segments; quick-click a segment to cycle its shape (linear → easeIn → easeOut → easeInOut → spring); drag a segment's middle for curvature; drag a divider to retime neighbors. Add a driver — a stacked lane below that re-paces the reading — and set Direction (forward / mirror / reverse)." single>
+        <Section index="10" title="Curve Composer" hint="Compose several curves into one. Split divides the time axis into more segments; quick-click a segment to cycle its shape (linear → easeIn → easeOut → easeInOut → spring); drag a segment's middle for curvature; drag a divider to retime neighbors. Add a driver — a stacked lane below that re-paces the reading — and set Direction (forward / mirror / reverse)." single>
           <Card title="CurveComposer" desc="An editable curve series with an optional time-warping driver lane. Each segment owns a slice of the horizontal time axis (its relative duration); quick-click cycles its curve type, dragging its body changes the curvature amount, and dragging a shared divider trades duration between neighbors. Double-click splits a segment in two. The driver is a single stacked curve below that remaps the reading pace of the series above; Direction reverses or ping-pongs the whole composition. Curves are SVG, themed via currentColor; curveColor and playheadColor are overridable." code="<CurveComposer segments driver direction onSegmentsChange onDriverChange getPhase />">
             <CurveComposerShowcase />
           </Card>

@@ -155,6 +155,8 @@ export const Panel = defineComponent({
             key: control.path,
             label: control.label,
             value: value as string,
+            alpha: control.alpha,
+            palette: control.palette,
             onChange: (next: string) => DialStore.updateValue(props.panel.id, control.path, next),
           });
         case 'action':

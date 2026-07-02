@@ -22,6 +22,7 @@ var vue_exports = {};
 __export(vue_exports, {
   ButtonGroup: () => ButtonGroup,
   ColorControl: () => ColorControl,
+  ColorPickerPanel: () => ColorPickerPanel,
   CurveComposer: () => CurveComposer,
   DialRoot: () => DialRoot,
   DialStore: () => DialStore,
@@ -49,6 +50,232 @@ module.exports = __toCommonJS(vue_exports);
 
 // src/vue/useDialKit.ts
 var import_vue = require("vue");
+
+// src/color-core.ts
+var LONG_PRESS_MS = 500;
+var PALETTE_DRAG_CANCEL_PX = 3;
+var HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
+var clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+var clamp01 = (n) => clamp(n, 0, 1);
+var byte = (n) => clamp(Math.round(n), 0, 255);
+function parseHex(input) {
+  if (typeof input !== "string") return null;
+  let s = input.trim();
+  if (!s.startsWith("#")) s = `#${s}`;
+  if (!HEX_COLOR_REGEX.test(s)) return null;
+  let h23 = s.slice(1);
+  if (h23.length <= 4) h23 = h23.split("").map((c) => c + c).join("");
+  const r = parseInt(h23.slice(0, 2), 16);
+  const g = parseInt(h23.slice(2, 4), 16);
+  const b = parseInt(h23.slice(4, 6), 16);
+  const a = h23.length === 8 ? parseInt(h23.slice(6, 8), 16) / 255 : 1;
+  return { r, g, b, a };
+}
+function formatHex(rgba, alphaEnabled) {
+  const hx = (n) => byte(n).toString(16).padStart(2, "0");
+  const base = `#${hx(rgba.r)}${hx(rgba.g)}${hx(rgba.b)}`;
+  return alphaEnabled ? `${base}${hx(clamp01(rgba.a) * 255)}` : base;
+}
+function normalizeHex(input, alphaEnabled) {
+  const rgba = parseHex(input);
+  return rgba ? formatHex(rgba, alphaEnabled) : null;
+}
+function displayHex(value) {
+  const rgba = parseHex(value);
+  if (!rgba) return (value ?? "").toUpperCase();
+  return formatHex(rgba, false).toUpperCase();
+}
+function bareHex(value) {
+  return displayHex(value).replace(/^#/, "");
+}
+function normalizeHexEdit(input, alphaEnabled, currentAlpha) {
+  const rgba = parseHex(input);
+  if (!rgba) return null;
+  const digits = input.trim().replace(/^#/, "").length;
+  if (alphaEnabled && (digits === 3 || digits === 6)) rgba.a = clamp01(currentAlpha);
+  return formatHex(rgba, alphaEnabled);
+}
+function opacityPercent(rgba) {
+  return Math.round(clamp01(rgba.a) * 100);
+}
+function rgbToHsv(rgba) {
+  const r = rgba.r / 255, g = rgba.g / 255, b = rgba.b / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const d = max - min;
+  let h23 = 0;
+  if (d !== 0) {
+    if (max === r) h23 = (g - b) / d % 6;
+    else if (max === g) h23 = (b - r) / d + 2;
+    else h23 = (r - g) / d + 4;
+    h23 *= 60;
+    if (h23 < 0) h23 += 360;
+  }
+  return { h: h23, s: max === 0 ? 0 : d / max, v: max, a: rgba.a };
+}
+function hsvToRgb(hsva) {
+  const h23 = (hsva.h % 360 + 360) % 360;
+  const s = clamp01(hsva.s), v = clamp01(hsva.v);
+  const c = v * s;
+  const x = c * (1 - Math.abs(h23 / 60 % 2 - 1));
+  const m = v - c;
+  let r = 0, g = 0, b = 0;
+  if (h23 < 60) [r, g, b] = [c, x, 0];
+  else if (h23 < 120) [r, g, b] = [x, c, 0];
+  else if (h23 < 180) [r, g, b] = [0, c, x];
+  else if (h23 < 240) [r, g, b] = [0, x, c];
+  else if (h23 < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  return { r: byte((r + m) * 255), g: byte((g + m) * 255), b: byte((b + m) * 255), a: hsva.a };
+}
+function rgbToHsl(rgba) {
+  const { h: h23, s, v, a } = rgbToHsv(rgba);
+  const l = v * (1 - s / 2);
+  const sl = l === 0 || l === 1 ? 0 : (v - l) / Math.min(l, 1 - l);
+  return { h: h23, s: sl, l, a };
+}
+function hslToRgb(hsla) {
+  const l = clamp01(hsla.l), s = clamp01(hsla.s);
+  const v = l + s * Math.min(l, 1 - l);
+  const sv = v === 0 ? 0 : 2 * (1 - l / v);
+  return hsvToRgb({ h: hsla.h, s: sv, v, a: hsla.a });
+}
+var srgbToLinear = (c) => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+var linearToSrgb = (c) => c <= 31308e-7 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+function rgbToOklab(rgba) {
+  const r = srgbToLinear(rgba.r / 255);
+  const g = srgbToLinear(rgba.g / 255);
+  const b = srgbToLinear(rgba.b / 255);
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return {
+    L: 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    A: 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    B: 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s
+  };
+}
+function oklabToLinearRgb(L, A, B) {
+  const l = (L + 0.3963377774 * A + 0.2158037573 * B) ** 3;
+  const m = (L - 0.1055613458 * A - 0.0638541728 * B) ** 3;
+  const s = (L - 0.0894841775 * A - 1.291485548 * B) ** 3;
+  return {
+    r: 4.0767416621 * l - 3.3077115913 * m + 0.2307590544 * s,
+    g: -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    b: -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s
+  };
+}
+function rgbToOklch(rgba) {
+  const { L, A, B } = rgbToOklab(rgba);
+  const c = Math.sqrt(A * A + B * B);
+  let h23 = Math.atan2(B, A) * 180 / Math.PI;
+  if (h23 < 0) h23 += 360;
+  return { l: L, c, h: c < 1e-6 ? 0 : h23, a: rgba.a };
+}
+var GAMUT_EPS = 1e-4;
+function inSrgbGamut(l, c, h23) {
+  const rad = h23 * Math.PI / 180;
+  const { r, g, b } = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
+  return r >= -GAMUT_EPS && r <= 1 + GAMUT_EPS && g >= -GAMUT_EPS && g <= 1 + GAMUT_EPS && b >= -GAMUT_EPS && b <= 1 + GAMUT_EPS;
+}
+function clampOklchToSrgb(oklch) {
+  const l = clamp01(oklch.l);
+  const h23 = (oklch.h % 360 + 360) % 360;
+  const c = Math.max(0, oklch.c);
+  if (inSrgbGamut(l, c, h23)) return { l, c, h: h23, a: clamp01(oklch.a) };
+  let lo = 0, hi = c;
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    if (inSrgbGamut(l, mid, h23)) lo = mid;
+    else hi = mid;
+  }
+  return { l, c: lo, h: h23, a: clamp01(oklch.a) };
+}
+function oklchToRgb(oklch) {
+  const { l, c, h: h23, a } = clampOklchToSrgb(oklch);
+  const rad = h23 * Math.PI / 180;
+  const lin = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
+  return {
+    r: byte(linearToSrgb(clamp01(lin.r)) * 255),
+    g: byte(linearToSrgb(clamp01(lin.g)) * 255),
+    b: byte(linearToSrgb(clamp01(lin.b)) * 255),
+    a: clamp01(a)
+  };
+}
+var ALPHA_CHANNEL = { key: "a", label: "A", min: 0, max: 100, step: 1, precision: 0 };
+var CHANNELS = {
+  rgb: [
+    { key: "r", label: "R", min: 0, max: 255, step: 1, precision: 0 },
+    { key: "g", label: "G", min: 0, max: 255, step: 1, precision: 0 },
+    { key: "b", label: "B", min: 0, max: 255, step: 1, precision: 0 }
+  ],
+  hsl: [
+    { key: "h", label: "H", min: 0, max: 360, step: 1, precision: 0 },
+    { key: "s", label: "S", min: 0, max: 100, step: 1, precision: 0 },
+    { key: "l", label: "L", min: 0, max: 100, step: 1, precision: 0 }
+  ],
+  oklch: [
+    { key: "l", label: "L", min: 0, max: 1, step: 0.01, precision: 2 },
+    { key: "c", label: "C", min: 0, max: 0.4, step: 5e-3, precision: 3 },
+    { key: "h", label: "H", min: 0, max: 360, step: 1, precision: 0 }
+  ]
+};
+function getChannels(format, alphaEnabled) {
+  return alphaEnabled ? [...CHANNELS[format], ALPHA_CHANNEL] : CHANNELS[format];
+}
+var round = (n, precision) => {
+  const f = 10 ** precision;
+  return Math.round(n * f) / f;
+};
+function rgbaToChannels(rgba, format, alphaEnabled) {
+  let values;
+  if (format === "rgb") {
+    values = [rgba.r, rgba.g, rgba.b];
+  } else if (format === "hsl") {
+    const { h: h23, s, l } = rgbToHsl(rgba);
+    values = [round(h23, 0), round(s * 100, 0), round(l * 100, 0)];
+  } else {
+    const { l, c, h: h23 } = rgbToOklch(rgba);
+    values = [round(l, 2), round(c, 3), round(h23, 0)];
+  }
+  if (alphaEnabled) values.push(opacityPercent(rgba));
+  return values;
+}
+function channelsToRgba(values, format, alphaEnabled) {
+  const specs = getChannels(format, alphaEnabled);
+  const v = specs.map((spec, i) => {
+    const n = Number(values[i]);
+    const fallback = spec.key === "a" ? spec.max : spec.min;
+    return clamp(Number.isFinite(n) ? n : fallback, spec.min, spec.max);
+  });
+  const a = alphaEnabled ? v[3] / 100 : 1;
+  if (format === "rgb") return { r: byte(v[0]), g: byte(v[1]), b: byte(v[2]), a };
+  if (format === "hsl") return hslToRgb({ h: v[0], s: v[1] / 100, l: v[2] / 100, a });
+  return oklchToRgb({ l: v[0], c: v[1], h: v[2], a });
+}
+var PALETTE_SIZE = 8;
+var PALETTE_STORAGE_KEY = "dialkit:color-palette";
+function emptyPalette() {
+  return Array(PALETTE_SIZE).fill(null);
+}
+function serializePalette(slots) {
+  return JSON.stringify(slots.slice(0, PALETTE_SIZE));
+}
+function deserializePalette(raw) {
+  const slots = emptyPalette();
+  if (!raw) return slots;
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return slots;
+  }
+  if (!Array.isArray(parsed)) return slots;
+  for (let i = 0; i < PALETTE_SIZE; i++) {
+    const entry = parsed[i];
+    if (typeof entry === "string" && HEX_COLOR_REGEX.test(entry)) slots[i] = entry;
+  }
+  return slots;
+}
 
 // src/store/DialStore.ts
 var EMPTY_VALUES = Object.freeze({});
@@ -362,7 +589,7 @@ var DialStoreClass = class {
       } else if (this.isSelectConfig(value)) {
         controls.push({ type: "select", path, label, options: value.options });
       } else if (this.isColorConfig(value)) {
-        controls.push({ type: "color", path, label });
+        controls.push({ type: "color", path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: "text", path, label, placeholder: value.placeholder });
       } else if (this.isGalleryConfig(value)) {
@@ -377,7 +604,8 @@ var DialStoreClass = class {
         controls.push({ type: "list", path, label, itemTypes: value.itemTypes, addLabel: value.addLabel, maxItems: value.max });
       } else if (typeof value === "string") {
         if (this.isHexColor(value)) {
-          controls.push({ type: "color", path, label });
+          const hasAlpha = value.length === 5 || value.length === 9;
+          controls.push({ type: "color", path, label, alpha: hasAlpha || void 0 });
         } else {
           controls.push({ type: "text", path, label });
         }
@@ -466,7 +694,7 @@ var DialStoreClass = class {
     return typeof value === "object" && value !== null && "type" in value && value.type === "list" && "itemTypes" in value && typeof value.itemTypes === "object";
   }
   isHexColor(value) {
-    return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(value);
+    return HEX_COLOR_REGEX.test(value);
   }
   formatLabel(key) {
     return key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()).trim();
@@ -532,7 +760,18 @@ var DialStoreClass = class {
         const validValues = new Set((control.chipOptions ?? []).map((option) => option.value));
         return validValues.has(existingValue) ? existingValue : defaultValue;
       }
-      case "color":
+      case "color": {
+        if (typeof existingValue !== "string" || !this.isHexColor(existingValue)) {
+          return defaultValue;
+        }
+        if (!control.alpha && (existingValue.length === 5 || existingValue.length === 9)) {
+          return existingValue.length === 9 ? existingValue.slice(0, 7) : existingValue.slice(0, 4);
+        }
+        if (control.alpha && (existingValue.length === 4 || existingValue.length === 7)) {
+          return existingValue + (existingValue.length === 7 ? "ff" : "f");
+        }
+        return existingValue;
+      }
       case "text":
       case "file":
         return typeof existingValue === "string" ? existingValue : defaultValue;
@@ -753,14 +992,14 @@ function getFirstOptionValue(options) {
 }
 
 // src/vue/directives/dialkit.ts
-var import_vue17 = require("vue");
+var import_vue18 = require("vue");
 
 // src/vue/components/DialRoot.ts
-var import_vue16 = require("vue");
+var import_vue17 = require("vue");
 
 // src/vue/components/Panel.ts
-var import_vue15 = require("vue");
-var import_motion_v5 = require("motion-v");
+var import_vue16 = require("vue");
+var import_motion_v6 = require("motion-v");
 
 // src/icons.ts
 var ICON_CHEVRON = "M6 9.5L12 15.5L18 9.5";
@@ -1714,21 +1953,21 @@ var SpringControl = (0, import_vue7.defineComponent)({
       unsub?.();
     });
     const isSimpleMode = () => mode.value === "simple";
-    const cache = {
+    const cache2 = {
       simple: props.spring.visualDuration !== void 0 ? { ...props.spring } : { type: "spring", visualDuration: 0.3, bounce: 0.2 },
       advanced: props.spring.stiffness !== void 0 ? { ...props.spring } : { type: "spring", stiffness: 200, damping: 25, mass: 1 }
     };
     const handleModeChange = (nextMode) => {
       if (isSimpleMode()) {
-        cache.simple = { ...props.spring };
+        cache2.simple = { ...props.spring };
       } else {
-        cache.advanced = { ...props.spring };
+        cache2.advanced = { ...props.spring };
       }
       DialStore.updateSpringMode(props.panelId, props.path, nextMode);
       if (nextMode === "simple") {
-        emit("change", cache.simple);
+        emit("change", cache2.simple);
       } else {
-        emit("change", cache.advanced);
+        emit("change", cache2.advanced);
       }
     };
     const handleUpdate = (key, value) => {
@@ -1938,34 +2177,34 @@ var TransitionControl = (0, import_vue9.defineComponent)({
       });
     });
     (0, import_vue9.onUnmounted)(() => unsub?.());
-    const cache = {
+    const cache2 = {
       easing: props.value.type === "easing" ? { ...props.value } : { type: "easing", duration: 0.3, ease: [1, -0.4, 0.5, 1] },
       simple: props.value.type === "spring" && props.value.visualDuration !== void 0 ? { ...props.value } : { type: "spring", visualDuration: 0.3, bounce: 0.2 },
       advanced: props.value.type === "spring" && props.value.stiffness !== void 0 ? { ...props.value } : { type: "spring", stiffness: 200, damping: 25, mass: 1 }
     };
     const spring = () => {
       if (props.value.type === "spring") {
-        if (mode.value === "simple") cache.simple = props.value;
-        else if (mode.value === "advanced") cache.advanced = props.value;
+        if (mode.value === "simple") cache2.simple = props.value;
+        else if (mode.value === "advanced") cache2.advanced = props.value;
         return props.value;
       }
-      return cache.simple;
+      return cache2.simple;
     };
     const easing = () => {
       if (props.value.type === "easing") {
-        cache.easing = props.value;
+        cache2.easing = props.value;
         return props.value;
       }
-      return cache.easing;
+      return cache2.easing;
     };
     const handleModeChange = (nextMode) => {
       DialStore.updateTransitionMode(props.panelId, props.path, nextMode);
       if (nextMode === "easing") {
-        emit("change", cache.easing);
+        emit("change", cache2.easing);
       } else if (nextMode === "simple") {
-        emit("change", cache.simple);
+        emit("change", cache2.simple);
       } else {
-        emit("change", cache.advanced);
+        emit("change", cache2.advanced);
       }
     };
     const updateEase = (index, value) => {
@@ -2250,83 +2489,596 @@ var SelectControl = (0, import_vue11.defineComponent)({
 });
 
 // src/vue/components/ColorControl.ts
+var import_vue13 = require("vue");
+var import_motion_v4 = require("motion-v");
+
+// src/vue/components/ColorPickerPanel.ts
 var import_vue12 = require("vue");
-var HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
-function expandShorthandHex(hex) {
-  if (hex.length !== 4) return hex;
-  return `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`;
+
+// src/color-palette-store.ts
+var cache = null;
+var listeners = /* @__PURE__ */ new Set();
+var storageListenerAttached = false;
+function readStorage() {
+  try {
+    if (typeof window === "undefined") return emptyPalette();
+    return deserializePalette(window.localStorage.getItem(PALETTE_STORAGE_KEY));
+  } catch {
+    return emptyPalette();
+  }
 }
-var colorControlInstance = 0;
-var ColorControl = (0, import_vue12.defineComponent)({
-  name: "DialKitColorControl",
+function notify() {
+  const slots = cache ?? emptyPalette();
+  listeners.forEach((cb) => cb(slots));
+}
+function onStorageEvent(e) {
+  if (e.key !== PALETTE_STORAGE_KEY) return;
+  cache = deserializePalette(e.newValue);
+  notify();
+}
+function loadPalette() {
+  if (cache === null) cache = readStorage();
+  return cache;
+}
+function savePalette(slots) {
+  cache = slots;
+  try {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(PALETTE_STORAGE_KEY, serializePalette(slots));
+    }
+  } catch {
+  }
+  notify();
+}
+function subscribePalette(cb) {
+  listeners.add(cb);
+  if (!storageListenerAttached && typeof window !== "undefined") {
+    window.addEventListener("storage", onStorageEvent);
+    storageListenerAttached = true;
+  }
+  return () => {
+    listeners.delete(cb);
+    if (listeners.size === 0 && storageListenerAttached && typeof window !== "undefined") {
+      window.removeEventListener("storage", onStorageEvent);
+      storageListenerAttached = false;
+    }
+  };
+}
+
+// src/vue/components/ColorPickerPanel.ts
+var FORMAT_OPTIONS = [
+  { value: "hex", label: "HEX" },
+  { value: "rgb", label: "RGB" },
+  { value: "hsl", label: "HSL" },
+  { value: "oklch", label: "OKLCH" }
+];
+var stickyFormat = "hex";
+var BLACK = { h: 0, s: 0, v: 0, a: 1 };
+var HEX_ALPHA_SPEC = { key: "a", label: "A", min: 0, max: 100, step: 1, precision: 0 };
+function useAreaDrag(onPoint) {
+  const elRef = (0, import_vue12.ref)(null);
+  let dragging = false;
+  const readPoint = (e) => {
+    const el = elRef.value;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    const y = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height));
+    onPoint(x, y);
+  };
+  const endDrag = () => {
+    dragging = false;
+  };
+  const handlers = {
+    onPointerdown: (e) => {
+      e.preventDefault();
+      elRef.value?.setPointerCapture(e.pointerId);
+      dragging = true;
+      readPoint(e);
+    },
+    onPointermove: (e) => {
+      if (dragging && e.buttons === 0) {
+        dragging = false;
+        return;
+      }
+      if (dragging) readPoint(e);
+    },
+    onPointerup: endDrag,
+    onPointercancel: endDrag
+  };
+  return { elRef, handlers };
+}
+var ChannelField = (0, import_vue12.defineComponent)({
+  name: "DialKitColorChannelField",
   props: {
-    label: { type: String, required: true },
-    value: { type: String, required: true }
+    spec: { type: Object, required: true },
+    value: { type: Number, required: true }
+  },
+  emits: ["commit"],
+  setup(props, { emit }) {
+    const draft = (0, import_vue12.ref)(null);
+    const commit = () => {
+      if (draft.value !== null) emit("commit", Number(draft.value));
+      draft.value = null;
+    };
+    return () => (0, import_vue12.h)("label", { class: "dialkit-color-field" }, [
+      (0, import_vue12.h)("input", {
+        type: "text",
+        inputmode: "decimal",
+        value: draft.value ?? String(props.value),
+        onFocus: (e) => {
+          draft.value = String(props.value);
+          e.target.select();
+        },
+        onInput: (e) => {
+          draft.value = e.target.value;
+        },
+        onBlur: commit,
+        onKeydown: (e) => {
+          if (e.key === "Enter") {
+            commit();
+            e.target.blur();
+          } else if (e.key === "Escape") {
+            e.stopPropagation();
+            draft.value = null;
+            e.target.blur();
+          }
+        }
+      }),
+      (0, import_vue12.h)("span", { class: "dialkit-color-field-label" }, props.spec.label)
+    ]);
+  }
+});
+var HexField = (0, import_vue12.defineComponent)({
+  name: "DialKitColorHexField",
+  props: {
+    value: { type: String, required: true },
+    alpha: { type: Boolean, required: true }
+  },
+  emits: ["commit"],
+  setup(props, { emit }) {
+    const draft = (0, import_vue12.ref)(null);
+    const commit = () => {
+      if (draft.value !== null) {
+        const normalized = normalizeHex(draft.value, props.alpha);
+        if (normalized) emit("commit", normalized);
+      }
+      draft.value = null;
+    };
+    return () => (0, import_vue12.h)("label", { class: "dialkit-color-field dialkit-color-field-hex" }, [
+      (0, import_vue12.h)("input", {
+        type: "text",
+        spellcheck: false,
+        value: (draft.value ?? props.value).toUpperCase(),
+        onFocus: (e) => {
+          draft.value = props.value;
+          e.target.select();
+        },
+        onInput: (e) => {
+          draft.value = e.target.value;
+        },
+        onBlur: commit,
+        onKeydown: (e) => {
+          if (e.key === "Enter") {
+            commit();
+            e.target.blur();
+          } else if (e.key === "Escape") {
+            e.stopPropagation();
+            draft.value = null;
+            e.target.blur();
+          }
+        }
+      }),
+      (0, import_vue12.h)("span", { class: "dialkit-color-field-label" }, "HEX")
+    ]);
+  }
+});
+var PaletteSlot = (0, import_vue12.defineComponent)({
+  name: "DialKitColorPaletteSlot",
+  props: {
+    color: { type: String, default: null }
+  },
+  emits: ["save", "apply", "clear"],
+  setup(props, { emit }) {
+    const holding = (0, import_vue12.ref)(false);
+    let timer = null;
+    let origin = null;
+    let fired = false;
+    const cancelHold = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      origin = null;
+      holding.value = false;
+    };
+    (0, import_vue12.onBeforeUnmount)(cancelHold);
+    return () => (0, import_vue12.h)("button", {
+      class: "dialkit-color-palette-slot",
+      "data-filled": String(props.color !== null),
+      "data-holding": String(holding.value),
+      style: props.color ? { "--swatch-color": props.color } : void 0,
+      title: props.color ? `${props.color.toUpperCase()} \u2014 click to apply, hold to clear` : "Save current color",
+      onContextmenu: (e) => e.preventDefault(),
+      onPointerdown: (e) => {
+        fired = false;
+        if (!props.color) return;
+        origin = { x: e.clientX, y: e.clientY };
+        holding.value = true;
+        timer = setTimeout(() => {
+          fired = true;
+          cancelHold();
+          emit("clear");
+        }, LONG_PRESS_MS);
+      },
+      onPointermove: (e) => {
+        if (!origin) return;
+        if (Math.hypot(e.clientX - origin.x, e.clientY - origin.y) > PALETTE_DRAG_CANCEL_PX) {
+          cancelHold();
+        }
+      },
+      onPointerup: cancelHold,
+      onPointerleave: cancelHold,
+      onPointercancel: cancelHold,
+      onClick: () => {
+        if (fired) {
+          fired = false;
+          return;
+        }
+        if (props.color) emit("apply");
+        else emit("save");
+      }
+    });
+  }
+});
+var ColorPickerPanel = (0, import_vue12.defineComponent)({
+  name: "DialKitColorPickerPanel",
+  props: {
+    value: { type: String, required: true },
+    alpha: { type: Boolean, default: false },
+    palette: { type: Boolean, default: false }
   },
   emits: ["change"],
   setup(props, { emit }) {
-    const textInputId = (0, import_vue12.ref)(`dialkit-color-${++colorControlInstance}`);
-    const isEditing = (0, import_vue12.ref)(false);
-    const editValue = (0, import_vue12.ref)(props.value);
-    const colorInputRef = (0, import_vue12.ref)(null);
+    const initialRgba = parseHex(props.value);
+    const hsva = (0, import_vue12.ref)(initialRgba ? rgbToHsv(initialRgba) : { ...BLACK });
+    const format = (0, import_vue12.ref)(stickyFormat);
+    const slots = (0, import_vue12.ref)(props.palette ? loadPalette() : emptyPalette());
+    let lastEmitted = props.value;
     (0, import_vue12.watch)(() => props.value, (value) => {
-      if (!isEditing.value) editValue.value = value;
+      if (value === lastEmitted) return;
+      lastEmitted = value;
+      const rgba2 = parseHex(value);
+      if (rgba2) hsva.value = rgbToHsv(rgba2);
     });
-    const submit = () => {
-      isEditing.value = false;
-      if (HEX_COLOR_REGEX.test(editValue.value)) {
-        emit("change", editValue.value);
-      } else {
-        editValue.value = props.value;
+    let unsubscribePalette;
+    (0, import_vue12.onMounted)(() => {
+      if (props.palette) {
+        unsubscribePalette = subscribePalette((next) => {
+          slots.value = next;
+        });
       }
+    });
+    (0, import_vue12.onBeforeUnmount)(() => unsubscribePalette?.());
+    const emitColor = (next) => {
+      hsva.value = next;
+      const hex = formatHex(hsvToRgb(next), props.alpha);
+      lastEmitted = hex;
+      emit("change", hex);
     };
-    return () => (0, import_vue12.h)("div", { class: "dialkit-color-control" }, [
-      (0, import_vue12.h)("label", { class: "dialkit-color-label", for: textInputId.value }, props.label),
-      (0, import_vue12.h)("div", { class: "dialkit-color-inputs" }, [
-        isEditing.value ? (0, import_vue12.h)("input", {
-          id: textInputId.value,
-          type: "text",
-          class: "dialkit-color-hex-input",
-          value: editValue.value,
-          autofocus: true,
-          onInput: (event) => {
-            editValue.value = event.target.value;
-          },
-          onBlur: submit,
-          onKeydown: (event) => {
-            if (event.key === "Enter") submit();
-            if (event.key === "Escape") {
-              isEditing.value = false;
-              editValue.value = props.value;
-            }
+    const applyHex = (hex) => {
+      const rgba2 = parseHex(hex);
+      if (!rgba2) return;
+      const normalized = formatHex(rgba2, props.alpha);
+      hsva.value = rgbToHsv(rgba2);
+      lastEmitted = normalized;
+      emit("change", normalized);
+    };
+    const svDrag = useAreaDrag((x, y) => emitColor({ ...hsva.value, s: x, v: 1 - y }));
+    const hueDrag = useAreaDrag((x) => emitColor({ ...hsva.value, h: Math.min(x * 360, 359.999) }));
+    const alphaDrag = useAreaDrag((x) => emitColor({ ...hsva.value, a: x }));
+    const rgba = (0, import_vue12.computed)(() => hsvToRgb(hsva.value));
+    const opaqueHex = (0, import_vue12.computed)(() => formatHex(rgba.value, false));
+    const currentHex = (0, import_vue12.computed)(() => formatHex(rgba.value, props.alpha));
+    const channelSpecs = (0, import_vue12.computed)(() => format.value === "hex" ? [] : getChannels(format.value, props.alpha));
+    const channelValues = (0, import_vue12.computed)(() => format.value === "hex" ? [] : rgbaToChannels(rgba.value, format.value, props.alpha));
+    const commitChannel = (index, n) => {
+      const next = [...channelValues.value];
+      next[index] = n;
+      const committed = channelsToRgba(next, format.value, props.alpha);
+      const nextHsva = rgbToHsv(committed);
+      if (nextHsva.s === 0) nextHsva.h = hsva.value.h;
+      if (nextHsva.v === 0) nextHsva.s = hsva.value.s;
+      emitColor(nextHsva);
+    };
+    return () => (0, import_vue12.h)("div", {
+      class: "dialkit-color-picker",
+      style: { "--picker-hue": String(hsva.value.h) }
+    }, [
+      (0, import_vue12.h)("div", {
+        class: "dialkit-color-sv",
+        ref: svDrag.elRef,
+        ...svDrag.handlers
+      }, [
+        (0, import_vue12.h)("div", {
+          class: "dialkit-color-sv-thumb",
+          style: {
+            left: `${hsva.value.s * 100}%`,
+            top: `${(1 - hsva.value.v) * 100}%`,
+            background: opaqueHex.value
           }
-        }) : (0, import_vue12.h)("span", { class: "dialkit-color-hex", onClick: () => {
-          isEditing.value = true;
-        } }, (props.value ?? "").toUpperCase()),
-        (0, import_vue12.h)("button", {
-          class: "dialkit-color-swatch",
-          style: { backgroundColor: props.value },
-          title: "Pick color",
-          "aria-label": `Pick color for ${props.label}`,
-          onClick: () => colorInputRef.value?.click()
-        }),
-        (0, import_vue12.h)("input", {
-          ref: colorInputRef,
-          type: "color",
-          class: "dialkit-color-picker-native",
-          "aria-label": `${props.label} color picker`,
-          value: props.value.length === 4 ? expandShorthandHex(props.value) : props.value.slice(0, 7),
-          onInput: (event) => emit("change", event.target.value)
         })
-      ])
+      ]),
+      (0, import_vue12.h)("div", {
+        class: "dialkit-color-slider dialkit-color-hue",
+        ref: hueDrag.elRef,
+        ...hueDrag.handlers
+      }, [
+        (0, import_vue12.h)("div", {
+          class: "dialkit-color-slider-thumb",
+          style: {
+            left: `${hsva.value.h / 360 * 100}%`,
+            background: `hsl(${hsva.value.h} 100% 50%)`
+          }
+        })
+      ]),
+      props.alpha ? (0, import_vue12.h)("div", {
+        class: "dialkit-color-slider dialkit-color-alpha dialkit-checker",
+        ref: alphaDrag.elRef,
+        ...alphaDrag.handlers
+      }, [
+        (0, import_vue12.h)("div", {
+          class: "dialkit-color-alpha-gradient",
+          style: { background: `linear-gradient(to right, transparent, ${opaqueHex.value})` }
+        }),
+        (0, import_vue12.h)("div", {
+          class: "dialkit-color-slider-thumb",
+          style: {
+            left: `${hsva.value.a * 100}%`,
+            background: opaqueHex.value,
+            opacity: String(Math.max(hsva.value.a, 0.15))
+          }
+        })
+      ]) : null,
+      (0, import_vue12.h)(SegmentedControl, {
+        options: FORMAT_OPTIONS,
+        value: format.value,
+        onChange: (f) => {
+          stickyFormat = f;
+          format.value = f;
+        }
+      }),
+      (0, import_vue12.h)("div", { class: "dialkit-color-fields", "data-format": format.value }, format.value === "hex" ? [
+        (0, import_vue12.h)(HexField, {
+          value: currentHex.value,
+          alpha: props.alpha,
+          onCommit: (hex) => applyHex(hex)
+        }),
+        props.alpha ? (0, import_vue12.h)(ChannelField, {
+          spec: HEX_ALPHA_SPEC,
+          value: opacityPercent(rgba.value),
+          onCommit: (n) => emitColor({ ...hsva.value, a: Math.min(1, Math.max(0, n / 100)) })
+        }) : null
+      ] : channelSpecs.value.map((spec, i) => (0, import_vue12.h)(ChannelField, {
+        key: `${format.value}-${spec.key}`,
+        spec,
+        value: channelValues.value[i],
+        onCommit: (n) => commitChannel(i, n)
+      }))),
+      props.palette ? (0, import_vue12.h)("div", { class: "dialkit-color-palette" }, Array.from({ length: PALETTE_SIZE }, (_, i) => (0, import_vue12.h)(PaletteSlot, {
+        key: i,
+        color: slots.value[i] ?? null,
+        // Read the store at commit time — a 500ms hold is long enough for
+        // another panel or tab to have rewritten the palette underneath.
+        onSave: () => savePalette(loadPalette().map((s, j) => j === i ? currentHex.value : s)),
+        onApply: () => {
+          const saved = slots.value[i];
+          if (saved) applyHex(saved);
+        },
+        onClear: () => savePalette(loadPalette().map((s, j) => j === i ? null : s))
+      }))) : null
     ]);
   }
 });
 
+// src/vue/components/ColorControl.ts
+var PICKER_WIDTH = 240;
+var PICKER_BASE_HEIGHT = 270;
+var PICKER_ALPHA_HEIGHT = 22;
+var PICKER_PALETTE_HEIGHT = 30;
+var ColorControl = (0, import_vue13.defineComponent)({
+  name: "DialKitColorControl",
+  props: {
+    label: { type: String, required: true },
+    value: { type: String, required: true },
+    alpha: { type: Boolean, default: false },
+    palette: { type: Boolean, default: false }
+  },
+  emits: ["change"],
+  setup(props, { emit }) {
+    const isEditing = (0, import_vue13.ref)(false);
+    const editValue = (0, import_vue13.ref)(bareHex(props.value));
+    const isOpen = (0, import_vue13.ref)(false);
+    const pos = (0, import_vue13.ref)(null);
+    const portalTarget = (0, import_vue13.ref)(null);
+    const swatchRef = (0, import_vue13.ref)(null);
+    const pickerRef = (0, import_vue13.ref)(null);
+    const hexInputRef = (0, import_vue13.ref)(null);
+    (0, import_vue13.watch)(() => props.value, (value) => {
+      if (!isEditing.value) editValue.value = bareHex(value);
+    });
+    (0, import_vue13.watch)(isEditing, async (editing) => {
+      if (!editing) return;
+      await (0, import_vue13.nextTick)();
+      hexInputRef.value?.focus();
+      hexInputRef.value?.select();
+    });
+    const updatePos = () => {
+      const el = swatchRef.value;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const pickerHeight = PICKER_BASE_HEIGHT + (props.alpha ? PICKER_ALPHA_HEIGHT : 0) + (props.palette ? PICKER_PALETTE_HEIGHT : 0);
+      const spaceBelow = window.innerHeight - rect.bottom - 4;
+      const above = spaceBelow < pickerHeight && rect.top > spaceBelow;
+      const left = Math.max(8, rect.right - PICKER_WIDTH);
+      pos.value = { top: above ? rect.top - 4 : rect.bottom + 4, left, above };
+    };
+    const openPicker = () => {
+      updatePos();
+      isOpen.value = true;
+    };
+    const closePicker = () => {
+      isOpen.value = false;
+    };
+    const togglePicker = () => {
+      if (isOpen.value) closePicker();
+      else openPicker();
+    };
+    const setPickerRef = (node) => {
+      if (node instanceof HTMLElement) {
+        pickerRef.value = node;
+        return;
+      }
+      if (node && typeof node === "object" && "$el" in node) {
+        const el = node.$el;
+        pickerRef.value = el instanceof HTMLElement ? el : null;
+        return;
+      }
+      pickerRef.value = null;
+    };
+    (0, import_vue13.watch)(isOpen, (open, _, onCleanup) => {
+      if (!open) return;
+      const handleViewportChange = () => updatePos();
+      const handleDocumentClick = (event) => {
+        const target = event.target;
+        if (swatchRef.value?.contains(target) || pickerRef.value?.contains(target)) return;
+        closePicker();
+      };
+      const handleKeydown = (event) => {
+        if (event.key === "Escape") {
+          closePicker();
+          swatchRef.value?.focus();
+        }
+      };
+      updatePos();
+      document.addEventListener("mousedown", handleDocumentClick);
+      document.addEventListener("keydown", handleKeydown);
+      window.addEventListener("resize", handleViewportChange);
+      window.addEventListener("scroll", handleViewportChange, true);
+      onCleanup(() => {
+        document.removeEventListener("mousedown", handleDocumentClick);
+        document.removeEventListener("keydown", handleKeydown);
+        window.removeEventListener("resize", handleViewportChange);
+        window.removeEventListener("scroll", handleViewportChange, true);
+      });
+    });
+    (0, import_vue13.onMounted)(() => {
+      const root = swatchRef.value?.closest(".dialkit-root");
+      portalTarget.value = root ?? document.body;
+    });
+    const submitText = () => {
+      isEditing.value = false;
+      const normalized = normalizeHexEdit(editValue.value, props.alpha, parseHex(props.value)?.a ?? 1);
+      if (normalized) {
+        emit("change", normalized);
+      } else {
+        editValue.value = bareHex(props.value);
+      }
+    };
+    return () => {
+      const rgba = parseHex(props.value);
+      return (0, import_vue13.h)("div", { class: "dialkit-color-control" }, [
+        (0, import_vue13.h)("span", { class: "dialkit-color-label" }, props.label),
+        (0, import_vue13.h)("div", { class: "dialkit-color-inputs" }, [
+          // The whole token (hash included) is the click target for editing.
+          (0, import_vue13.h)("span", {
+            class: "dialkit-color-hex-wrap",
+            onClick: () => {
+              isEditing.value = true;
+            }
+          }, [
+            (0, import_vue13.h)("span", { class: "dialkit-color-hash", "aria-hidden": "true" }, "#"),
+            isEditing.value ? (0, import_vue13.h)("input", {
+              ref: hexInputRef,
+              type: "text",
+              class: "dialkit-color-hex-input",
+              "aria-label": `Hex color for ${props.label}`,
+              value: editValue.value,
+              onInput: (event) => {
+                editValue.value = event.target.value;
+              },
+              onBlur: submitText,
+              onKeydown: (event) => {
+                if (event.key === "Enter") {
+                  submitText();
+                } else if (event.key === "Escape") {
+                  event.stopPropagation();
+                  isEditing.value = false;
+                  editValue.value = bareHex(props.value);
+                }
+              }
+            }) : (0, import_vue13.h)("span", {
+              class: "dialkit-color-hex",
+              "aria-label": `Hex color for ${props.label}`
+            }, bareHex(props.value))
+          ]),
+          ...props.alpha && rgba ? [
+            (0, import_vue13.h)("span", { class: "dialkit-color-divider", "aria-hidden": "true" }),
+            (0, import_vue13.h)("span", { class: "dialkit-color-opacity" }, [
+              `${opacityPercent(rgba)} `,
+              (0, import_vue13.h)("span", { class: "dialkit-color-opacity-unit" }, "%")
+            ])
+          ] : [],
+          (0, import_vue13.h)("button", {
+            ref: swatchRef,
+            class: "dialkit-color-swatch",
+            style: { "--swatch-color": props.value },
+            "data-open": String(isOpen.value),
+            title: "Pick color",
+            "aria-label": `Pick color for ${props.label}`,
+            "aria-expanded": isOpen.value,
+            onClick: togglePicker
+          })
+        ]),
+        portalTarget.value ? (0, import_vue13.h)(import_vue13.Teleport, { to: portalTarget.value }, [
+          (0, import_vue13.h)(import_motion_v4.AnimatePresence, null, {
+            default: () => isOpen.value && pos.value ? [(0, import_vue13.h)(import_motion_v4.motion.div, {
+              key: "dialkit-color-picker-popover",
+              ref: setPickerRef,
+              class: "dialkit-color-picker-popover",
+              initial: { opacity: 0, y: pos.value.above ? 8 : -8, scale: 0.95 },
+              animate: { opacity: 1, y: 0, scale: 1 },
+              exit: { opacity: 0, y: pos.value.above ? 8 : -8, scale: 0.95 },
+              transition: { type: "spring", visualDuration: 0.15, bounce: 0 },
+              style: {
+                position: "fixed",
+                left: `${pos.value.left}px`,
+                width: `${PICKER_WIDTH}px`,
+                ...pos.value.above ? {
+                  bottom: `${window.innerHeight - pos.value.top}px`,
+                  transformOrigin: "bottom right"
+                } : {
+                  top: `${pos.value.top}px`,
+                  transformOrigin: "top right"
+                }
+              }
+            }, [
+              (0, import_vue13.h)(ColorPickerPanel, {
+                value: props.value,
+                alpha: props.alpha,
+                palette: props.palette,
+                onChange: (next) => emit("change", next)
+              })
+            ])] : []
+          })
+        ]) : null
+      ]);
+    };
+  }
+});
+
 // src/vue/components/PresetManager.ts
-var import_vue13 = require("vue");
-var import_motion_v4 = require("motion-v");
-var PresetManager = (0, import_vue13.defineComponent)({
+var import_vue14 = require("vue");
+var import_motion_v5 = require("motion-v");
+var PresetManager = (0, import_vue14.defineComponent)({
   name: "DialKitPresetManager",
   props: {
     panelId: { type: String, required: true },
@@ -2341,10 +3093,10 @@ var PresetManager = (0, import_vue13.defineComponent)({
     }
   },
   setup(props) {
-    const isOpen = (0, import_vue13.ref)(false);
-    const pos = (0, import_vue13.ref)({ top: 0, left: 0, width: 0 });
-    const triggerRef = (0, import_vue13.ref)(null);
-    const dropdownRef = (0, import_vue13.ref)(null);
+    const isOpen = (0, import_vue14.ref)(false);
+    const pos = (0, import_vue14.ref)({ top: 0, left: 0, width: 0 });
+    const triggerRef = (0, import_vue14.ref)(null);
+    const dropdownRef = (0, import_vue14.ref)(null);
     const hasPresets = () => props.presets.length > 0;
     const activePreset = () => props.presets.find((preset) => preset.id === props.activePresetId);
     const open = () => {
@@ -2374,7 +3126,7 @@ var PresetManager = (0, import_vue13.defineComponent)({
       if (isOpen.value) close();
       else open();
     };
-    (0, import_vue13.watch)(isOpen, (open2, _, onCleanup) => {
+    (0, import_vue14.watch)(isOpen, (open2, _, onCleanup) => {
       if (!open2) return;
       const handler = (event) => {
         const target = event.target;
@@ -2398,8 +3150,8 @@ var PresetManager = (0, import_vue13.defineComponent)({
       event.stopPropagation();
       DialStore.deletePreset(props.panelId, presetId);
     };
-    return () => (0, import_vue13.h)("div", { class: "dialkit-preset-manager" }, [
-      (0, import_vue13.h)("button", {
+    return () => (0, import_vue14.h)("div", { class: "dialkit-preset-manager" }, [
+      (0, import_vue14.h)("button", {
         ref: triggerRef,
         class: "dialkit-preset-trigger",
         onClick: toggle,
@@ -2407,8 +3159,8 @@ var PresetManager = (0, import_vue13.defineComponent)({
         "data-has-preset": String(!!activePreset()),
         "data-disabled": String(!hasPresets())
       }, [
-        (0, import_vue13.h)("span", { class: "dialkit-preset-label" }, activePreset()?.name ?? "Version 1"),
-        (0, import_vue13.h)(import_motion_v4.motion.svg, {
+        (0, import_vue14.h)("span", { class: "dialkit-preset-label" }, activePreset()?.name ?? "Version 1"),
+        (0, import_vue14.h)(import_motion_v5.motion.svg, {
           class: "dialkit-select-chevron",
           viewBox: "0 0 24 24",
           fill: "none",
@@ -2418,11 +3170,11 @@ var PresetManager = (0, import_vue13.defineComponent)({
           "stroke-linejoin": "round",
           animate: { rotate: isOpen.value ? 180 : 0, opacity: hasPresets() ? 0.6 : 0.25 },
           transition: { type: "spring", visualDuration: 0.2, bounce: 0.15 }
-        }, [(0, import_vue13.h)("path", { d: ICON_CHEVRON })])
+        }, [(0, import_vue14.h)("path", { d: ICON_CHEVRON })])
       ]),
-      (0, import_vue13.h)(import_vue13.Teleport, { to: "body" }, [
-        (0, import_vue13.h)(import_motion_v4.AnimatePresence, null, {
-          default: () => isOpen.value ? [(0, import_vue13.h)(import_motion_v4.motion.div, {
+      (0, import_vue14.h)(import_vue14.Teleport, { to: "body" }, [
+        (0, import_vue14.h)(import_motion_v5.AnimatePresence, null, {
+          default: () => isOpen.value ? [(0, import_vue14.h)(import_motion_v5.motion.div, {
             key: "dialkit-preset-dropdown",
             ref: setDropdownRef,
             class: "dialkit-root dialkit-preset-dropdown",
@@ -2437,31 +3189,31 @@ var PresetManager = (0, import_vue13.defineComponent)({
             exit: { opacity: 0, y: 4, scale: 0.97, pointerEvents: "none" },
             transition: { type: "spring", visualDuration: 0.15, bounce: 0 }
           }, [
-            (0, import_vue13.h)("div", {
+            (0, import_vue14.h)("div", {
               class: "dialkit-preset-item",
               "data-active": String(!props.activePresetId),
               onClick: () => handleSelect(null)
-            }, [(0, import_vue13.h)("span", { class: "dialkit-preset-name" }, "Version 1")]),
-            ...props.presets.map((preset) => (0, import_vue13.h)("div", {
+            }, [(0, import_vue14.h)("span", { class: "dialkit-preset-name" }, "Version 1")]),
+            ...props.presets.map((preset) => (0, import_vue14.h)("div", {
               key: preset.id,
               class: "dialkit-preset-item",
               "data-active": String(preset.id === props.activePresetId),
               onClick: () => handleSelect(preset.id)
             }, [
-              (0, import_vue13.h)("span", { class: "dialkit-preset-name" }, preset.name),
-              (0, import_vue13.h)("button", {
+              (0, import_vue14.h)("span", { class: "dialkit-preset-name" }, preset.name),
+              (0, import_vue14.h)("button", {
                 class: "dialkit-preset-delete",
                 onClick: (event) => handleDelete(event, preset.id),
                 title: "Delete preset"
               }, [
-                (0, import_vue13.h)("svg", {
+                (0, import_vue14.h)("svg", {
                   viewBox: "0 0 24 24",
                   fill: "none",
                   stroke: "currentColor",
                   "stroke-width": "2",
                   "stroke-linecap": "round",
                   "stroke-linejoin": "round"
-                }, ICON_TRASH.map((d) => (0, import_vue13.h)("path", { d })))
+                }, ICON_TRASH.map((d) => (0, import_vue14.h)("path", { d })))
               ])
             ]))
           ])] : []
@@ -2472,24 +3224,24 @@ var PresetManager = (0, import_vue13.defineComponent)({
 });
 
 // src/vue/components/ShortcutListener.ts
-var import_vue14 = require("vue");
+var import_vue15 = require("vue");
 var ShortcutKey = /* @__PURE__ */ Symbol("DialKitShortcut");
 function useShortcutContext() {
-  return (0, import_vue14.inject)(ShortcutKey, {
-    activePanelId: (0, import_vue14.ref)(null),
-    activePath: (0, import_vue14.ref)(null)
+  return (0, import_vue15.inject)(ShortcutKey, {
+    activePanelId: (0, import_vue15.ref)(null),
+    activePath: (0, import_vue15.ref)(null)
   });
 }
-var ShortcutListener = (0, import_vue14.defineComponent)({
+var ShortcutListener = (0, import_vue15.defineComponent)({
   name: "DialKitShortcutListener",
   setup(_, { slots }) {
-    const activePanelId = (0, import_vue14.ref)(null);
-    const activePath = (0, import_vue14.ref)(null);
+    const activePanelId = (0, import_vue15.ref)(null);
+    const activePath = (0, import_vue15.ref)(null);
     const activeKeys = /* @__PURE__ */ new Set();
     let isDragging = false;
     let lastMouseX = null;
     let dragAccumulator = 0;
-    (0, import_vue14.provide)(ShortcutKey, { activePanelId, activePath });
+    (0, import_vue15.provide)(ShortcutKey, { activePanelId, activePath });
     const resolveActiveTarget = (interaction) => {
       for (const key of activeKeys) {
         const panels = DialStore.getPanels();
@@ -2652,7 +3404,7 @@ var ShortcutListener = (0, import_vue14.defineComponent)({
       activePanelId.value = null;
       activePath.value = null;
     };
-    (0, import_vue14.onMounted)(() => {
+    (0, import_vue15.onMounted)(() => {
       window.addEventListener("keydown", handleKeyDown);
       window.addEventListener("keyup", handleKeyUp);
       window.addEventListener("wheel", handleWheel, { passive: false });
@@ -2661,7 +3413,7 @@ var ShortcutListener = (0, import_vue14.defineComponent)({
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("blur", handleWindowBlur);
     });
-    (0, import_vue14.onUnmounted)(() => {
+    (0, import_vue15.onUnmounted)(() => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("wheel", handleWheel);
@@ -2675,7 +3427,7 @@ var ShortcutListener = (0, import_vue14.defineComponent)({
 });
 
 // src/vue/components/Panel.ts
-var Panel = (0, import_vue15.defineComponent)({
+var Panel = (0, import_vue16.defineComponent)({
   name: "DialKitPanel",
   props: {
     panel: {
@@ -2693,21 +3445,21 @@ var Panel = (0, import_vue15.defineComponent)({
   },
   setup(props) {
     const shortcutCtx = useShortcutContext();
-    const values = (0, import_vue15.ref)(DialStore.getValues(props.panel.id));
-    const presets = (0, import_vue15.ref)(DialStore.getPresets(props.panel.id));
-    const activePresetId = (0, import_vue15.ref)(DialStore.getActivePresetId(props.panel.id));
-    const copied = (0, import_vue15.ref)(false);
+    const values = (0, import_vue16.ref)(DialStore.getValues(props.panel.id));
+    const presets = (0, import_vue16.ref)(DialStore.getPresets(props.panel.id));
+    const activePresetId = (0, import_vue16.ref)(DialStore.getActivePresetId(props.panel.id));
+    const copied = (0, import_vue16.ref)(false);
     const hasShortcuts = () => Object.keys(DialStore.getPanel(props.panel.id)?.shortcuts ?? {}).length > 0;
     let unsubscribe;
     let copiedTimeout = null;
-    (0, import_vue15.onMounted)(() => {
+    (0, import_vue16.onMounted)(() => {
       unsubscribe = DialStore.subscribe(props.panel.id, () => {
         values.value = DialStore.getValues(props.panel.id);
         presets.value = DialStore.getPresets(props.panel.id);
         activePresetId.value = DialStore.getActivePresetId(props.panel.id);
       });
     });
-    (0, import_vue15.onUnmounted)(() => {
+    (0, import_vue16.onUnmounted)(() => {
       unsubscribe?.();
       if (copiedTimeout) {
         window.clearTimeout(copiedTimeout);
@@ -2744,7 +3496,7 @@ Apply these values as the new defaults in the useDialKit call.`;
       const value = values.value[control.path];
       switch (control.type) {
         case "slider":
-          return (0, import_vue15.h)(Slider, {
+          return (0, import_vue16.h)(Slider, {
             key: control.path,
             label: control.label,
             value,
@@ -2756,7 +3508,7 @@ Apply these values as the new defaults in the useDialKit call.`;
             onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
           });
         case "toggle":
-          return (0, import_vue15.h)(Toggle, {
+          return (0, import_vue16.h)(Toggle, {
             key: control.path,
             label: control.label,
             checked: value,
@@ -2765,7 +3517,7 @@ Apply these values as the new defaults in the useDialKit call.`;
             onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
           });
         case "spring":
-          return (0, import_vue15.h)(SpringControl, {
+          return (0, import_vue16.h)(SpringControl, {
             key: control.path,
             panelId: props.panel.id,
             path: control.path,
@@ -2774,7 +3526,7 @@ Apply these values as the new defaults in the useDialKit call.`;
             onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
           });
         case "transition":
-          return (0, import_vue15.h)(TransitionControl, {
+          return (0, import_vue16.h)(TransitionControl, {
             key: control.path,
             panelId: props.panel.id,
             path: control.path,
@@ -2783,7 +3535,7 @@ Apply these values as the new defaults in the useDialKit call.`;
             onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
           });
         case "folder":
-          return (0, import_vue15.h)(Folder, {
+          return (0, import_vue16.h)(Folder, {
             key: control.path,
             title: control.label,
             defaultOpen: control.defaultOpen ?? true
@@ -2791,7 +3543,7 @@ Apply these values as the new defaults in the useDialKit call.`;
             default: () => (control.children ?? []).map(renderControl)
           });
         case "text":
-          return (0, import_vue15.h)(TextControl, {
+          return (0, import_vue16.h)(TextControl, {
             key: control.path,
             label: control.label,
             value,
@@ -2799,7 +3551,7 @@ Apply these values as the new defaults in the useDialKit call.`;
             onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
           });
         case "select":
-          return (0, import_vue15.h)(SelectControl, {
+          return (0, import_vue16.h)(SelectControl, {
             key: control.path,
             label: control.label,
             value,
@@ -2807,14 +3559,16 @@ Apply these values as the new defaults in the useDialKit call.`;
             onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
           });
         case "color":
-          return (0, import_vue15.h)(ColorControl, {
+          return (0, import_vue16.h)(ColorControl, {
             key: control.path,
             label: control.label,
             value,
+            alpha: control.alpha,
+            palette: control.palette,
             onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
           });
         case "action":
-          return (0, import_vue15.h)("button", {
+          return (0, import_vue16.h)("button", {
             key: control.path,
             class: "dialkit-button",
             onClick: () => DialStore.triggerAction(props.panel.id, control.path)
@@ -2824,57 +3578,57 @@ Apply these values as the new defaults in the useDialKit call.`;
       }
     };
     return () => {
-      const toolbarNode = (0, import_vue15.h)(import_vue15.Fragment, null, [
-        (0, import_vue15.h)(import_motion_v5.motion.button, {
+      const toolbarNode = (0, import_vue16.h)(import_vue16.Fragment, null, [
+        (0, import_vue16.h)(import_motion_v6.motion.button, {
           class: "dialkit-toolbar-add",
           onClick: handleAddPreset,
           title: "Add preset",
           whilePress: { scale: 0.9 },
           transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 }
         }, [
-          (0, import_vue15.h)("svg", {
+          (0, import_vue16.h)("svg", {
             viewBox: "0 0 24 24",
             fill: "none",
             stroke: "currentColor",
             "stroke-width": "2.5",
             "stroke-linecap": "round",
             "stroke-linejoin": "round"
-          }, ICON_ADD_PRESET.map((d) => (0, import_vue15.h)("path", { d })))
+          }, ICON_ADD_PRESET.map((d) => (0, import_vue16.h)("path", { d })))
         ]),
-        (0, import_vue15.h)(PresetManager, {
+        (0, import_vue16.h)(PresetManager, {
           panelId: props.panel.id,
           presets: presets.value,
           activePresetId: activePresetId.value
         }),
-        (0, import_vue15.h)(import_motion_v5.motion.button, {
+        (0, import_vue16.h)(import_motion_v6.motion.button, {
           class: "dialkit-toolbar-copy",
           onClick: handleCopy,
           title: "Copy parameters",
           whilePress: { scale: 0.95 },
           transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 }
         }, [
-          (0, import_vue15.h)("span", { class: "dialkit-toolbar-copy-icon-wrap" }, [
-            (0, import_vue15.h)("span", {
+          (0, import_vue16.h)("span", { class: "dialkit-toolbar-copy-icon-wrap" }, [
+            (0, import_vue16.h)("span", {
               class: "dialkit-toolbar-copy-icon",
               style: { opacity: copied.value ? 0 : 1, transition: "opacity 120ms ease" }
             }, [
-              (0, import_vue15.h)("svg", {
+              (0, import_vue16.h)("svg", {
                 viewBox: "0 0 24 24",
                 fill: "none",
                 width: 16,
                 height: 16
               }, [
-                (0, import_vue15.h)("path", {
+                (0, import_vue16.h)("path", {
                   d: ICON_CLIPBOARD.board,
                   stroke: "currentColor",
                   "stroke-width": 2,
                   "stroke-linejoin": "round"
                 }),
-                (0, import_vue15.h)("path", {
+                (0, import_vue16.h)("path", {
                   d: ICON_CLIPBOARD.sparkle,
                   fill: "currentColor"
                 }),
-                (0, import_vue15.h)("path", {
+                (0, import_vue16.h)("path", {
                   d: ICON_CLIPBOARD.body,
                   stroke: "currentColor",
                   "stroke-width": 2,
@@ -2883,8 +3637,8 @@ Apply these values as the new defaults in the useDialKit call.`;
                 })
               ])
             ]),
-            (0, import_vue15.h)(import_motion_v5.AnimatePresence, { initial: false, mode: "popLayout" }, {
-              default: () => copied.value ? [(0, import_vue15.h)(import_motion_v5.motion.span, {
+            (0, import_vue16.h)(import_motion_v6.AnimatePresence, { initial: false, mode: "popLayout" }, {
+              default: () => copied.value ? [(0, import_vue16.h)(import_motion_v6.motion.span, {
                 key: "check",
                 class: "dialkit-toolbar-copy-icon",
                 initial: { scale: 0.5, opacity: 0 },
@@ -2892,7 +3646,7 @@ Apply these values as the new defaults in the useDialKit call.`;
                 exit: { scale: 0.5, opacity: 0 },
                 transition: { type: "spring", visualDuration: 0.3, bounce: 0.2 }
               }, [
-                (0, import_vue15.h)("svg", {
+                (0, import_vue16.h)("svg", {
                   viewBox: "0 0 24 24",
                   fill: "none",
                   stroke: "currentColor",
@@ -2901,15 +3655,15 @@ Apply these values as the new defaults in the useDialKit call.`;
                   "stroke-linejoin": "round",
                   width: 16,
                   height: 16
-                }, [(0, import_vue15.h)("path", { d: ICON_CHECK })])
+                }, [(0, import_vue16.h)("path", { d: ICON_CHECK })])
               ])] : []
             })
           ]),
           "Copy"
         ])
       ]);
-      return (0, import_vue15.h)("div", { class: "dialkit-panel-wrapper" }, [
-        (0, import_vue15.h)(Folder, {
+      return (0, import_vue16.h)("div", { class: "dialkit-panel-wrapper" }, [
+        (0, import_vue16.h)(Folder, {
           title: props.panel.name,
           defaultOpen: props.defaultOpen,
           isRoot: true,
@@ -2926,7 +3680,7 @@ Apply these values as the new defaults in the useDialKit call.`;
 // src/vue/components/DialRoot.ts
 var import_meta = {};
 var isDevDefault = typeof process !== "undefined" && process?.env?.NODE_ENV ? process.env.NODE_ENV !== "production" : typeof import_meta !== "undefined" && import_meta.env?.MODE ? import_meta.env.MODE !== "production" : true;
-var DialRoot = (0, import_vue16.defineComponent)({
+var DialRoot = (0, import_vue17.defineComponent)({
   name: "DialKitDialRoot",
   props: {
     position: {
@@ -2951,26 +3705,26 @@ var DialRoot = (0, import_vue16.defineComponent)({
     }
   },
   setup(props) {
-    const panels = (0, import_vue16.ref)([]);
-    const mounted = (0, import_vue16.ref)(false);
+    const panels = (0, import_vue17.ref)([]);
+    const mounted = (0, import_vue17.ref)(false);
     let unsubscribe;
-    (0, import_vue16.onMounted)(() => {
+    (0, import_vue17.onMounted)(() => {
       mounted.value = true;
       panels.value = DialStore.getPanels();
       unsubscribe = DialStore.subscribeGlobal(() => {
         panels.value = DialStore.getPanels();
       });
     });
-    (0, import_vue16.onUnmounted)(() => {
+    (0, import_vue17.onUnmounted)(() => {
       unsubscribe?.();
     });
-    const renderContent = () => (0, import_vue16.h)(ShortcutListener, null, {
-      default: () => (0, import_vue16.h)("div", { class: "dialkit-root", "data-mode": props.mode, "data-theme": props.theme }, [
-        (0, import_vue16.h)("div", {
+    const renderContent = () => (0, import_vue17.h)(ShortcutListener, null, {
+      default: () => (0, import_vue17.h)("div", { class: "dialkit-root", "data-mode": props.mode, "data-theme": props.theme }, [
+        (0, import_vue17.h)("div", {
           class: "dialkit-panel",
           "data-position": props.mode === "inline" ? void 0 : props.position,
           "data-mode": props.mode
-        }, panels.value.map((panel) => (0, import_vue16.h)(Panel, {
+        }, panels.value.map((panel) => (0, import_vue17.h)(Panel, {
           key: panel.id,
           panel,
           defaultOpen: props.mode === "inline" || props.defaultOpen,
@@ -2985,7 +3739,7 @@ var DialRoot = (0, import_vue16.defineComponent)({
       if (props.mode === "inline") {
         return renderContent();
       }
-      return (0, import_vue16.h)(import_vue16.Teleport, { to: "body" }, renderContent());
+      return (0, import_vue17.h)(import_vue17.Teleport, { to: "body" }, renderContent());
     };
   }
 });
@@ -3003,14 +3757,14 @@ function mountDialRoot(el, value) {
   if (typeof window === "undefined") return;
   const host = document.createElement("div");
   el.appendChild(host);
-  const props = (0, import_vue17.shallowRef)(normalizeDirectiveValue(value));
-  const RootHost = (0, import_vue17.defineComponent)({
+  const props = (0, import_vue18.shallowRef)(normalizeDirectiveValue(value));
+  const RootHost = (0, import_vue18.defineComponent)({
     name: "DialKitDirectiveHost",
     setup() {
-      return () => (0, import_vue17.h)(DialRoot, props.value);
+      return () => (0, import_vue18.h)(DialRoot, props.value);
     }
   });
-  const app = (0, import_vue17.createApp)(RootHost);
+  const app = (0, import_vue18.createApp)(RootHost);
   app.mount(host);
   states.set(el, { app, host, props });
 }
@@ -3039,7 +3793,7 @@ var vDialKit = {
 };
 
 // src/vue/components/ShortcutsMenu.ts
-var import_vue18 = require("vue");
+var import_vue19 = require("vue");
 function formatShortcutKey(sc) {
   if (!sc.key) return "\u2014";
   const mod = sc.modifier === "alt" ? "\u2325" : sc.modifier === "shift" ? "\u21E7" : sc.modifier === "meta" ? "\u2318" : "";
@@ -3058,7 +3812,7 @@ function formatInteraction(sc) {
       return "scroll";
   }
 }
-var ShortcutsMenu = (0, import_vue18.defineComponent)({
+var ShortcutsMenu = (0, import_vue19.defineComponent)({
   name: "DialKitShortcutsMenu",
   props: {
     panelId: {
@@ -3067,10 +3821,10 @@ var ShortcutsMenu = (0, import_vue18.defineComponent)({
     }
   },
   setup(props) {
-    const isOpen = (0, import_vue18.ref)(false);
-    const triggerRef = (0, import_vue18.ref)(null);
-    const dropdownRef = (0, import_vue18.ref)(null);
-    const pos = (0, import_vue18.ref)({ top: 0, right: 0 });
+    const isOpen = (0, import_vue19.ref)(false);
+    const triggerRef = (0, import_vue19.ref)(null);
+    const dropdownRef = (0, import_vue19.ref)(null);
+    const pos = (0, import_vue19.ref)({ top: 0, right: 0 });
     const open = () => {
       const rect = triggerRef.value?.getBoundingClientRect();
       if (rect) {
@@ -3100,7 +3854,7 @@ var ShortcutsMenu = (0, import_vue18.defineComponent)({
         mousedownHandler = null;
       }
     };
-    (0, import_vue18.onUnmounted)(() => {
+    (0, import_vue19.onUnmounted)(() => {
       removeOutsideClickListener();
     });
     return () => {
@@ -3129,13 +3883,13 @@ var ShortcutsMenu = (0, import_vue18.defineComponent)({
         removeOutsideClickListener();
       }
       return [
-        (0, import_vue18.h)("button", {
+        (0, import_vue19.h)("button", {
           ref: triggerRef,
           class: "dialkit-shortcuts-trigger",
           onClick: toggle,
           title: "Keyboard shortcuts"
         }, [
-          (0, import_vue18.h)("svg", {
+          (0, import_vue19.h)("svg", {
             viewBox: "0 0 24 24",
             fill: "none",
             stroke: "currentColor",
@@ -3143,16 +3897,16 @@ var ShortcutsMenu = (0, import_vue18.defineComponent)({
             "stroke-linecap": "round",
             "stroke-linejoin": "round"
           }, [
-            (0, import_vue18.h)("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
-            (0, import_vue18.h)("path", { d: "M6 10H6.01" }),
-            (0, import_vue18.h)("path", { d: "M10 10H10.01" }),
-            (0, import_vue18.h)("path", { d: "M14 10H14.01" }),
-            (0, import_vue18.h)("path", { d: "M18 10H18.01" }),
-            (0, import_vue18.h)("path", { d: "M8 14H16" })
+            (0, import_vue19.h)("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
+            (0, import_vue19.h)("path", { d: "M6 10H6.01" }),
+            (0, import_vue19.h)("path", { d: "M10 10H10.01" }),
+            (0, import_vue19.h)("path", { d: "M14 10H14.01" }),
+            (0, import_vue19.h)("path", { d: "M18 10H18.01" }),
+            (0, import_vue19.h)("path", { d: "M8 14H16" })
           ])
         ]),
-        isOpen.value ? (0, import_vue18.h)(import_vue18.Teleport, { to: "body" }, [
-          (0, import_vue18.h)("div", {
+        isOpen.value ? (0, import_vue19.h)(import_vue19.Teleport, { to: "body" }, [
+          (0, import_vue19.h)("div", {
             ref: dropdownRef,
             class: "dialkit-root dialkit-shortcuts-dropdown",
             style: {
@@ -3161,19 +3915,19 @@ var ShortcutsMenu = (0, import_vue18.defineComponent)({
               right: `${pos.value.right}px`
             }
           }, [
-            (0, import_vue18.h)("div", { class: "dialkit-shortcuts-title" }, "Keyboard Shortcuts"),
-            (0, import_vue18.h)(
+            (0, import_vue19.h)("div", { class: "dialkit-shortcuts-title" }, "Keyboard Shortcuts"),
+            (0, import_vue19.h)(
               "div",
               { class: "dialkit-shortcuts-list" },
               rows.map(
-                (row) => (0, import_vue18.h)("div", { key: row.path, class: "dialkit-shortcuts-row" }, [
-                  (0, import_vue18.h)("span", { class: "dialkit-shortcuts-row-key" }, formatShortcutKey(row.shortcut)),
-                  (0, import_vue18.h)("span", { class: "dialkit-shortcuts-row-label" }, row.label),
-                  (0, import_vue18.h)("span", { class: "dialkit-shortcuts-row-mode" }, formatInteraction(row.shortcut))
+                (row) => (0, import_vue19.h)("div", { key: row.path, class: "dialkit-shortcuts-row" }, [
+                  (0, import_vue19.h)("span", { class: "dialkit-shortcuts-row-key" }, formatShortcutKey(row.shortcut)),
+                  (0, import_vue19.h)("span", { class: "dialkit-shortcuts-row-label" }, row.label),
+                  (0, import_vue19.h)("span", { class: "dialkit-shortcuts-row-mode" }, formatInteraction(row.shortcut))
                 ])
               )
             ),
-            (0, import_vue18.h)("div", { class: "dialkit-shortcuts-hint" }, "See pill badges on controls for keys")
+            (0, import_vue19.h)("div", { class: "dialkit-shortcuts-hint" }, "See pill badges on controls for keys")
           ])
         ]) : null
       ];
@@ -3182,8 +3936,8 @@ var ShortcutsMenu = (0, import_vue18.defineComponent)({
 });
 
 // src/vue/components/Module.ts
-var import_vue19 = require("vue");
-var Module = (0, import_vue19.defineComponent)({
+var import_vue20 = require("vue");
+var Module = (0, import_vue20.defineComponent)({
   name: "DialKitModule",
   props: {
     title: { type: String, required: true },
@@ -3196,11 +3950,11 @@ var Module = (0, import_vue19.defineComponent)({
       props.onEnabledChange?.(enabled);
       emit("enabledChange", enabled);
     };
-    return () => (0, import_vue19.h)("div", { class: "dialkit-module" }, [
-      (0, import_vue19.h)("div", { class: "dialkit-module-header" }, [
-        (0, import_vue19.h)("span", { class: "dialkit-module-title" }, props.title),
-        (0, import_vue19.h)("div", { class: "dialkit-module-switch" }, [
-          (0, import_vue19.h)(SegmentedControl, {
+    return () => (0, import_vue20.h)("div", { class: "dialkit-module" }, [
+      (0, import_vue20.h)("div", { class: "dialkit-module-header" }, [
+        (0, import_vue20.h)("span", { class: "dialkit-module-title" }, props.title),
+        (0, import_vue20.h)("div", { class: "dialkit-module-switch" }, [
+          (0, import_vue20.h)(SegmentedControl, {
             options: [
               { value: "off", label: "Off" },
               { value: "on", label: "On" }
@@ -3210,9 +3964,9 @@ var Module = (0, import_vue19.defineComponent)({
           })
         ])
       ]),
-      (0, import_vue19.h)("div", { class: "dialkit-module-collapse", "data-open": props.enabled }, [
-        (0, import_vue19.h)("div", { class: "dialkit-module-collapse-clip" }, [
-          (0, import_vue19.h)("div", { class: "dialkit-module-inner" }, slots.default ? slots.default() : [])
+      (0, import_vue20.h)("div", { class: "dialkit-module-collapse", "data-open": props.enabled }, [
+        (0, import_vue20.h)("div", { class: "dialkit-module-collapse-clip" }, [
+          (0, import_vue20.h)("div", { class: "dialkit-module-inner" }, slots.default ? slots.default() : [])
         ])
       ])
     ]);
@@ -3220,8 +3974,8 @@ var Module = (0, import_vue19.defineComponent)({
 });
 
 // src/vue/components/ButtonGroup.ts
-var import_vue20 = require("vue");
-var ButtonGroup = (0, import_vue20.defineComponent)({
+var import_vue21 = require("vue");
+var ButtonGroup = (0, import_vue21.defineComponent)({
   name: "DialKitButtonGroup",
   props: {
     buttons: {
@@ -3230,18 +3984,18 @@ var ButtonGroup = (0, import_vue20.defineComponent)({
     }
   },
   setup(props) {
-    return () => (0, import_vue20.h)(
+    return () => (0, import_vue21.h)(
       "div",
       { class: "dialkit-button-group" },
       props.buttons.map(
-        (button) => (0, import_vue20.h)("button", { class: "dialkit-button", onClick: button.onClick }, button.label)
+        (button) => (0, import_vue21.h)("button", { class: "dialkit-button", onClick: button.onClick }, button.label)
       )
     );
   }
 });
 
 // src/vue/components/WaveformVisualization.ts
-var import_vue21 = require("vue");
+var import_vue22 = require("vue");
 
 // src/waveform-dsp.ts
 function mixToMono(buffer) {
@@ -3634,7 +4388,7 @@ function createWaveformEngine(canvas, get) {
 }
 
 // src/vue/components/WaveformVisualization.ts
-var WaveformVisualization = (0, import_vue21.defineComponent)({
+var WaveformVisualization = (0, import_vue22.defineComponent)({
   name: "DialKitWaveformVisualization",
   props: {
     buffer: { type: Object, default: null },
@@ -3656,10 +4410,10 @@ var WaveformVisualization = (0, import_vue21.defineComponent)({
     height: { type: Number, default: 140 }
   },
   setup(props) {
-    const canvasRef = (0, import_vue21.ref)(null);
-    const zoom = (0, import_vue21.ref)(1);
+    const canvasRef = (0, import_vue22.ref)(null);
+    const zoom = (0, import_vue22.ref)(1);
     let engine = null;
-    (0, import_vue21.onMounted)(() => {
+    (0, import_vue22.onMounted)(() => {
       if (!canvasRef.value) return;
       engine = createWaveformEngine(
         canvasRef.value,
@@ -3685,17 +4439,17 @@ var WaveformVisualization = (0, import_vue21.defineComponent)({
         })
       );
     });
-    (0, import_vue21.onBeforeUnmount)(() => engine?.destroy());
-    const minusIcon = () => (0, import_vue21.h)("svg", { viewBox: "0 0 16 16", fill: "none" }, [
-      (0, import_vue21.h)("path", { d: "M3.5 8h9", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" })
+    (0, import_vue22.onBeforeUnmount)(() => engine?.destroy());
+    const minusIcon = () => (0, import_vue22.h)("svg", { viewBox: "0 0 16 16", fill: "none" }, [
+      (0, import_vue22.h)("path", { d: "M3.5 8h9", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" })
     ]);
-    const plusIcon = () => (0, import_vue21.h)("svg", { viewBox: "0 0 16 16", fill: "none" }, [
-      (0, import_vue21.h)("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" })
+    const plusIcon = () => (0, import_vue22.h)("svg", { viewBox: "0 0 16 16", fill: "none" }, [
+      (0, import_vue22.h)("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" })
     ]);
     return () => {
       const framingLoop = props.autoZoomOnLoop && !!props.loop;
       const children = [
-        (0, import_vue21.h)("canvas", {
+        (0, import_vue22.h)("canvas", {
           ref: canvasRef,
           class: "dialkit-waveform-viz",
           style: { width: `${props.width}px`, height: `${props.height}px` }
@@ -3705,7 +4459,7 @@ var WaveformVisualization = (0, import_vue21.defineComponent)({
         const buttons = [];
         if (zoom.value > 1) {
           buttons.push(
-            (0, import_vue21.h)(
+            (0, import_vue22.h)(
               "button",
               {
                 type: "button",
@@ -3719,7 +4473,7 @@ var WaveformVisualization = (0, import_vue21.defineComponent)({
           );
         }
         buttons.push(
-          (0, import_vue21.h)(
+          (0, import_vue22.h)(
             "button",
             {
               type: "button",
@@ -3732,15 +4486,15 @@ var WaveformVisualization = (0, import_vue21.defineComponent)({
             [plusIcon()]
           )
         );
-        children.push((0, import_vue21.h)("div", { class: "dialkit-waveform-zoom" }, buttons));
+        children.push((0, import_vue22.h)("div", { class: "dialkit-waveform-zoom" }, buttons));
       }
-      return (0, import_vue21.h)("div", { class: "dialkit-waveform-viz-wrap", style: { width: `${props.width}px` } }, children);
+      return (0, import_vue22.h)("div", { class: "dialkit-waveform-viz-wrap", style: { width: `${props.width}px` } }, children);
     };
   }
 });
 
 // src/vue/components/CurveComposer.ts
-var import_vue22 = require("vue");
+var import_vue23 = require("vue");
 
 // src/curve-composer-core.ts
 var CURVE_CYCLE = ["linear", "easeIn", "easeOut", "easeInOut", "spring"];
@@ -3754,7 +4508,7 @@ var DRAG_THRESHOLD2 = 3;
 var EDGE_HIT2 = 6;
 var CURVE_MIN_WEIGHT_FRAC = 0.06;
 var lerp = (a, b, t) => a + (b - a) * t;
-var clamp01 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
+var clamp012 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
 var clampBipolar = (v) => v < -1 ? -1 : v > 1 ? 1 : v;
 var SKEW_MAX = 0.45;
 function steepnessGain(steepness) {
@@ -3767,7 +4521,7 @@ function deriveEase(type, curvature, steepness = 0) {
   const x1 = base[0] * k;
   const x2 = 1 + (base[2] - 1) * k;
   const shift = clampBipolar(curvature) * SKEW_MAX;
-  return [clamp01(x1 + shift), base[1], clamp01(x2 + shift), base[3]];
+  return [clamp012(x1 + shift), base[1], clamp012(x2 + shift), base[3]];
 }
 function bezierAxis(p1, p2, s) {
   const u = 1 - s;
@@ -3778,21 +4532,21 @@ function bezierAxisDeriv(p1, p2, s) {
   return 3 * u * u * p1 + 6 * u * s * (p2 - p1) + 3 * s * s * (1 - p2);
 }
 function bezierY(ease, x) {
-  const tx = clamp01(x);
+  const tx = clamp012(x);
   let s = tx;
   for (let i = 0; i < 6; i++) {
     const xs = bezierAxis(ease[0], ease[2], s) - tx;
     if (Math.abs(xs) < 1e-5) break;
     const d = bezierAxisDeriv(ease[0], ease[2], s);
     if (Math.abs(d) < 1e-6) break;
-    s = clamp01(s - xs / d);
+    s = clamp012(s - xs / d);
   }
   return bezierAxis(ease[1], ease[3], s);
 }
 var SPRING_SAMPLES = 72;
 function springPoints(curvature, steepness = 0) {
   const visualDuration = 1;
-  const bounce = clamp01((clampBipolar(curvature) + 1) / 2) * 0.6;
+  const bounce = clamp012((clampBipolar(curvature) + 1) / 2) * 0.6;
   const mass = 1;
   let stiffness = 2 * Math.PI / visualDuration;
   stiffness = stiffness * stiffness;
@@ -3813,7 +4567,7 @@ function springPoints(curvature, steepness = 0) {
   return raw;
 }
 function interp(points, t) {
-  const x = clamp01(t) * (points.length - 1);
+  const x = clamp012(t) * (points.length - 1);
   const i = Math.floor(x);
   if (i >= points.length - 1) return points[points.length - 1];
   return lerp(points[i], points[i + 1], x - i);
@@ -3849,7 +4603,7 @@ function segmentSpan(segments, index) {
 }
 function segmentIndexAt(xNorm, segments) {
   const total = totalWeight(segments);
-  const x = clamp01(xNorm) * total;
+  const x = clamp012(xNorm) * total;
   let acc = 0;
   for (let i = 0; i < segments.length; i++) {
     acc += segments[i].weight;
@@ -3933,7 +4687,7 @@ function setDriverSteepness(comp, steepness) {
 var DRAG_ENERGY_GAIN = 0.6;
 var DRAG_STEEP_GAIN = 0.6;
 function toLocalCoords(clientX, clientY, rect, totalH) {
-  const xN = clamp01((clientX - rect.left) / (rect.width || 1));
+  const xN = clamp012((clientX - rect.left) / (rect.width || 1));
   const py = (clientY - rect.top) / (rect.height || 1) * totalH;
   return { xN, py };
 }
@@ -3958,14 +4712,14 @@ function buildSamplers(comp) {
   };
 }
 function directionPhase(u, dir) {
-  const x = clamp01(u);
+  const x = clamp012(u);
   if (dir === "reverse") return 1 - x;
   if (dir === "mirror") return 1 - Math.abs(1 - 2 * x);
   return x;
 }
 function readComposition(comp, u, s) {
   const inputPhase = directionPhase(u, comp.direction);
-  const warpedPhase = s.driver ? clamp01(s.driver(inputPhase)) : inputPhase;
+  const warpedPhase = s.driver ? clamp012(s.driver(inputPhase)) : inputPhase;
   const segIndex = segmentIndexAt(warpedPhase, comp.segments);
   const [a, b] = segmentSpan(comp.segments, segIndex);
   const localT = b > a ? (warpedPhase - a) / (b - a) : 0;
@@ -4026,8 +4780,8 @@ var TRIGGER_FLYBACK = 0.5;
 function triggersCrossed(prevValue, curValue, steps) {
   const n = Math.max(2, Math.floor(steps));
   const seg = 1 / (n - 1);
-  const p = clamp01(prevValue);
-  const c = clamp01(curValue);
+  const p = clamp012(prevValue);
+  const c = clamp012(curValue);
   const delta = c - p;
   const fired = [];
   if (Math.abs(delta) > TRIGGER_FLYBACK) {
@@ -4047,7 +4801,7 @@ function triggersCrossed(prevValue, curValue, steps) {
 }
 
 // src/vue/components/CurveComposer.ts
-var CurveComposer = (0, import_vue22.defineComponent)({
+var CurveComposer = (0, import_vue23.defineComponent)({
   name: "DialKitCurveComposer",
   props: {
     /** The curve series (controlled). */
@@ -4082,23 +4836,23 @@ var CurveComposer = (0, import_vue22.defineComponent)({
     height: { type: Number, default: 140 }
   },
   setup(props) {
-    const svgRef = (0, import_vue22.ref)(null);
-    const seriesPlayheadRef = (0, import_vue22.ref)(null);
-    const seriesDotRef = (0, import_vue22.ref)(null);
-    const driverPlayheadRef = (0, import_vue22.ref)(null);
-    const drag = (0, import_vue22.ref)(null);
-    const hover = (0, import_vue22.ref)(null);
-    const layout = (0, import_vue22.computed)(() => composerLayout(props.width, props.height, props.driver != null));
-    const W = (0, import_vue22.computed)(() => layout.value.W);
-    const totalH = (0, import_vue22.computed)(() => layout.value.totalH);
-    const mainRect = (0, import_vue22.computed)(() => layout.value.mainRect);
-    const driverRect = (0, import_vue22.computed)(() => layout.value.driverRect);
-    const composition = (0, import_vue22.computed)(() => ({
+    const svgRef = (0, import_vue23.ref)(null);
+    const seriesPlayheadRef = (0, import_vue23.ref)(null);
+    const seriesDotRef = (0, import_vue23.ref)(null);
+    const driverPlayheadRef = (0, import_vue23.ref)(null);
+    const drag = (0, import_vue23.ref)(null);
+    const hover = (0, import_vue23.ref)(null);
+    const layout = (0, import_vue23.computed)(() => composerLayout(props.width, props.height, props.driver != null));
+    const W = (0, import_vue23.computed)(() => layout.value.W);
+    const totalH = (0, import_vue23.computed)(() => layout.value.totalH);
+    const mainRect = (0, import_vue23.computed)(() => layout.value.mainRect);
+    const driverRect = (0, import_vue23.computed)(() => layout.value.driverRect);
+    const composition = (0, import_vue23.computed)(() => ({
       segments: props.segments,
       driver: props.driver,
       direction: props.direction
     }));
-    const samplers = (0, import_vue22.computed)(() => buildSamplers(composition.value));
+    const samplers = (0, import_vue23.computed)(() => buildSamplers(composition.value));
     let raf = 0;
     let prevTrigValue = Number.NaN;
     let armW = Number.NaN;
@@ -4137,10 +4891,10 @@ var CurveComposer = (0, import_vue22.defineComponent)({
         prevTrigValue = Number.NaN;
       }
     };
-    (0, import_vue22.onMounted)(() => {
+    (0, import_vue23.onMounted)(() => {
       raf = requestAnimationFrame(tick);
     });
-    (0, import_vue22.onBeforeUnmount)(() => cancelAnimationFrame(raf));
+    (0, import_vue23.onBeforeUnmount)(() => cancelAnimationFrame(raf));
     const hitLayout = () => ({ totalH: totalH.value, driverY: driverRect.value ? driverRect.value.y : null });
     const localCoords = (clientX, clientY) => {
       const rect = svgRef.value.getBoundingClientRect();
@@ -4253,15 +5007,15 @@ var CurveComposer = (0, import_vue22.defineComponent)({
       for (let i = 1; i < n; i++) {
         const gx = i / n * W.value;
         lines.push(
-          (0, import_vue22.h)("line", { key: `g-${rect.y}-${i}`, class: "dialkit-cc-grid", x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h })
+          (0, import_vue23.h)("line", { key: `g-${rect.y}-${i}`, class: "dialkit-cc-grid", x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h })
         );
       }
       return lines;
     };
-    const renderLaneBg = (rect, key) => (0, import_vue22.h)("rect", { key, class: "dialkit-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 });
+    const renderLaneBg = (rect, key) => (0, import_vue23.h)("rect", { key, class: "dialkit-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 });
     const diagonal = (rect, span, key) => {
       const d = diagonalLine(rect, span, W.value);
-      return (0, import_vue22.h)("line", { key, class: "dialkit-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 });
+      return (0, import_vue23.h)("line", { key, class: "dialkit-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 });
     };
     return () => {
       const main = mainRect.value;
@@ -4275,7 +5029,7 @@ var CurveComposer = (0, import_vue22.defineComponent)({
       if (hover.value?.kind === "segment" && !drag.value) {
         const span = segmentSpan(props.segments, hover.value.index);
         children.push(
-          (0, import_vue22.h)("rect", {
+          (0, import_vue23.h)("rect", {
             class: "dialkit-cc-seg-hover",
             x: span[0] * W.value,
             y: main.y,
@@ -4288,10 +5042,10 @@ var CurveComposer = (0, import_vue22.defineComponent)({
       children.push(
         props.segments.map((seg, i) => {
           const span = segmentSpan(props.segments, i);
-          return (0, import_vue22.h)("g", { key: `seg-${i}` }, [
+          return (0, import_vue23.h)("g", { key: `seg-${i}` }, [
             diagonal(main, span, `diag-${i}`),
-            (0, import_vue22.h)("path", { class: "dialkit-cc-curve", d: curvePath(seg, main, span, W.value) }),
-            (0, import_vue22.h)(
+            (0, import_vue23.h)("path", { class: "dialkit-cc-curve", d: curvePath(seg, main, span, W.value) }),
+            (0, import_vue23.h)(
               "text",
               { class: "dialkit-cc-label", x: (span[0] + span[1]) * 0.5 * W.value, y: main.y + 13 },
               seg.type
@@ -4301,7 +5055,7 @@ var CurveComposer = (0, import_vue22.defineComponent)({
       );
       children.push(
         interior.map(
-          (bx, i) => (0, import_vue22.h)("line", {
+          (bx, i) => (0, import_vue23.h)("line", {
             key: `b-${i}`,
             class: "dialkit-cc-boundary",
             "data-active": String(
@@ -4315,7 +5069,7 @@ var CurveComposer = (0, import_vue22.defineComponent)({
         )
       );
       children.push(
-        (0, import_vue22.h)("line", {
+        (0, import_vue23.h)("line", {
           ref: seriesPlayheadRef,
           class: "dialkit-cc-playhead",
           x1: 0,
@@ -4326,7 +5080,7 @@ var CurveComposer = (0, import_vue22.defineComponent)({
         })
       );
       children.push(
-        (0, import_vue22.h)("circle", {
+        (0, import_vue23.h)("circle", {
           ref: seriesDotRef,
           class: "dialkit-cc-dot",
           cx: 0,
@@ -4340,18 +5094,18 @@ var CurveComposer = (0, import_vue22.defineComponent)({
         children.push(renderLaneGrid(dr));
         if (hover.value?.kind === "driver" && !drag.value) {
           children.push(
-            (0, import_vue22.h)("rect", { class: "dialkit-cc-seg-hover", x: 0, y: dr.y, width: W.value, height: dr.h, rx: 8 })
+            (0, import_vue23.h)("rect", { class: "dialkit-cc-seg-hover", x: 0, y: dr.y, width: W.value, height: dr.h, rx: 8 })
           );
         }
         children.push(diagonal(dr, [0, 1], "driver-diag"));
         children.push(
-          (0, import_vue22.h)("path", { class: "dialkit-cc-curve dialkit-cc-curve-driver", d: curvePath(props.driver, dr, [0, 1], W.value) })
+          (0, import_vue23.h)("path", { class: "dialkit-cc-curve dialkit-cc-curve-driver", d: curvePath(props.driver, dr, [0, 1], W.value) })
         );
         children.push(
-          (0, import_vue22.h)("text", { class: "dialkit-cc-label", x: W.value * 0.5, y: dr.y + 13 }, `driver \xB7 ${props.driver.type}`)
+          (0, import_vue23.h)("text", { class: "dialkit-cc-label", x: W.value * 0.5, y: dr.y + 13 }, `driver \xB7 ${props.driver.type}`)
         );
         children.push(
-          (0, import_vue22.h)("line", {
+          (0, import_vue23.h)("line", {
             ref: driverPlayheadRef,
             class: "dialkit-cc-playhead",
             x1: 0,
@@ -4362,8 +5116,8 @@ var CurveComposer = (0, import_vue22.defineComponent)({
           })
         );
       }
-      return (0, import_vue22.h)("div", { class: "dialkit-cc-wrap", style: { width: `${W.value}px` } }, [
-        (0, import_vue22.h)(
+      return (0, import_vue23.h)("div", { class: "dialkit-cc-wrap", style: { width: `${W.value}px` } }, [
+        (0, import_vue23.h)(
           "svg",
           {
             ref: svgRef,
@@ -4389,6 +5143,7 @@ var CurveComposer = (0, import_vue22.defineComponent)({
 0 && (module.exports = {
   ButtonGroup,
   ColorControl,
+  ColorPickerPanel,
   CurveComposer,
   DialRoot,
   DialStore,

@@ -22,6 +22,7 @@ export type { CurveType, CurveSegment, CurveDriver, CurveComposition, DriverDire
 export { TextControl } from './components/TextControl';
 export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';
+export { ColorPickerPanel } from './components/ColorPickerPanel';
 export { PresetManager } from './components/PresetManager';
 
 // Store exports
