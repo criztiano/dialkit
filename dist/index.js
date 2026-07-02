@@ -1103,7 +1103,7 @@ function getFirstOptionValue(options) {
 }
 
 // src/components/DialRoot.tsx
-import { useEffect as useEffect13, useState as useState16, useRef as useRef18, useCallback as useCallback10 } from "react";
+import { useEffect as useEffect14, useState as useState16, useRef as useRef18, useCallback as useCallback10 } from "react";
 import { createPortal as createPortal6 } from "react-dom";
 
 // src/components/Panel.tsx
@@ -3068,12 +3068,12 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
 }
 
 // src/components/GradientControl.tsx
-import { useState as useState10, useRef as useRef12, useEffect as useEffect8, useCallback as useCallback7 } from "react";
+import { useState as useState10, useRef as useRef12, useEffect as useEffect9, useCallback as useCallback7 } from "react";
 import { createPortal as createPortal3 } from "react-dom";
 import { motion as motion5, AnimatePresence as AnimatePresence4 } from "motion/react";
 
 // src/components/GradientPanel.tsx
-import { useState as useState9, useRef as useRef11 } from "react";
+import { useState as useState9, useRef as useRef11, useEffect as useEffect8 } from "react";
 import { jsx as jsx14, jsxs as jsxs13 } from "react/jsx-runtime";
 var TYPE_OPTIONS = [
   { value: "linear", label: "Linear" },
@@ -3089,6 +3089,11 @@ function GradientPanel({ value, onChange }) {
   const [detach, setDetach] = useState9(null);
   const stripRef = useRef11(null);
   const drag = useRef11({ mode: "idle", activeIndex: -1, originX: 0, originY: 0, timer: null, working: value });
+  const valueRef = useRef11(value);
+  valueRef.current = value;
+  useEffect8(() => () => {
+    if (drag.current.timer) clearTimeout(drag.current.timer);
+  }, []);
   const safeIndex = Math.min(selectedIndex, value.stops.length - 1);
   const stripPos = (clientX) => {
     const rect = stripRef.current.getBoundingClientRect();
@@ -3136,7 +3141,7 @@ function GradientPanel({ value, onChange }) {
           d.timer = null;
           d.mode = "idle";
           setHoldingIndex(-1);
-          const next2 = removeStop(d.working, index2);
+          const next2 = removeStop(valueRef.current, index2);
           onChange(next2);
           setSelectedIndex(Math.min(index2, next2.stops.length - 1));
         }, LONG_PRESS_MS);
@@ -3290,11 +3295,11 @@ function GradientControl({ label, value, onChange }) {
     updatePos();
     setIsOpen(true);
   };
-  useEffect8(() => {
+  useEffect9(() => {
     const root = triggerRef.current?.closest(".dialkit-root");
     setPortalTarget(root ?? document.body);
   }, []);
-  useEffect8(() => {
+  useEffect9(() => {
     if (!isOpen) return;
     updatePos();
     const onViewport = () => updatePos();
@@ -3360,7 +3365,7 @@ function GradientControl({ label, value, onChange }) {
 }
 
 // src/components/GalleryControl.tsx
-import { useState as useState11, useRef as useRef13, useEffect as useEffect9 } from "react";
+import { useState as useState11, useRef as useRef13, useEffect as useEffect10 } from "react";
 import { jsx as jsx16, jsxs as jsxs15 } from "react/jsx-runtime";
 function itemContent(item, skeleton) {
   if (item.render) return item.render();
@@ -3370,7 +3375,7 @@ function itemContent(item, skeleton) {
 function GalleryImage({ item }) {
   const [loaded, setLoaded] = useState11(false);
   const imgRef = useRef13(null);
-  useEffect9(() => {
+  useEffect10(() => {
     const img = imgRef.current;
     if (!img) return;
     if (img.complete && img.naturalWidth > 0) {
@@ -3519,7 +3524,7 @@ function FileControl({ label, value, accept, multiple = false, onChange, onPick 
 }
 
 // src/components/SwatchControl.tsx
-import { useState as useState12, useRef as useRef15, useEffect as useEffect10, useCallback as useCallback8 } from "react";
+import { useState as useState12, useRef as useRef15, useEffect as useEffect11, useCallback as useCallback8 } from "react";
 import { createPortal as createPortal4 } from "react-dom";
 import { motion as motion6, AnimatePresence as AnimatePresence5 } from "motion/react";
 import { jsx as jsx18, jsxs as jsxs17 } from "react/jsx-runtime";
@@ -3575,11 +3580,11 @@ function SwatchControl({ label, value, options, onChange }) {
       if (highlight >= 0 && highlight < options.length) select(options[highlight].value);
     }
   };
-  useEffect10(() => {
+  useEffect11(() => {
     const root = triggerRef.current?.closest(".dialkit-root");
     setPortalTarget(root ?? document.body);
   }, []);
-  useEffect10(() => {
+  useEffect11(() => {
     if (!isOpen) return;
     updatePos();
     const onViewport = () => updatePos();
@@ -3700,7 +3705,7 @@ function ChipsControl({ label, value, options, onChange, onRemove }) {
 }
 
 // src/components/ListControl.tsx
-import { useRef as useRef16, useState as useState13, useEffect as useEffect11 } from "react";
+import { useRef as useRef16, useState as useState13, useEffect as useEffect12 } from "react";
 import { jsx as jsx20, jsxs as jsxs19 } from "react/jsx-runtime";
 function FieldControl({ field, value, onChange }) {
   switch (field.kind) {
@@ -3729,7 +3734,7 @@ function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, on
   if (ids.length !== value.length) {
     setIds((cur) => value.map((_, i) => cur[i] ?? mkId()));
   }
-  useEffect11(() => {
+  useEffect12(() => {
     const disarm = () => {
       armedRef.current = null;
     };
@@ -3882,7 +3887,7 @@ function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, on
 }
 
 // src/components/PresetManager.tsx
-import { useState as useState14, useRef as useRef17, useEffect as useEffect12, useCallback as useCallback9 } from "react";
+import { useState as useState14, useRef as useRef17, useEffect as useEffect13, useCallback as useCallback9 } from "react";
 import { createPortal as createPortal5 } from "react-dom";
 import { motion as motion7, AnimatePresence as AnimatePresence6 } from "motion/react";
 import { jsx as jsx21, jsxs as jsxs20 } from "react/jsx-runtime";
@@ -3906,7 +3911,7 @@ function PresetManager({ panelId, presets, activePresetId, onAdd }) {
     if (isOpen) close();
     else open();
   }, [isOpen, open, close]);
-  useEffect12(() => {
+  useEffect13(() => {
     if (!isOpen) return;
     const handler = (e) => {
       const target = e.target;
@@ -4309,7 +4314,7 @@ function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover"
   const draggingRef = useRef18(false);
   const dragStartRef = useRef18(null);
   const didDragRef = useRef18(false);
-  useEffect13(() => {
+  useEffect14(() => {
     setMounted(true);
     setPanels(DialStore.getPanels());
     const unsubscribe = DialStore.subscribeGlobal(() => {
@@ -4317,7 +4322,7 @@ function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover"
     });
     return unsubscribe;
   }, []);
-  useEffect13(() => {
+  useEffect14(() => {
     if (!panelRef.current || inline) return;
     const observer = new MutationObserver(() => {
       const inner = panelRef.current?.querySelector(".dialkit-panel-inner");
@@ -4450,7 +4455,7 @@ function ButtonGroup({ buttons }) {
 }
 
 // src/components/WaveformVisualization.tsx
-import { useRef as useRef19, useEffect as useEffect14, useState as useState17 } from "react";
+import { useRef as useRef19, useEffect as useEffect15, useState as useState17 } from "react";
 
 // src/waveform-dsp.ts
 function mixToMono(buffer) {
@@ -4886,7 +4891,7 @@ function WaveformVisualization({
     onSeek,
     onLoopChange
   };
-  useEffect14(() => {
+  useEffect15(() => {
     if (!canvasRef.current) return;
     const engine = createWaveformEngine(canvasRef.current, () => runtimeRef.current);
     return () => engine.destroy();
@@ -4912,7 +4917,7 @@ function WaveformVisualization({
 }
 
 // src/components/CurveComposer.tsx
-import { useRef as useRef20, useEffect as useEffect15, useMemo, useState as useState18 } from "react";
+import { useRef as useRef20, useEffect as useEffect16, useMemo, useState as useState18 } from "react";
 
 // src/curve-composer-core.ts
 var CURVE_CYCLE = ["linear", "easeIn", "easeOut", "easeInOut", "spring"];
@@ -5285,7 +5290,7 @@ function CurveComposer({
   const [hover, setHover] = useState18(null);
   const dragRef = useRef20(null);
   dragRef.current = drag;
-  useEffect15(() => {
+  useEffect16(() => {
     let raf = 0;
     prevTrigValue.current = Number.NaN;
     const tick = () => {
@@ -5508,7 +5513,7 @@ function CurveComposer({
 }
 
 // src/components/ShortcutsMenu.tsx
-import { useState as useState19, useRef as useRef21, useEffect as useEffect16, useCallback as useCallback11 } from "react";
+import { useState as useState19, useRef as useRef21, useEffect as useEffect17, useCallback as useCallback11 } from "react";
 import { createPortal as createPortal7 } from "react-dom";
 import { motion as motion9, AnimatePresence as AnimatePresence8 } from "motion/react";
 import { Fragment as Fragment7, jsx as jsx28, jsxs as jsxs25 } from "react/jsx-runtime";
@@ -5547,7 +5552,7 @@ function ShortcutsMenu({ panelId }) {
     if (isOpen) close();
     else open();
   }, [isOpen, open, close]);
-  useEffect16(() => {
+  useEffect17(() => {
     if (!isOpen) return;
     const handler = (e) => {
       const target = e.target;

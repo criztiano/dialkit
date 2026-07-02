@@ -3271,6 +3271,7 @@ var GradientPanel = (0, import_vue14.defineComponent)({
       if (drag.timer) clearTimeout(drag.timer);
       drag.timer = null;
     };
+    (0, import_vue14.onBeforeUnmount)(clearTimer);
     const resetDrag = () => {
       clearTimer();
       drag.mode = "idle";
@@ -3304,7 +3305,7 @@ var GradientPanel = (0, import_vue14.defineComponent)({
             drag.timer = null;
             drag.mode = "idle";
             holdingIndex.value = -1;
-            const next2 = removeStop(drag.working, index2);
+            const next2 = removeStop(props.value, index2);
             emit("change", next2);
             selectedIndex.value = Math.min(index2, next2.stops.length - 1);
           }, LONG_PRESS_MS);

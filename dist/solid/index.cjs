@@ -3652,6 +3652,7 @@ function GradientPanel(props) {
     if (drag.timer) clearTimeout(drag.timer);
     drag.timer = null;
   };
+  (0, import_solid_js12.onCleanup)(clearTimer);
   const resetDrag = () => {
     clearTimer();
     drag.mode = "idle";
@@ -3685,7 +3686,7 @@ function GradientPanel(props) {
           drag.timer = null;
           drag.mode = "idle";
           setHoldingIndex(-1);
-          const next2 = removeStop(drag.working, index2);
+          const next2 = removeStop(props.value, index2);
           props.onChange(next2);
           setSelectedIndex(Math.min(index2, next2.stops.length - 1));
         }, LONG_PRESS_MS);

@@ -3186,6 +3186,11 @@ function GradientPanel({ value, onChange }) {
   const [detach, setDetach] = (0, import_react15.useState)(null);
   const stripRef = (0, import_react15.useRef)(null);
   const drag = (0, import_react15.useRef)({ mode: "idle", activeIndex: -1, originX: 0, originY: 0, timer: null, working: value });
+  const valueRef = (0, import_react15.useRef)(value);
+  valueRef.current = value;
+  (0, import_react15.useEffect)(() => () => {
+    if (drag.current.timer) clearTimeout(drag.current.timer);
+  }, []);
   const safeIndex = Math.min(selectedIndex, value.stops.length - 1);
   const stripPos = (clientX) => {
     const rect = stripRef.current.getBoundingClientRect();
@@ -3233,7 +3238,7 @@ function GradientPanel({ value, onChange }) {
           d.timer = null;
           d.mode = "idle";
           setHoldingIndex(-1);
-          const next2 = removeStop(d.working, index2);
+          const next2 = removeStop(valueRef.current, index2);
           onChange(next2);
           setSelectedIndex(Math.min(index2, next2.stops.length - 1));
         }, LONG_PRESS_MS);

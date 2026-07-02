@@ -1056,7 +1056,7 @@ import { setAttribute as _$setAttribute12 } from "solid-js/web";
 import { effect as _$effect14 } from "solid-js/web";
 import { insert as _$insert15 } from "solid-js/web";
 import { createComponent as _$createComponent14 } from "solid-js/web";
-import { createSignal as createSignal14, onMount as onMount10, onCleanup as onCleanup12, Show as Show11, For as For7 } from "solid-js";
+import { createSignal as createSignal14, onMount as onMount10, onCleanup as onCleanup13, Show as Show11, For as For7 } from "solid-js";
 import { Portal as Portal5 } from "solid-js/web";
 
 // src/solid/components/ShortcutListener.tsx
@@ -1386,7 +1386,7 @@ import { use as _$use10 } from "solid-js/web";
 import { insert as _$insert14 } from "solid-js/web";
 import { createComponent as _$createComponent13 } from "solid-js/web";
 import { memo as _$memo10 } from "solid-js/web";
-import { createSignal as createSignal13, createEffect as createEffect9, onMount as onMount9, onCleanup as onCleanup11, For as For6 } from "solid-js";
+import { createSignal as createSignal13, createEffect as createEffect9, onMount as onMount9, onCleanup as onCleanup12, For as For6 } from "solid-js";
 import { animate as animate7 } from "motion";
 
 // src/icons.ts
@@ -3546,7 +3546,7 @@ import { createComponent as _$createComponent11 } from "solid-js/web";
 import { memo as _$memo8 } from "solid-js/web";
 import { use as _$use8 } from "solid-js/web";
 import { insert as _$insert12 } from "solid-js/web";
-import { createSignal as createSignal11, createEffect as createEffect7, onMount as onMount7, onCleanup as onCleanup9, Show as Show9 } from "solid-js";
+import { createSignal as createSignal11, createEffect as createEffect7, onMount as onMount7, onCleanup as onCleanup10, Show as Show9 } from "solid-js";
 import { Portal as Portal3 } from "solid-js/web";
 import { animate as animate5 } from "motion";
 
@@ -3559,7 +3559,7 @@ import { effect as _$effect10 } from "solid-js/web";
 import { insert as _$insert11 } from "solid-js/web";
 import { use as _$use7 } from "solid-js/web";
 import { createComponent as _$createComponent10 } from "solid-js/web";
-import { createSignal as createSignal10, For as For4, Show as Show8 } from "solid-js";
+import { createSignal as createSignal10, For as For4, Show as Show8, onCleanup as onCleanup9 } from "solid-js";
 var _tmpl$19 = /* @__PURE__ */ _$template11(`<div class=dialkit-gradient-panel><div class=dialkit-gradient-strip></div><span class=dialkit-gradient-divider aria-hidden=true>`);
 var _tmpl$29 = /* @__PURE__ */ _$template11(`<button type=button class=dialkit-gradient-stop>`);
 var TYPE_OPTIONS = [{
@@ -3605,6 +3605,7 @@ function GradientPanel(props) {
     if (drag.timer) clearTimeout(drag.timer);
     drag.timer = null;
   };
+  onCleanup9(clearTimer);
   const resetDrag = () => {
     clearTimer();
     drag.mode = "idle";
@@ -3638,7 +3639,7 @@ function GradientPanel(props) {
           drag.timer = null;
           drag.mode = "idle";
           setHoldingIndex(-1);
-          const next2 = removeStop(drag.working, index2);
+          const next2 = removeStop(props.value, index2);
           props.onChange(next2);
           setSelectedIndex(Math.min(index2, next2.stops.length - 1));
         }, LONG_PRESS_MS);
@@ -3816,7 +3817,7 @@ function GradientControl(props) {
   onMount7(() => {
     const root = triggerRef?.closest(".dialkit-root");
     setPortalTarget(root ?? document.body);
-    onCleanup9(() => {
+    onCleanup10(() => {
       closeAnim?.stop();
     });
   });
@@ -3894,7 +3895,7 @@ function GradientControl(props) {
     document.addEventListener("keydown", handleKeyDown);
     window.addEventListener("resize", handleViewportChange);
     window.addEventListener("scroll", handleViewportChange, true);
-    onCleanup9(() => {
+    onCleanup10(() => {
       document.removeEventListener("mousedown", handleMouseDown);
       document.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("resize", handleViewportChange);
@@ -3994,7 +3995,7 @@ import { setAttribute as _$setAttribute10 } from "solid-js/web";
 import { insert as _$insert13 } from "solid-js/web";
 import { memo as _$memo9 } from "solid-js/web";
 import { use as _$use9 } from "solid-js/web";
-import { createSignal as createSignal12, createEffect as createEffect8, onMount as onMount8, onCleanup as onCleanup10, Show as Show10, For as For5 } from "solid-js";
+import { createSignal as createSignal12, createEffect as createEffect8, onMount as onMount8, onCleanup as onCleanup11, Show as Show10, For as For5 } from "solid-js";
 import { Portal as Portal4 } from "solid-js/web";
 import { animate as animate6 } from "motion";
 var _tmpl$21 = /* @__PURE__ */ _$template13(`<div class="dialkit-root dialkit-preset-dropdown"style=position:fixed><div class=dialkit-preset-item><span class=dialkit-preset-name>Version 1`);
@@ -4023,7 +4024,7 @@ function PresetManager(props) {
       chevronRef.style.transform = `rotate(${isOpen() ? 180 : 0}deg)`;
       chevronRef.style.opacity = String(hasPresets() ? 0.6 : 0.25);
     }
-    onCleanup10(() => {
+    onCleanup11(() => {
       closeAnim?.stop();
       chevronAnim?.stop();
     });
@@ -4096,7 +4097,7 @@ function PresetManager(props) {
     document.addEventListener("mousedown", handler);
     window.addEventListener("resize", handleViewportChange);
     window.addEventListener("scroll", handleViewportChange, true);
-    onCleanup10(() => {
+    onCleanup11(() => {
       document.removeEventListener("mousedown", handler);
       window.removeEventListener("resize", handleViewportChange);
       window.removeEventListener("scroll", handleViewportChange, true);
@@ -4261,7 +4262,7 @@ function Panel(props) {
       copyCheckIconRef.style.filter = "blur(4px)";
       didInitCopyIcons = true;
     }
-    onCleanup11(unsub);
+    onCleanup12(unsub);
   });
   const handleAddPreset = () => {
     const nextNum = presets().length + 2;
@@ -4302,7 +4303,7 @@ Apply these values as the new defaults in the createDialKit call.`;
       filter: isCopied ? "blur(0px)" : "blur(4px)"
     }, transition);
   });
-  onCleanup11(() => {
+  onCleanup12(() => {
     addTapAnim?.stop();
     copyTapAnim?.stop();
     copyClipboardAnim?.stop();
@@ -4583,7 +4584,7 @@ function DialRoot(props) {
     const unsub = DialStore.subscribeGlobal(() => {
       setPanels(DialStore.getPanels());
     });
-    onCleanup12(unsub);
+    onCleanup13(unsub);
   });
   const content = () => _$createComponent14(ShortcutListener, {
     get children() {
@@ -4713,7 +4714,7 @@ import { effect as _$effect16 } from "solid-js/web";
 import { insert as _$insert18 } from "solid-js/web";
 import { createComponent as _$createComponent17 } from "solid-js/web";
 import { use as _$use11 } from "solid-js/web";
-import { createSignal as createSignal15, mergeProps, onCleanup as onCleanup13, onMount as onMount11, Show as Show12 } from "solid-js";
+import { createSignal as createSignal15, mergeProps, onCleanup as onCleanup14, onMount as onMount11, Show as Show12 } from "solid-js";
 
 // src/waveform-dsp.ts
 function mixToMono(buffer) {
@@ -5148,7 +5149,7 @@ function WaveformVisualization(props) {
       onSeek: p.onSeek,
       onLoopChange: p.onLoopChange
     }));
-    onCleanup13(() => engine.destroy());
+    onCleanup14(() => engine.destroy());
   });
   const framingLoop = () => p.autoZoomOnLoop && !!p.loop;
   return (() => {
@@ -5202,7 +5203,7 @@ import { insert as _$insert19 } from "solid-js/web";
 import { memo as _$memo13 } from "solid-js/web";
 import { createComponent as _$createComponent18 } from "solid-js/web";
 import { use as _$use12 } from "solid-js/web";
-import { createMemo as createMemo2, createSignal as createSignal16, For as For9, mergeProps as mergeProps2, onCleanup as onCleanup14, onMount as onMount12, Show as Show13 } from "solid-js";
+import { createMemo as createMemo2, createSignal as createSignal16, For as For9, mergeProps as mergeProps2, onCleanup as onCleanup15, onMount as onMount12, Show as Show13 } from "solid-js";
 
 // src/curve-composer-core.ts
 var CURVE_CYCLE = ["linear", "easeIn", "easeOut", "easeInOut", "spring"];
@@ -5586,7 +5587,7 @@ function CurveComposer(props) {
       }
     };
     raf = requestAnimationFrame(tick);
-    onCleanup14(() => cancelAnimationFrame(raf));
+    onCleanup15(() => cancelAnimationFrame(raf));
   });
   const hitLayout = () => {
     const dr = driverRect();

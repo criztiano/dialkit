@@ -3172,7 +3172,7 @@ import { Teleport as Teleport3, defineComponent as defineComponent14, h as h14, 
 import { AnimatePresence as AnimatePresence4, motion as motion4 } from "motion-v";
 
 // src/vue/components/GradientPanel.ts
-import { computed as computed6, defineComponent as defineComponent13, h as h13, ref as ref11 } from "vue";
+import { computed as computed6, defineComponent as defineComponent13, h as h13, ref as ref11, onBeforeUnmount as onBeforeUnmount2 } from "vue";
 var TYPE_OPTIONS = [
   { value: "linear", label: "Linear" },
   { value: "radial", label: "Radial" },
@@ -3213,6 +3213,7 @@ var GradientPanel = defineComponent13({
       if (drag.timer) clearTimeout(drag.timer);
       drag.timer = null;
     };
+    onBeforeUnmount2(clearTimer);
     const resetDrag = () => {
       clearTimer();
       drag.mode = "idle";
@@ -3246,7 +3247,7 @@ var GradientPanel = defineComponent13({
             drag.timer = null;
             drag.mode = "idle";
             holdingIndex.value = -1;
-            const next2 = removeStop(drag.working, index2);
+            const next2 = removeStop(props.value, index2);
             emit("change", next2);
             selectedIndex.value = Math.min(index2, next2.stops.length - 1);
           }, LONG_PRESS_MS);
@@ -4416,7 +4417,7 @@ var ButtonGroup = defineComponent22({
 });
 
 // src/vue/components/WaveformVisualization.ts
-import { defineComponent as defineComponent23, h as h23, ref as ref18, onMounted as onMounted15, onBeforeUnmount as onBeforeUnmount2 } from "vue";
+import { defineComponent as defineComponent23, h as h23, ref as ref18, onMounted as onMounted15, onBeforeUnmount as onBeforeUnmount3 } from "vue";
 
 // src/waveform-dsp.ts
 function mixToMono(buffer) {
@@ -4860,7 +4861,7 @@ var WaveformVisualization = defineComponent23({
         })
       );
     });
-    onBeforeUnmount2(() => engine?.destroy());
+    onBeforeUnmount3(() => engine?.destroy());
     const minusIcon = () => h23("svg", { viewBox: "0 0 16 16", fill: "none" }, [
       h23("path", { d: "M3.5 8h9", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" })
     ]);
@@ -4921,7 +4922,7 @@ import {
   ref as ref19,
   computed as computed7,
   onMounted as onMounted16,
-  onBeforeUnmount as onBeforeUnmount3
+  onBeforeUnmount as onBeforeUnmount4
 } from "vue";
 
 // src/curve-composer-core.ts
@@ -5322,7 +5323,7 @@ var CurveComposer = defineComponent24({
     onMounted16(() => {
       raf = requestAnimationFrame(tick);
     });
-    onBeforeUnmount3(() => cancelAnimationFrame(raf));
+    onBeforeUnmount4(() => cancelAnimationFrame(raf));
     const hitLayout = () => ({ totalH: totalH.value, driverY: driverRect.value ? driverRect.value.y : null });
     const localCoords = (clientX, clientY) => {
       const rect = svgRef.value.getBoundingClientRect();
