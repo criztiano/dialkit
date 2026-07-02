@@ -1,5 +1,6 @@
 import { useEffect, useId, useSyncExternalStore, useRef } from 'react';
-import { DialStore, DialConfig, DialValue, DialEvent, ResolvedValues, SpringConfig, EasingConfig, SelectConfig, ColorConfig, TextConfig, GalleryConfig, FileConfig, SwatchConfig, ChipsConfig, ListConfig, ActionConfig, ShortcutConfig, normalizeListItems } from '../store/DialStore';
+import { DialStore, DialConfig, DialValue, DialEvent, ResolvedValues, SpringConfig, EasingConfig, SelectConfig, ColorConfig, GradientConfig, TextConfig, GalleryConfig, FileConfig, SwatchConfig, ChipsConfig, ListConfig, ActionConfig, ShortcutConfig, normalizeListItems } from '../store/DialStore';
+import { normalizeGradient, DEFAULT_GRADIENT } from '../gradient-core';
 
 export interface UseDialOptions {
   onAction?: (action: string) => void;
@@ -96,6 +97,9 @@ function buildResolvedValues(
     } else if (isColorConfig(configValue)) {
       // Color config resolves to string value
       result[key] = flatValues[path] ?? configValue.default ?? '#000000';
+    } else if (isGradientConfig(configValue)) {
+      // Gradient config resolves to a normalized GradientValue object
+      result[key] = flatValues[path] ?? normalizeGradient(configValue.default ?? DEFAULT_GRADIENT);
     } else if (isTextConfig(configValue)) {
       // Text config resolves to string value
       result[key] = flatValues[path] ?? configValue.default ?? '';
@@ -144,6 +148,10 @@ function isSelectConfig(value: unknown): value is SelectConfig {
 
 function isColorConfig(value: unknown): value is ColorConfig {
   return hasType(value, 'color');
+}
+
+function isGradientConfig(value: unknown): value is GradientConfig {
+  return hasType(value, 'gradient');
 }
 
 function isTextConfig(value: unknown): value is TextConfig {

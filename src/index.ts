@@ -62,6 +62,22 @@ export {
   clampOklchToSrgb,
 } from './color-core';
 export type { RGBA, HSVA, HSLA, OKLCH, ColorFormat } from './color-core';
+export { GradientControl } from './components/GradientControl';
+export { GradientPanel } from './components/GradientPanel';
+export {
+  gradientToCss,
+  normalizeGradient,
+  colorAtPosition,
+  addStop,
+  removeStop,
+  moveStop,
+  setStopColor,
+  setGradientType,
+  setGradientAngle,
+  DEFAULT_GRADIENT,
+  MIN_STOPS,
+} from './gradient-core';
+export type { GradientValue, GradientStop, GradientType } from './gradient-core';
 export { GalleryControl } from './components/GalleryControl';
 export { FileControl } from './components/FileControl';
 export { SwatchControl } from './components/SwatchControl';
@@ -79,6 +95,7 @@ export type {
   ActionConfig,
   SelectConfig,
   ColorConfig,
+  GradientConfig,
   TextConfig,
   GalleryConfig,
   GalleryItem,
