@@ -2,7 +2,7 @@ import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { animate } from 'motion';
 import { ColorPickerPanel } from './ColorPickerPanel';
-import { parseHex, normalizeHex, displayHex, opacityPercent } from '../../color-core';
+import { parseHex, normalizeHex, bareHex, opacityPercent } from '../../color-core';
 
 interface ColorControlProps {
   label: string;
@@ -22,7 +22,7 @@ export function ColorControl(props: ColorControlProps) {
   const alpha = () => props.alpha ?? false;
   const palette = () => props.palette ?? false;
   const [isEditing, setIsEditing] = createSignal(false);
-  const [editValue, setEditValue] = createSignal(props.value);
+  const [editValue, setEditValue] = createSignal(bareHex(props.value));
   const [isOpen, setIsOpen] = createSignal(false);
   const [mounted, setMounted] = createSignal(false);
   const [pos, setPos] = createSignal<{ top: number; left: number; above: boolean } | null>(null);
@@ -33,11 +33,12 @@ export function ColorControl(props: ColorControlProps) {
 
   const rgba = () => parseHex(props.value);
 
-  // Sync editValue when value changes externally
+  // Sync editValue when value changes externally (edited without the '#' —
+  // it renders as a fixed symbol; normalizeHex tolerates pasted '#…' anyway)
   createEffect(() => {
     const value = props.value;
     if (!isEditing()) {
-      setEditValue(value);
+      setEditValue(bareHex(value));
     }
   });
 
@@ -123,7 +124,7 @@ export function ColorControl(props: ColorControlProps) {
     if (normalized) {
       props.onChange(normalized);
     } else {
-      setEditValue(props.value);
+      setEditValue(bareHex(props.value));
     }
   };
 
@@ -133,7 +134,7 @@ export function ColorControl(props: ColorControlProps) {
       // Cancel only the edit — don't let the document handler close the popover too.
       e.stopPropagation();
       setIsEditing(false);
-      setEditValue(props.value);
+      setEditValue(bareHex(props.value));
     }
   };
 
@@ -154,31 +155,6 @@ export function ColorControl(props: ColorControlProps) {
     <div class="dialkit-color-control">
       <span class="dialkit-color-label">{props.label}</span>
       <div class="dialkit-color-inputs">
-        <Show when={alpha() && rgba()}>
-          {(r) => (
-            <span class="dialkit-color-opacity">
-              {opacityPercent(r())} <span class="dialkit-color-opacity-unit">%</span>
-            </span>
-          )}
-        </Show>
-        <Show
-          when={isEditing()}
-          fallback={
-            <span class="dialkit-color-hex" onClick={() => setIsEditing(true)}>
-              {displayHex(props.value)}
-            </span>
-          }
-        >
-          <input
-            type="text"
-            class="dialkit-color-hex-input"
-            value={editValue()}
-            onInput={(e) => setEditValue(e.currentTarget.value)}
-            onBlur={handleTextSubmit}
-            onKeyDown={handleKeyDown}
-            autofocus
-          />
-        </Show>
         <button
           ref={swatchRef}
           class="dialkit-color-swatch"
@@ -189,6 +165,38 @@ export function ColorControl(props: ColorControlProps) {
           aria-label={`Pick color for ${props.label}`}
           aria-expanded={isOpen()}
         />
+        <span class="dialkit-color-hex-wrap">
+          <span class="dialkit-color-hash" aria-hidden="true">#</span>
+          <Show
+            when={isEditing()}
+            fallback={
+              <span class="dialkit-color-hex" onClick={() => setIsEditing(true)}>
+                {bareHex(props.value)}
+              </span>
+            }
+          >
+            <input
+              // Focus + select-all on edit start so a paste replaces the value outright.
+              ref={(el) => queueMicrotask(() => { el.focus(); el.select(); })}
+              type="text"
+              class="dialkit-color-hex-input"
+              value={editValue()}
+              onInput={(e) => setEditValue(e.currentTarget.value)}
+              onBlur={handleTextSubmit}
+              onKeyDown={handleKeyDown}
+            />
+          </Show>
+        </span>
+        <Show when={alpha() && rgba()}>
+          {(r) => (
+            <>
+              <span class="dialkit-color-divider" aria-hidden="true" />
+              <span class="dialkit-color-opacity">
+                {opacityPercent(r())} <span class="dialkit-color-opacity-unit">%</span>
+              </span>
+            </>
+          )}
+        </Show>
       </div>
 
       <Show when={!!portalTarget()}>

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { ColorPickerPanel } from './ColorPickerPanel';
-import { parseHex, normalizeHex, displayHex, opacityPercent } from '../color-core';
+import { parseHex, normalizeHex, bareHex, opacityPercent } from '../color-core';
 
 interface ColorControlProps {
   label: string;
@@ -20,7 +20,16 @@ const PICKER_PALETTE_HEIGHT = 30;
 
 export function ColorControl({ label, value, onChange, alpha = false, palette = false }: ColorControlProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState(value);
+  const [editValue, setEditValue] = useState(() => bareHex(value));
+  const hexInputRef = useRef<HTMLInputElement>(null);
+
+  // Focus + select-all on edit start so a paste replaces the value outright.
+  useEffect(() => {
+    if (isEditing) {
+      hexInputRef.current?.focus();
+      hexInputRef.current?.select();
+    }
+  }, [isEditing]);
   const [isOpen, setIsOpen] = useState(false);
   const swatchRef = useRef<HTMLButtonElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -29,10 +38,11 @@ export function ColorControl({ label, value, onChange, alpha = false, palette = 
 
   const rgba = parseHex(value);
 
-  // Sync editValue when value changes externally
+  // Sync editValue when value changes externally (edited without the '#' —
+  // it renders as a fixed symbol; normalizeHex tolerates pasted '#…' anyway)
   useEffect(() => {
     if (!isEditing) {
-      setEditValue(value);
+      setEditValue(bareHex(value));
     }
   }, [value, isEditing]);
 
@@ -91,7 +101,7 @@ export function ColorControl({ label, value, onChange, alpha = false, palette = 
     if (normalized) {
       onChange(normalized);
     } else {
-      setEditValue(value);
+      setEditValue(bareHex(value));
     }
   }
 
@@ -102,7 +112,7 @@ export function ColorControl({ label, value, onChange, alpha = false, palette = 
       // Cancel only the edit — don't let the document handler close the popover too.
       e.stopPropagation();
       setIsEditing(false);
-      setEditValue(value);
+      setEditValue(bareHex(value));
     }
   }
 
@@ -110,29 +120,6 @@ export function ColorControl({ label, value, onChange, alpha = false, palette = 
     <div className="dialkit-color-control">
       <span className="dialkit-color-label">{label}</span>
       <div className="dialkit-color-inputs">
-        {alpha && rgba && (
-          <span className="dialkit-color-opacity">
-            {opacityPercent(rgba)} <span className="dialkit-color-opacity-unit">%</span>
-          </span>
-        )}
-        {isEditing ? (
-          <input
-            type="text"
-            className="dialkit-color-hex-input"
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onBlur={handleTextSubmit}
-            onKeyDown={handleKeyDown}
-            autoFocus
-          />
-        ) : (
-          <span
-            className="dialkit-color-hex"
-            onClick={() => setIsEditing(true)}
-          >
-            {displayHex(value)}
-          </span>
-        )}
         <button
           ref={swatchRef}
           className="dialkit-color-swatch"
@@ -143,6 +130,35 @@ export function ColorControl({ label, value, onChange, alpha = false, palette = 
           aria-label={`Pick color for ${label}`}
           aria-expanded={isOpen}
         />
+        <span className="dialkit-color-hex-wrap">
+          <span className="dialkit-color-hash" aria-hidden="true">#</span>
+          {isEditing ? (
+            <input
+              ref={hexInputRef}
+              type="text"
+              className="dialkit-color-hex-input"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleTextSubmit}
+              onKeyDown={handleKeyDown}
+            />
+          ) : (
+            <span
+              className="dialkit-color-hex"
+              onClick={() => setIsEditing(true)}
+            >
+              {bareHex(value)}
+            </span>
+          )}
+        </span>
+        {alpha && rgba && (
+          <>
+            <span className="dialkit-color-divider" aria-hidden="true" />
+            <span className="dialkit-color-opacity">
+              {opacityPercent(rgba)} <span className="dialkit-color-opacity-unit">%</span>
+            </span>
+          </>
+        )}
       </div>
 
       {portalTarget && createPortal(

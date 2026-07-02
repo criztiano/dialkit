@@ -73,6 +73,11 @@ export function displayHex(value: string): string {
   return formatHex(rgba, false).toUpperCase();
 }
 
+/** displayHex without the leading '#' — the trigger row renders the hash as a fixed symbol. */
+export function bareHex(value: string): string {
+  return displayHex(value).replace(/^#/, '');
+}
+
 /** 0–100 readout for the trigger row ("60 %"). */
 export function opacityPercent(rgba: RGBA): number {
   return Math.round(clamp01(rgba.a) * 100);

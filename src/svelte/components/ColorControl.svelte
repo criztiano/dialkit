@@ -2,7 +2,7 @@
   import Portal from '../Portal.svelte';
   import { dropdownTransition } from './transitions';
   import ColorPickerPanel from './ColorPickerPanel.svelte';
-  import { parseHex, normalizeHex, displayHex, opacityPercent } from '../../color-core';
+  import { parseHex, normalizeHex, bareHex, opacityPercent } from '../../color-core';
 
   let { label, value, onChange, alpha = false, palette = false } = $props<{
     label: string;
@@ -28,11 +28,12 @@
 
   const rgba = $derived(parseHex(value));
 
-  // Sync editValue when value changes externally
+  // Sync editValue when value changes externally (edited without the '#' —
+  // it renders as a fixed symbol; normalizeHex tolerates pasted '#…' anyway)
   $effect(() => {
     value;
     if (!isEditing) {
-      editValue = value;
+      editValue = bareHex(value);
     }
   });
 
@@ -101,7 +102,7 @@
     if (normalized) {
       onChange(normalized);
     } else {
-      editValue = value;
+      editValue = bareHex(value);
     }
   };
 
@@ -112,39 +113,21 @@
       // Cancel only the edit — don't let the document handler close the popover too.
       e.stopPropagation();
       isEditing = false;
-      editValue = value;
+      editValue = bareHex(value);
     }
   };
 
   // React's autoFocus equivalent — the input mounts only when editing starts.
+  // Select-all so a paste replaces the value outright.
   const focusOnMount = (node: HTMLInputElement) => {
     node.focus();
+    node.select();
   };
 </script>
 
 <div class="dialkit-color-control">
   <span class="dialkit-color-label">{label}</span>
   <div class="dialkit-color-inputs">
-    {#if alpha && rgba}
-      <span class="dialkit-color-opacity">
-        {opacityPercent(rgba)} <span class="dialkit-color-opacity-unit">%</span>
-      </span>
-    {/if}
-    {#if isEditing}
-      <input
-        type="text"
-        class="dialkit-color-hex-input"
-        value={editValue}
-        oninput={(e) => (editValue = (e.currentTarget as HTMLInputElement).value)}
-        onblur={handleTextSubmit}
-        onkeydown={handleKeyDown}
-        use:focusOnMount
-      />
-    {:else}
-      <span class="dialkit-color-hex" onclick={() => (isEditing = true)}>
-        {displayHex(value)}
-      </span>
-    {/if}
     <button
       bind:this={swatchRef}
       class="dialkit-color-swatch"
@@ -155,6 +138,30 @@
       aria-label={`Pick color for ${label}`}
       aria-expanded={isOpen}
     ></button>
+    <span class="dialkit-color-hex-wrap">
+      <span class="dialkit-color-hash" aria-hidden="true">#</span>
+      {#if isEditing}
+        <input
+          type="text"
+          class="dialkit-color-hex-input"
+          value={editValue}
+          oninput={(e) => (editValue = (e.currentTarget as HTMLInputElement).value)}
+          onblur={handleTextSubmit}
+          onkeydown={handleKeyDown}
+          use:focusOnMount
+        />
+      {:else}
+        <span class="dialkit-color-hex" onclick={() => (isEditing = true)}>
+          {bareHex(value)}
+        </span>
+      {/if}
+    </span>
+    {#if alpha && rgba}
+      <span class="dialkit-color-divider" aria-hidden="true"></span>
+      <span class="dialkit-color-opacity">
+        {opacityPercent(rgba)} <span class="dialkit-color-opacity-unit">%</span>
+      </span>
+    {/if}
   </div>
 
   {#if portalTarget}

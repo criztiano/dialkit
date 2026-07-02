@@ -1,7 +1,7 @@
 import { Teleport, defineComponent, h, nextTick, onMounted, ref, watch } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
 import { ColorPickerPanel } from './ColorPickerPanel';
-import { parseHex, normalizeHex, displayHex, opacityPercent } from '../../color-core';
+import { parseHex, normalizeHex, bareHex, opacityPercent } from '../../color-core';
 
 const PICKER_WIDTH = 240;
 // Estimated open heights for the above/below flip (SV area + sliders + fields + padding).
@@ -20,7 +20,7 @@ export const ColorControl = defineComponent({
   emits: ['change'],
   setup(props, { emit }) {
     const isEditing = ref(false);
-    const editValue = ref(props.value);
+    const editValue = ref(bareHex(props.value));
     const isOpen = ref(false);
     const pos = ref<{ top: number; left: number; above: boolean } | null>(null);
     const portalTarget = ref<HTMLElement | null>(null);
@@ -29,17 +29,20 @@ export const ColorControl = defineComponent({
     const pickerRef = ref<HTMLElement | null>(null);
     const hexInputRef = ref<HTMLInputElement | null>(null);
 
-    // Sync editValue when value changes externally
+    // Sync editValue when value changes externally (edited without the '#' —
+    // it renders as a fixed symbol; normalizeHex tolerates pasted '#…' anyway)
     watch(() => props.value, (value) => {
-      if (!isEditing.value) editValue.value = value;
+      if (!isEditing.value) editValue.value = bareHex(value);
     });
 
     // React's autoFocus focuses on mount; Vue's autofocus attribute doesn't
     // for dynamically inserted inputs, so focus explicitly once it renders.
+    // Select-all so a paste replaces the value outright.
     watch(isEditing, async (editing) => {
       if (!editing) return;
       await nextTick();
       hexInputRef.value?.focus();
+      hexInputRef.value?.select();
     });
 
     const updatePos = () => {
@@ -124,7 +127,7 @@ export const ColorControl = defineComponent({
       if (normalized) {
         emit('change', normalized);
       } else {
-        editValue.value = props.value;
+        editValue.value = bareHex(props.value);
       }
     };
 
@@ -134,39 +137,6 @@ export const ColorControl = defineComponent({
       return h('div', { class: 'dialkit-color-control' }, [
         h('span', { class: 'dialkit-color-label' }, props.label),
         h('div', { class: 'dialkit-color-inputs' }, [
-          props.alpha && rgba
-            ? h('span', { class: 'dialkit-color-opacity' }, [
-              `${opacityPercent(rgba)} `,
-              h('span', { class: 'dialkit-color-opacity-unit' }, '%'),
-            ])
-            : null,
-          isEditing.value
-            ? h('input', {
-              ref: hexInputRef,
-              type: 'text',
-              class: 'dialkit-color-hex-input',
-              value: editValue.value,
-              onInput: (event: Event) => {
-                editValue.value = (event.target as HTMLInputElement).value;
-              },
-              onBlur: submitText,
-              onKeydown: (event: KeyboardEvent) => {
-                if (event.key === 'Enter') {
-                  submitText();
-                } else if (event.key === 'Escape') {
-                  // Cancel only the edit — don't let the document handler close the popover too.
-                  event.stopPropagation();
-                  isEditing.value = false;
-                  editValue.value = props.value;
-                }
-              },
-            })
-            : h('span', {
-              class: 'dialkit-color-hex',
-              onClick: () => {
-                isEditing.value = true;
-              },
-            }, displayHex(props.value)),
           h('button', {
             ref: swatchRef,
             class: 'dialkit-color-swatch',
@@ -177,6 +147,45 @@ export const ColorControl = defineComponent({
             'aria-expanded': isOpen.value,
             onClick: togglePicker,
           }),
+          h('span', { class: 'dialkit-color-hex-wrap' }, [
+            h('span', { class: 'dialkit-color-hash', 'aria-hidden': 'true' }, '#'),
+            isEditing.value
+              ? h('input', {
+                ref: hexInputRef,
+                type: 'text',
+                class: 'dialkit-color-hex-input',
+                value: editValue.value,
+                onInput: (event: Event) => {
+                  editValue.value = (event.target as HTMLInputElement).value;
+                },
+                onBlur: submitText,
+                onKeydown: (event: KeyboardEvent) => {
+                  if (event.key === 'Enter') {
+                    submitText();
+                  } else if (event.key === 'Escape') {
+                    // Cancel only the edit — don't let the document handler close the popover too.
+                    event.stopPropagation();
+                    isEditing.value = false;
+                    editValue.value = bareHex(props.value);
+                  }
+                },
+              })
+              : h('span', {
+                class: 'dialkit-color-hex',
+                onClick: () => {
+                  isEditing.value = true;
+                },
+              }, bareHex(props.value)),
+          ]),
+          ...(props.alpha && rgba
+            ? [
+              h('span', { class: 'dialkit-color-divider', 'aria-hidden': 'true' }),
+              h('span', { class: 'dialkit-color-opacity' }, [
+                `${opacityPercent(rgba)} `,
+                h('span', { class: 'dialkit-color-opacity-unit' }, '%'),
+              ]),
+            ]
+            : []),
         ]),
         portalTarget.value
           ? h(Teleport, { to: portalTarget.value }, [
