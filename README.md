@@ -171,6 +171,35 @@ Hex strings (`#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`) are auto-detected as color
 
 **Returns:** `string` (hex color)
 
+### Gradient
+
+```tsx
+bg: { type: 'gradient' }                                    // defaults to a linear ramp
+hero: {
+  type: 'gradient',
+  default: {
+    type: 'conic',                                          // 'linear' | 'radial' | 'conic'
+    angle: 45,                                              // degrees (ignored for radial)
+    stops: [
+      { color: '#6366f1ff', position: 0 },                 // #rrggbbaa, position 0–1
+      { color: '#ec4899ff', position: 1 },
+    ],
+  },
+}
+```
+
+The control shows a live gradient strip; clicking it opens the editor: a linear / radial / conic switcher, an angle, and a ramp of draggable color stops. Click an empty spot on the ramp to add a stop (seeded with the color under the cursor), drag a stop to reposition it (stops swap past each other live), and drag a stop off the strip or long-press it to remove one (minimum two). Selecting a stop opens the full color picker below it — stops always carry alpha.
+
+Turn the value into CSS with the exported helper:
+
+```tsx
+import { gradientToCss } from 'dialkit';
+
+<div style={{ background: gradientToCss(p.bg) }} />
+```
+
+**Returns:** `GradientValue` — `{ type, angle, stops: { color, position }[] }`
+
 ### Select
 
 ```tsx
