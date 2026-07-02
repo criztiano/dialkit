@@ -1,6 +1,12 @@
 import * as solid_js from 'solid-js';
 import { Accessor, JSX } from 'solid-js';
 
+/** A resolved range value. Invariant (upheld by the helpers): min <= max. */
+type RangeValue = {
+    min: number;
+    max: number;
+};
+
 type SpringConfig = {
     type: 'spring';
     stiffness?: number;
@@ -30,11 +36,24 @@ type SelectConfig = {
 type ColorConfig = {
     type: 'color';
     default?: string;
+    /** Enables the alpha slider; the emitted value becomes #rrggbbaa. Default false. */
+    alpha?: boolean;
+    /** Shows the shared saved-swatches row (persisted per machine). Default false. */
+    palette?: boolean;
 };
 type TextConfig = {
     type: 'text';
     default?: string;
     placeholder?: string;
+};
+type RangeConfig = {
+    type: 'range';
+    min: number;
+    max: number;
+    /** Falls back to the full span { min, max } when omitted. */
+    default?: RangeValue;
+    /** Falls back to inferStep(min, max) when omitted. */
+    step?: number;
 };
 type FileConfig = {
     type: 'file';
@@ -108,12 +127,12 @@ type ListConfig = {
     /** Label for the add affordance. Defaults to 'Add'. */
     addLabel?: string;
 };
-type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[];
+type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 type DialConfig = {
     [key: string]: DialValue | [number, number, number, number?] | DialConfig;
 };
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends TextConfig ? string : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -124,12 +143,14 @@ type ShortcutConfig = {
     interaction?: ShortcutInteraction;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'text' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
     path: string;
     label: string;
     min?: number;
     max?: number;
     step?: number;
+    /** Range control's configured reset target — its `default`, else the full {min,max} span. */
+    rangeDefault?: RangeValue;
     children?: ControlMeta[];
     defaultOpen?: boolean;
     options?: (string | {
@@ -146,6 +167,8 @@ type ControlMeta = {
     itemTypes?: Record<string, ListItemType>;
     addLabel?: string;
     maxItems?: number;
+    alpha?: boolean;
+    palette?: boolean;
     shortcut?: ShortcutConfig;
 };
 type PanelConfig = {
@@ -238,6 +261,8 @@ declare class DialStoreClass {
     private isActionConfig;
     private isSelectConfig;
     private isColorConfig;
+    private isRangeConfig;
+    private isRangeValue;
     private isTextConfig;
     private isGalleryConfig;
     private isFileConfig;
@@ -294,6 +319,20 @@ interface SliderProps {
     shortcutActive?: boolean;
 }
 declare function Slider(props: SliderProps): solid_js.JSX.Element;
+
+interface RangeSliderProps {
+    label: string;
+    value: RangeValue;
+    onChange: (value: RangeValue) => void;
+    /** Lower bound of the track. */
+    min?: number;
+    /** Upper bound of the track. */
+    max?: number;
+    step?: number;
+    /** Reset target for a double-click on the track. Falls back to the full {min,max} span. */
+    defaultValue?: RangeValue;
+}
+declare function RangeSlider(props: RangeSliderProps): solid_js.JSX.Element;
 
 interface ToggleProps {
     label: string;
@@ -492,8 +531,18 @@ interface ColorControlProps {
     label: string;
     value: string;
     onChange: (value: string) => void;
+    alpha?: boolean;
+    palette?: boolean;
 }
 declare function ColorControl(props: ColorControlProps): solid_js.JSX.Element;
+
+interface ColorPickerPanelProps {
+    value: string;
+    onChange: (value: string) => void;
+    alpha?: boolean;
+    palette?: boolean;
+}
+declare function ColorPickerPanel(props: ColorPickerPanelProps): solid_js.JSX.Element;
 
 interface PresetManagerProps {
     panelId: string;
@@ -503,4 +552,4 @@ interface PresetManagerProps {
 }
 declare function PresetManager(props: PresetManagerProps): solid_js.JSX.Element;
 
-export { type ActionConfig, ButtonGroup, type ColorConfig, ColorControl, type ControlMeta, type CreateDialOptions, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, type DialConfig, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, Folder, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type WaveformLoop, type WaveformMode, WaveformVisualization, createDialKit };
+export { type ActionConfig, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, type CreateDialOptions, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, type DialConfig, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, Folder, Module, type PanelConfig, type Preset, PresetManager, RangeSlider, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type WaveformLoop, type WaveformMode, WaveformVisualization, createDialKit };

@@ -1,3 +1,5 @@
+import { RangeValue } from './range-slider-core.js';
+
 type SelectConfig = {
     type: 'select';
     options: (string | {
@@ -9,6 +11,10 @@ type SelectConfig = {
 type ColorConfig = {
     type: 'color';
     default?: string;
+    /** Enables the alpha slider; the emitted value becomes #rrggbbaa. Default false. */
+    alpha?: boolean;
+    /** Shows the shared saved-swatches row (persisted per machine). Default false. */
+    palette?: boolean;
 };
 type TextConfig = {
     type: 'text';
@@ -55,12 +61,14 @@ type ShortcutConfig = {
     interaction?: ShortcutInteraction;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'text' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
     path: string;
     label: string;
     min?: number;
     max?: number;
     step?: number;
+    /** Range control's configured reset target — its `default`, else the full {min,max} span. */
+    rangeDefault?: RangeValue;
     children?: ControlMeta[];
     defaultOpen?: boolean;
     options?: (string | {
@@ -77,6 +85,8 @@ type ControlMeta = {
     itemTypes?: Record<string, ListItemType>;
     addLabel?: string;
     maxItems?: number;
+    alpha?: boolean;
+    palette?: boolean;
     shortcut?: ShortcutConfig;
 };
 

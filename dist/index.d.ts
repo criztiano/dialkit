@@ -1,6 +1,79 @@
 import * as react_jsx_runtime from 'react/jsx-runtime';
 import { ReactNode } from 'react';
 
+/** A resolved range value. Invariant (upheld by the helpers): min <= max. */
+type RangeValue = {
+    min: number;
+    max: number;
+};
+/** Clamp `v` into the inclusive `[lo, hi]` interval. */
+declare function clamp(v: number, lo: number, hi: number): number;
+/**
+ * Position of `v` within `[min, max]` as a 0..100 percentage. When the bounds are
+ * degenerate (`max === min`) there is no span to map onto, so return 0 rather than
+ * dividing by zero (which would yield NaN/Infinity).
+ */
+declare function valueToPercent(v: number, min: number, max: number): number;
+/** Inverse of {@link valueToPercent}: a 0..1 fraction back to a value in `[min, max]`. */
+declare function percentToValue(pct01: number, min: number, max: number): number;
+/** Order a pair so `min <= max`, swapping a reversed pair. */
+declare function orderRange(v: RangeValue): RangeValue;
+/** Clamp both ends into `[min, max]`, then order so `min <= max`. */
+declare function clampRange(v: RangeValue, min: number, max: number): RangeValue;
+/**
+ * Move the low handle to `nextLow`, clamped to `[min, current.max]` so it cannot
+ * cross the high handle. Equal handles (zero-width) are allowed.
+ */
+declare function setLow(nextLow: number, current: RangeValue, min: number): RangeValue;
+/**
+ * Move the high handle to `nextHigh`, clamped to `[current.min, max]` so it cannot
+ * cross the low handle. Equal handles (zero-width) are allowed.
+ */
+declare function setHigh(nextHigh: number, current: RangeValue, max: number): RangeValue;
+/**
+ * Shift the whole span by `deltaValue`, preserving its width. When the shift would
+ * push the span past an edge, the desired low is clamped to `[min, max - width]`
+ * so the entire span parks flush at that edge instead of shrinking.
+ */
+declare function shiftSpan(deltaValue: number, current: RangeValue, min: number, max: number): RangeValue;
+/**
+ * Pick the handle nearer to `atValue`. On a tie (or when the handles overlap and
+ * distance can't disambiguate) fall back to side: a value below the low handle
+ * grabs 'min', otherwise 'max' — so a press to the left of an overlapped pair drags
+ * low and a press to the right drags high.
+ */
+declare function nearestHandle(atValue: number, current: RangeValue): 'min' | 'max';
+/**
+ * Decide what a pointer-down grabs. A handle gets a grab radius (`hitValue`, in
+ * VALUE units) that reaches INTO the span, so a handle parked at its bound — with
+ * no empty track outside to press — is still grabbable from just inside the fill.
+ * Priority: a press within the grab radius of a handle grabs that handle even
+ * inside the span; overlapping zones pick the nearer handle (tie broken by side
+ * via nearestHandle); a strictly-interior press outside both zones drags the
+ * span; anything else targets the nearer handle.
+ */
+declare function pickDragTarget(atValue: number, current: RangeValue, hitValue: number): 'min' | 'max' | 'span';
+/**
+ * True when the press landed on empty track (at or beyond either handle). This is
+ * the only case where a plain click (no drag) may jump the nearest handle to the
+ * click point; a press inside the span stays a no-op so it can't shrink the range.
+ */
+declare function isOutsideSpan(atValue: number, current: RangeValue): boolean;
+/**
+ * CSS `left` strings for the two 3px handle lines. `gap` is the fill width, resolved to
+ * px at layout. Wide apart the `ramp` is 0 and each handle keeps its inside offset
+ * (low `+6px`, high `-9px` — the unchanged look). As the fill shrinks below ~30px the
+ * `clamp` ramp grows to 12px, sliding each handle from ~inside its fill edge to ~4.5px
+ * OUTSIDE it (low `-6px`, high `+3px`), so a small range is framed by two distinct
+ * handles just BEYOND the fill and a collapsed range shows them symmetric around the
+ * point (± 4.5px). The lines never cross (min ~9px center separation). Pure string math —
+ * no DOM; CSS min()/max()/clamp() resolve the px/%% mix at layout.
+ */
+declare function handleLeftStyles(lowPercent: number, highPercent: number): {
+    low: string;
+    high: string;
+};
+
 type SpringConfig = {
     type: 'spring';
     stiffness?: number;
@@ -30,11 +103,24 @@ type SelectConfig = {
 type ColorConfig = {
     type: 'color';
     default?: string;
+    /** Enables the alpha slider; the emitted value becomes #rrggbbaa. Default false. */
+    alpha?: boolean;
+    /** Shows the shared saved-swatches row (persisted per machine). Default false. */
+    palette?: boolean;
 };
 type TextConfig = {
     type: 'text';
     default?: string;
     placeholder?: string;
+};
+type RangeConfig = {
+    type: 'range';
+    min: number;
+    max: number;
+    /** Falls back to the full span { min, max } when omitted. */
+    default?: RangeValue;
+    /** Falls back to inferStep(min, max) when omitted. */
+    step?: number;
 };
 type FileConfig = {
     type: 'file';
@@ -124,12 +210,12 @@ type ListField = {
     placeholder?: string;
     defaultValue: number | boolean | string;
 };
-type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[];
+type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 type DialConfig = {
     [key: string]: DialValue | [number, number, number, number?] | DialConfig;
 };
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends TextConfig ? string : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -140,12 +226,14 @@ type ShortcutConfig = {
     interaction?: ShortcutInteraction;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'text' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
     path: string;
     label: string;
     min?: number;
     max?: number;
     step?: number;
+    /** Range control's configured reset target — its `default`, else the full {min,max} span. */
+    rangeDefault?: RangeValue;
     children?: ControlMeta[];
     defaultOpen?: boolean;
     options?: (string | {
@@ -162,6 +250,8 @@ type ControlMeta = {
     itemTypes?: Record<string, ListItemType>;
     addLabel?: string;
     maxItems?: number;
+    alpha?: boolean;
+    palette?: boolean;
     shortcut?: ShortcutConfig;
 };
 type PanelConfig = {
@@ -254,6 +344,8 @@ declare class DialStoreClass {
     private isActionConfig;
     private isSelectConfig;
     private isColorConfig;
+    private isRangeConfig;
+    private isRangeValue;
     private isTextConfig;
     private isGalleryConfig;
     private isFileConfig;
@@ -330,6 +422,20 @@ interface SliderProps {
     shortcutActive?: boolean;
 }
 declare function Slider({ label, value, onChange, min, max, step, unit, formatValue, valueIcon, origin, bipolar, shortcut, shortcutActive, }: SliderProps): react_jsx_runtime.JSX.Element;
+
+interface RangeSliderProps {
+    label: string;
+    value: RangeValue;
+    onChange: (value: RangeValue) => void;
+    /** Lower bound of the track. */
+    min?: number;
+    /** Upper bound of the track. */
+    max?: number;
+    step?: number;
+    /** Reset target for a double-click on the track. Falls back to the full {min,max} span. */
+    defaultValue?: RangeValue;
+}
+declare function RangeSlider({ label, value: rawValue, onChange, min, max, step, defaultValue, }: RangeSliderProps): react_jsx_runtime.JSX.Element;
 
 interface ToggleProps {
     label: string;
@@ -659,8 +765,80 @@ interface ColorControlProps {
     label: string;
     value: string;
     onChange: (value: string) => void;
+    alpha?: boolean;
+    palette?: boolean;
 }
-declare function ColorControl({ label, value, onChange }: ColorControlProps): react_jsx_runtime.JSX.Element;
+declare function ColorControl({ label, value, onChange, alpha, palette }: ColorControlProps): react_jsx_runtime.JSX.Element;
+
+interface ColorPickerPanelProps {
+    value: string;
+    onChange: (value: string) => void;
+    alpha?: boolean;
+    palette?: boolean;
+}
+declare function ColorPickerPanel({ value, onChange, alpha, palette }: ColorPickerPanelProps): react_jsx_runtime.JSX.Element;
+
+/**
+ * color-core — DOM-free color math shared by every framework port of the
+ * color picker (React, Solid, Vue, Svelte). Pure functions only; anything
+ * that touches the DOM or storage lives in the component layer or
+ * color-palette-store.
+ *
+ * Canonical value shape: hex string. `#rrggbb` normally, `#rrggbbaa` always
+ * (even at full opacity) when a control opts into alpha — deterministic
+ * round-tripping keeps store reconciliation trivial.
+ */
+/** r/g/b 0–255, a 0–1. */
+type RGBA = {
+    r: number;
+    g: number;
+    b: number;
+    a: number;
+};
+/** h 0–360, s/v 0–1, a 0–1. The picker's working space. */
+type HSVA = {
+    h: number;
+    s: number;
+    v: number;
+    a: number;
+};
+/** h 0–360, s/l 0–1, a 0–1. */
+type HSLA = {
+    h: number;
+    s: number;
+    l: number;
+    a: number;
+};
+/** OKLCH: l 0–1, c ≥ 0 (sRGB tops out ≈0.37), h 0–360, a 0–1. */
+type OKLCH = {
+    l: number;
+    c: number;
+    h: number;
+    a: number;
+};
+type ColorFormat = 'hex' | 'rgb' | 'hsl' | 'oklch';
+declare const COLOR_FORMATS: ColorFormat[];
+/** Parses #RGB / #RGBA / #RRGGBB / #RRGGBBAA; tolerates a missing '#' and whitespace. */
+declare function parseHex(input: string): RGBA | null;
+/** Lowercase `#rrggbb`, or `#rrggbbaa` (always, even at a=1) when alpha is enabled. */
+declare function formatHex(rgba: RGBA, alphaEnabled: boolean): string;
+/** Parse + reformat; strips the alpha channel when alpha is off. Null when unparseable. */
+declare function normalizeHex(input: string, alphaEnabled: boolean): string | null;
+/** Trigger-row presentation: uppercased, alpha digits hidden (opacity has its own readout). */
+declare function displayHex(value: string): string;
+/** 0–100 readout for the trigger row ("60 %"). */
+declare function opacityPercent(rgba: RGBA): number;
+declare function rgbToHsv(rgba: RGBA): HSVA;
+declare function hsvToRgb(hsva: HSVA): RGBA;
+declare function rgbToHsl(rgba: RGBA): HSLA;
+declare function hslToRgb(hsla: HSLA): RGBA;
+declare function rgbToOklch(rgba: RGBA): OKLCH;
+/**
+ * Maps an out-of-gamut OKLCH into sRGB by binary-searching the chroma down,
+ * preserving lightness and hue (channel-clipping would shift the hue).
+ */
+declare function clampOklchToSrgb(oklch: OKLCH): OKLCH;
+declare function oklchToRgb(oklch: OKLCH): RGBA;
 
 interface GalleryControlProps {
     label: string;
@@ -724,4 +902,4 @@ interface ShortcutsMenuProps {
 }
 declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react_jsx_runtime.JSX.Element | null;
 
-export { type ActionConfig, ButtonGroup, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, addDriver, buildSamplers, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, normalizeListItems, parseListItemSchema, readComposition, redistributeWeight, removeDriver, removeSegment, setDriverCurvature, setDriverSteepness, setSegmentCurvature, setSegmentSteepness, splitSegment, triggerLevels, triggersCrossed, useDialKit };
+export { type ActionConfig, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type OKLCH, type PanelConfig, type Preset, PresetManager, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, addDriver, buildSamplers, clamp, clampOklchToSrgb, clampRange, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, formatHex, handleLeftStyles, hslToRgb, hsvToRgb, isOutsideSpan, nearestHandle, normalizeHex, normalizeListItems, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, readComposition, redistributeWeight, removeDriver, removeSegment, rgbToHsl, rgbToHsv, rgbToOklch, setDriverCurvature, setDriverSteepness, setHigh, setLow, setSegmentCurvature, setSegmentSteepness, shiftSpan, splitSegment, triggerLevels, triggersCrossed, useDialKit, valueToPercent };

@@ -161,9 +161,13 @@ Non-hex strings are auto-detected as text inputs. Use the explicit form for a pl
 ```tsx
 color: '#ff5500'                           // auto-detected from hex string
 bg: { type: 'color', default: '#000' }     // explicit
+tint: { type: 'color', default: '#310b0299', alpha: true, palette: true }
 ```
 
-Hex strings (`#RGB`, `#RRGGBB`, `#RRGGBBAA`) are auto-detected as color pickers. Each color control has a text display (click to edit the hex value), and a swatch button that opens the native color picker.
+Hex strings (`#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`) are auto-detected as color pickers. Each color control has a text display (click to edit the hex value) and a swatch button that opens the picker panel: a saturation/value area, hue slider, and HEX / RGB / HSL / OKLCH input formats. Whatever format you edit in, the value your code receives is always hex.
+
+- `alpha: true` adds an alpha slider and an opacity readout on the row; values become `#rrggbbaa`. An 8-digit (or `#RGBA`) default enables it automatically.
+- `palette: true` adds a row of save slots shared by every picker on the machine (persisted in `localStorage`). Click an empty slot to save the current color, a filled one to apply it, and long-press to clear it.
 
 **Returns:** `string` (hex color)
 
