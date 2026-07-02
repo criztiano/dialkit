@@ -7,6 +7,7 @@ import {
   Toggle,
   TextControl,
   ColorControl,
+  GradientControl,
   GalleryControl,
   ButtonGroup,
   Folder,
@@ -19,8 +20,10 @@ import {
   DialRoot,
   DialStore,
   useDialKit,
+  gradientToCss,
+  DEFAULT_GRADIENT,
 } from 'dialkit';
-import type { SpringConfig, TransitionConfig, EasingConfig, GalleryItem } from 'dialkit';
+import type { SpringConfig, TransitionConfig, EasingConfig, GalleryItem, GradientValue } from 'dialkit';
 import { WaveformShowcase } from './WaveformShowcase';
 import { CurveComposerShowcase } from './CurveComposerShowcase';
 import 'dialkit/styles.css';
@@ -106,6 +109,7 @@ export function Library() {
   const [colorBasic, setColorBasic] = useState('#6366f1');
   const [colorAlpha, setColorAlpha] = useState('#310b0299');
   const [colorPalette, setColorPalette] = useState('#10b981ff');
+  const [gradientValue, setGradientValue] = useState<GradientValue>(DEFAULT_GRADIENT);
   const [galleryValue, setGalleryValue] = useState('ember');
   const [lastAction, setLastAction] = useState('—');
 
@@ -130,6 +134,7 @@ export function Library() {
     color: '#6366f1',
     label: 'Press',
     variant: { type: 'select' as const, options: ['solid', 'outline', 'ghost'], default: 'solid' },
+    backdrop: { type: 'gradient' as const },
     glow: true,
     spring: { type: 'spring' as const, visualDuration: 0.5, bounce: 0.3 },
     shadow: {
@@ -270,13 +275,22 @@ export function Library() {
           </Card>
         </Section>
 
-        <Section index="06" title="Gallery" hint="Tap the trigger to reveal a masonry grid; scroll it (the edges rubber-band). Pick a tile to select it; tap the trigger again to close." single>
+        <Section index="06" title="Gradient" hint="A gradient control — click the strip to open the editor: linear / radial / conic, an angle, and draggable color stops that each open the full color picker. Click the strip to add a stop, drag to move, drag it off or long-press to remove (minimum two)." single>
+          <Card title="Stop editor" desc="Click an empty spot on the ramp to add a stop (seeded with the color under the cursor); drag stops to reposition (they swap past each other live); drag a stop off the strip or long-press it to remove. The selected stop opens the alpha-enabled color picker below. Emits a { type, angle, stops } object; gradientToCss turns it into a ready CSS string." code="bg: { type: 'gradient', default }">
+            <div className="lib-gradient-demo">
+              <div className="lib-gradient-swatch" style={{ background: gradientToCss(gradientValue) }} />
+              <GradientControl label="bg" value={gradientValue} onChange={setGradientValue} />
+            </div>
+          </Card>
+        </Section>
+
+        <Section index="07" title="Gallery" hint="Tap the trigger to reveal a masonry grid; scroll it (the edges rubber-band). Pick a tile to select it; tap the trigger again to close." single>
           <Card title="Masonry picker" desc="A trigger expands a 3:4 surface of masonry items and stays lit while open. Scrolling overshoots and springs at the edges; images load through a shimmer skeleton then blur-fade in. Mixes real photos with custom gradient tiles." code="cover: { type: 'gallery', items, default }">
             <GalleryControl label="cover" value={galleryValue} items={GALLERY_ITEMS} onChange={setGalleryValue} columns={3} />
           </Card>
         </Section>
 
-        <Section index="07" title="Actions & Structure" count={5} hint="Action buttons fire callbacks; folders group controls; visualizations preview motion.">
+        <Section index="08" title="Actions & Structure" count={5} hint="Action buttons fire callbacks; folders group controls; visualizations preview motion.">
           <Card title="Action button" desc="A single { type: 'action' } fires a callback with no stored value." code="shuffle: { type: 'action' }">
             <ButtonGroup buttons={[{ label: 'Shuffle', onClick: () => setLastAction('shuffle') }]} />
             <ActionLog value={lastAction} />
@@ -306,7 +320,7 @@ export function Library() {
           </Card>
         </Section>
 
-        <Section index="08" title="Motion editors" count={2} hint="Spring and transition editors with a live animation-curve preview. Toggle their modes.">
+        <Section index="09" title="Motion editors" count={2} hint="Spring and transition editors with a live animation-curve preview. Toggle their modes.">
           {liveId ? (
             <>
               <Card title="SpringControl" desc="Time (visualDuration + bounce) or Physics (stiffness, damping, mass)." code="{ type: 'spring', bounce: 0.25 }">
@@ -321,13 +335,13 @@ export function Library() {
           )}
         </Section>
 
-        <Section index="09" title="Waveform" hint="The whole waveform of a sample, drawn once and fixed — a playhead sweeps across it at the display's refresh rate. Press Play, then toggle smooth / pixelated, the 3-band EQ split, the grid, and zoom in (top-right). Click the waveform to set the playhead; drag to mark a loop." single>
+        <Section index="10" title="Waveform" hint="The whole waveform of a sample, drawn once and fixed — a playhead sweeps across it at the display's refresh rate. Press Play, then toggle smooth / pixelated, the 3-band EQ split, the grid, and zoom in (top-right). Click the waveform to set the playhead; drag to mark a loop." single>
           <Card title="WaveformVisualization" desc="Renders a decoded AudioBuffer's entire waveform (fixed); the playhead marks the play position. Smooth is a simplified, interpolated solid fill (or translucent + outline via the border prop); pixelated is chunky per-column bars. EQ bands splits into low/mid/high, color-coded purple/cyan/lime. The top-right + / − buttons zoom the time axis (the window follows the playhead); grid overlays gridSubdivisions vertical time-lines. With onSeek/onLoopChange wired, click sets the playhead and drag defines a loop — drag either edge to resize it, click clears it. waveColor and playheadColor are themable (the loop band derives from the playhead color); autoZoomOnLoop frames the loop on selection." code="<WaveformVisualization buffer loop onSeek onLoopChange waveColor playheadColor autoZoomOnLoop />">
             <WaveformShowcase />
           </Card>
         </Section>
 
-        <Section index="10" title="Curve Composer" hint="Compose several curves into one. Split divides the time axis into more segments; quick-click a segment to cycle its shape (linear → easeIn → easeOut → easeInOut → spring); drag a segment's middle for curvature; drag a divider to retime neighbors. Add a driver — a stacked lane below that re-paces the reading — and set Direction (forward / mirror / reverse)." single>
+        <Section index="11" title="Curve Composer" hint="Compose several curves into one. Split divides the time axis into more segments; quick-click a segment to cycle its shape (linear → easeIn → easeOut → easeInOut → spring); drag a segment's middle for curvature; drag a divider to retime neighbors. Add a driver — a stacked lane below that re-paces the reading — and set Direction (forward / mirror / reverse)." single>
           <Card title="CurveComposer" desc="An editable curve series with an optional time-warping driver lane. Each segment owns a slice of the horizontal time axis (its relative duration); quick-click cycles its curve type, dragging its body changes the curvature amount, and dragging a shared divider trades duration between neighbors. Double-click splits a segment in two. The driver is a single stacked curve below that remaps the reading pace of the series above; Direction reverses or ping-pongs the whole composition. Curves are SVG, themed via currentColor; curveColor and playheadColor are overridable." code="<CurveComposer segments driver direction onSegmentsChange onDriverChange getPhase />">
             <CurveComposerShowcase />
           </Card>
@@ -347,7 +361,7 @@ export function Library() {
           </div>
 
           <div className="lib-live">
-            <div className="lib-preview-stage">
+            <div className="lib-preview-stage" style={{ background: gradientToCss(p.backdrop) }}>
               <div style={previewStyle}>{p.label}</div>
             </div>
             <div className="lib-window">
@@ -482,6 +496,9 @@ const CSS = `
 
 .lib-stage { display: flex; flex-direction: column; gap: 6px; padding: 4px 0 16px; }
 .lib-viz { padding: 4px 0; }
+
+.lib-gradient-demo { display: flex; flex-direction: column; gap: 10px; }
+.lib-gradient-swatch { width: 100%; height: 72px; border-radius: 10px; border: 1px solid var(--dial-border); }
 
 .lib-action-log { font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--dial-text-tertiary); padding-left: 2px; }
 .lib-action-log span { color: var(--dial-text-label); }
