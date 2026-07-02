@@ -209,6 +209,8 @@ export function Panel(props: PanelProps) {
             label={control.label}
             value={value() as string}
             onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
+            alpha={control.alpha}
+            palette={control.palette}
           />
         );
 

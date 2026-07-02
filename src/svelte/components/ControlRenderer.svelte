@@ -92,6 +92,8 @@
     label={control.label}
     value={controlValue as string}
     onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+    alpha={control.alpha}
+    palette={control.palette}
   />
 {:else if control.type === 'file'}
   <FileControl

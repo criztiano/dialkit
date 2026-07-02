@@ -66,6 +66,8 @@ export default defineConfig([
       'shortcut-utils': 'src/shortcut-utils.ts',
       'waveform-engine': 'src/waveform-engine.ts',
       'curve-composer-core': 'src/curve-composer-core.ts',
+      'color-core': 'src/color-core.ts',
+      'color-palette-store': 'src/color-palette-store.ts',
     },
     outDir: 'dist',
     format: ['esm'],
