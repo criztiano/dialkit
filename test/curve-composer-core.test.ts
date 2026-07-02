@@ -15,10 +15,15 @@ import {
   splitSegment,
   removeSegment,
   cycleSegmentType,
+  flipSegment,
   setSegmentCurvature,
   setSegmentSteepness,
+  setSegmentOvershoot,
+  setSegmentAnticipate,
   defaultComposition,
   composerLayout,
+  timelineSlots,
+  smootherstep,
   mapY,
   curvePath,
   diagonalLine,
@@ -271,6 +276,66 @@ describe('deriveEase', () => {
   });
 });
 
+describe('full easing coverage (steepness → expo, overshoot → back)', () => {
+  const TS = Array.from({ length: 101 }, (_, i) => i / 100);
+  const maxErr = (f: (t: number) => number, g: (t: number) => number) =>
+    Math.max(...TS.map((t) => Math.abs(f(t) - g(t))));
+  const easeIn = (c: number, s: number, o = 0) =>
+    buildSampler({ type: 'easeIn', weight: 1, curvature: c, steepness: s, overshoot: o });
+
+  it('steepness at max reaches expo (which the pinned-y model could not)', () => {
+    const expo = (t: number) => (t === 0 ? 0 : Math.pow(2, 10 * t - 10));
+    expect(maxErr(easeIn(0, 1), expo)).toBeLessThan(0.03); // ~1% in practice
+  });
+
+  it('circ is reachable mid-steepness with a touch of energy', () => {
+    const circ = (t: number) => 1 - Math.sqrt(1 - t * t);
+    let best = 1;
+    for (let s = 0; s <= 1.0001; s += 0.05)
+      for (let e = -0.5; e <= 0.5001; e += 0.1) best = Math.min(best, maxErr(easeIn(e, s), circ));
+    expect(best).toBeLessThan(0.03);
+  });
+
+  it('overshoot pushes the END above 1 (easeOutBack); the start stays put', () => {
+    const f = buildSampler({ type: 'easeOut', weight: 1, curvature: 0, steepness: 0, overshoot: 1 });
+    expect(Math.max(...TS.map(f))).toBeGreaterThan(1.1);
+    expect(Math.min(...TS.map(f))).toBeGreaterThanOrEqual(-0.0001); // no dip
+    expect(f(1)).toBeCloseTo(1, 5); // still settles exactly at 1
+  });
+
+  it('anticipate dips the START below 0 (easeInBack); the end stays put', () => {
+    const f = buildSampler({ type: 'easeIn', weight: 1, curvature: 0, steepness: 0, anticipate: 1 });
+    expect(Math.min(...TS.map(f))).toBeLessThan(-0.1);
+    expect(Math.max(...TS.map(f))).toBeLessThanOrEqual(1.0001); // no overshoot
+    expect(f(0)).toBeCloseTo(0, 5);
+  });
+
+  it('overshoot and anticipate combine independently (easeInOutBack: dip then overshoot)', () => {
+    const f = buildSampler({ type: 'easeInOut', weight: 1, curvature: 0, steepness: 0, overshoot: 1, anticipate: 1 });
+    expect(Math.min(...TS.map(f))).toBeLessThan(-0.05); // anticipation dip at the start
+    expect(Math.max(...TS.map(f))).toBeGreaterThan(1.05); // overshoot at the end
+    expect(f(0)).toBeCloseTo(0, 5);
+    expect(f(1)).toBeCloseTo(1, 5);
+  });
+
+  it('both absent behave as 0 (stays within the band)', () => {
+    const f = buildSampler({ type: 'easeOut', weight: 1, curvature: 0, steepness: 0 });
+    expect(Math.max(...TS.map(f))).toBeLessThanOrEqual(1.0001);
+    expect(Math.min(...TS.map(f))).toBeGreaterThanOrEqual(-0.0001);
+  });
+
+  it('overshoot/anticipate setters clamp to [0, 1]; cycle resets both', () => {
+    let comp = defaultComposition();
+    expect(setSegmentOvershoot(comp, 0, 5).segments[0].overshoot).toBe(1);
+    expect(setSegmentOvershoot(comp, 0, -3).segments[0].overshoot).toBe(0);
+    expect(setSegmentAnticipate(comp, 0, 5).segments[0].anticipate).toBe(1);
+    comp = setSegmentOvershoot(setSegmentAnticipate(comp, 0, 0.6), 0, 0.6);
+    const cycled = cycleSegmentType(comp, 0).segments[0];
+    expect(cycled.overshoot).toBe(0);
+    expect(cycled.anticipate).toBe(0);
+  });
+});
+
 describe('buildSampler', () => {
   it('bezier eases pin the endpoints to 0 and 1', () => {
     for (const type of ['linear', 'easeIn', 'easeOut', 'easeInOut'] as const) {
@@ -366,6 +431,37 @@ describe('state transitions', () => {
     expect(after.steepness).toBe(0);
   });
 
+  it('flipSegment mirrors the curve (easeIn↔easeOut, energy negates, overshoot↔anticipate swap)', () => {
+    const comp: CurveComposition = {
+      segments: [{ type: 'easeIn', weight: 1, curvature: 0.4, steepness: 0.3, overshoot: 0.5, anticipate: 0 }],
+      driver: null,
+      direction: 'forward',
+    };
+    const f = flipSegment(comp, 0).segments[0];
+    expect(f.type).toBe('easeOut');
+    expect(f.curvature).toBe(-0.4);
+    expect(f.steepness).toBe(0.3); // intensity preserved
+    expect(f.overshoot).toBe(0); // was anticipate (0)
+    expect(f.anticipate).toBe(0.5); // was overshoot
+    // and the sampled curve is the left↔right mirror: flipped(t) ≈ 1 - original(1-t)
+    const orig = buildSampler(comp.segments[0]);
+    const flipped = buildSampler(f);
+    for (const t of [0.2, 0.5, 0.8]) expect(flipped(t)).toBeCloseTo(1 - orig(1 - t), 5);
+  });
+
+  it('flipping twice returns to the original shape', () => {
+    const comp: CurveComposition = {
+      segments: [{ type: 'easeIn', weight: 1, curvature: 0.6, steepness: -0.2, overshoot: 0.3, anticipate: 0.1 }],
+      driver: null,
+      direction: 'forward',
+    };
+    const twice = flipSegment(flipSegment(comp, 0), 0).segments[0];
+    expect(twice.type).toBe('easeIn');
+    expect(twice.curvature).toBeCloseTo(0.6, 5);
+    expect(twice.overshoot).toBe(0.3);
+    expect(twice.anticipate).toBe(0.1);
+  });
+
   it('removeSegment is a no-op on the last remaining segment', () => {
     const single: CurveComposition = oneSeg('linear');
     expect(removeSegment(single, 0).segments).toHaveLength(1);
@@ -375,6 +471,56 @@ describe('state transitions', () => {
     const comp = defaultComposition();
     expect(setSegmentCurvature(comp, 0, 5).segments[0].curvature).toBe(1);
     expect(setSegmentSteepness(comp, 0, -5).segments[0].steepness).toBe(-1);
+  });
+});
+
+describe('gaps', () => {
+  const twoLinear = (gap: number): CurveComposition => ({
+    segments: [
+      { type: 'linear', weight: 1, curvature: 0, steepness: 0 },
+      { type: 'linear', weight: 1, curvature: 0, steepness: 0 },
+    ],
+    driver: null,
+    direction: 'forward',
+    gap,
+  });
+
+  it('timelineSlots: gaps sit only BETWEEN segments (N-1), never after the last', () => {
+    const noGap = timelineSlots(twoLinear(0).segments, 0);
+    expect(noGap.filter((s) => s.kind === 'segment').map((s) => [s.a, s.b])).toEqual([
+      [0, 0.5],
+      [0.5, 1],
+    ]);
+    const withGap = timelineSlots(twoLinear(0.3).segments, 0.3);
+    expect(withGap.filter((s) => s.kind === 'gap')).toHaveLength(1); // 2 segments → 1 interior gap
+    expect(withGap[withGap.length - 1].kind).toBe('segment'); // ends on a segment, no trailing gap
+    const seg0 = withGap.find((s) => s.kind === 'segment' && s.index === 0)!;
+    expect(seg0.b).toBeCloseTo(0.35); // 0.5 * (1 - 0.3)
+    const gap0 = withGap.find((s) => s.kind === 'gap')!;
+    expect(gap0.b - gap0.a).toBeCloseTo(0.3); // the whole gap budget across the one interior gap
+  });
+
+  it('a single segment has no gap slots at all', () => {
+    const slots = timelineSlots(oneSeg('linear').segments, 0.5);
+    expect(slots.filter((s) => s.kind === 'gap')).toHaveLength(0);
+  });
+
+  it('readComposition glides smoothly across a gap (end → next start) instead of snapping', () => {
+    const comp = twoLinear(0.3);
+    const s = buildSamplers(comp);
+    // seg 0 spans [0, 0.35]; the interior gap is [0.35, 0.65]; seg 1 [0.65, 1]
+    expect(readComposition(comp, 0.34, s).value).toBeGreaterThan(0.9); // near the top of seg 0
+    const gapMid = readComposition(comp, 0.5, s).value;
+    expect(gapMid).toBeGreaterThan(0.05);
+    expect(gapMid).toBeLessThan(0.95); // partway down, not snapped
+    expect(readComposition(comp, 0.65, s).value).toBeCloseTo(0, 1); // gap end = next segment start
+  });
+
+  it('smootherstep is a 0→1 ease with flat ends', () => {
+    expect(smootherstep(0)).toBe(0);
+    expect(smootherstep(1)).toBe(1);
+    expect(smootherstep(0.5)).toBeCloseTo(0.5);
+    expect(smootherstep(0.1)).toBeLessThan(0.1); // flat near the start
   });
 });
 
