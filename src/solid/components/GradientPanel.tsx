@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For, Show, onCleanup } from 'solid-js';
 import { SegmentedControl } from './SegmentedControl';
 import { Slider } from './Slider';
 import { ColorPickerPanel } from './ColorPickerPanel';
@@ -70,6 +70,8 @@ export function GradientPanel(props: GradientPanelProps) {
     if (drag.timer) clearTimeout(drag.timer);
     drag.timer = null;
   };
+  // A held long-press timer must not outlive the panel.
+  onCleanup(clearTimer);
   const resetDrag = () => {
     clearTimer();
     drag.mode = 'idle';
@@ -111,7 +113,8 @@ export function GradientPanel(props: GradientPanelProps) {
           drag.timer = null;
           drag.mode = 'idle';
           setHoldingIndex(-1);
-          const next = removeStop(drag.working, index);
+          // Remove from current state, not the pointerdown snapshot.
+          const next = removeStop(props.value, index);
           props.onChange(next);
           setSelectedIndex(Math.min(index, next.stops.length - 1));
         }, LONG_PRESS_MS);

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { untrack, onDestroy } from 'svelte';
   import SegmentedControl from './SegmentedControl.svelte';
   import Slider from './Slider.svelte';
   import ColorPickerPanel from './ColorPickerPanel.svelte';
@@ -71,6 +71,8 @@
     if (drag.timer) clearTimeout(drag.timer);
     drag.timer = null;
   };
+  // A held long-press timer must not outlive the panel.
+  onDestroy(clearTimer);
   const resetDrag = () => {
     clearTimer();
     drag.mode = 'idle';
@@ -112,7 +114,8 @@
           drag.timer = null;
           drag.mode = 'idle';
           holdingIndex = -1;
-          const next = removeStop(drag.working, index);
+          // Remove from current state, not the pointerdown snapshot.
+          const next = removeStop(value, index);
           onChange(next);
           selectedIndex = Math.min(index, next.stops.length - 1);
         }, LONG_PRESS_MS);

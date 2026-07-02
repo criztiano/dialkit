@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { SegmentedControl } from './SegmentedControl';
 import { Slider } from './Slider';
 import { ColorPickerPanel } from './ColorPickerPanel';
@@ -52,6 +52,17 @@ export function GradientPanel({ value, onChange }: GradientPanelProps) {
     timer: ReturnType<typeof setTimeout> | null;
     working: GradientValue;
   }>({ mode: 'idle', activeIndex: -1, originX: 0, originY: 0, timer: null, working: value });
+
+  // Latest value for the long-press timer — it must remove from current state,
+  // not the snapshot taken at pointerdown (an external write could land mid-hold).
+  const valueRef = useRef(value);
+  valueRef.current = value;
+
+  // A held long-press timer must not outlive the panel: if the popover closes
+  // mid-hold (Escape/outside-click), clear it so it can't emit a stray removal.
+  useEffect(() => () => {
+    if (drag.current.timer) clearTimeout(drag.current.timer);
+  }, []);
 
   // Selection can outrun a shrinking stop list (external preset restore).
   const safeIndex = Math.min(selectedIndex, value.stops.length - 1);
@@ -111,7 +122,7 @@ export function GradientPanel({ value, onChange }: GradientPanelProps) {
           d.timer = null;
           d.mode = 'idle';
           setHoldingIndex(-1);
-          const next = removeStop(d.working, index);
+          const next = removeStop(valueRef.current, index);
           onChange(next);
           setSelectedIndex(Math.min(index, next.stops.length - 1));
         }, LONG_PRESS_MS);

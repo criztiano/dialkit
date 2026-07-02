@@ -1,4 +1,4 @@
-import { computed, defineComponent, h, ref, type PropType } from 'vue';
+import { computed, defineComponent, h, ref, onBeforeUnmount, type PropType } from 'vue';
 import { SegmentedControl } from './SegmentedControl';
 import { Slider } from './Slider';
 import { ColorPickerPanel } from './ColorPickerPanel';
@@ -70,6 +70,8 @@ export const GradientPanel = defineComponent({
       if (drag.timer) clearTimeout(drag.timer);
       drag.timer = null;
     };
+    // A held long-press timer must not outlive the panel.
+    onBeforeUnmount(clearTimer);
     const resetDrag = () => {
       clearTimer();
       drag.mode = 'idle';
@@ -111,7 +113,8 @@ export const GradientPanel = defineComponent({
             drag.timer = null;
             drag.mode = 'idle';
             holdingIndex.value = -1;
-            const next = removeStop(drag.working, index);
+            // Remove from current state, not the pointerdown snapshot.
+            const next = removeStop(props.value, index);
             emit('change', next);
             selectedIndex.value = Math.min(index, next.stops.length - 1);
           }, LONG_PRESS_MS);
