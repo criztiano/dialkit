@@ -223,6 +223,14 @@ describe('channel model', () => {
     expect(channelsToRgba([NaN, 10, 20], 'rgb', false).r).toBe(0);
   });
 
+  it('defaults a missing alpha entry to opaque, never transparent', () => {
+    expect(channelsToRgba([255, 0, 0], 'rgb', true).a).toBe(1);
+  });
+
+  it('wraps out-of-range hues', () => {
+    expect(hsvToRgb({ h: -30, s: 1, v: 1, a: 1 })).toEqual(hsvToRgb({ h: 330, s: 1, v: 1, a: 1 }));
+  });
+
   it('round-trips hsl channels', () => {
     const out = channelsToRgba([0, 100, 50], 'hsl', false);
     expect(out).toEqual(rgba(255, 0, 0));

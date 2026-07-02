@@ -99,6 +99,8 @@ export function ColorControl({ label, value, onChange, alpha = false, palette = 
     if (e.key === 'Enter') {
       handleTextSubmit();
     } else if (e.key === 'Escape') {
+      // Cancel only the edit — don't let the document handler close the popover too.
+      e.stopPropagation();
       setIsEditing(false);
       setEditValue(value);
     }

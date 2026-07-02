@@ -65,6 +65,11 @@ function useAreaDrag(onPoint: (x: number, y: number) => void) {
     readPoint(e);
   };
   const onPointerMove = (e: React.PointerEvent) => {
+    // Insurance against lost pointer capture: no buttons down means no drag.
+    if (draggingRef.current && e.buttons === 0) {
+      draggingRef.current = false;
+      return;
+    }
     if (draggingRef.current) readPoint(e);
   };
   const endDrag = () => {
@@ -188,8 +193,9 @@ function PaletteSlot({
       title={color ? `${color.toUpperCase()} — click to apply, hold to clear` : 'Save current color'}
       onContextMenu={(e) => e.preventDefault()}
       onPointerDown={(e) => {
-        if (!color) return;
+        // Always reset first: a new press is never a stale long-press echo.
         firedRef.current = false;
+        if (!color) return;
         originRef.current = { x: e.clientX, y: e.clientY };
         setHolding(true);
         timerRef.current = setTimeout(() => {
@@ -381,12 +387,14 @@ export function ColorPickerPanel({ value, onChange, alpha = false, palette = fal
             <PaletteSlot
               key={i}
               color={slots[i] ?? null}
-              onSave={() => savePalette(slots.map((s, j) => (j === i ? currentHex : s)))}
+              // Read the store at commit time — a 500ms hold is long enough for
+              // another panel or tab to have rewritten the palette underneath.
+              onSave={() => savePalette(loadPalette().map((s, j) => (j === i ? currentHex : s)))}
               onApply={() => {
                 const saved = slots[i];
                 if (saved) applyHex(saved);
               }}
-              onClear={() => savePalette(slots.map((s, j) => (j === i ? null : s)))}
+              onClear={() => savePalette(loadPalette().map((s, j) => (j === i ? null : s)))}
             />
           ))}
         </div>

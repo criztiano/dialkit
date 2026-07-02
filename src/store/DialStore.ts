@@ -1,5 +1,7 @@
 // Lightweight state store with subscriptions for dialkit
 
+import { HEX_COLOR_REGEX } from '../color-core';
+
 export type SpringConfig = {
   type: 'spring';
   stiffness?: number;
@@ -837,7 +839,7 @@ class DialStoreClass {
   }
 
   private isHexColor(value: string): boolean {
-    return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(value);
+    return HEX_COLOR_REGEX.test(value);
   }
 
   private formatLabel(key: string): string {
@@ -928,6 +930,10 @@ class DialStoreClass {
         // Config dropped alpha: reconcile stored 8-digit values back to opaque hex.
         if (!control.alpha && (existingValue.length === 5 || existingValue.length === 9)) {
           return existingValue.length === 9 ? existingValue.slice(0, 7) : existingValue.slice(0, 4);
+        }
+        // Config gained alpha: uphold the #rrggbbaa invariant from load, not first edit.
+        if (control.alpha && (existingValue.length === 4 || existingValue.length === 7)) {
+          return existingValue + (existingValue.length === 7 ? 'ff' : 'f');
         }
         return existingValue;
       }

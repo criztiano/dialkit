@@ -60,7 +60,12 @@ export function savePalette(slots: PaletteSlots): void {
   notify();
 }
 
-/** Same-page panels sync through the listener set; other tabs via the storage event. */
+/**
+ * Same-page panels sync through the listener set; other tabs via the storage
+ * event. Caveat: mixed-framework pages load one module copy per bundle, and
+ * the storage event doesn't fire in the writing document — so same-page sync
+ * only spans panels from the same bundle. Cross-tab sync always works.
+ */
 export function subscribePalette(cb: PaletteListener): () => void {
   listeners.add(cb);
   if (!storageListenerAttached && typeof window !== 'undefined') {
@@ -69,5 +74,9 @@ export function subscribePalette(cb: PaletteListener): () => void {
   }
   return () => {
     listeners.delete(cb);
+    if (listeners.size === 0 && storageListenerAttached && typeof window !== 'undefined') {
+      window.removeEventListener('storage', onStorageEvent);
+      storageListenerAttached = false;
+    }
   };
 }

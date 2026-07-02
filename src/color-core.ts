@@ -266,7 +266,10 @@ export function channelsToRgba(values: number[], format: Exclude<ColorFormat, 'h
   const specs = getChannels(format, alphaEnabled);
   const v = specs.map((spec, i) => {
     const n = Number(values[i]);
-    return clamp(Number.isFinite(n) ? n : spec.min, spec.min, spec.max);
+    // Garbage falls to the channel minimum — except alpha, where a silently
+    // transparent color is worse than a silently opaque one.
+    const fallback = spec.key === 'a' ? spec.max : spec.min;
+    return clamp(Number.isFinite(n) ? n : fallback, spec.min, spec.max);
   });
   const a = alphaEnabled ? v[3] / 100 : 1;
   if (format === 'rgb') return { r: byte(v[0]), g: byte(v[1]), b: byte(v[2]), a };
