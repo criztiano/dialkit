@@ -1,6 +1,37 @@
 import * as solid_js from 'solid-js';
 import { Accessor, JSX } from 'solid-js';
 
+/**
+ * gradient-core — DOM-free gradient math shared by every framework port of the
+ * gradient editor. Pure functions only; anything touching the DOM lives in the
+ * component layer. Reuses color-core for all color math (no duplication).
+ *
+ * Canonical value shape and invariants (enforced by normalizeGradient and
+ * preserved by every helper below):
+ *   - stops sorted ascending by position
+ *   - positions clamped to 0–1
+ *   - stop colors always 8-digit lowercase hex (#rrggbbaa) — alpha always on
+ *   - angle wrapped to [0, 360)
+ *   - stops.length >= MIN_STOPS
+ * `angle` is kept even for radial gradients so switching type round-trips
+ * without losing the value.
+ */
+
+type GradientType = 'linear' | 'radial' | 'conic';
+/** color is always #rrggbbaa; position is 0–1. */
+type GradientStop = {
+    color: string;
+    position: number;
+};
+type GradientValue = {
+    type: GradientType;
+    angle: number;
+    stops: GradientStop[];
+};
+declare const DEFAULT_GRADIENT: GradientValue;
+/** Ready CSS gradient string for any of the three types. #rrggbbaa is valid CSS. */
+declare function gradientToCss(value: GradientValue): string;
+
 type SpringConfig = {
     type: 'spring';
     stiffness?: number;
@@ -34,6 +65,10 @@ type ColorConfig = {
     alpha?: boolean;
     /** Shows the shared saved-swatches row (persisted per machine). Default false. */
     palette?: boolean;
+};
+type GradientConfig = {
+    type: 'gradient';
+    default?: GradientValue;
 };
 type TextConfig = {
     type: 'text';
@@ -112,12 +147,12 @@ type ListConfig = {
     /** Label for the add affordance. Defaults to 'Add'. */
     addLabel?: string;
 };
-type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[];
+type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | GradientConfig | GradientValue | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[];
 type DialConfig = {
     [key: string]: DialValue | [number, number, number, number?] | DialConfig;
 };
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends TextConfig ? string : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends TextConfig ? string : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -128,7 +163,7 @@ type ShortcutConfig = {
     interaction?: ShortcutInteraction;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'text' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'text' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
     path: string;
     label: string;
     min?: number;
@@ -244,6 +279,7 @@ declare class DialStoreClass {
     private isActionConfig;
     private isSelectConfig;
     private isColorConfig;
+    private isGradientConfig;
     private isTextConfig;
     private isGalleryConfig;
     private isFileConfig;
@@ -511,6 +547,19 @@ interface ColorPickerPanelProps {
 }
 declare function ColorPickerPanel(props: ColorPickerPanelProps): solid_js.JSX.Element;
 
+interface GradientControlProps {
+    label: string;
+    value: GradientValue;
+    onChange: (value: GradientValue) => void;
+}
+declare function GradientControl(props: GradientControlProps): solid_js.JSX.Element;
+
+interface GradientPanelProps {
+    value: GradientValue;
+    onChange: (value: GradientValue) => void;
+}
+declare function GradientPanel(props: GradientPanelProps): solid_js.JSX.Element;
+
 interface PresetManagerProps {
     panelId: string;
     presets: Preset[];
@@ -519,4 +568,4 @@ interface PresetManagerProps {
 }
 declare function PresetManager(props: PresetManagerProps): solid_js.JSX.Element;
 
-export { type ActionConfig, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, type CreateDialOptions, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, type DialConfig, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, Folder, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type WaveformLoop, type WaveformMode, WaveformVisualization, createDialKit };
+export { type ActionConfig, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, type CreateDialOptions, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, type DialConfig, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, Folder, GradientControl, GradientPanel, type GradientStop, type GradientType, type GradientValue, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type WaveformLoop, type WaveformMode, WaveformVisualization, createDialKit, gradientToCss };

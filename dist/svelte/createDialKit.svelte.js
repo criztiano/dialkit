@@ -1,4 +1,5 @@
 import { DialStore, normalizeListItems } from 'dialkit/store';
+import { normalizeGradient, DEFAULT_GRADIENT } from '../gradient-core';
 let dialKitInstance = 0;
 export function createDialKit(name, config, options) {
     const panelId = `${name}-${++dialKitInstance}`;
@@ -50,6 +51,12 @@ function buildResolvedValues(config, flatValues, prefix) {
         else if (isColorConfig(configValue)) {
             result[key] = flatValues[path] ?? configValue.default ?? '#000000';
         }
+        else if (isGradientConfig(configValue)) {
+            // Must precede the generic nested-object branch below — otherwise a
+            // gradient config is walked as a folder and resolves to the raw config,
+            // crashing gradientToCss with "stops is not iterable".
+            result[key] = flatValues[path] ?? normalizeGradient(configValue.default ?? DEFAULT_GRADIENT);
+        }
         else if (isTextConfig(configValue)) {
             result[key] = flatValues[path] ?? configValue.default ?? '';
         }
@@ -88,6 +95,9 @@ function isSelectConfig(value) {
 }
 function isColorConfig(value) {
     return hasType(value, 'color');
+}
+function isGradientConfig(value) {
+    return hasType(value, 'gradient');
 }
 function isTextConfig(value) {
     return hasType(value, 'text');

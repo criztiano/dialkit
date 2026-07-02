@@ -1944,6 +1944,124 @@
   transform: scale(0.82);
 }
 
+/* ── Gradient control ── */
+
+.dialkit-gradient-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: var(--dial-row-height);
+  padding: 0 12px;
+  background: var(--dial-surface);
+  border-radius: var(--dial-radius);
+}
+
+.dialkit-gradient-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dial-text-label);
+  flex-shrink: 0;
+  transform: translateY(-0.5px);
+}
+
+/* The trigger shows the real gradient (incl. radial/conic) over a checkerboard
+   so translucent stops read correctly — same two-layer technique as the swatch. */
+.dialkit-gradient-preview {
+  width: 96px;
+  height: 20px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid var(--dial-border-hover);
+  cursor: pointer;
+  transition: transform 0.15s;
+  background:
+    var(--gradient-preview, transparent),
+    conic-gradient(rgba(127, 127, 127, 0.35) 25%, transparent 0 50%, rgba(127, 127, 127, 0.35) 0 75%, transparent 0) 0 0 / 8px 8px;
+}
+
+.dialkit-gradient-preview:hover,
+.dialkit-gradient-preview[data-open="true"] {
+  transform: scale(1.05);
+}
+
+/* ── Gradient editor popover ── */
+
+.dialkit-gradient-popover {
+  z-index: 10000;
+}
+
+.dialkit-gradient-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  background: var(--dial-dropdown-bg);
+  border: 1px solid var(--dial-border);
+  border-radius: 12px;
+  box-shadow: var(--dial-shadow-dropdown);
+  box-sizing: border-box;
+}
+
+/* The embedded color picker sheds its own chrome inside the gradient panel. */
+.dialkit-gradient-panel .dialkit-color-picker {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  border-radius: 0;
+}
+
+.dialkit-gradient-strip {
+  position: relative;
+  height: 28px;
+  border-radius: 6px;
+  cursor: crosshair;
+  touch-action: none;
+  background:
+    var(--gradient-ramp, transparent),
+    conic-gradient(rgba(127, 127, 127, 0.35) 25%, transparent 0 50%, rgba(127, 127, 127, 0.35) 0 75%, transparent 0) 0 0 / 8px 8px;
+}
+
+.dialkit-gradient-stop {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-sizing: border-box;
+  cursor: grab;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 1px 4px rgba(0, 0, 0, 0.4);
+  transform: translate(-50%, -50%) translateY(var(--detach-y, 0px));
+  transition: transform 0.12s ease, opacity 0.12s ease;
+  background:
+    linear-gradient(var(--swatch-color, transparent), var(--swatch-color, transparent)),
+    conic-gradient(rgba(127, 127, 127, 0.35) 25%, transparent 0 50%, rgba(127, 127, 127, 0.35) 0 75%, transparent 0) 0 0 / 6px 6px;
+}
+
+.dialkit-gradient-stop[data-selected="true"] {
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 0 0 3px var(--dial-text-focus), 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+/* Long-press telegraph: the handle sinks while the hold timer runs. */
+.dialkit-gradient-stop[data-holding="true"] {
+  transform: translate(-50%, -50%) scale(0.82);
+  transition: transform 0.45s ease;
+}
+
+/* Drag-off-the-strip telegraph: fade + shrink to preview removal. */
+.dialkit-gradient-stop[data-detaching="true"] {
+  opacity: 0.45;
+  transform: translate(-50%, -50%) translateY(var(--detach-y, 0px)) scale(0.85);
+}
+
+.dialkit-gradient-divider {
+  height: 1px;
+  background: var(--dial-surface-active);
+}
+
 /* Preset Manager */
 .dialkit-preset-manager {
   position: relative;

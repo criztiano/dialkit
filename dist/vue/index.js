@@ -13,12 +13,12 @@ function parseHex(input) {
   let s = input.trim();
   if (!s.startsWith("#")) s = `#${s}`;
   if (!HEX_COLOR_REGEX.test(s)) return null;
-  let h23 = s.slice(1);
-  if (h23.length <= 4) h23 = h23.split("").map((c) => c + c).join("");
-  const r = parseInt(h23.slice(0, 2), 16);
-  const g = parseInt(h23.slice(2, 4), 16);
-  const b = parseInt(h23.slice(4, 6), 16);
-  const a = h23.length === 8 ? parseInt(h23.slice(6, 8), 16) / 255 : 1;
+  let h25 = s.slice(1);
+  if (h25.length <= 4) h25 = h25.split("").map((c) => c + c).join("");
+  const r = parseInt(h25.slice(0, 2), 16);
+  const g = parseInt(h25.slice(2, 4), 16);
+  const b = parseInt(h25.slice(4, 6), 16);
+  const a = h25.length === 8 ? parseInt(h25.slice(6, 8), 16) / 255 : 1;
   return { r, g, b, a };
 }
 function formatHex(rgba, alphaEnabled) {
@@ -52,36 +52,36 @@ function rgbToHsv(rgba) {
   const r = rgba.r / 255, g = rgba.g / 255, b = rgba.b / 255;
   const max = Math.max(r, g, b), min = Math.min(r, g, b);
   const d = max - min;
-  let h23 = 0;
+  let h25 = 0;
   if (d !== 0) {
-    if (max === r) h23 = (g - b) / d % 6;
-    else if (max === g) h23 = (b - r) / d + 2;
-    else h23 = (r - g) / d + 4;
-    h23 *= 60;
-    if (h23 < 0) h23 += 360;
+    if (max === r) h25 = (g - b) / d % 6;
+    else if (max === g) h25 = (b - r) / d + 2;
+    else h25 = (r - g) / d + 4;
+    h25 *= 60;
+    if (h25 < 0) h25 += 360;
   }
-  return { h: h23, s: max === 0 ? 0 : d / max, v: max, a: rgba.a };
+  return { h: h25, s: max === 0 ? 0 : d / max, v: max, a: rgba.a };
 }
 function hsvToRgb(hsva) {
-  const h23 = (hsva.h % 360 + 360) % 360;
+  const h25 = (hsva.h % 360 + 360) % 360;
   const s = clamp01(hsva.s), v = clamp01(hsva.v);
   const c = v * s;
-  const x = c * (1 - Math.abs(h23 / 60 % 2 - 1));
+  const x = c * (1 - Math.abs(h25 / 60 % 2 - 1));
   const m = v - c;
   let r = 0, g = 0, b = 0;
-  if (h23 < 60) [r, g, b] = [c, x, 0];
-  else if (h23 < 120) [r, g, b] = [x, c, 0];
-  else if (h23 < 180) [r, g, b] = [0, c, x];
-  else if (h23 < 240) [r, g, b] = [0, x, c];
-  else if (h23 < 300) [r, g, b] = [x, 0, c];
+  if (h25 < 60) [r, g, b] = [c, x, 0];
+  else if (h25 < 120) [r, g, b] = [x, c, 0];
+  else if (h25 < 180) [r, g, b] = [0, c, x];
+  else if (h25 < 240) [r, g, b] = [0, x, c];
+  else if (h25 < 300) [r, g, b] = [x, 0, c];
   else [r, g, b] = [c, 0, x];
   return { r: byte((r + m) * 255), g: byte((g + m) * 255), b: byte((b + m) * 255), a: hsva.a };
 }
 function rgbToHsl(rgba) {
-  const { h: h23, s, v, a } = rgbToHsv(rgba);
+  const { h: h25, s, v, a } = rgbToHsv(rgba);
   const l = v * (1 - s / 2);
   const sl = l === 0 || l === 1 ? 0 : (v - l) / Math.min(l, 1 - l);
-  return { h: h23, s: sl, l, a };
+  return { h: h25, s: sl, l, a };
 }
 function hslToRgb(hsla) {
   const l = clamp01(hsla.l), s = clamp01(hsla.s);
@@ -117,32 +117,32 @@ function oklabToLinearRgb(L, A, B) {
 function rgbToOklch(rgba) {
   const { L, A, B } = rgbToOklab(rgba);
   const c = Math.sqrt(A * A + B * B);
-  let h23 = Math.atan2(B, A) * 180 / Math.PI;
-  if (h23 < 0) h23 += 360;
-  return { l: L, c, h: c < 1e-6 ? 0 : h23, a: rgba.a };
+  let h25 = Math.atan2(B, A) * 180 / Math.PI;
+  if (h25 < 0) h25 += 360;
+  return { l: L, c, h: c < 1e-6 ? 0 : h25, a: rgba.a };
 }
 var GAMUT_EPS = 1e-4;
-function inSrgbGamut(l, c, h23) {
-  const rad = h23 * Math.PI / 180;
+function inSrgbGamut(l, c, h25) {
+  const rad = h25 * Math.PI / 180;
   const { r, g, b } = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
   return r >= -GAMUT_EPS && r <= 1 + GAMUT_EPS && g >= -GAMUT_EPS && g <= 1 + GAMUT_EPS && b >= -GAMUT_EPS && b <= 1 + GAMUT_EPS;
 }
 function clampOklchToSrgb(oklch) {
   const l = clamp01(oklch.l);
-  const h23 = (oklch.h % 360 + 360) % 360;
+  const h25 = (oklch.h % 360 + 360) % 360;
   const c = Math.max(0, oklch.c);
-  if (inSrgbGamut(l, c, h23)) return { l, c, h: h23, a: clamp01(oklch.a) };
+  if (inSrgbGamut(l, c, h25)) return { l, c, h: h25, a: clamp01(oklch.a) };
   let lo = 0, hi = c;
   for (let i = 0; i < 24; i++) {
     const mid = (lo + hi) / 2;
-    if (inSrgbGamut(l, mid, h23)) lo = mid;
+    if (inSrgbGamut(l, mid, h25)) lo = mid;
     else hi = mid;
   }
-  return { l, c: lo, h: h23, a: clamp01(oklch.a) };
+  return { l, c: lo, h: h25, a: clamp01(oklch.a) };
 }
 function oklchToRgb(oklch) {
-  const { l, c, h: h23, a } = clampOklchToSrgb(oklch);
-  const rad = h23 * Math.PI / 180;
+  const { l, c, h: h25, a } = clampOklchToSrgb(oklch);
+  const rad = h25 * Math.PI / 180;
   const lin = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
   return {
     r: byte(linearToSrgb(clamp01(lin.r)) * 255),
@@ -181,11 +181,11 @@ function rgbaToChannels(rgba, format, alphaEnabled) {
   if (format === "rgb") {
     values = [rgba.r, rgba.g, rgba.b];
   } else if (format === "hsl") {
-    const { h: h23, s, l } = rgbToHsl(rgba);
-    values = [round(h23, 0), round(s * 100, 0), round(l * 100, 0)];
+    const { h: h25, s, l } = rgbToHsl(rgba);
+    values = [round(h25, 0), round(s * 100, 0), round(l * 100, 0)];
   } else {
-    const { l, c, h: h23 } = rgbToOklch(rgba);
-    values = [round(l, 2), round(c, 3), round(h23, 0)];
+    const { l, c, h: h25 } = rgbToOklch(rgba);
+    values = [round(l, 2), round(c, 3), round(h25, 0)];
   }
   if (alphaEnabled) values.push(opacityPercent(rgba));
   return values;
@@ -225,6 +225,125 @@ function deserializePalette(raw) {
     if (typeof entry === "string" && HEX_COLOR_REGEX.test(entry)) slots[i] = entry;
   }
   return slots;
+}
+
+// src/gradient-core.ts
+var MIN_STOPS = 2;
+var STOP_DETACH_PX = 24;
+var DEFAULT_GRADIENT = {
+  type: "linear",
+  angle: 90,
+  stops: [
+    { color: "#6366f1ff", position: 0 },
+    { color: "#ec4899ff", position: 1 }
+  ]
+};
+var clamp012 = (n) => Math.min(1, Math.max(0, n));
+var wrapAngle = (a) => (a % 360 + 360) % 360;
+var round2 = (n, p) => {
+  const f = 10 ** p;
+  return Math.round(n * f) / f;
+};
+var cloneDefaultStops = () => DEFAULT_GRADIENT.stops.map((s) => ({ ...s }));
+var cloneDefault = () => ({
+  type: DEFAULT_GRADIENT.type,
+  angle: DEFAULT_GRADIENT.angle,
+  stops: cloneDefaultStops()
+});
+var sortedStops = (stops) => [...stops].sort((a, b) => a.position - b.position);
+var normColor = (color) => {
+  const rgba = parseHex(color);
+  return rgba ? formatHex(rgba, true) : "#000000ff";
+};
+function gradientToCss(value) {
+  const stopStr = sortedStops(value.stops).map((s) => `${s.color} ${round2(clamp012(s.position) * 100, 2)}%`).join(", ");
+  const angle = round2(wrapAngle(value.angle), 2);
+  switch (value.type) {
+    case "radial":
+      return `radial-gradient(circle at 50% 50%, ${stopStr})`;
+    case "conic":
+      return `conic-gradient(from ${angle}deg at 50% 50%, ${stopStr})`;
+    case "linear":
+    default:
+      return `linear-gradient(${angle}deg, ${stopStr})`;
+  }
+}
+function lerpPremult(a, b, t) {
+  const pa = a.a + (b.a - a.a) * t;
+  if (pa === 0) return { r: 0, g: 0, b: 0, a: 0 };
+  const mix = (ca, aa, cb, ba) => (ca * aa + (cb * ba - ca * aa) * t) / pa;
+  return {
+    r: mix(a.r, a.a, b.r, b.a),
+    g: mix(a.g, a.a, b.g, b.a),
+    b: mix(a.b, a.a, b.b, b.a),
+    a: pa
+  };
+}
+function colorAtPosition(value, position) {
+  const stops = sortedStops(value.stops);
+  if (stops.length === 0) return "#000000ff";
+  const p = clamp012(position);
+  if (p <= stops[0].position) return normColor(stops[0].color);
+  const last = stops[stops.length - 1];
+  if (p >= last.position) return normColor(last.color);
+  let i = 0;
+  while (i < stops.length - 1 && stops[i + 1].position <= p) i++;
+  const a = stops[i];
+  const b = stops[i + 1];
+  const span = b.position - a.position;
+  const t = span === 0 ? 0 : (p - a.position) / span;
+  const ca = parseHex(a.color) ?? { r: 0, g: 0, b: 0, a: 1 };
+  const cb = parseHex(b.color) ?? { r: 0, g: 0, b: 0, a: 1 };
+  return formatHex(lerpPremult(ca, cb, t), true);
+}
+function normalizeGradient(input) {
+  if (!input || typeof input !== "object") return cloneDefault();
+  const obj = input;
+  if (!Array.isArray(obj.stops)) return cloneDefault();
+  const type = obj.type === "radial" || obj.type === "conic" ? obj.type : "linear";
+  const rawAngle = Number(obj.angle);
+  const angle = Number.isFinite(rawAngle) ? wrapAngle(rawAngle) : DEFAULT_GRADIENT.angle;
+  const stops = [];
+  for (const raw of obj.stops) {
+    if (!raw || typeof raw !== "object") continue;
+    const s = raw;
+    const rgba = typeof s.color === "string" ? parseHex(s.color) : null;
+    const pos = Number(s.position);
+    if (!rgba || !Number.isFinite(pos)) continue;
+    stops.push({ color: formatHex(rgba, true), position: clamp012(pos) });
+  }
+  if (stops.length < MIN_STOPS) return { type, angle, stops: cloneDefaultStops() };
+  stops.sort((a, b) => a.position - b.position);
+  return { type, angle, stops };
+}
+function addStop(value, position) {
+  const stop = { color: colorAtPosition(value, position), position: clamp012(position) };
+  const stops = [...value.stops, stop].sort((a, b) => a.position - b.position);
+  return { value: { ...value, stops }, index: stops.indexOf(stop) };
+}
+function moveStop(value, index, position) {
+  if (index < 0 || index >= value.stops.length) return { value, index };
+  const moved = { ...value.stops[index], position: clamp012(position) };
+  const stops = value.stops.map((s, i) => i === index ? moved : s);
+  stops.sort((a, b) => a.position - b.position);
+  return { value: { ...value, stops }, index: stops.indexOf(moved) };
+}
+function removeStop(value, index) {
+  if (value.stops.length <= MIN_STOPS || index < 0 || index >= value.stops.length) return value;
+  return { ...value, stops: value.stops.filter((_, i) => i !== index) };
+}
+function setStopColor(value, index, hex) {
+  if (index < 0 || index >= value.stops.length) return value;
+  const rgba = parseHex(hex);
+  if (!rgba) return value;
+  const color = formatHex(rgba, true);
+  return { ...value, stops: value.stops.map((s, i) => i === index ? { ...s, color } : s) };
+}
+function setGradientType(value, type) {
+  return { ...value, type };
+}
+function setGradientAngle(value, angle) {
+  return { ...value, angle: wrapAngle(angle) };
 }
 
 // src/store/DialStore.ts
@@ -504,7 +623,7 @@ var DialStoreClass = class {
         const hasPhysics = value.stiffness !== void 0 || value.damping !== void 0 || value.mass !== void 0;
         const hasTime = value.visualDuration !== void 0 || value.bounce !== void 0;
         values[`${path}.__mode`] = hasPhysics && !hasTime ? "advanced" : "simple";
-      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isColorConfig(value) && !this.isTextConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isListConfig(value)) {
+      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isTextConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isListConfig(value)) {
         this.initTransitionModes(value, path, values);
       }
     }
@@ -540,6 +659,8 @@ var DialStoreClass = class {
         controls.push({ type: "select", path, label, options: value.options });
       } else if (this.isColorConfig(value)) {
         controls.push({ type: "color", path, label, alpha: value.alpha, palette: value.palette });
+      } else if (this.isGradientConfig(value)) {
+        controls.push({ type: "gradient", path, label });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: "text", path, label, placeholder: value.placeholder });
       } else if (this.isGalleryConfig(value)) {
@@ -592,6 +713,8 @@ var DialStoreClass = class {
         values[path] = value.default ?? firstValue;
       } else if (this.isColorConfig(value)) {
         values[path] = value.default ?? "#000000";
+      } else if (this.isGradientConfig(value)) {
+        values[path] = normalizeGradient(value.default ?? DEFAULT_GRADIENT);
       } else if (this.isTextConfig(value)) {
         values[path] = value.default ?? "";
       } else if (this.isGalleryConfig(value)) {
@@ -624,6 +747,9 @@ var DialStoreClass = class {
   }
   isColorConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "color";
+  }
+  isGradientConfig(value) {
+    return typeof value === "object" && value !== null && "type" in value && value.type === "gradient";
   }
   isTextConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "text";
@@ -721,6 +847,12 @@ var DialStoreClass = class {
           return existingValue + (existingValue.length === 7 ? "ff" : "f");
         }
         return existingValue;
+      }
+      case "gradient": {
+        if (typeof existingValue !== "object" || existingValue === null || !Array.isArray(existingValue.stops)) {
+          return defaultValue;
+        }
+        return normalizeGradient(existingValue);
       }
       case "text":
       case "file":
@@ -907,6 +1039,8 @@ function buildResolvedValues(config, flatValues, prefix) {
       result[key] = flatValues[path] ?? defaultValue;
     } else if (isColorConfig(configValue)) {
       result[key] = flatValues[path] ?? configValue.default ?? "#000000";
+    } else if (isGradientConfig(configValue)) {
+      result[key] = flatValues[path] ?? normalizeGradient(configValue.default ?? DEFAULT_GRADIENT);
     } else if (isTextConfig(configValue)) {
       result[key] = flatValues[path] ?? configValue.default ?? "";
     } else if (typeof configValue === "object" && configValue !== null) {
@@ -933,6 +1067,9 @@ function isSelectConfig(value) {
 function isColorConfig(value) {
   return hasType(value, "color");
 }
+function isGradientConfig(value) {
+  return hasType(value, "gradient");
+}
 function isTextConfig(value) {
   return hasType(value, "text");
 }
@@ -944,17 +1081,17 @@ function getFirstOptionValue(options) {
 // src/vue/directives/dialkit.ts
 import {
   createApp,
-  defineComponent as defineComponent17,
-  h as h17,
+  defineComponent as defineComponent19,
+  h as h19,
   shallowRef as shallowRef2
 } from "vue";
 
 // src/vue/components/DialRoot.ts
-import { defineComponent as defineComponent16, h as h16, onMounted as onMounted12, onUnmounted as onUnmounted9, ref as ref14, Teleport as Teleport4 } from "vue";
+import { defineComponent as defineComponent18, h as h18, onMounted as onMounted13, onUnmounted as onUnmounted9, ref as ref16, Teleport as Teleport5 } from "vue";
 
 // src/vue/components/Panel.ts
-import { Fragment, defineComponent as defineComponent15, h as h15, onMounted as onMounted11, onUnmounted as onUnmounted8, ref as ref13 } from "vue";
-import { AnimatePresence as AnimatePresence5, motion as motion5 } from "motion-v";
+import { Fragment, defineComponent as defineComponent17, h as h17, onMounted as onMounted12, onUnmounted as onUnmounted8, ref as ref15 } from "vue";
+import { AnimatePresence as AnimatePresence6, motion as motion6 } from "motion-v";
 
 // src/icons.ts
 var ICON_CHEVRON = "M6 9.5L12 15.5L18 9.5";
@@ -3030,10 +3167,333 @@ var ColorControl = defineComponent12({
   }
 });
 
-// src/vue/components/PresetManager.ts
-import { Teleport as Teleport3, defineComponent as defineComponent13, h as h13, ref as ref11, watch as watch7 } from "vue";
+// src/vue/components/GradientControl.ts
+import { Teleport as Teleport3, defineComponent as defineComponent14, h as h14, onMounted as onMounted10, ref as ref12, watch as watch7 } from "vue";
 import { AnimatePresence as AnimatePresence4, motion as motion4 } from "motion-v";
-var PresetManager = defineComponent13({
+
+// src/vue/components/GradientPanel.ts
+import { computed as computed6, defineComponent as defineComponent13, h as h13, ref as ref11 } from "vue";
+var TYPE_OPTIONS = [
+  { value: "linear", label: "Linear" },
+  { value: "radial", label: "Radial" },
+  { value: "conic", label: "Conic" }
+];
+function rampCss(stops) {
+  return gradientToCss({ type: "linear", angle: 90, stops });
+}
+var GradientPanel = defineComponent13({
+  name: "DialKitGradientPanel",
+  props: {
+    value: { type: Object, required: true }
+  },
+  emits: ["change"],
+  setup(props, { emit }) {
+    const selectedIndex = ref11(0);
+    const holdingIndex = ref11(-1);
+    const detach = ref11(null);
+    const stripRef = ref11(null);
+    const drag = {
+      mode: "idle",
+      activeIndex: -1,
+      originX: 0,
+      originY: 0,
+      timer: null,
+      working: props.value
+    };
+    const safeIndex = computed6(() => Math.min(selectedIndex.value, props.value.stops.length - 1));
+    const stripPos = (clientX) => {
+      const rect = stripRef.value.getBoundingClientRect();
+      return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    };
+    const stripCenterY = () => {
+      const rect = stripRef.value.getBoundingClientRect();
+      return rect.top + rect.height / 2;
+    };
+    const clearTimer = () => {
+      if (drag.timer) clearTimeout(drag.timer);
+      drag.timer = null;
+    };
+    const resetDrag = () => {
+      clearTimer();
+      drag.mode = "idle";
+      holdingIndex.value = -1;
+    };
+    const commitMove = (clientX) => {
+      const r = moveStop(drag.working, drag.activeIndex, stripPos(clientX));
+      drag.working = r.value;
+      drag.activeIndex = r.index;
+      selectedIndex.value = r.index;
+      emit("change", r.value);
+    };
+    const onPointerDown = (e) => {
+      e.preventDefault();
+      try {
+        stripRef.value?.setPointerCapture(e.pointerId);
+      } catch {
+      }
+      drag.originX = e.clientX;
+      drag.originY = e.clientY;
+      drag.working = props.value;
+      const handle = e.target.closest(".dialkit-gradient-stop");
+      if (handle) {
+        const index2 = Number(handle.dataset.index);
+        selectedIndex.value = index2;
+        drag.activeIndex = index2;
+        drag.mode = "pending";
+        if (props.value.stops.length > MIN_STOPS) {
+          holdingIndex.value = index2;
+          drag.timer = setTimeout(() => {
+            drag.timer = null;
+            drag.mode = "idle";
+            holdingIndex.value = -1;
+            const next2 = removeStop(drag.working, index2);
+            emit("change", next2);
+            selectedIndex.value = Math.min(index2, next2.stops.length - 1);
+          }, LONG_PRESS_MS);
+        }
+        return;
+      }
+      const { value: next, index } = addStop(props.value, stripPos(e.clientX));
+      drag.working = next;
+      drag.activeIndex = index;
+      drag.mode = "dragging";
+      selectedIndex.value = index;
+      emit("change", next);
+    };
+    const onPointerMove = (e) => {
+      if (drag.mode === "idle") return;
+      if (e.buttons === 0) {
+        detach.value = null;
+        resetDrag();
+        return;
+      }
+      if (drag.mode === "pending") {
+        if (Math.hypot(e.clientX - drag.originX, e.clientY - drag.originY) <= PALETTE_DRAG_CANCEL_PX) return;
+        clearTimer();
+        holdingIndex.value = -1;
+        drag.mode = "dragging";
+      }
+      if (drag.mode === "dragging") {
+        const offV = e.clientY - stripCenterY();
+        if (drag.working.stops.length > MIN_STOPS && Math.abs(offV) > STOP_DETACH_PX) {
+          drag.mode = "detached";
+          detach.value = { index: drag.activeIndex, y: offV };
+          return;
+        }
+        commitMove(e.clientX);
+        return;
+      }
+      if (drag.mode === "detached") {
+        const offV = e.clientY - stripCenterY();
+        if (Math.abs(offV) <= STOP_DETACH_PX) {
+          drag.mode = "dragging";
+          detach.value = null;
+          commitMove(e.clientX);
+        } else {
+          detach.value = { index: drag.activeIndex, y: offV };
+        }
+      }
+    };
+    const onPointerUp = () => {
+      if (drag.mode === "detached") {
+        const next = removeStop(drag.working, drag.activeIndex);
+        emit("change", next);
+        selectedIndex.value = Math.min(drag.activeIndex, next.stops.length - 1);
+      }
+      detach.value = null;
+      resetDrag();
+    };
+    return () => {
+      const value = props.value;
+      const previewStops = detach.value ? value.stops.filter((_, i) => i !== detach.value.index) : value.stops;
+      return h13("div", { class: "dialkit-gradient-panel" }, [
+        h13(SegmentedControl, {
+          options: TYPE_OPTIONS,
+          value: value.type,
+          onChange: (t) => emit("change", setGradientType(value, t))
+        }),
+        value.type !== "radial" ? h13(Slider, {
+          label: "Angle",
+          value: value.angle,
+          min: 0,
+          max: 360,
+          step: 1,
+          unit: "\xB0",
+          onChange: (a) => emit("change", setGradientAngle(value, a))
+        }) : null,
+        h13("div", {
+          ref: stripRef,
+          class: "dialkit-gradient-strip",
+          style: { "--gradient-ramp": rampCss(previewStops) },
+          onPointerdown: onPointerDown,
+          onPointermove: onPointerMove,
+          onPointerup: onPointerUp,
+          onPointercancel: onPointerUp
+        }, value.stops.map((stop, i) => {
+          const detaching = detach.value?.index === i;
+          return h13("button", {
+            key: i,
+            type: "button",
+            class: "dialkit-gradient-stop",
+            "data-index": i,
+            "data-selected": String(i === safeIndex.value),
+            "data-holding": String(i === holdingIndex.value),
+            "data-detaching": String(detaching),
+            style: {
+              left: `${stop.position * 100}%`,
+              zIndex: i === safeIndex.value ? 99 : i + 1,
+              "--swatch-color": stop.color,
+              "--detach-y": detaching ? `${detach.value.y}px` : "0px"
+            },
+            "aria-label": `Gradient stop ${i + 1}`
+          });
+        })),
+        h13("span", { class: "dialkit-gradient-divider", "aria-hidden": "true" }),
+        h13(ColorPickerPanel, {
+          key: safeIndex.value,
+          value: value.stops[safeIndex.value].color,
+          alpha: true,
+          palette: false,
+          onChange: (hex) => emit("change", setStopColor(value, safeIndex.value, hex))
+        })
+      ]);
+    };
+  }
+});
+
+// src/vue/components/GradientControl.ts
+var PANEL_WIDTH = 240;
+var PANEL_HEIGHT_ANGLED = 470;
+var PANEL_HEIGHT_RADIAL = 430;
+var GradientControl = defineComponent14({
+  name: "DialKitGradientControl",
+  props: {
+    label: { type: String, required: true },
+    value: { type: Object, required: true }
+  },
+  emits: ["change"],
+  setup(props, { emit }) {
+    const isOpen = ref12(false);
+    const pos = ref12(null);
+    const portalTarget = ref12(null);
+    const triggerRef = ref12(null);
+    const panelRef = ref12(null);
+    const updatePos = () => {
+      const el = triggerRef.value;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const panelHeight = props.value.type === "radial" ? PANEL_HEIGHT_RADIAL : PANEL_HEIGHT_ANGLED;
+      const spaceBelow = window.innerHeight - rect.bottom - 4;
+      const above = spaceBelow < panelHeight && rect.top > spaceBelow;
+      const left = Math.max(8, rect.right - PANEL_WIDTH);
+      pos.value = { top: above ? rect.top - 4 : rect.bottom + 4, left, above };
+    };
+    const openPanel = () => {
+      updatePos();
+      isOpen.value = true;
+    };
+    const closePanel = () => {
+      isOpen.value = false;
+    };
+    const togglePanel = () => {
+      if (isOpen.value) closePanel();
+      else openPanel();
+    };
+    const setPanelRef = (node) => {
+      if (node instanceof HTMLElement) {
+        panelRef.value = node;
+        return;
+      }
+      if (node && typeof node === "object" && "$el" in node) {
+        const el = node.$el;
+        panelRef.value = el instanceof HTMLElement ? el : null;
+        return;
+      }
+      panelRef.value = null;
+    };
+    watch7(() => props.value.type, () => {
+      if (isOpen.value) updatePos();
+    });
+    watch7(isOpen, (open, _, onCleanup) => {
+      if (!open) return;
+      const handleViewportChange = () => updatePos();
+      const handleDocumentClick = (event) => {
+        const target = event.target;
+        if (triggerRef.value?.contains(target) || panelRef.value?.contains(target)) return;
+        closePanel();
+      };
+      const handleKeydown = (event) => {
+        if (event.key === "Escape") {
+          closePanel();
+          triggerRef.value?.focus();
+        }
+      };
+      updatePos();
+      document.addEventListener("mousedown", handleDocumentClick);
+      document.addEventListener("keydown", handleKeydown);
+      window.addEventListener("resize", handleViewportChange);
+      window.addEventListener("scroll", handleViewportChange, true);
+      onCleanup(() => {
+        document.removeEventListener("mousedown", handleDocumentClick);
+        document.removeEventListener("keydown", handleKeydown);
+        window.removeEventListener("resize", handleViewportChange);
+        window.removeEventListener("scroll", handleViewportChange, true);
+      });
+    });
+    onMounted10(() => {
+      const root = triggerRef.value?.closest(".dialkit-root");
+      portalTarget.value = root ?? document.body;
+    });
+    return () => h14("div", { class: "dialkit-gradient-control" }, [
+      h14("span", { class: "dialkit-gradient-label" }, props.label),
+      h14("button", {
+        ref: triggerRef,
+        class: "dialkit-gradient-preview dialkit-checker",
+        style: { "--gradient-preview": gradientToCss(props.value) },
+        "data-open": String(isOpen.value),
+        title: "Edit gradient",
+        "aria-label": `Edit gradient for ${props.label}`,
+        "aria-expanded": isOpen.value,
+        onClick: togglePanel
+      }),
+      portalTarget.value ? h14(Teleport3, { to: portalTarget.value }, [
+        h14(AnimatePresence4, null, {
+          default: () => isOpen.value && pos.value ? [h14(motion4.div, {
+            key: "dialkit-gradient-popover",
+            ref: setPanelRef,
+            class: "dialkit-gradient-popover",
+            initial: { opacity: 0, y: pos.value.above ? 8 : -8, scale: 0.95 },
+            animate: { opacity: 1, y: 0, scale: 1 },
+            exit: { opacity: 0, y: pos.value.above ? 8 : -8, scale: 0.95 },
+            transition: { type: "spring", visualDuration: 0.15, bounce: 0 },
+            style: {
+              position: "fixed",
+              left: `${pos.value.left}px`,
+              width: `${PANEL_WIDTH}px`,
+              ...pos.value.above ? {
+                bottom: `${window.innerHeight - pos.value.top}px`,
+                transformOrigin: "bottom right"
+              } : {
+                top: `${pos.value.top}px`,
+                transformOrigin: "top right"
+              }
+            }
+          }, [
+            h14(GradientPanel, {
+              value: props.value,
+              onChange: (next) => emit("change", next)
+            })
+          ])] : []
+        })
+      ]) : null
+    ]);
+  }
+});
+
+// src/vue/components/PresetManager.ts
+import { Teleport as Teleport4, defineComponent as defineComponent15, h as h15, ref as ref13, watch as watch8 } from "vue";
+import { AnimatePresence as AnimatePresence5, motion as motion5 } from "motion-v";
+var PresetManager = defineComponent15({
   name: "DialKitPresetManager",
   props: {
     panelId: { type: String, required: true },
@@ -3048,10 +3508,10 @@ var PresetManager = defineComponent13({
     }
   },
   setup(props) {
-    const isOpen = ref11(false);
-    const pos = ref11({ top: 0, left: 0, width: 0 });
-    const triggerRef = ref11(null);
-    const dropdownRef = ref11(null);
+    const isOpen = ref13(false);
+    const pos = ref13({ top: 0, left: 0, width: 0 });
+    const triggerRef = ref13(null);
+    const dropdownRef = ref13(null);
     const hasPresets = () => props.presets.length > 0;
     const activePreset = () => props.presets.find((preset) => preset.id === props.activePresetId);
     const open = () => {
@@ -3081,7 +3541,7 @@ var PresetManager = defineComponent13({
       if (isOpen.value) close();
       else open();
     };
-    watch7(isOpen, (open2, _, onCleanup) => {
+    watch8(isOpen, (open2, _, onCleanup) => {
       if (!open2) return;
       const handler = (event) => {
         const target = event.target;
@@ -3105,8 +3565,8 @@ var PresetManager = defineComponent13({
       event.stopPropagation();
       DialStore.deletePreset(props.panelId, presetId);
     };
-    return () => h13("div", { class: "dialkit-preset-manager" }, [
-      h13("button", {
+    return () => h15("div", { class: "dialkit-preset-manager" }, [
+      h15("button", {
         ref: triggerRef,
         class: "dialkit-preset-trigger",
         onClick: toggle,
@@ -3114,8 +3574,8 @@ var PresetManager = defineComponent13({
         "data-has-preset": String(!!activePreset()),
         "data-disabled": String(!hasPresets())
       }, [
-        h13("span", { class: "dialkit-preset-label" }, activePreset()?.name ?? "Version 1"),
-        h13(motion4.svg, {
+        h15("span", { class: "dialkit-preset-label" }, activePreset()?.name ?? "Version 1"),
+        h15(motion5.svg, {
           class: "dialkit-select-chevron",
           viewBox: "0 0 24 24",
           fill: "none",
@@ -3125,11 +3585,11 @@ var PresetManager = defineComponent13({
           "stroke-linejoin": "round",
           animate: { rotate: isOpen.value ? 180 : 0, opacity: hasPresets() ? 0.6 : 0.25 },
           transition: { type: "spring", visualDuration: 0.2, bounce: 0.15 }
-        }, [h13("path", { d: ICON_CHEVRON })])
+        }, [h15("path", { d: ICON_CHEVRON })])
       ]),
-      h13(Teleport3, { to: "body" }, [
-        h13(AnimatePresence4, null, {
-          default: () => isOpen.value ? [h13(motion4.div, {
+      h15(Teleport4, { to: "body" }, [
+        h15(AnimatePresence5, null, {
+          default: () => isOpen.value ? [h15(motion5.div, {
             key: "dialkit-preset-dropdown",
             ref: setDropdownRef,
             class: "dialkit-root dialkit-preset-dropdown",
@@ -3144,31 +3604,31 @@ var PresetManager = defineComponent13({
             exit: { opacity: 0, y: 4, scale: 0.97, pointerEvents: "none" },
             transition: { type: "spring", visualDuration: 0.15, bounce: 0 }
           }, [
-            h13("div", {
+            h15("div", {
               class: "dialkit-preset-item",
               "data-active": String(!props.activePresetId),
               onClick: () => handleSelect(null)
-            }, [h13("span", { class: "dialkit-preset-name" }, "Version 1")]),
-            ...props.presets.map((preset) => h13("div", {
+            }, [h15("span", { class: "dialkit-preset-name" }, "Version 1")]),
+            ...props.presets.map((preset) => h15("div", {
               key: preset.id,
               class: "dialkit-preset-item",
               "data-active": String(preset.id === props.activePresetId),
               onClick: () => handleSelect(preset.id)
             }, [
-              h13("span", { class: "dialkit-preset-name" }, preset.name),
-              h13("button", {
+              h15("span", { class: "dialkit-preset-name" }, preset.name),
+              h15("button", {
                 class: "dialkit-preset-delete",
                 onClick: (event) => handleDelete(event, preset.id),
                 title: "Delete preset"
               }, [
-                h13("svg", {
+                h15("svg", {
                   viewBox: "0 0 24 24",
                   fill: "none",
                   stroke: "currentColor",
                   "stroke-width": "2",
                   "stroke-linecap": "round",
                   "stroke-linejoin": "round"
-                }, ICON_TRASH.map((d) => h13("path", { d })))
+                }, ICON_TRASH.map((d) => h15("path", { d })))
               ])
             ]))
           ])] : []
@@ -3179,19 +3639,19 @@ var PresetManager = defineComponent13({
 });
 
 // src/vue/components/ShortcutListener.ts
-import { defineComponent as defineComponent14, inject, onMounted as onMounted10, onUnmounted as onUnmounted7, provide, ref as ref12 } from "vue";
+import { defineComponent as defineComponent16, inject, onMounted as onMounted11, onUnmounted as onUnmounted7, provide, ref as ref14 } from "vue";
 var ShortcutKey = /* @__PURE__ */ Symbol("DialKitShortcut");
 function useShortcutContext() {
   return inject(ShortcutKey, {
-    activePanelId: ref12(null),
-    activePath: ref12(null)
+    activePanelId: ref14(null),
+    activePath: ref14(null)
   });
 }
-var ShortcutListener = defineComponent14({
+var ShortcutListener = defineComponent16({
   name: "DialKitShortcutListener",
   setup(_, { slots }) {
-    const activePanelId = ref12(null);
-    const activePath = ref12(null);
+    const activePanelId = ref14(null);
+    const activePath = ref14(null);
     const activeKeys = /* @__PURE__ */ new Set();
     let isDragging = false;
     let lastMouseX = null;
@@ -3359,7 +3819,7 @@ var ShortcutListener = defineComponent14({
       activePanelId.value = null;
       activePath.value = null;
     };
-    onMounted10(() => {
+    onMounted11(() => {
       window.addEventListener("keydown", handleKeyDown);
       window.addEventListener("keyup", handleKeyUp);
       window.addEventListener("wheel", handleWheel, { passive: false });
@@ -3382,7 +3842,7 @@ var ShortcutListener = defineComponent14({
 });
 
 // src/vue/components/Panel.ts
-var Panel = defineComponent15({
+var Panel = defineComponent17({
   name: "DialKitPanel",
   props: {
     panel: {
@@ -3400,14 +3860,14 @@ var Panel = defineComponent15({
   },
   setup(props) {
     const shortcutCtx = useShortcutContext();
-    const values = ref13(DialStore.getValues(props.panel.id));
-    const presets = ref13(DialStore.getPresets(props.panel.id));
-    const activePresetId = ref13(DialStore.getActivePresetId(props.panel.id));
-    const copied = ref13(false);
+    const values = ref15(DialStore.getValues(props.panel.id));
+    const presets = ref15(DialStore.getPresets(props.panel.id));
+    const activePresetId = ref15(DialStore.getActivePresetId(props.panel.id));
+    const copied = ref15(false);
     const hasShortcuts = () => Object.keys(DialStore.getPanel(props.panel.id)?.shortcuts ?? {}).length > 0;
     let unsubscribe;
     let copiedTimeout = null;
-    onMounted11(() => {
+    onMounted12(() => {
       unsubscribe = DialStore.subscribe(props.panel.id, () => {
         values.value = DialStore.getValues(props.panel.id);
         presets.value = DialStore.getPresets(props.panel.id);
@@ -3451,7 +3911,7 @@ Apply these values as the new defaults in the useDialKit call.`;
       const value = values.value[control.path];
       switch (control.type) {
         case "slider":
-          return h15(Slider, {
+          return h17(Slider, {
             key: control.path,
             label: control.label,
             value,
@@ -3463,7 +3923,7 @@ Apply these values as the new defaults in the useDialKit call.`;
             onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
           });
         case "toggle":
-          return h15(Toggle, {
+          return h17(Toggle, {
             key: control.path,
             label: control.label,
             checked: value,
@@ -3472,7 +3932,7 @@ Apply these values as the new defaults in the useDialKit call.`;
             onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
           });
         case "spring":
-          return h15(SpringControl, {
+          return h17(SpringControl, {
             key: control.path,
             panelId: props.panel.id,
             path: control.path,
@@ -3481,7 +3941,7 @@ Apply these values as the new defaults in the useDialKit call.`;
             onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
           });
         case "transition":
-          return h15(TransitionControl, {
+          return h17(TransitionControl, {
             key: control.path,
             panelId: props.panel.id,
             path: control.path,
@@ -3490,7 +3950,7 @@ Apply these values as the new defaults in the useDialKit call.`;
             onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
           });
         case "folder":
-          return h15(Folder, {
+          return h17(Folder, {
             key: control.path,
             title: control.label,
             defaultOpen: control.defaultOpen ?? true
@@ -3498,7 +3958,7 @@ Apply these values as the new defaults in the useDialKit call.`;
             default: () => (control.children ?? []).map(renderControl)
           });
         case "text":
-          return h15(TextControl, {
+          return h17(TextControl, {
             key: control.path,
             label: control.label,
             value,
@@ -3506,7 +3966,7 @@ Apply these values as the new defaults in the useDialKit call.`;
             onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
           });
         case "select":
-          return h15(SelectControl, {
+          return h17(SelectControl, {
             key: control.path,
             label: control.label,
             value,
@@ -3514,7 +3974,7 @@ Apply these values as the new defaults in the useDialKit call.`;
             onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
           });
         case "color":
-          return h15(ColorControl, {
+          return h17(ColorControl, {
             key: control.path,
             label: control.label,
             value,
@@ -3522,8 +3982,15 @@ Apply these values as the new defaults in the useDialKit call.`;
             palette: control.palette,
             onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
           });
+        case "gradient":
+          return h17(GradientControl, {
+            key: control.path,
+            label: control.label,
+            value,
+            onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
+          });
         case "action":
-          return h15("button", {
+          return h17("button", {
             key: control.path,
             class: "dialkit-button",
             onClick: () => DialStore.triggerAction(props.panel.id, control.path)
@@ -3533,57 +4000,57 @@ Apply these values as the new defaults in the useDialKit call.`;
       }
     };
     return () => {
-      const toolbarNode = h15(Fragment, null, [
-        h15(motion5.button, {
+      const toolbarNode = h17(Fragment, null, [
+        h17(motion6.button, {
           class: "dialkit-toolbar-add",
           onClick: handleAddPreset,
           title: "Add preset",
           whilePress: { scale: 0.9 },
           transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 }
         }, [
-          h15("svg", {
+          h17("svg", {
             viewBox: "0 0 24 24",
             fill: "none",
             stroke: "currentColor",
             "stroke-width": "2.5",
             "stroke-linecap": "round",
             "stroke-linejoin": "round"
-          }, ICON_ADD_PRESET.map((d) => h15("path", { d })))
+          }, ICON_ADD_PRESET.map((d) => h17("path", { d })))
         ]),
-        h15(PresetManager, {
+        h17(PresetManager, {
           panelId: props.panel.id,
           presets: presets.value,
           activePresetId: activePresetId.value
         }),
-        h15(motion5.button, {
+        h17(motion6.button, {
           class: "dialkit-toolbar-copy",
           onClick: handleCopy,
           title: "Copy parameters",
           whilePress: { scale: 0.95 },
           transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 }
         }, [
-          h15("span", { class: "dialkit-toolbar-copy-icon-wrap" }, [
-            h15("span", {
+          h17("span", { class: "dialkit-toolbar-copy-icon-wrap" }, [
+            h17("span", {
               class: "dialkit-toolbar-copy-icon",
               style: { opacity: copied.value ? 0 : 1, transition: "opacity 120ms ease" }
             }, [
-              h15("svg", {
+              h17("svg", {
                 viewBox: "0 0 24 24",
                 fill: "none",
                 width: 16,
                 height: 16
               }, [
-                h15("path", {
+                h17("path", {
                   d: ICON_CLIPBOARD.board,
                   stroke: "currentColor",
                   "stroke-width": 2,
                   "stroke-linejoin": "round"
                 }),
-                h15("path", {
+                h17("path", {
                   d: ICON_CLIPBOARD.sparkle,
                   fill: "currentColor"
                 }),
-                h15("path", {
+                h17("path", {
                   d: ICON_CLIPBOARD.body,
                   stroke: "currentColor",
                   "stroke-width": 2,
@@ -3592,8 +4059,8 @@ Apply these values as the new defaults in the useDialKit call.`;
                 })
               ])
             ]),
-            h15(AnimatePresence5, { initial: false, mode: "popLayout" }, {
-              default: () => copied.value ? [h15(motion5.span, {
+            h17(AnimatePresence6, { initial: false, mode: "popLayout" }, {
+              default: () => copied.value ? [h17(motion6.span, {
                 key: "check",
                 class: "dialkit-toolbar-copy-icon",
                 initial: { scale: 0.5, opacity: 0 },
@@ -3601,7 +4068,7 @@ Apply these values as the new defaults in the useDialKit call.`;
                 exit: { scale: 0.5, opacity: 0 },
                 transition: { type: "spring", visualDuration: 0.3, bounce: 0.2 }
               }, [
-                h15("svg", {
+                h17("svg", {
                   viewBox: "0 0 24 24",
                   fill: "none",
                   stroke: "currentColor",
@@ -3610,15 +4077,15 @@ Apply these values as the new defaults in the useDialKit call.`;
                   "stroke-linejoin": "round",
                   width: 16,
                   height: 16
-                }, [h15("path", { d: ICON_CHECK })])
+                }, [h17("path", { d: ICON_CHECK })])
               ])] : []
             })
           ]),
           "Copy"
         ])
       ]);
-      return h15("div", { class: "dialkit-panel-wrapper" }, [
-        h15(Folder, {
+      return h17("div", { class: "dialkit-panel-wrapper" }, [
+        h17(Folder, {
           title: props.panel.name,
           defaultOpen: props.defaultOpen,
           isRoot: true,
@@ -3634,7 +4101,7 @@ Apply these values as the new defaults in the useDialKit call.`;
 
 // src/vue/components/DialRoot.ts
 var isDevDefault = typeof process !== "undefined" && process?.env?.NODE_ENV ? process.env.NODE_ENV !== "production" : typeof import.meta !== "undefined" && import.meta.env?.MODE ? import.meta.env.MODE !== "production" : true;
-var DialRoot = defineComponent16({
+var DialRoot = defineComponent18({
   name: "DialKitDialRoot",
   props: {
     position: {
@@ -3659,10 +4126,10 @@ var DialRoot = defineComponent16({
     }
   },
   setup(props) {
-    const panels = ref14([]);
-    const mounted = ref14(false);
+    const panels = ref16([]);
+    const mounted = ref16(false);
     let unsubscribe;
-    onMounted12(() => {
+    onMounted13(() => {
       mounted.value = true;
       panels.value = DialStore.getPanels();
       unsubscribe = DialStore.subscribeGlobal(() => {
@@ -3672,13 +4139,13 @@ var DialRoot = defineComponent16({
     onUnmounted9(() => {
       unsubscribe?.();
     });
-    const renderContent = () => h16(ShortcutListener, null, {
-      default: () => h16("div", { class: "dialkit-root", "data-mode": props.mode, "data-theme": props.theme }, [
-        h16("div", {
+    const renderContent = () => h18(ShortcutListener, null, {
+      default: () => h18("div", { class: "dialkit-root", "data-mode": props.mode, "data-theme": props.theme }, [
+        h18("div", {
           class: "dialkit-panel",
           "data-position": props.mode === "inline" ? void 0 : props.position,
           "data-mode": props.mode
-        }, panels.value.map((panel) => h16(Panel, {
+        }, panels.value.map((panel) => h18(Panel, {
           key: panel.id,
           panel,
           defaultOpen: props.mode === "inline" || props.defaultOpen,
@@ -3693,7 +4160,7 @@ var DialRoot = defineComponent16({
       if (props.mode === "inline") {
         return renderContent();
       }
-      return h16(Teleport4, { to: "body" }, renderContent());
+      return h18(Teleport5, { to: "body" }, renderContent());
     };
   }
 });
@@ -3712,10 +4179,10 @@ function mountDialRoot(el, value) {
   const host = document.createElement("div");
   el.appendChild(host);
   const props = shallowRef2(normalizeDirectiveValue(value));
-  const RootHost = defineComponent17({
+  const RootHost = defineComponent19({
     name: "DialKitDirectiveHost",
     setup() {
-      return () => h17(DialRoot, props.value);
+      return () => h19(DialRoot, props.value);
     }
   });
   const app = createApp(RootHost);
@@ -3747,7 +4214,7 @@ var vDialKit = {
 };
 
 // src/vue/components/ShortcutsMenu.ts
-import { defineComponent as defineComponent18, h as h18, onUnmounted as onUnmounted10, ref as ref15, Teleport as Teleport5 } from "vue";
+import { defineComponent as defineComponent20, h as h20, onUnmounted as onUnmounted10, ref as ref17, Teleport as Teleport6 } from "vue";
 function formatShortcutKey(sc) {
   if (!sc.key) return "\u2014";
   const mod = sc.modifier === "alt" ? "\u2325" : sc.modifier === "shift" ? "\u21E7" : sc.modifier === "meta" ? "\u2318" : "";
@@ -3766,7 +4233,7 @@ function formatInteraction(sc) {
       return "scroll";
   }
 }
-var ShortcutsMenu = defineComponent18({
+var ShortcutsMenu = defineComponent20({
   name: "DialKitShortcutsMenu",
   props: {
     panelId: {
@@ -3775,10 +4242,10 @@ var ShortcutsMenu = defineComponent18({
     }
   },
   setup(props) {
-    const isOpen = ref15(false);
-    const triggerRef = ref15(null);
-    const dropdownRef = ref15(null);
-    const pos = ref15({ top: 0, right: 0 });
+    const isOpen = ref17(false);
+    const triggerRef = ref17(null);
+    const dropdownRef = ref17(null);
+    const pos = ref17({ top: 0, right: 0 });
     const open = () => {
       const rect = triggerRef.value?.getBoundingClientRect();
       if (rect) {
@@ -3837,13 +4304,13 @@ var ShortcutsMenu = defineComponent18({
         removeOutsideClickListener();
       }
       return [
-        h18("button", {
+        h20("button", {
           ref: triggerRef,
           class: "dialkit-shortcuts-trigger",
           onClick: toggle,
           title: "Keyboard shortcuts"
         }, [
-          h18("svg", {
+          h20("svg", {
             viewBox: "0 0 24 24",
             fill: "none",
             stroke: "currentColor",
@@ -3851,16 +4318,16 @@ var ShortcutsMenu = defineComponent18({
             "stroke-linecap": "round",
             "stroke-linejoin": "round"
           }, [
-            h18("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
-            h18("path", { d: "M6 10H6.01" }),
-            h18("path", { d: "M10 10H10.01" }),
-            h18("path", { d: "M14 10H14.01" }),
-            h18("path", { d: "M18 10H18.01" }),
-            h18("path", { d: "M8 14H16" })
+            h20("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
+            h20("path", { d: "M6 10H6.01" }),
+            h20("path", { d: "M10 10H10.01" }),
+            h20("path", { d: "M14 10H14.01" }),
+            h20("path", { d: "M18 10H18.01" }),
+            h20("path", { d: "M8 14H16" })
           ])
         ]),
-        isOpen.value ? h18(Teleport5, { to: "body" }, [
-          h18("div", {
+        isOpen.value ? h20(Teleport6, { to: "body" }, [
+          h20("div", {
             ref: dropdownRef,
             class: "dialkit-root dialkit-shortcuts-dropdown",
             style: {
@@ -3869,19 +4336,19 @@ var ShortcutsMenu = defineComponent18({
               right: `${pos.value.right}px`
             }
           }, [
-            h18("div", { class: "dialkit-shortcuts-title" }, "Keyboard Shortcuts"),
-            h18(
+            h20("div", { class: "dialkit-shortcuts-title" }, "Keyboard Shortcuts"),
+            h20(
               "div",
               { class: "dialkit-shortcuts-list" },
               rows.map(
-                (row) => h18("div", { key: row.path, class: "dialkit-shortcuts-row" }, [
-                  h18("span", { class: "dialkit-shortcuts-row-key" }, formatShortcutKey(row.shortcut)),
-                  h18("span", { class: "dialkit-shortcuts-row-label" }, row.label),
-                  h18("span", { class: "dialkit-shortcuts-row-mode" }, formatInteraction(row.shortcut))
+                (row) => h20("div", { key: row.path, class: "dialkit-shortcuts-row" }, [
+                  h20("span", { class: "dialkit-shortcuts-row-key" }, formatShortcutKey(row.shortcut)),
+                  h20("span", { class: "dialkit-shortcuts-row-label" }, row.label),
+                  h20("span", { class: "dialkit-shortcuts-row-mode" }, formatInteraction(row.shortcut))
                 ])
               )
             ),
-            h18("div", { class: "dialkit-shortcuts-hint" }, "See pill badges on controls for keys")
+            h20("div", { class: "dialkit-shortcuts-hint" }, "See pill badges on controls for keys")
           ])
         ]) : null
       ];
@@ -3890,8 +4357,8 @@ var ShortcutsMenu = defineComponent18({
 });
 
 // src/vue/components/Module.ts
-import { defineComponent as defineComponent19, h as h19 } from "vue";
-var Module = defineComponent19({
+import { defineComponent as defineComponent21, h as h21 } from "vue";
+var Module = defineComponent21({
   name: "DialKitModule",
   props: {
     title: { type: String, required: true },
@@ -3904,11 +4371,11 @@ var Module = defineComponent19({
       props.onEnabledChange?.(enabled);
       emit("enabledChange", enabled);
     };
-    return () => h19("div", { class: "dialkit-module" }, [
-      h19("div", { class: "dialkit-module-header" }, [
-        h19("span", { class: "dialkit-module-title" }, props.title),
-        h19("div", { class: "dialkit-module-switch" }, [
-          h19(SegmentedControl, {
+    return () => h21("div", { class: "dialkit-module" }, [
+      h21("div", { class: "dialkit-module-header" }, [
+        h21("span", { class: "dialkit-module-title" }, props.title),
+        h21("div", { class: "dialkit-module-switch" }, [
+          h21(SegmentedControl, {
             options: [
               { value: "off", label: "Off" },
               { value: "on", label: "On" }
@@ -3918,9 +4385,9 @@ var Module = defineComponent19({
           })
         ])
       ]),
-      h19("div", { class: "dialkit-module-collapse", "data-open": props.enabled }, [
-        h19("div", { class: "dialkit-module-collapse-clip" }, [
-          h19("div", { class: "dialkit-module-inner" }, slots.default ? slots.default() : [])
+      h21("div", { class: "dialkit-module-collapse", "data-open": props.enabled }, [
+        h21("div", { class: "dialkit-module-collapse-clip" }, [
+          h21("div", { class: "dialkit-module-inner" }, slots.default ? slots.default() : [])
         ])
       ])
     ]);
@@ -3928,8 +4395,8 @@ var Module = defineComponent19({
 });
 
 // src/vue/components/ButtonGroup.ts
-import { defineComponent as defineComponent20, h as h20 } from "vue";
-var ButtonGroup = defineComponent20({
+import { defineComponent as defineComponent22, h as h22 } from "vue";
+var ButtonGroup = defineComponent22({
   name: "DialKitButtonGroup",
   props: {
     buttons: {
@@ -3938,18 +4405,18 @@ var ButtonGroup = defineComponent20({
     }
   },
   setup(props) {
-    return () => h20(
+    return () => h22(
       "div",
       { class: "dialkit-button-group" },
       props.buttons.map(
-        (button) => h20("button", { class: "dialkit-button", onClick: button.onClick }, button.label)
+        (button) => h22("button", { class: "dialkit-button", onClick: button.onClick }, button.label)
       )
     );
   }
 });
 
 // src/vue/components/WaveformVisualization.ts
-import { defineComponent as defineComponent21, h as h21, ref as ref16, onMounted as onMounted14, onBeforeUnmount as onBeforeUnmount2 } from "vue";
+import { defineComponent as defineComponent23, h as h23, ref as ref18, onMounted as onMounted15, onBeforeUnmount as onBeforeUnmount2 } from "vue";
 
 // src/waveform-dsp.ts
 function mixToMono(buffer) {
@@ -4342,7 +4809,7 @@ function createWaveformEngine(canvas, get) {
 }
 
 // src/vue/components/WaveformVisualization.ts
-var WaveformVisualization = defineComponent21({
+var WaveformVisualization = defineComponent23({
   name: "DialKitWaveformVisualization",
   props: {
     buffer: { type: Object, default: null },
@@ -4364,10 +4831,10 @@ var WaveformVisualization = defineComponent21({
     height: { type: Number, default: 140 }
   },
   setup(props) {
-    const canvasRef = ref16(null);
-    const zoom = ref16(1);
+    const canvasRef = ref18(null);
+    const zoom = ref18(1);
     let engine = null;
-    onMounted14(() => {
+    onMounted15(() => {
       if (!canvasRef.value) return;
       engine = createWaveformEngine(
         canvasRef.value,
@@ -4394,16 +4861,16 @@ var WaveformVisualization = defineComponent21({
       );
     });
     onBeforeUnmount2(() => engine?.destroy());
-    const minusIcon = () => h21("svg", { viewBox: "0 0 16 16", fill: "none" }, [
-      h21("path", { d: "M3.5 8h9", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" })
+    const minusIcon = () => h23("svg", { viewBox: "0 0 16 16", fill: "none" }, [
+      h23("path", { d: "M3.5 8h9", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" })
     ]);
-    const plusIcon = () => h21("svg", { viewBox: "0 0 16 16", fill: "none" }, [
-      h21("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" })
+    const plusIcon = () => h23("svg", { viewBox: "0 0 16 16", fill: "none" }, [
+      h23("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" })
     ]);
     return () => {
       const framingLoop = props.autoZoomOnLoop && !!props.loop;
       const children = [
-        h21("canvas", {
+        h23("canvas", {
           ref: canvasRef,
           class: "dialkit-waveform-viz",
           style: { width: `${props.width}px`, height: `${props.height}px` }
@@ -4413,7 +4880,7 @@ var WaveformVisualization = defineComponent21({
         const buttons = [];
         if (zoom.value > 1) {
           buttons.push(
-            h21(
+            h23(
               "button",
               {
                 type: "button",
@@ -4427,7 +4894,7 @@ var WaveformVisualization = defineComponent21({
           );
         }
         buttons.push(
-          h21(
+          h23(
             "button",
             {
               type: "button",
@@ -4440,20 +4907,20 @@ var WaveformVisualization = defineComponent21({
             [plusIcon()]
           )
         );
-        children.push(h21("div", { class: "dialkit-waveform-zoom" }, buttons));
+        children.push(h23("div", { class: "dialkit-waveform-zoom" }, buttons));
       }
-      return h21("div", { class: "dialkit-waveform-viz-wrap", style: { width: `${props.width}px` } }, children);
+      return h23("div", { class: "dialkit-waveform-viz-wrap", style: { width: `${props.width}px` } }, children);
     };
   }
 });
 
 // src/vue/components/CurveComposer.ts
 import {
-  defineComponent as defineComponent22,
-  h as h22,
-  ref as ref17,
-  computed as computed6,
-  onMounted as onMounted15,
+  defineComponent as defineComponent24,
+  h as h24,
+  ref as ref19,
+  computed as computed7,
+  onMounted as onMounted16,
   onBeforeUnmount as onBeforeUnmount3
 } from "vue";
 
@@ -4469,7 +4936,7 @@ var DRAG_THRESHOLD2 = 3;
 var EDGE_HIT2 = 6;
 var CURVE_MIN_WEIGHT_FRAC = 0.06;
 var lerp = (a, b, t) => a + (b - a) * t;
-var clamp012 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
+var clamp013 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
 var clampBipolar = (v) => v < -1 ? -1 : v > 1 ? 1 : v;
 var SKEW_MAX = 0.45;
 function steepnessGain(steepness) {
@@ -4482,7 +4949,7 @@ function deriveEase(type, curvature, steepness = 0) {
   const x1 = base[0] * k;
   const x2 = 1 + (base[2] - 1) * k;
   const shift = clampBipolar(curvature) * SKEW_MAX;
-  return [clamp012(x1 + shift), base[1], clamp012(x2 + shift), base[3]];
+  return [clamp013(x1 + shift), base[1], clamp013(x2 + shift), base[3]];
 }
 function bezierAxis(p1, p2, s) {
   const u = 1 - s;
@@ -4493,21 +4960,21 @@ function bezierAxisDeriv(p1, p2, s) {
   return 3 * u * u * p1 + 6 * u * s * (p2 - p1) + 3 * s * s * (1 - p2);
 }
 function bezierY(ease, x) {
-  const tx = clamp012(x);
+  const tx = clamp013(x);
   let s = tx;
   for (let i = 0; i < 6; i++) {
     const xs = bezierAxis(ease[0], ease[2], s) - tx;
     if (Math.abs(xs) < 1e-5) break;
     const d = bezierAxisDeriv(ease[0], ease[2], s);
     if (Math.abs(d) < 1e-6) break;
-    s = clamp012(s - xs / d);
+    s = clamp013(s - xs / d);
   }
   return bezierAxis(ease[1], ease[3], s);
 }
 var SPRING_SAMPLES = 72;
 function springPoints(curvature, steepness = 0) {
   const visualDuration = 1;
-  const bounce = clamp012((clampBipolar(curvature) + 1) / 2) * 0.6;
+  const bounce = clamp013((clampBipolar(curvature) + 1) / 2) * 0.6;
   const mass = 1;
   let stiffness = 2 * Math.PI / visualDuration;
   stiffness = stiffness * stiffness;
@@ -4528,7 +4995,7 @@ function springPoints(curvature, steepness = 0) {
   return raw;
 }
 function interp(points, t) {
-  const x = clamp012(t) * (points.length - 1);
+  const x = clamp013(t) * (points.length - 1);
   const i = Math.floor(x);
   if (i >= points.length - 1) return points[points.length - 1];
   return lerp(points[i], points[i + 1], x - i);
@@ -4564,7 +5031,7 @@ function segmentSpan(segments, index) {
 }
 function segmentIndexAt(xNorm, segments) {
   const total = totalWeight(segments);
-  const x = clamp012(xNorm) * total;
+  const x = clamp013(xNorm) * total;
   let acc = 0;
   for (let i = 0; i < segments.length; i++) {
     acc += segments[i].weight;
@@ -4648,7 +5115,7 @@ function setDriverSteepness(comp, steepness) {
 var DRAG_ENERGY_GAIN = 0.6;
 var DRAG_STEEP_GAIN = 0.6;
 function toLocalCoords(clientX, clientY, rect, totalH) {
-  const xN = clamp012((clientX - rect.left) / (rect.width || 1));
+  const xN = clamp013((clientX - rect.left) / (rect.width || 1));
   const py = (clientY - rect.top) / (rect.height || 1) * totalH;
   return { xN, py };
 }
@@ -4673,14 +5140,14 @@ function buildSamplers(comp) {
   };
 }
 function directionPhase(u, dir) {
-  const x = clamp012(u);
+  const x = clamp013(u);
   if (dir === "reverse") return 1 - x;
   if (dir === "mirror") return 1 - Math.abs(1 - 2 * x);
   return x;
 }
 function readComposition(comp, u, s) {
   const inputPhase = directionPhase(u, comp.direction);
-  const warpedPhase = s.driver ? clamp012(s.driver(inputPhase)) : inputPhase;
+  const warpedPhase = s.driver ? clamp013(s.driver(inputPhase)) : inputPhase;
   const segIndex = segmentIndexAt(warpedPhase, comp.segments);
   const [a, b] = segmentSpan(comp.segments, segIndex);
   const localT = b > a ? (warpedPhase - a) / (b - a) : 0;
@@ -4741,8 +5208,8 @@ var TRIGGER_FLYBACK = 0.5;
 function triggersCrossed(prevValue, curValue, steps) {
   const n = Math.max(2, Math.floor(steps));
   const seg = 1 / (n - 1);
-  const p = clamp012(prevValue);
-  const c = clamp012(curValue);
+  const p = clamp013(prevValue);
+  const c = clamp013(curValue);
   const delta = c - p;
   const fired = [];
   if (Math.abs(delta) > TRIGGER_FLYBACK) {
@@ -4762,7 +5229,7 @@ function triggersCrossed(prevValue, curValue, steps) {
 }
 
 // src/vue/components/CurveComposer.ts
-var CurveComposer = defineComponent22({
+var CurveComposer = defineComponent24({
   name: "DialKitCurveComposer",
   props: {
     /** The curve series (controlled). */
@@ -4797,23 +5264,23 @@ var CurveComposer = defineComponent22({
     height: { type: Number, default: 140 }
   },
   setup(props) {
-    const svgRef = ref17(null);
-    const seriesPlayheadRef = ref17(null);
-    const seriesDotRef = ref17(null);
-    const driverPlayheadRef = ref17(null);
-    const drag = ref17(null);
-    const hover = ref17(null);
-    const layout = computed6(() => composerLayout(props.width, props.height, props.driver != null));
-    const W = computed6(() => layout.value.W);
-    const totalH = computed6(() => layout.value.totalH);
-    const mainRect = computed6(() => layout.value.mainRect);
-    const driverRect = computed6(() => layout.value.driverRect);
-    const composition = computed6(() => ({
+    const svgRef = ref19(null);
+    const seriesPlayheadRef = ref19(null);
+    const seriesDotRef = ref19(null);
+    const driverPlayheadRef = ref19(null);
+    const drag = ref19(null);
+    const hover = ref19(null);
+    const layout = computed7(() => composerLayout(props.width, props.height, props.driver != null));
+    const W = computed7(() => layout.value.W);
+    const totalH = computed7(() => layout.value.totalH);
+    const mainRect = computed7(() => layout.value.mainRect);
+    const driverRect = computed7(() => layout.value.driverRect);
+    const composition = computed7(() => ({
       segments: props.segments,
       driver: props.driver,
       direction: props.direction
     }));
-    const samplers = computed6(() => buildSamplers(composition.value));
+    const samplers = computed7(() => buildSamplers(composition.value));
     let raf = 0;
     let prevTrigValue = Number.NaN;
     let armW = Number.NaN;
@@ -4852,7 +5319,7 @@ var CurveComposer = defineComponent22({
         prevTrigValue = Number.NaN;
       }
     };
-    onMounted15(() => {
+    onMounted16(() => {
       raf = requestAnimationFrame(tick);
     });
     onBeforeUnmount3(() => cancelAnimationFrame(raf));
@@ -4968,15 +5435,15 @@ var CurveComposer = defineComponent22({
       for (let i = 1; i < n; i++) {
         const gx = i / n * W.value;
         lines.push(
-          h22("line", { key: `g-${rect.y}-${i}`, class: "dialkit-cc-grid", x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h })
+          h24("line", { key: `g-${rect.y}-${i}`, class: "dialkit-cc-grid", x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h })
         );
       }
       return lines;
     };
-    const renderLaneBg = (rect, key) => h22("rect", { key, class: "dialkit-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 });
+    const renderLaneBg = (rect, key) => h24("rect", { key, class: "dialkit-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 });
     const diagonal = (rect, span, key) => {
       const d = diagonalLine(rect, span, W.value);
-      return h22("line", { key, class: "dialkit-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 });
+      return h24("line", { key, class: "dialkit-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 });
     };
     return () => {
       const main = mainRect.value;
@@ -4990,7 +5457,7 @@ var CurveComposer = defineComponent22({
       if (hover.value?.kind === "segment" && !drag.value) {
         const span = segmentSpan(props.segments, hover.value.index);
         children.push(
-          h22("rect", {
+          h24("rect", {
             class: "dialkit-cc-seg-hover",
             x: span[0] * W.value,
             y: main.y,
@@ -5003,10 +5470,10 @@ var CurveComposer = defineComponent22({
       children.push(
         props.segments.map((seg, i) => {
           const span = segmentSpan(props.segments, i);
-          return h22("g", { key: `seg-${i}` }, [
+          return h24("g", { key: `seg-${i}` }, [
             diagonal(main, span, `diag-${i}`),
-            h22("path", { class: "dialkit-cc-curve", d: curvePath(seg, main, span, W.value) }),
-            h22(
+            h24("path", { class: "dialkit-cc-curve", d: curvePath(seg, main, span, W.value) }),
+            h24(
               "text",
               { class: "dialkit-cc-label", x: (span[0] + span[1]) * 0.5 * W.value, y: main.y + 13 },
               seg.type
@@ -5016,7 +5483,7 @@ var CurveComposer = defineComponent22({
       );
       children.push(
         interior.map(
-          (bx, i) => h22("line", {
+          (bx, i) => h24("line", {
             key: `b-${i}`,
             class: "dialkit-cc-boundary",
             "data-active": String(
@@ -5030,7 +5497,7 @@ var CurveComposer = defineComponent22({
         )
       );
       children.push(
-        h22("line", {
+        h24("line", {
           ref: seriesPlayheadRef,
           class: "dialkit-cc-playhead",
           x1: 0,
@@ -5041,7 +5508,7 @@ var CurveComposer = defineComponent22({
         })
       );
       children.push(
-        h22("circle", {
+        h24("circle", {
           ref: seriesDotRef,
           class: "dialkit-cc-dot",
           cx: 0,
@@ -5055,18 +5522,18 @@ var CurveComposer = defineComponent22({
         children.push(renderLaneGrid(dr));
         if (hover.value?.kind === "driver" && !drag.value) {
           children.push(
-            h22("rect", { class: "dialkit-cc-seg-hover", x: 0, y: dr.y, width: W.value, height: dr.h, rx: 8 })
+            h24("rect", { class: "dialkit-cc-seg-hover", x: 0, y: dr.y, width: W.value, height: dr.h, rx: 8 })
           );
         }
         children.push(diagonal(dr, [0, 1], "driver-diag"));
         children.push(
-          h22("path", { class: "dialkit-cc-curve dialkit-cc-curve-driver", d: curvePath(props.driver, dr, [0, 1], W.value) })
+          h24("path", { class: "dialkit-cc-curve dialkit-cc-curve-driver", d: curvePath(props.driver, dr, [0, 1], W.value) })
         );
         children.push(
-          h22("text", { class: "dialkit-cc-label", x: W.value * 0.5, y: dr.y + 13 }, `driver \xB7 ${props.driver.type}`)
+          h24("text", { class: "dialkit-cc-label", x: W.value * 0.5, y: dr.y + 13 }, `driver \xB7 ${props.driver.type}`)
         );
         children.push(
-          h22("line", {
+          h24("line", {
             ref: driverPlayheadRef,
             class: "dialkit-cc-playhead",
             x1: 0,
@@ -5077,8 +5544,8 @@ var CurveComposer = defineComponent22({
           })
         );
       }
-      return h22("div", { class: "dialkit-cc-wrap", style: { width: `${W.value}px` } }, [
-        h22(
+      return h24("div", { class: "dialkit-cc-wrap", style: { width: `${W.value}px` } }, [
+        h24(
           "svg",
           {
             ref: svgRef,
@@ -5105,10 +5572,14 @@ export {
   ColorControl,
   ColorPickerPanel,
   CurveComposer,
+  DEFAULT_GRADIENT,
   DialRoot,
   DialStore,
   EasingVisualization,
   Folder,
+  GradientControl,
+  GradientPanel,
+  MIN_STOPS,
   Module,
   PresetManager,
   SegmentedControl,
@@ -5123,6 +5594,15 @@ export {
   Toggle,
   TransitionControl,
   WaveformVisualization,
+  addStop,
+  colorAtPosition,
+  gradientToCss,
+  moveStop,
+  normalizeGradient,
+  removeStop,
+  setGradientAngle,
+  setGradientType,
+  setStopColor,
   useDialKit,
   useShortcutContext,
   vDialKit
