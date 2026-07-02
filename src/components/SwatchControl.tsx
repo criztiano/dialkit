@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
+import { PresenceMotionDiv } from './PresenceMotionDiv';
 import { ICON_CHEVRON } from '../icons';
 import type { SwatchOption } from '../store/DialStore';
 
@@ -132,8 +133,8 @@ export function SwatchControl({ label, value, options, onChange }: SwatchControl
       {portalTarget && createPortal(
         <AnimatePresence>
           {isOpen && pos && (
-            <motion.div
-              ref={dropdownRef}
+            <PresenceMotionDiv
+              divRef={dropdownRef}
               className="dialkit-select-dropdown"
               initial={{ opacity: 0, y: pos.above ? 8 : -8, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -161,7 +162,7 @@ export function SwatchControl({ label, value, options, onChange }: SwatchControl
                   <span className="dialkit-swatch-option-label">{option.label}</span>
                 </button>
               ))}
-            </motion.div>
+            </PresenceMotionDiv>
           )}
         </AnimatePresence>,
         portalTarget
