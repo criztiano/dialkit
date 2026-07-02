@@ -1,3 +1,6 @@
+// src/color-core.ts
+var HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
+
 // src/store/DialStore.ts
 var EMPTY_VALUES = Object.freeze({});
 var DialStoreClass = class {
@@ -310,7 +313,7 @@ var DialStoreClass = class {
       } else if (this.isSelectConfig(value)) {
         controls.push({ type: "select", path, label, options: value.options });
       } else if (this.isColorConfig(value)) {
-        controls.push({ type: "color", path, label });
+        controls.push({ type: "color", path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: "text", path, label, placeholder: value.placeholder });
       } else if (this.isGalleryConfig(value)) {
@@ -325,7 +328,8 @@ var DialStoreClass = class {
         controls.push({ type: "list", path, label, itemTypes: value.itemTypes, addLabel: value.addLabel, maxItems: value.max });
       } else if (typeof value === "string") {
         if (this.isHexColor(value)) {
-          controls.push({ type: "color", path, label });
+          const hasAlpha = value.length === 5 || value.length === 9;
+          controls.push({ type: "color", path, label, alpha: hasAlpha || void 0 });
         } else {
           controls.push({ type: "text", path, label });
         }
@@ -414,7 +418,7 @@ var DialStoreClass = class {
     return typeof value === "object" && value !== null && "type" in value && value.type === "list" && "itemTypes" in value && typeof value.itemTypes === "object";
   }
   isHexColor(value) {
-    return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(value);
+    return HEX_COLOR_REGEX.test(value);
   }
   formatLabel(key) {
     return key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()).trim();
@@ -480,7 +484,18 @@ var DialStoreClass = class {
         const validValues = new Set((control.chipOptions ?? []).map((option) => option.value));
         return validValues.has(existingValue) ? existingValue : defaultValue;
       }
-      case "color":
+      case "color": {
+        if (typeof existingValue !== "string" || !this.isHexColor(existingValue)) {
+          return defaultValue;
+        }
+        if (!control.alpha && (existingValue.length === 5 || existingValue.length === 9)) {
+          return existingValue.length === 9 ? existingValue.slice(0, 7) : existingValue.slice(0, 4);
+        }
+        if (control.alpha && (existingValue.length === 4 || existingValue.length === 7)) {
+          return existingValue + (existingValue.length === 7 ? "ff" : "f");
+        }
+        return existingValue;
+      }
       case "text":
       case "file":
         return typeof existingValue === "string" ? existingValue : defaultValue;

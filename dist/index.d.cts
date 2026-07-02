@@ -30,6 +30,10 @@ type SelectConfig = {
 type ColorConfig = {
     type: 'color';
     default?: string;
+    /** Enables the alpha slider; the emitted value becomes #rrggbbaa. Default false. */
+    alpha?: boolean;
+    /** Shows the shared saved-swatches row (persisted per machine). Default false. */
+    palette?: boolean;
 };
 type TextConfig = {
     type: 'text';
@@ -162,6 +166,8 @@ type ControlMeta = {
     itemTypes?: Record<string, ListItemType>;
     addLabel?: string;
     maxItems?: number;
+    alpha?: boolean;
+    palette?: boolean;
     shortcut?: ShortcutConfig;
 };
 type PanelConfig = {
@@ -659,8 +665,80 @@ interface ColorControlProps {
     label: string;
     value: string;
     onChange: (value: string) => void;
+    alpha?: boolean;
+    palette?: boolean;
 }
-declare function ColorControl({ label, value, onChange }: ColorControlProps): react_jsx_runtime.JSX.Element;
+declare function ColorControl({ label, value, onChange, alpha, palette }: ColorControlProps): react_jsx_runtime.JSX.Element;
+
+interface ColorPickerPanelProps {
+    value: string;
+    onChange: (value: string) => void;
+    alpha?: boolean;
+    palette?: boolean;
+}
+declare function ColorPickerPanel({ value, onChange, alpha, palette }: ColorPickerPanelProps): react_jsx_runtime.JSX.Element;
+
+/**
+ * color-core — DOM-free color math shared by every framework port of the
+ * color picker (React, Solid, Vue, Svelte). Pure functions only; anything
+ * that touches the DOM or storage lives in the component layer or
+ * color-palette-store.
+ *
+ * Canonical value shape: hex string. `#rrggbb` normally, `#rrggbbaa` always
+ * (even at full opacity) when a control opts into alpha — deterministic
+ * round-tripping keeps store reconciliation trivial.
+ */
+/** r/g/b 0–255, a 0–1. */
+type RGBA = {
+    r: number;
+    g: number;
+    b: number;
+    a: number;
+};
+/** h 0–360, s/v 0–1, a 0–1. The picker's working space. */
+type HSVA = {
+    h: number;
+    s: number;
+    v: number;
+    a: number;
+};
+/** h 0–360, s/l 0–1, a 0–1. */
+type HSLA = {
+    h: number;
+    s: number;
+    l: number;
+    a: number;
+};
+/** OKLCH: l 0–1, c ≥ 0 (sRGB tops out ≈0.37), h 0–360, a 0–1. */
+type OKLCH = {
+    l: number;
+    c: number;
+    h: number;
+    a: number;
+};
+type ColorFormat = 'hex' | 'rgb' | 'hsl' | 'oklch';
+declare const COLOR_FORMATS: ColorFormat[];
+/** Parses #RGB / #RGBA / #RRGGBB / #RRGGBBAA; tolerates a missing '#' and whitespace. */
+declare function parseHex(input: string): RGBA | null;
+/** Lowercase `#rrggbb`, or `#rrggbbaa` (always, even at a=1) when alpha is enabled. */
+declare function formatHex(rgba: RGBA, alphaEnabled: boolean): string;
+/** Parse + reformat; strips the alpha channel when alpha is off. Null when unparseable. */
+declare function normalizeHex(input: string, alphaEnabled: boolean): string | null;
+/** Trigger-row presentation: uppercased, alpha digits hidden (opacity has its own readout). */
+declare function displayHex(value: string): string;
+/** 0–100 readout for the trigger row ("60 %"). */
+declare function opacityPercent(rgba: RGBA): number;
+declare function rgbToHsv(rgba: RGBA): HSVA;
+declare function hsvToRgb(hsva: HSVA): RGBA;
+declare function rgbToHsl(rgba: RGBA): HSLA;
+declare function hslToRgb(hsla: HSLA): RGBA;
+declare function rgbToOklch(rgba: RGBA): OKLCH;
+/**
+ * Maps an out-of-gamut OKLCH into sRGB by binary-searching the chroma down,
+ * preserving lightness and hue (channel-clipping would shift the hue).
+ */
+declare function clampOklchToSrgb(oklch: OKLCH): OKLCH;
+declare function oklchToRgb(oklch: OKLCH): RGBA;
 
 interface GalleryControlProps {
     label: string;
@@ -724,4 +802,4 @@ interface ShortcutsMenuProps {
 }
 declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react_jsx_runtime.JSX.Element | null;
 
-export { type ActionConfig, ButtonGroup, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, addDriver, buildSamplers, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, normalizeListItems, parseListItemSchema, readComposition, redistributeWeight, removeDriver, removeSegment, setDriverCurvature, setDriverSteepness, setSegmentCurvature, setSegmentSteepness, splitSegment, triggerLevels, triggersCrossed, useDialKit };
+export { type ActionConfig, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type OKLCH, type PanelConfig, type Preset, PresetManager, type RGBA, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, addDriver, buildSamplers, clampOklchToSrgb, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, formatHex, hslToRgb, hsvToRgb, normalizeHex, normalizeListItems, oklchToRgb, opacityPercent, parseHex, parseListItemSchema, readComposition, redistributeWeight, removeDriver, removeSegment, rgbToHsl, rgbToHsv, rgbToOklch, setDriverCurvature, setDriverSteepness, setSegmentCurvature, setSegmentSteepness, splitSegment, triggerLevels, triggersCrossed, useDialKit };

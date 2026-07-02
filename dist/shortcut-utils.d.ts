@@ -9,6 +9,10 @@ type SelectConfig = {
 type ColorConfig = {
     type: 'color';
     default?: string;
+    /** Enables the alpha slider; the emitted value becomes #rrggbbaa. Default false. */
+    alpha?: boolean;
+    /** Shows the shared saved-swatches row (persisted per machine). Default false. */
+    palette?: boolean;
 };
 type TextConfig = {
     type: 'text';
@@ -77,6 +81,8 @@ type ControlMeta = {
     itemTypes?: Record<string, ListItemType>;
     addLabel?: string;
     maxItems?: number;
+    alpha?: boolean;
+    palette?: boolean;
     shortcut?: ShortcutConfig;
 };
 
