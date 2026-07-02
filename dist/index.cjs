@@ -122,6 +122,9 @@ function displayHex(value) {
   if (!rgba) return (value ?? "").toUpperCase();
   return formatHex(rgba, false).toUpperCase();
 }
+function bareHex(value) {
+  return displayHex(value).replace(/^#/, "");
+}
 function opacityPercent(rgba) {
   return Math.round(clamp01(rgba.a) * 100);
 }
@@ -2858,7 +2861,14 @@ var PICKER_ALPHA_HEIGHT = 22;
 var PICKER_PALETTE_HEIGHT = 30;
 function ColorControl({ label, value, onChange, alpha = false, palette = false }) {
   const [isEditing, setIsEditing] = (0, import_react13.useState)(false);
-  const [editValue, setEditValue] = (0, import_react13.useState)(value);
+  const [editValue, setEditValue] = (0, import_react13.useState)(() => bareHex(value));
+  const hexInputRef = (0, import_react13.useRef)(null);
+  (0, import_react13.useEffect)(() => {
+    if (isEditing) {
+      hexInputRef.current?.focus();
+      hexInputRef.current?.select();
+    }
+  }, [isEditing]);
   const [isOpen, setIsOpen] = (0, import_react13.useState)(false);
   const swatchRef = (0, import_react13.useRef)(null);
   const pickerRef = (0, import_react13.useRef)(null);
@@ -2867,7 +2877,7 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
   const rgba = parseHex(value);
   (0, import_react13.useEffect)(() => {
     if (!isEditing) {
-      setEditValue(value);
+      setEditValue(bareHex(value));
     }
   }, [value, isEditing]);
   const updatePos = (0, import_react13.useCallback)(() => {
@@ -2920,7 +2930,7 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
     if (normalized) {
       onChange(normalized);
     } else {
-      setEditValue(value);
+      setEditValue(bareHex(value));
     }
   }
   function handleKeyDown(e) {
@@ -2929,36 +2939,12 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
     } else if (e.key === "Escape") {
       e.stopPropagation();
       setIsEditing(false);
-      setEditValue(value);
+      setEditValue(bareHex(value));
     }
   }
   return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "dialkit-color-control", children: [
     /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "dialkit-color-label", children: label }),
     /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "dialkit-color-inputs", children: [
-      alpha && rgba && /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { className: "dialkit-color-opacity", children: [
-        opacityPercent(rgba),
-        " ",
-        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "dialkit-color-opacity-unit", children: "%" })
-      ] }),
-      isEditing ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
-        "input",
-        {
-          type: "text",
-          className: "dialkit-color-hex-input",
-          value: editValue,
-          onChange: (e) => setEditValue(e.target.value),
-          onBlur: handleTextSubmit,
-          onKeyDown: handleKeyDown,
-          autoFocus: true
-        }
-      ) : /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
-        "span",
-        {
-          className: "dialkit-color-hex",
-          onClick: () => setIsEditing(true),
-          children: displayHex(value)
-        }
-      ),
       /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
         "button",
         {
@@ -2971,7 +2957,37 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
           "aria-label": `Pick color for ${label}`,
           "aria-expanded": isOpen
         }
-      )
+      ),
+      /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { className: "dialkit-color-hex-wrap", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "dialkit-color-hash", "aria-hidden": "true", children: "#" }),
+        isEditing ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+          "input",
+          {
+            ref: hexInputRef,
+            type: "text",
+            className: "dialkit-color-hex-input",
+            value: editValue,
+            onChange: (e) => setEditValue(e.target.value),
+            onBlur: handleTextSubmit,
+            onKeyDown: handleKeyDown
+          }
+        ) : /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+          "span",
+          {
+            className: "dialkit-color-hex",
+            onClick: () => setIsEditing(true),
+            children: bareHex(value)
+          }
+        )
+      ] }),
+      alpha && rgba && /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(import_jsx_runtime13.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "dialkit-color-divider", "aria-hidden": "true" }),
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { className: "dialkit-color-opacity", children: [
+          opacityPercent(rgba),
+          " ",
+          /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "dialkit-color-opacity-unit", children: "%" })
+        ] })
+      ] })
     ] }),
     portalTarget && (0, import_react_dom2.createPortal)(
       /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(import_react14.AnimatePresence, { children: isOpen && pos && /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(

@@ -33,6 +33,9 @@ function displayHex(value) {
   if (!rgba) return (value ?? "").toUpperCase();
   return formatHex(rgba, false).toUpperCase();
 }
+function bareHex(value) {
+  return displayHex(value).replace(/^#/, "");
+}
 function opacityPercent(rgba) {
   return Math.round(clamp01(rgba.a) * 100);
 }
@@ -221,6 +224,7 @@ export {
   PALETTE_DRAG_CANCEL_PX,
   PALETTE_SIZE,
   PALETTE_STORAGE_KEY,
+  bareHex,
   channelsToRgba,
   clampOklchToSrgb,
   deserializePalette,

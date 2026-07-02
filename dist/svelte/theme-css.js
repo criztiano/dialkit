@@ -1702,7 +1702,7 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
 }
 
 .dialkit-color-hex-input {
-  width: 7ch;
+  width: 6.5ch;
   font-size: 13px;
   font-weight: 500;
   font-family: 'Geist Mono', monospace;
@@ -1752,6 +1752,29 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
 
 .dialkit-color-opacity-unit {
   color: var(--dial-text-tertiary);
+}
+
+.dialkit-color-hex-wrap {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Fixed hash symbol — the editable value carries only the hex digits. */
+.dialkit-color-hash {
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'Geist Mono', monospace;
+  color: var(--dial-text-tertiary);
+  transform: translateY(-0.5px);
+  user-select: none;
+}
+
+.dialkit-color-divider {
+  width: 1px;
+  height: 14px;
+  flex-shrink: 0;
+  background: var(--dial-surface-active);
 }
 
 /* ── Color picker popover ── */

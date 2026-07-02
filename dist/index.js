@@ -38,6 +38,9 @@ function displayHex(value) {
   if (!rgba) return (value ?? "").toUpperCase();
   return formatHex(rgba, false).toUpperCase();
 }
+function bareHex(value) {
+  return displayHex(value).replace(/^#/, "");
+}
 function opacityPercent(rgba) {
   return Math.round(clamp01(rgba.a) * 100);
 }
@@ -2767,14 +2770,21 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
 }
 
 // src/components/ColorControl.tsx
-import { jsx as jsx13, jsxs as jsxs12 } from "react/jsx-runtime";
+import { Fragment as Fragment4, jsx as jsx13, jsxs as jsxs12 } from "react/jsx-runtime";
 var PICKER_WIDTH = 240;
 var PICKER_BASE_HEIGHT = 270;
 var PICKER_ALPHA_HEIGHT = 22;
 var PICKER_PALETTE_HEIGHT = 30;
 function ColorControl({ label, value, onChange, alpha = false, palette = false }) {
   const [isEditing, setIsEditing] = useState8(false);
-  const [editValue, setEditValue] = useState8(value);
+  const [editValue, setEditValue] = useState8(() => bareHex(value));
+  const hexInputRef = useRef10(null);
+  useEffect7(() => {
+    if (isEditing) {
+      hexInputRef.current?.focus();
+      hexInputRef.current?.select();
+    }
+  }, [isEditing]);
   const [isOpen, setIsOpen] = useState8(false);
   const swatchRef = useRef10(null);
   const pickerRef = useRef10(null);
@@ -2783,7 +2793,7 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
   const rgba = parseHex(value);
   useEffect7(() => {
     if (!isEditing) {
-      setEditValue(value);
+      setEditValue(bareHex(value));
     }
   }, [value, isEditing]);
   const updatePos = useCallback6(() => {
@@ -2836,7 +2846,7 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
     if (normalized) {
       onChange(normalized);
     } else {
-      setEditValue(value);
+      setEditValue(bareHex(value));
     }
   }
   function handleKeyDown(e) {
@@ -2845,36 +2855,12 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
     } else if (e.key === "Escape") {
       e.stopPropagation();
       setIsEditing(false);
-      setEditValue(value);
+      setEditValue(bareHex(value));
     }
   }
   return /* @__PURE__ */ jsxs12("div", { className: "dialkit-color-control", children: [
     /* @__PURE__ */ jsx13("span", { className: "dialkit-color-label", children: label }),
     /* @__PURE__ */ jsxs12("div", { className: "dialkit-color-inputs", children: [
-      alpha && rgba && /* @__PURE__ */ jsxs12("span", { className: "dialkit-color-opacity", children: [
-        opacityPercent(rgba),
-        " ",
-        /* @__PURE__ */ jsx13("span", { className: "dialkit-color-opacity-unit", children: "%" })
-      ] }),
-      isEditing ? /* @__PURE__ */ jsx13(
-        "input",
-        {
-          type: "text",
-          className: "dialkit-color-hex-input",
-          value: editValue,
-          onChange: (e) => setEditValue(e.target.value),
-          onBlur: handleTextSubmit,
-          onKeyDown: handleKeyDown,
-          autoFocus: true
-        }
-      ) : /* @__PURE__ */ jsx13(
-        "span",
-        {
-          className: "dialkit-color-hex",
-          onClick: () => setIsEditing(true),
-          children: displayHex(value)
-        }
-      ),
       /* @__PURE__ */ jsx13(
         "button",
         {
@@ -2887,7 +2873,37 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
           "aria-label": `Pick color for ${label}`,
           "aria-expanded": isOpen
         }
-      )
+      ),
+      /* @__PURE__ */ jsxs12("span", { className: "dialkit-color-hex-wrap", children: [
+        /* @__PURE__ */ jsx13("span", { className: "dialkit-color-hash", "aria-hidden": "true", children: "#" }),
+        isEditing ? /* @__PURE__ */ jsx13(
+          "input",
+          {
+            ref: hexInputRef,
+            type: "text",
+            className: "dialkit-color-hex-input",
+            value: editValue,
+            onChange: (e) => setEditValue(e.target.value),
+            onBlur: handleTextSubmit,
+            onKeyDown: handleKeyDown
+          }
+        ) : /* @__PURE__ */ jsx13(
+          "span",
+          {
+            className: "dialkit-color-hex",
+            onClick: () => setIsEditing(true),
+            children: bareHex(value)
+          }
+        )
+      ] }),
+      alpha && rgba && /* @__PURE__ */ jsxs12(Fragment4, { children: [
+        /* @__PURE__ */ jsx13("span", { className: "dialkit-color-divider", "aria-hidden": "true" }),
+        /* @__PURE__ */ jsxs12("span", { className: "dialkit-color-opacity", children: [
+          opacityPercent(rgba),
+          " ",
+          /* @__PURE__ */ jsx13("span", { className: "dialkit-color-opacity-unit", children: "%" })
+        ] })
+      ] })
     ] }),
     portalTarget && createPortal2(
       /* @__PURE__ */ jsx13(AnimatePresence3, { children: isOpen && pos && /* @__PURE__ */ jsx13(
@@ -3563,7 +3579,7 @@ function PresetManager({ panelId, presets, activePresetId, onAdd }) {
 }
 
 // src/components/Panel.tsx
-import { Fragment as Fragment4, jsx as jsx20, jsxs as jsxs19 } from "react/jsx-runtime";
+import { Fragment as Fragment5, jsx as jsx20, jsxs as jsxs19 } from "react/jsx-runtime";
 function Panel({ panel, defaultOpen = true, inline = false }) {
   const [copied, setCopied] = useState13(false);
   const [isPanelOpen, setIsPanelOpen] = useState13(defaultOpen);
@@ -3768,7 +3784,7 @@ Apply these values as the new defaults in the useDialKit call.`;
     return panel.controls.map(renderControl);
   };
   const iconTransition = { type: "spring", visualDuration: 0.4, bounce: 0.1 };
-  const toolbar = /* @__PURE__ */ jsxs19(Fragment4, { children: [
+  const toolbar = /* @__PURE__ */ jsxs19(Fragment5, { children: [
     /* @__PURE__ */ jsx20(
       motion7.button,
       {
@@ -4790,7 +4806,7 @@ function defaultComposition() {
 }
 
 // src/components/CurveComposer.tsx
-import { Fragment as Fragment5, jsx as jsx25, jsxs as jsxs22 } from "react/jsx-runtime";
+import { Fragment as Fragment6, jsx as jsx25, jsxs as jsxs22 } from "react/jsx-runtime";
 function CurveComposer({
   segments,
   driver = null,
@@ -5034,7 +5050,7 @@ function CurveComposer({
         )),
         /* @__PURE__ */ jsx25("line", { ref: seriesPlayheadRef, className: "dialkit-cc-playhead", x1: 0, y1: mainRect.y, x2: 0, y2: mainRect.y + mainRect.h, style: { stroke: playheadColor } }),
         /* @__PURE__ */ jsx25("circle", { ref: seriesDotRef, className: "dialkit-cc-dot", cx: 0, cy: mapY(mainRect, 0), r: 3, style: { fill: playheadColor } }),
-        driverRect && /* @__PURE__ */ jsxs22(Fragment5, { children: [
+        driverRect && /* @__PURE__ */ jsxs22(Fragment6, { children: [
           renderLaneBg(driverRect, "driver-bg"),
           renderLaneGrid(driverRect),
           hover?.kind === "driver" && !drag && /* @__PURE__ */ jsx25("rect", { className: "dialkit-cc-seg-hover", x: 0, y: driverRect.y, width: W, height: driverRect.h, rx: 8 }),
@@ -5055,7 +5071,7 @@ function CurveComposer({
 import { useState as useState17, useRef as useRef19, useEffect as useEffect15, useCallback as useCallback10 } from "react";
 import { createPortal as createPortal6 } from "react-dom";
 import { motion as motion8, AnimatePresence as AnimatePresence7 } from "motion/react";
-import { Fragment as Fragment6, jsx as jsx26, jsxs as jsxs23 } from "react/jsx-runtime";
+import { Fragment as Fragment7, jsx as jsx26, jsxs as jsxs23 } from "react/jsx-runtime";
 function formatShortcutKey(sc) {
   if (!sc.key) return "\u2014";
   const mod = sc.modifier === "alt" ? "\u2325" : sc.modifier === "shift" ? "\u21E7" : sc.modifier === "meta" ? "\u2318" : "";
@@ -5122,7 +5138,7 @@ function ShortcutsMenu({ panelId }) {
       label: findLabel(panel.controls)
     };
   });
-  return /* @__PURE__ */ jsxs23(Fragment6, { children: [
+  return /* @__PURE__ */ jsxs23(Fragment7, { children: [
     /* @__PURE__ */ jsx26(
       motion8.button,
       {

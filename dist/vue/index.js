@@ -35,6 +35,9 @@ function displayHex(value) {
   if (!rgba) return (value ?? "").toUpperCase();
   return formatHex(rgba, false).toUpperCase();
 }
+function bareHex(value) {
+  return displayHex(value).replace(/^#/, "");
+}
 function opacityPercent(rgba) {
   return Math.round(clamp01(rgba.a) * 100);
 }
@@ -2840,7 +2843,7 @@ var ColorControl = defineComponent12({
   emits: ["change"],
   setup(props, { emit }) {
     const isEditing = ref10(false);
-    const editValue = ref10(props.value);
+    const editValue = ref10(bareHex(props.value));
     const isOpen = ref10(false);
     const pos = ref10(null);
     const portalTarget = ref10(null);
@@ -2848,12 +2851,13 @@ var ColorControl = defineComponent12({
     const pickerRef = ref10(null);
     const hexInputRef = ref10(null);
     watch6(() => props.value, (value) => {
-      if (!isEditing.value) editValue.value = value;
+      if (!isEditing.value) editValue.value = bareHex(value);
     });
     watch6(isEditing, async (editing) => {
       if (!editing) return;
       await nextTick3();
       hexInputRef.value?.focus();
+      hexInputRef.value?.select();
     });
     const updatePos = () => {
       const el = swatchRef.value;
@@ -2924,7 +2928,7 @@ var ColorControl = defineComponent12({
       if (normalized) {
         emit("change", normalized);
       } else {
-        editValue.value = props.value;
+        editValue.value = bareHex(props.value);
       }
     };
     return () => {
@@ -2932,34 +2936,6 @@ var ColorControl = defineComponent12({
       return h12("div", { class: "dialkit-color-control" }, [
         h12("span", { class: "dialkit-color-label" }, props.label),
         h12("div", { class: "dialkit-color-inputs" }, [
-          props.alpha && rgba ? h12("span", { class: "dialkit-color-opacity" }, [
-            `${opacityPercent(rgba)} `,
-            h12("span", { class: "dialkit-color-opacity-unit" }, "%")
-          ]) : null,
-          isEditing.value ? h12("input", {
-            ref: hexInputRef,
-            type: "text",
-            class: "dialkit-color-hex-input",
-            value: editValue.value,
-            onInput: (event) => {
-              editValue.value = event.target.value;
-            },
-            onBlur: submitText,
-            onKeydown: (event) => {
-              if (event.key === "Enter") {
-                submitText();
-              } else if (event.key === "Escape") {
-                event.stopPropagation();
-                isEditing.value = false;
-                editValue.value = props.value;
-              }
-            }
-          }) : h12("span", {
-            class: "dialkit-color-hex",
-            onClick: () => {
-              isEditing.value = true;
-            }
-          }, displayHex(props.value)),
           h12("button", {
             ref: swatchRef,
             class: "dialkit-color-swatch",
@@ -2969,7 +2945,41 @@ var ColorControl = defineComponent12({
             "aria-label": `Pick color for ${props.label}`,
             "aria-expanded": isOpen.value,
             onClick: togglePicker
-          })
+          }),
+          h12("span", { class: "dialkit-color-hex-wrap" }, [
+            h12("span", { class: "dialkit-color-hash", "aria-hidden": "true" }, "#"),
+            isEditing.value ? h12("input", {
+              ref: hexInputRef,
+              type: "text",
+              class: "dialkit-color-hex-input",
+              value: editValue.value,
+              onInput: (event) => {
+                editValue.value = event.target.value;
+              },
+              onBlur: submitText,
+              onKeydown: (event) => {
+                if (event.key === "Enter") {
+                  submitText();
+                } else if (event.key === "Escape") {
+                  event.stopPropagation();
+                  isEditing.value = false;
+                  editValue.value = bareHex(props.value);
+                }
+              }
+            }) : h12("span", {
+              class: "dialkit-color-hex",
+              onClick: () => {
+                isEditing.value = true;
+              }
+            }, bareHex(props.value))
+          ]),
+          ...props.alpha && rgba ? [
+            h12("span", { class: "dialkit-color-divider", "aria-hidden": "true" }),
+            h12("span", { class: "dialkit-color-opacity" }, [
+              `${opacityPercent(rgba)} `,
+              h12("span", { class: "dialkit-color-opacity-unit" }, "%")
+            ])
+          ] : []
         ]),
         portalTarget.value ? h12(Teleport2, { to: portalTarget.value }, [
           h12(AnimatePresence3, null, {

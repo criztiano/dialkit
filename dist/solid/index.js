@@ -35,6 +35,9 @@ function displayHex(value) {
   if (!rgba) return (value ?? "").toUpperCase();
   return formatHex(rgba, false).toUpperCase();
 }
+function bareHex(value) {
+  return displayHex(value).replace(/^#/, "");
+}
 function opacityPercent(rgba) {
   return Math.round(clamp01(rgba.a) * 100);
 }
@@ -2649,10 +2652,10 @@ import { delegateEvents as _$delegateEvents7 } from "solid-js/web";
 import { setAttribute as _$setAttribute7 } from "solid-js/web";
 import { setStyleProperty as _$setStyleProperty4 } from "solid-js/web";
 import { style as _$style4 } from "solid-js/web";
-import { use as _$use6 } from "solid-js/web";
-import { effect as _$effect9 } from "solid-js/web";
-import { createComponent as _$createComponent9 } from "solid-js/web";
 import { memo as _$memo7 } from "solid-js/web";
+import { createComponent as _$createComponent9 } from "solid-js/web";
+import { effect as _$effect9 } from "solid-js/web";
+import { use as _$use6 } from "solid-js/web";
 import { insert as _$insert10 } from "solid-js/web";
 import { createSignal as createSignal9, createEffect as createEffect6, onMount as onMount6, onCleanup as onCleanup8, Show as Show7 } from "solid-js";
 import { Portal as Portal2 } from "solid-js/web";
@@ -3129,11 +3132,12 @@ function ColorPickerPanel(props) {
 _$delegateEvents6(["input", "keydown", "contextmenu", "pointerdown", "pointermove", "pointerup", "click"]);
 
 // src/solid/components/ColorControl.tsx
-var _tmpl$18 = /* @__PURE__ */ _$template10(`<input type=text class=dialkit-color-hex-input autofocus>`);
+var _tmpl$18 = /* @__PURE__ */ _$template10(`<input type=text class=dialkit-color-hex-input>`);
 var _tmpl$28 = /* @__PURE__ */ _$template10(`<div class=dialkit-color-picker-popover>`);
-var _tmpl$37 = /* @__PURE__ */ _$template10(`<div class=dialkit-color-control><span class=dialkit-color-label></span><div class=dialkit-color-inputs><button class=dialkit-color-swatch title="Pick color">`);
-var _tmpl$44 = /* @__PURE__ */ _$template10(`<span class=dialkit-color-opacity> <span class=dialkit-color-opacity-unit>%`);
-var _tmpl$53 = /* @__PURE__ */ _$template10(`<span class=dialkit-color-hex>`);
+var _tmpl$37 = /* @__PURE__ */ _$template10(`<div class=dialkit-color-control><span class=dialkit-color-label></span><div class=dialkit-color-inputs><button class=dialkit-color-swatch title="Pick color"></button><span class=dialkit-color-hex-wrap><span class=dialkit-color-hash aria-hidden=true>#`);
+var _tmpl$44 = /* @__PURE__ */ _$template10(`<span class=dialkit-color-hex>`);
+var _tmpl$53 = /* @__PURE__ */ _$template10(`<span class=dialkit-color-divider aria-hidden=true>`);
+var _tmpl$63 = /* @__PURE__ */ _$template10(`<span class=dialkit-color-opacity> <span class=dialkit-color-opacity-unit>%`);
 var PICKER_WIDTH = 240;
 var PICKER_BASE_HEIGHT = 270;
 var PICKER_ALPHA_HEIGHT = 22;
@@ -3142,7 +3146,7 @@ function ColorControl(props) {
   const alpha = () => props.alpha ?? false;
   const palette = () => props.palette ?? false;
   const [isEditing, setIsEditing] = createSignal9(false);
-  const [editValue, setEditValue] = createSignal9(props.value);
+  const [editValue, setEditValue] = createSignal9(bareHex(props.value));
   const [isOpen, setIsOpen] = createSignal9(false);
   const [mounted, setMounted] = createSignal9(false);
   const [pos, setPos] = createSignal9(null);
@@ -3154,7 +3158,7 @@ function ColorControl(props) {
   createEffect6(() => {
     const value = props.value;
     if (!isEditing()) {
-      setEditValue(value);
+      setEditValue(bareHex(value));
     }
   });
   onMount6(() => {
@@ -3250,7 +3254,7 @@ function ColorControl(props) {
     if (normalized) {
       props.onChange(normalized);
     } else {
-      setEditValue(props.value);
+      setEditValue(bareHex(props.value));
     }
   };
   const handleKeyDown = (e) => {
@@ -3258,7 +3262,7 @@ function ColorControl(props) {
     else if (e.key === "Escape") {
       e.stopPropagation();
       setIsEditing(false);
-      setEditValue(props.value);
+      setEditValue(bareHex(props.value));
     }
   };
   const popoverStyle = () => {
@@ -3278,42 +3282,46 @@ function ColorControl(props) {
     };
   };
   return (() => {
-    var _el$ = _tmpl$37(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$5 = _el$3.firstChild;
+    var _el$ = _tmpl$37(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$4 = _el$3.firstChild, _el$5 = _el$4.nextSibling, _el$6 = _el$5.firstChild;
     _$insert10(_el$2, () => props.label);
-    _$insert10(_el$3, _$createComponent9(Show7, {
-      get when() {
-        return _$memo7(() => !!alpha())() && rgba();
-      },
-      children: (r) => (() => {
-        var _el$7 = _tmpl$44(), _el$8 = _el$7.firstChild;
-        _$insert10(_el$7, () => opacityPercent(r()), _el$8);
-        return _el$7;
-      })()
-    }), _el$5);
-    _$insert10(_el$3, _$createComponent9(Show7, {
+    _el$4.$$click = () => isOpen() ? closePopover() : openPopover();
+    var _ref$ = swatchRef;
+    typeof _ref$ === "function" ? _$use6(_ref$, _el$4) : swatchRef = _el$4;
+    _$insert10(_el$5, _$createComponent9(Show7, {
       get when() {
         return isEditing();
       },
       get fallback() {
         return (() => {
-          var _el$9 = _tmpl$53();
+          var _el$9 = _tmpl$44();
           _el$9.$$click = () => setIsEditing(true);
-          _$insert10(_el$9, () => displayHex(props.value));
+          _$insert10(_el$9, () => bareHex(props.value));
           return _el$9;
         })();
       },
       get children() {
-        var _el$4 = _tmpl$18();
-        _el$4.$$keydown = handleKeyDown;
-        _el$4.addEventListener("blur", handleTextSubmit);
-        _el$4.$$input = (e) => setEditValue(e.currentTarget.value);
-        _$effect9(() => _el$4.value = editValue());
-        return _el$4;
+        var _el$7 = _tmpl$18();
+        _el$7.$$keydown = handleKeyDown;
+        _el$7.addEventListener("blur", handleTextSubmit);
+        _el$7.$$input = (e) => setEditValue(e.currentTarget.value);
+        _$use6((el) => queueMicrotask(() => {
+          el.focus();
+          el.select();
+        }), _el$7);
+        _$effect9(() => _el$7.value = editValue());
+        return _el$7;
       }
-    }), _el$5);
-    _el$5.$$click = () => isOpen() ? closePopover() : openPopover();
-    var _ref$ = swatchRef;
-    typeof _ref$ === "function" ? _$use6(_ref$, _el$5) : swatchRef = _el$5;
+    }), null);
+    _$insert10(_el$3, _$createComponent9(Show7, {
+      get when() {
+        return _$memo7(() => !!alpha())() && rgba();
+      },
+      children: (r) => [_tmpl$53(), (() => {
+        var _el$1 = _tmpl$63(), _el$10 = _el$1.firstChild;
+        _$insert10(_el$1, () => opacityPercent(r()), _el$10);
+        return _el$1;
+      })()]
+    }), null);
     _$insert10(_el$, _$createComponent9(Show7, {
       get when() {
         return !!portalTarget();
@@ -3329,7 +3337,7 @@ function ColorControl(props) {
                 return _$memo7(() => !!mounted())() && pos();
               },
               get children() {
-                var _el$6 = _tmpl$28();
+                var _el$8 = _tmpl$28();
                 _$use6((el) => {
                   pickerRef = el;
                   const above = pos()?.above ?? false;
@@ -3342,8 +3350,8 @@ function ColorControl(props) {
                     visualDuration: 0.15,
                     bounce: 0
                   });
-                }, _el$6);
-                _$insert10(_el$6, _$createComponent9(ColorPickerPanel, {
+                }, _el$8);
+                _$insert10(_el$8, _$createComponent9(ColorPickerPanel, {
                   get value() {
                     return props.value;
                   },
@@ -3355,8 +3363,8 @@ function ColorControl(props) {
                     return palette();
                   }
                 }));
-                _$effect9((_$p) => _$style4(_el$6, popoverStyle(), _$p));
-                return _el$6;
+                _$effect9((_$p) => _$style4(_el$8, popoverStyle(), _$p));
+                return _el$8;
               }
             });
           }
@@ -3365,10 +3373,10 @@ function ColorControl(props) {
     }), null);
     _$effect9((_p$) => {
       var _v$ = props.value, _v$2 = String(isOpen()), _v$3 = `Pick color for ${props.label}`, _v$4 = isOpen();
-      _v$ !== _p$.e && _$setStyleProperty4(_el$5, "--swatch-color", _p$.e = _v$);
-      _v$2 !== _p$.t && _$setAttribute7(_el$5, "data-open", _p$.t = _v$2);
-      _v$3 !== _p$.a && _$setAttribute7(_el$5, "aria-label", _p$.a = _v$3);
-      _v$4 !== _p$.o && _$setAttribute7(_el$5, "aria-expanded", _p$.o = _v$4);
+      _v$ !== _p$.e && _$setStyleProperty4(_el$4, "--swatch-color", _p$.e = _v$);
+      _v$2 !== _p$.t && _$setAttribute7(_el$4, "data-open", _p$.t = _v$2);
+      _v$3 !== _p$.a && _$setAttribute7(_el$4, "aria-label", _p$.a = _v$3);
+      _v$4 !== _p$.o && _$setAttribute7(_el$4, "aria-expanded", _p$.o = _v$4);
       return _p$;
     }, {
       e: void 0,
@@ -3379,7 +3387,7 @@ function ColorControl(props) {
     return _el$;
   })();
 }
-_$delegateEvents7(["input", "keydown", "click"]);
+_$delegateEvents7(["click", "input", "keydown"]);
 
 // src/solid/components/PresetManager.tsx
 import { template as _$template11 } from "solid-js/web";
@@ -4901,7 +4909,7 @@ var _tmpl$213 = /* @__PURE__ */ _$template17(`<svg><line class=dialkit-cc-grid><
 var _tmpl$311 = /* @__PURE__ */ _$template17(`<svg><rect class=dialkit-cc-seg-hover rx=8></svg>`, false, true, false);
 var _tmpl$46 = /* @__PURE__ */ _$template17(`<svg><g><line class=dialkit-cc-diagonal></line><path class=dialkit-cc-curve></path><text class=dialkit-cc-label></svg>`, false, true, false);
 var _tmpl$54 = /* @__PURE__ */ _$template17(`<svg><line class=dialkit-cc-boundary></svg>`, false, true, false);
-var _tmpl$63 = /* @__PURE__ */ _$template17(`<svg><rect class=dialkit-cc-lane rx=8></svg>`, false, true, false);
+var _tmpl$64 = /* @__PURE__ */ _$template17(`<svg><rect class=dialkit-cc-lane rx=8></svg>`, false, true, false);
 var _tmpl$72 = /* @__PURE__ */ _$template17(`<svg><rect class=dialkit-cc-seg-hover x=0 rx=8></svg>`, false, true, false);
 var _tmpl$82 = /* @__PURE__ */ _$template17(`<svg><path class="dialkit-cc-curve dialkit-cc-curve-driver"></svg>`, false, true, false);
 var _tmpl$92 = /* @__PURE__ */ _$template17(`<svg><text class=dialkit-cc-label>driver \xB7 </svg>`, false, true, false);
@@ -5257,7 +5265,7 @@ function CurveComposer(props) {
         return driverRect();
       },
       children: (dr) => [(() => {
-        var _el$11 = _tmpl$63();
+        var _el$11 = _tmpl$64();
         _$effect15((_p$) => {
           var _v$36 = dr().x, _v$37 = dr().y, _v$38 = dr().w, _v$39 = dr().h;
           _v$36 !== _p$.e && _$setAttribute12(_el$11, "x", _p$.e = _v$36);

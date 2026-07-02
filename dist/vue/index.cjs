@@ -85,6 +85,9 @@ function displayHex(value) {
   if (!rgba) return (value ?? "").toUpperCase();
   return formatHex(rgba, false).toUpperCase();
 }
+function bareHex(value) {
+  return displayHex(value).replace(/^#/, "");
+}
 function opacityPercent(rgba) {
   return Math.round(clamp01(rgba.a) * 100);
 }
@@ -2885,7 +2888,7 @@ var ColorControl = (0, import_vue13.defineComponent)({
   emits: ["change"],
   setup(props, { emit }) {
     const isEditing = (0, import_vue13.ref)(false);
-    const editValue = (0, import_vue13.ref)(props.value);
+    const editValue = (0, import_vue13.ref)(bareHex(props.value));
     const isOpen = (0, import_vue13.ref)(false);
     const pos = (0, import_vue13.ref)(null);
     const portalTarget = (0, import_vue13.ref)(null);
@@ -2893,12 +2896,13 @@ var ColorControl = (0, import_vue13.defineComponent)({
     const pickerRef = (0, import_vue13.ref)(null);
     const hexInputRef = (0, import_vue13.ref)(null);
     (0, import_vue13.watch)(() => props.value, (value) => {
-      if (!isEditing.value) editValue.value = value;
+      if (!isEditing.value) editValue.value = bareHex(value);
     });
     (0, import_vue13.watch)(isEditing, async (editing) => {
       if (!editing) return;
       await (0, import_vue13.nextTick)();
       hexInputRef.value?.focus();
+      hexInputRef.value?.select();
     });
     const updatePos = () => {
       const el = swatchRef.value;
@@ -2969,7 +2973,7 @@ var ColorControl = (0, import_vue13.defineComponent)({
       if (normalized) {
         emit("change", normalized);
       } else {
-        editValue.value = props.value;
+        editValue.value = bareHex(props.value);
       }
     };
     return () => {
@@ -2977,34 +2981,6 @@ var ColorControl = (0, import_vue13.defineComponent)({
       return (0, import_vue13.h)("div", { class: "dialkit-color-control" }, [
         (0, import_vue13.h)("span", { class: "dialkit-color-label" }, props.label),
         (0, import_vue13.h)("div", { class: "dialkit-color-inputs" }, [
-          props.alpha && rgba ? (0, import_vue13.h)("span", { class: "dialkit-color-opacity" }, [
-            `${opacityPercent(rgba)} `,
-            (0, import_vue13.h)("span", { class: "dialkit-color-opacity-unit" }, "%")
-          ]) : null,
-          isEditing.value ? (0, import_vue13.h)("input", {
-            ref: hexInputRef,
-            type: "text",
-            class: "dialkit-color-hex-input",
-            value: editValue.value,
-            onInput: (event) => {
-              editValue.value = event.target.value;
-            },
-            onBlur: submitText,
-            onKeydown: (event) => {
-              if (event.key === "Enter") {
-                submitText();
-              } else if (event.key === "Escape") {
-                event.stopPropagation();
-                isEditing.value = false;
-                editValue.value = props.value;
-              }
-            }
-          }) : (0, import_vue13.h)("span", {
-            class: "dialkit-color-hex",
-            onClick: () => {
-              isEditing.value = true;
-            }
-          }, displayHex(props.value)),
           (0, import_vue13.h)("button", {
             ref: swatchRef,
             class: "dialkit-color-swatch",
@@ -3014,7 +2990,41 @@ var ColorControl = (0, import_vue13.defineComponent)({
             "aria-label": `Pick color for ${props.label}`,
             "aria-expanded": isOpen.value,
             onClick: togglePicker
-          })
+          }),
+          (0, import_vue13.h)("span", { class: "dialkit-color-hex-wrap" }, [
+            (0, import_vue13.h)("span", { class: "dialkit-color-hash", "aria-hidden": "true" }, "#"),
+            isEditing.value ? (0, import_vue13.h)("input", {
+              ref: hexInputRef,
+              type: "text",
+              class: "dialkit-color-hex-input",
+              value: editValue.value,
+              onInput: (event) => {
+                editValue.value = event.target.value;
+              },
+              onBlur: submitText,
+              onKeydown: (event) => {
+                if (event.key === "Enter") {
+                  submitText();
+                } else if (event.key === "Escape") {
+                  event.stopPropagation();
+                  isEditing.value = false;
+                  editValue.value = bareHex(props.value);
+                }
+              }
+            }) : (0, import_vue13.h)("span", {
+              class: "dialkit-color-hex",
+              onClick: () => {
+                isEditing.value = true;
+              }
+            }, bareHex(props.value))
+          ]),
+          ...props.alpha && rgba ? [
+            (0, import_vue13.h)("span", { class: "dialkit-color-divider", "aria-hidden": "true" }),
+            (0, import_vue13.h)("span", { class: "dialkit-color-opacity" }, [
+              `${opacityPercent(rgba)} `,
+              (0, import_vue13.h)("span", { class: "dialkit-color-opacity-unit" }, "%")
+            ])
+          ] : []
         ]),
         portalTarget.value ? (0, import_vue13.h)(import_vue13.Teleport, { to: portalTarget.value }, [
           (0, import_vue13.h)(import_motion_v4.AnimatePresence, null, {
