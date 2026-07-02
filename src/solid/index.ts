@@ -23,6 +23,26 @@ export { TextControl } from './components/TextControl';
 export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';
 export { ColorPickerPanel } from './components/ColorPickerPanel';
+export { XYPad } from './components/XYPad';
+export type { XYPadProps } from './components/XYPad';
+export { XYControl } from './components/XYControl';
+export {
+  XY_DETENT_PX,
+  XY_DEFAULT_STEP,
+  resolveAxis,
+  clamp,
+  snapToStep,
+  valueToNorm,
+  normToValue,
+  invertY,
+  valueFromPoint,
+  pointFromValue,
+  applyDetentAxis,
+  nudge,
+  centerValue,
+  normalizeValue,
+} from '../xy-pad-core';
+export type { XYValue, AxisSpec, Point } from '../xy-pad-core';
 export { PresetManager } from './components/PresetManager';
 
 // Store exports
@@ -32,6 +52,8 @@ export type {
   ActionConfig,
   SelectConfig,
   ColorConfig,
+  XYConfig,
+  XYAxis,
   TextConfig,
   ShortcutConfig,
   Preset,

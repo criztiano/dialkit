@@ -23,6 +23,8 @@ export { default as TextControl } from './components/TextControl.svelte';
 export { default as SelectControl } from './components/SelectControl.svelte';
 export { default as ColorControl } from './components/ColorControl.svelte';
 export { default as ColorPickerPanel } from './components/ColorPickerPanel.svelte';
+export { default as XYPad } from './components/XYPad.svelte';
+export { default as XYControl } from './components/XYControl.svelte';
 export { default as FileControl } from './components/FileControl.svelte';
 export { default as SwatchControl } from './components/SwatchControl.svelte';
 export { default as ChipsControl } from './components/ChipsControl.svelte';

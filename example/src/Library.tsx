@@ -23,6 +23,7 @@ import {
 import type { SpringConfig, TransitionConfig, EasingConfig, GalleryItem } from 'dialkit';
 import { WaveformShowcase } from './WaveformShowcase';
 import { CurveComposerShowcase } from './CurveComposerShowcase';
+import { XYPadShowcase } from './XYPadShowcase';
 import 'dialkit/styles.css';
 
 type Theme = 'dark' | 'light';
@@ -333,10 +334,16 @@ export function Library() {
           </Card>
         </Section>
 
+        <Section index="11" title="XY Pad" hint="A draggable point in a fluid landscape pad that fills the container width — X and Y each map to a range, with the axis names labelled inside the pad (X along the bottom, Y up the left; add showValues to also print the live number). Press to place and grab, drag to set live, Shift for fine. Focus it and arrow around (Shift = coarse, Alt = fine, Page/Home/End jump); double-click or Alt-click resets. Switch examples to see bipolar axes, the return-to-center joystick, grid density, custom ranges, and the disabled state." single>
+          <Card title="XYPad" desc="A 2D value control that holds position by default, or springs back to center with returnToCenter (joystick). It grows to fill the container width (size sets its height, not forced square). Per-axis objects set range, step, origin, and bipolar independently; snap quantizes to the step; the grid is a 5×5 by default (density multiplies it for a denser grid, or grid={false} hides it). The axis names render inside the pad — X along the bottom, Y up the left; showValues prints the live number next to each. Full keyboard + screen-reader support: the point announces both axes via aria-valuetext regardless of showValues. The grid stays faintly visible and strengthens on hover/focus/drag, while the crosshair guides reveal only on interaction." code="<XYPad label value onChange x y grid density snap returnToCenter showValues />">
+            <XYPadShowcase />
+          </Card>
+        </Section>
+
         <section className="lib-section">
           <div className="lib-section-head">
             <div className="lib-section-headline">
-              <span className="lib-section-index">10</span>
+              <span className="lib-section-index">12</span>
               <h2 className="lib-section-title">Live panel</h2>
               {liveId && <ShortcutsMenu panelId={liveId} />}
             </div>

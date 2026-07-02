@@ -1,6 +1,24 @@
 import * as vue from 'vue';
 import { ComputedRef, ObjectDirective, InjectionKey, Ref, PropType, h, VNode } from 'vue';
 
+type XYValue = {
+    x: number;
+    y: number;
+};
+
+/**
+ * One axis of an XY pad control. Partial — every field falls back through
+ * `resolveAxis` (min 0, max 1, step 0.01). `origin`/`bipolar` mirror the
+ * Slider's names/semantics, resolved independently per axis.
+ */
+type XYAxis = {
+    min?: number;
+    max?: number;
+    step?: number;
+    origin?: number;
+    bipolar?: boolean;
+    label?: string;
+};
 type SpringConfig = {
     type: 'spring';
     stiffness?: number;
@@ -34,6 +52,24 @@ type ColorConfig = {
     alpha?: boolean;
     /** Shows the shared saved-swatches row (persisted per machine). Default false. */
     palette?: boolean;
+};
+type XYConfig = {
+    type: 'xy';
+    /** Starting point. Missing/out-of-range components clamp to each axis's origin. */
+    default?: XYValue;
+    /** Per-axis range/step/origin. Each resolves through `resolveAxis`. */
+    x?: XYAxis;
+    y?: XYAxis;
+    /** Grid overlay — on by default as a 5×5 grid (faint at rest, stronger on interaction). `false` to hide, or a number for a uniform N×N count. */
+    grid?: boolean | number;
+    /** Multiplies both grid axis subdivision counts (default 1). E.g. 2 on the 5×5 default → 10×10. */
+    density?: number;
+    /** Snap the emitted value to each axis's step (default continuous). */
+    snap?: boolean;
+    /** Spring the thumb back to centre on release (joystick feel). Default hold. */
+    returnToCenter?: boolean;
+    /** Show the live value next to each axis label (default false = label only). */
+    showValues?: boolean;
 };
 type TextConfig = {
     type: 'text';
@@ -112,12 +148,12 @@ type ListConfig = {
     /** Label for the add affordance. Defaults to 'Add'. */
     addLabel?: string;
 };
-type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[];
+type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[];
 type DialConfig = {
     [key: string]: DialValue | [number, number, number, number?] | DialConfig;
 };
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends TextConfig ? string : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -128,7 +164,7 @@ type ShortcutConfig = {
     interaction?: ShortcutInteraction;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'text' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'xy' | 'text' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
     path: string;
     label: string;
     min?: number;
@@ -152,6 +188,14 @@ type ControlMeta = {
     maxItems?: number;
     alpha?: boolean;
     palette?: boolean;
+    /** XY pad axes/options — carried through to the XYControl. */
+    xAxis?: XYAxis;
+    yAxis?: XYAxis;
+    grid?: boolean | number;
+    density?: number;
+    snap?: boolean;
+    returnToCenter?: boolean;
+    showValues?: boolean;
     shortcut?: ShortcutConfig;
 };
 type PanelConfig = {
@@ -244,6 +288,7 @@ declare class DialStoreClass {
     private isActionConfig;
     private isSelectConfig;
     private isColorConfig;
+    private isXYConfig;
     private isTextConfig;
     private isGalleryConfig;
     private isFileConfig;
@@ -455,9 +500,9 @@ declare const Slider: vue.DefineComponent<vue.ExtractPropTypes<{
 }>> & Readonly<{
     onChange?: ((...args: any[]) => any) | undefined;
 }>, {
-    shortcut: ShortcutConfig;
     origin: number;
     bipolar: boolean;
+    shortcut: ShortcutConfig;
     shortcutActive: boolean;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
@@ -909,11 +954,11 @@ declare const WaveformVisualization: vue.DefineComponent<vue.ExtractPropTypes<{
     };
 }>> & Readonly<{}>, {
     mode: WaveformMode;
+    grid: boolean;
     progress: number;
     height: number;
     width: number;
     border: boolean;
-    grid: boolean;
     buffer: AudioBuffer | null;
     getProgress: () => number;
     bands: boolean;
@@ -1125,10 +1170,10 @@ declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
     };
 }>> & Readonly<{}>, {
     mode: "continuous" | "trigger";
+    grid: boolean;
     height: number;
     width: number;
     direction: DriverDirection;
-    grid: boolean;
     driver: CurveDriver | null;
     gridSubdivisions: number;
     playheadColor: string;
@@ -1287,6 +1332,288 @@ declare const ColorPickerPanel: vue.DefineComponent<vue.ExtractPropTypes<{
     palette: boolean;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
+/**
+ * Standalone 2D value pad. A single focusable surface with an absolutely
+ * positioned thumb; pointer press places-and-grabs, arrows nudge, and an
+ * optional return-to-centre springs the thumb home on release. All value
+ * math (mapping, clamping, snapping, nudging, detent) lives in xy-pad-core.
+ *
+ * The thumb/guides are positioned purely from the `value` prop via CSS
+ * `left%`/`top%` (the ColorPickerPanel SV-thumb idiom), so the four ports render
+ * identical markup with no animation library. Smooth motion for keyboard nudges
+ * and return-to-centre comes from a CSS transition that is disabled during drag
+ * (via `data-dragging`), keeping drags instant.
+ */
+declare const XYPad: vue.DefineComponent<vue.ExtractPropTypes<{
+    label: {
+        type: StringConstructor;
+        required: true;
+    };
+    value: {
+        type: PropType<XYValue>;
+        required: true;
+    };
+    /** Horizontal axis (defaults: min 0, max 1, step 0.01). */
+    x: {
+        type: PropType<XYAxis>;
+        default: undefined;
+    };
+    /** Vertical axis, Cartesian (top = max). Same defaults as x. */
+    y: {
+        type: PropType<XYAxis>;
+        default: undefined;
+    };
+    /** Height of the pad in px; the pad grows to fill the container width (it is not forced square). Default 160. */
+    size: {
+        type: NumberConstructor;
+        default: number;
+    };
+    /**
+     * Grid overlay — on by default as a 5×5 grid (5 columns on X, 5 rows on Y),
+     * faint at rest and stronger on interaction. Pass `false` to hide it, or a
+     * number for a uniform N×N count. `density` multiplies whichever grid applies.
+     */
+    grid: {
+        type: PropType<boolean | number>;
+        default: undefined;
+    };
+    /** Multiplies both axis subdivision counts (default 1). E.g. 2 on the 5×5 default → 10×10. */
+    density: {
+        type: NumberConstructor;
+        default: number;
+    };
+    /** Snap the emitted value to each axis's step. Default false (continuous). */
+    snap: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    /** Spring back to centre on release (joystick). Default false = hold. */
+    returnToCenter: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    /** Show the live value next to each axis label (default false = label only). */
+    showValues: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    disabled: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    /** Override the readout / aria-valuetext text. Owns the full string. */
+    formatValue: {
+        type: PropType<(value: XYValue) => string>;
+        default: undefined;
+    };
+    shortcut: {
+        type: PropType<ShortcutConfig>;
+        default: undefined;
+    };
+    shortcutActive: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, "change"[], "change", vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    label: {
+        type: StringConstructor;
+        required: true;
+    };
+    value: {
+        type: PropType<XYValue>;
+        required: true;
+    };
+    /** Horizontal axis (defaults: min 0, max 1, step 0.01). */
+    x: {
+        type: PropType<XYAxis>;
+        default: undefined;
+    };
+    /** Vertical axis, Cartesian (top = max). Same defaults as x. */
+    y: {
+        type: PropType<XYAxis>;
+        default: undefined;
+    };
+    /** Height of the pad in px; the pad grows to fill the container width (it is not forced square). Default 160. */
+    size: {
+        type: NumberConstructor;
+        default: number;
+    };
+    /**
+     * Grid overlay — on by default as a 5×5 grid (5 columns on X, 5 rows on Y),
+     * faint at rest and stronger on interaction. Pass `false` to hide it, or a
+     * number for a uniform N×N count. `density` multiplies whichever grid applies.
+     */
+    grid: {
+        type: PropType<boolean | number>;
+        default: undefined;
+    };
+    /** Multiplies both axis subdivision counts (default 1). E.g. 2 on the 5×5 default → 10×10. */
+    density: {
+        type: NumberConstructor;
+        default: number;
+    };
+    /** Snap the emitted value to each axis's step. Default false (continuous). */
+    snap: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    /** Spring back to centre on release (joystick). Default false = hold. */
+    returnToCenter: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    /** Show the live value next to each axis label (default false = label only). */
+    showValues: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    disabled: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    /** Override the readout / aria-valuetext text. Owns the full string. */
+    formatValue: {
+        type: PropType<(value: XYValue) => string>;
+        default: undefined;
+    };
+    shortcut: {
+        type: PropType<ShortcutConfig>;
+        default: undefined;
+    };
+    shortcutActive: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+}>> & Readonly<{
+    onChange?: ((...args: any[]) => any) | undefined;
+}>, {
+    x: XYAxis;
+    y: XYAxis;
+    shortcut: ShortcutConfig;
+    grid: number | boolean;
+    density: number;
+    snap: boolean;
+    returnToCenter: boolean;
+    showValues: boolean;
+    size: number;
+    shortcutActive: boolean;
+    disabled: boolean;
+    formatValue: (value: XYValue) => string;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+/**
+ * Config wrapper for the XY pad — the `{ type: 'xy' }` case. Reads the resolved
+ * ControlMeta fields and forwards them to the standalone XYPad, mirroring how
+ * ColorControl wraps ColorPickerPanel.
+ */
+declare const XYControl: vue.DefineComponent<vue.ExtractPropTypes<{
+    label: {
+        type: StringConstructor;
+        required: true;
+    };
+    value: {
+        type: PropType<XYValue>;
+        required: true;
+    };
+    x: {
+        type: PropType<XYAxis>;
+        default: undefined;
+    };
+    y: {
+        type: PropType<XYAxis>;
+        default: undefined;
+    };
+    grid: {
+        type: PropType<boolean | number>;
+        default: undefined;
+    };
+    density: {
+        type: NumberConstructor;
+        default: undefined;
+    };
+    snap: {
+        type: BooleanConstructor;
+        default: undefined;
+    };
+    returnToCenter: {
+        type: BooleanConstructor;
+        default: undefined;
+    };
+    showValues: {
+        type: BooleanConstructor;
+        default: undefined;
+    };
+    shortcut: {
+        type: PropType<ShortcutConfig>;
+        default: undefined;
+    };
+    shortcutActive: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, "change"[], "change", vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    label: {
+        type: StringConstructor;
+        required: true;
+    };
+    value: {
+        type: PropType<XYValue>;
+        required: true;
+    };
+    x: {
+        type: PropType<XYAxis>;
+        default: undefined;
+    };
+    y: {
+        type: PropType<XYAxis>;
+        default: undefined;
+    };
+    grid: {
+        type: PropType<boolean | number>;
+        default: undefined;
+    };
+    density: {
+        type: NumberConstructor;
+        default: undefined;
+    };
+    snap: {
+        type: BooleanConstructor;
+        default: undefined;
+    };
+    returnToCenter: {
+        type: BooleanConstructor;
+        default: undefined;
+    };
+    showValues: {
+        type: BooleanConstructor;
+        default: undefined;
+    };
+    shortcut: {
+        type: PropType<ShortcutConfig>;
+        default: undefined;
+    };
+    shortcutActive: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+}>> & Readonly<{
+    onChange?: ((...args: any[]) => any) | undefined;
+}>, {
+    x: XYAxis;
+    y: XYAxis;
+    shortcut: ShortcutConfig;
+    grid: number | boolean;
+    density: number;
+    snap: boolean;
+    returnToCenter: boolean;
+    showValues: boolean;
+    shortcutActive: boolean;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
 declare const PresetManager: vue.DefineComponent<vue.ExtractPropTypes<{
     panelId: {
         type: StringConstructor;
@@ -1321,4 +1648,4 @@ declare const PresetManager: vue.DefineComponent<vue.ExtractPropTypes<{
     activePresetId: string | null;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
-export { type ActionConfig, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, type DialConfig, type DialKitDirectiveOptions, type DialKitDirectiveValue, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, Folder, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, ShortcutKey, ShortcutListener, type ShortcutState, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, useDialKit, useShortcutContext, vDialKit };
+export { type ActionConfig, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, type DialConfig, type DialKitDirectiveOptions, type DialKitDirectiveValue, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, Folder, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, ShortcutKey, ShortcutListener, type ShortcutState, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYValue, useDialKit, useShortcutContext, vDialKit };

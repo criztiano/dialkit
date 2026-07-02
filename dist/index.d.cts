@@ -1,6 +1,117 @@
 import * as react_jsx_runtime from 'react/jsx-runtime';
 import { ReactNode } from 'react';
 
+type XYValue = {
+    x: number;
+    y: number;
+};
+/** A fully-resolved axis — every field required (see `resolveAxis` for defaults). */
+type AxisSpec = {
+    min: number;
+    max: number;
+    step: number;
+    /** Value the escapable centre detent snaps to (midpoint for bipolar, else min). */
+    origin: number;
+    /** When true, the axis has a meaningful centre → enables the centre detent. */
+    bipolar: boolean;
+};
+/**
+ * Screen-normalized position: each component in [0,1]. y=0 is the TOP, y=1 is the
+ * BOTTOM, so it drops straight into CSS `left: x*100%` / `top: y*100%`.
+ */
+type Point = {
+    x: number;
+    y: number;
+};
+/** Pixel radius of the centre detent's capture band (see `applyDetentAxis`). */
+declare const XY_DETENT_PX = 6;
+/** Fallback step when an axis omits one. */
+declare const XY_DEFAULT_STEP = 0.01;
+/**
+ * Resolve a partial axis into a fully-specified one. Defaults: min=0, max=1,
+ * step=XY_DEFAULT_STEP, bipolar=false. `origin` falls back to the axis midpoint for a
+ * bipolar axis (its natural rest/centre) or to `min` otherwise. Never mutates the input.
+ */
+declare function resolveAxis(axis?: Partial<{
+    min: number;
+    max: number;
+    step: number;
+    origin: number;
+    bipolar: boolean;
+}>): AxisSpec;
+/** Clamp `v` into [min, max]. */
+declare function clamp(v: number, min: number, max: number): number;
+/**
+ * Snap `v` to the nearest multiple of `step` measured from `min`, then round to the
+ * step's precision to kill float dust. A non-positive step means "no grid" → passthrough.
+ */
+declare function snapToStep(v: number, step: number, min: number): number;
+/**
+ * Map a value to [0,1] along the axis (0 at min, 1 at max), clamped. A degenerate axis
+ * (max===min) has no extent to map into, so it collapses to 0.
+ */
+declare function valueToNorm(v: number, axis: AxisSpec): number;
+/** Inverse of `valueToNorm` (no snapping). `n` is clamped to [0,1] first. */
+declare function normToValue(n: number, axis: AxisSpec): number;
+/**
+ * Flip between screen-y (down) and Cartesian-y (up). This is the ONE place the two
+ * y conventions meet — value→point and point→value both route through it.
+ */
+declare function invertY(n: number): number;
+/**
+ * Screen point (y-down) → Cartesian value. x maps directly; y is inverted so the top of
+ * the pad reads as the axis maximum. Each result is clamped into its axis range, and
+ * optionally snapped to the axis step.
+ *
+ * Corner contract: {x:0,y:1} (bottom-left) → {x:xMin, y:yMin};
+ *                  {x:1,y:0} (top-right)   → {x:xMax, y:yMax}.
+ */
+declare function valueFromPoint(point: Point, xAxis: AxisSpec, yAxis: AxisSpec, snap?: boolean): XYValue;
+/**
+ * Cartesian value → screen point (inverse of `valueFromPoint`, for CSS positioning).
+ * y is inverted so a value at yMax yields point.y=0 (the top of the pad).
+ */
+declare function pointFromValue(value: XYValue, xAxis: AxisSpec, yAxis: AxisSpec): Point;
+/**
+ * Escapable centre detent for one axis. While the pointer is within `XY_DETENT_PX` of the
+ * origin position, the value sticks to `axis.origin`; move further and the live `value`
+ * passes through untouched. Only bipolar axes have a centre to snap to. The component
+ * supplies the pixel distance from the origin's screen position.
+ */
+declare function applyDetentAxis(value: number, axis: AxisSpec, pxFromOrigin: number): number;
+/**
+ * Nudge one axis by a keyboard step and return a NEW value (the other axis is copied
+ * untouched). Cartesian: direction +1 is UP/right → larger value; -1 is down/left. The
+ * result is clamped into range and rounded to the step's precision.
+ */
+declare function nudge(value: XYValue, axis: 'x' | 'y', direction: -1 | 1, xAxis: AxisSpec, yAxis: AxisSpec, mode?: 'fine' | 'normal' | 'coarse'): XYValue;
+/**
+ * Return-to-centre / joystick rest target: each axis's origin. For a bipolar (or
+ * explicit-origin) axis this is the visual centre; a plain non-bipolar 0..1 axis rests
+ * at its min, which is the intended behaviour for that case.
+ */
+declare function centerValue(xAxis: AxisSpec, yAxis: AxisSpec): XYValue;
+/**
+ * Defensively normalize a possibly-partial/garbage value into a clean in-range XYValue.
+ * Missing or non-finite (NaN/±Infinity) components fall back to the axis origin; each is
+ * clamped into range and optionally snapped. Negative zero is normalized to 0. The input
+ * is never mutated.
+ */
+declare function normalizeValue(value: Partial<XYValue> | undefined, xAxis: AxisSpec, yAxis: AxisSpec, snap?: boolean): XYValue;
+
+/**
+ * One axis of an XY pad control. Partial — every field falls back through
+ * `resolveAxis` (min 0, max 1, step 0.01). `origin`/`bipolar` mirror the
+ * Slider's names/semantics, resolved independently per axis.
+ */
+type XYAxis = {
+    min?: number;
+    max?: number;
+    step?: number;
+    origin?: number;
+    bipolar?: boolean;
+    label?: string;
+};
 type SpringConfig = {
     type: 'spring';
     stiffness?: number;
@@ -34,6 +145,24 @@ type ColorConfig = {
     alpha?: boolean;
     /** Shows the shared saved-swatches row (persisted per machine). Default false. */
     palette?: boolean;
+};
+type XYConfig = {
+    type: 'xy';
+    /** Starting point. Missing/out-of-range components clamp to each axis's origin. */
+    default?: XYValue;
+    /** Per-axis range/step/origin. Each resolves through `resolveAxis`. */
+    x?: XYAxis;
+    y?: XYAxis;
+    /** Grid overlay — on by default as a 5×5 grid (faint at rest, stronger on interaction). `false` to hide, or a number for a uniform N×N count. */
+    grid?: boolean | number;
+    /** Multiplies both grid axis subdivision counts (default 1). E.g. 2 on the 5×5 default → 10×10. */
+    density?: number;
+    /** Snap the emitted value to each axis's step (default continuous). */
+    snap?: boolean;
+    /** Spring the thumb back to centre on release (joystick feel). Default hold. */
+    returnToCenter?: boolean;
+    /** Show the live value next to each axis label (default false = label only). */
+    showValues?: boolean;
 };
 type TextConfig = {
     type: 'text';
@@ -128,12 +257,12 @@ type ListField = {
     placeholder?: string;
     defaultValue: number | boolean | string;
 };
-type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[];
+type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[];
 type DialConfig = {
     [key: string]: DialValue | [number, number, number, number?] | DialConfig;
 };
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends TextConfig ? string : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -144,7 +273,7 @@ type ShortcutConfig = {
     interaction?: ShortcutInteraction;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'text' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'xy' | 'text' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
     path: string;
     label: string;
     min?: number;
@@ -168,6 +297,14 @@ type ControlMeta = {
     maxItems?: number;
     alpha?: boolean;
     palette?: boolean;
+    /** XY pad axes/options — carried through to the XYControl. */
+    xAxis?: XYAxis;
+    yAxis?: XYAxis;
+    grid?: boolean | number;
+    density?: number;
+    snap?: boolean;
+    returnToCenter?: boolean;
+    showValues?: boolean;
     shortcut?: ShortcutConfig;
 };
 type PanelConfig = {
@@ -260,6 +397,7 @@ declare class DialStoreClass {
     private isActionConfig;
     private isSelectConfig;
     private isColorConfig;
+    private isXYConfig;
     private isTextConfig;
     private isGalleryConfig;
     private isFileConfig;
@@ -740,6 +878,71 @@ declare function rgbToOklch(rgba: RGBA): OKLCH;
 declare function clampOklchToSrgb(oklch: OKLCH): OKLCH;
 declare function oklchToRgb(oklch: OKLCH): RGBA;
 
+interface XYPadProps {
+    label: string;
+    value: XYValue;
+    onChange: (value: XYValue) => void;
+    /** Horizontal axis (defaults: min 0, max 1, step 0.01). */
+    x?: XYAxis;
+    /** Vertical axis, Cartesian (top = max). Same defaults as x. */
+    y?: XYAxis;
+    /** Height of the pad in px; the pad grows to fill the container width (it is not forced square). Default 160. */
+    size?: number;
+    /**
+     * Grid overlay — on by default as a 5×5 grid (5 columns on X, 5 rows on Y),
+     * faint at rest and stronger on interaction. Pass `false` to hide it, or a
+     * number for a uniform N×N count. `density` multiplies whichever grid applies.
+     */
+    grid?: boolean | number;
+    /** Multiplies both axis subdivision counts (default 1). E.g. 2 on the 5×5 default → 10×10. */
+    density?: number;
+    /** Snap the emitted value to each axis's step. Default false (continuous). */
+    snap?: boolean;
+    /** Spring back to centre on release (joystick). Default false = hold. */
+    returnToCenter?: boolean;
+    /** Show the live value next to each axis label (default false = label only). */
+    showValues?: boolean;
+    disabled?: boolean;
+    /** Override the readout / aria-valuetext text. Owns the full string. */
+    formatValue?: (value: XYValue) => string;
+    shortcut?: ShortcutConfig;
+    shortcutActive?: boolean;
+}
+/**
+ * Standalone 2D value pad. A single focusable surface with an absolutely
+ * positioned thumb; pointer press places-and-grabs, arrows nudge, and an
+ * optional return-to-centre springs the thumb home on release. All value
+ * math (mapping, clamping, snapping, nudging, detent) lives in xy-pad-core.
+ *
+ * The thumb/guides are positioned purely from the `value` prop via CSS
+ * `left%`/`top%` (the ColorPickerPanel SV-thumb idiom), so the four ports render
+ * identical markup with no animation library. Smooth motion for keyboard nudges
+ * and return-to-centre comes from a CSS transition that is disabled during drag
+ * (via `data-dragging`), keeping drags instant.
+ */
+declare function XYPad({ label, value, onChange, x, y, size, grid, density, snap, returnToCenter, showValues, disabled, formatValue, shortcut, shortcutActive, }: XYPadProps): react_jsx_runtime.JSX.Element;
+
+interface XYControlProps {
+    label: string;
+    value: XYValue;
+    onChange: (value: XYValue) => void;
+    x?: XYAxis;
+    y?: XYAxis;
+    grid?: boolean | number;
+    density?: number;
+    snap?: boolean;
+    returnToCenter?: boolean;
+    showValues?: boolean;
+    shortcut?: ShortcutConfig;
+    shortcutActive?: boolean;
+}
+/**
+ * Config wrapper for the XY pad — the `{ type: 'xy' }` case. Reads the resolved
+ * ControlMeta fields and forwards them to the standalone XYPad, mirroring how
+ * ColorControl wraps ColorPickerPanel.
+ */
+declare function XYControl({ label, value, onChange, x, y, grid, density, snap, returnToCenter, showValues, shortcut, shortcutActive }: XYControlProps): react_jsx_runtime.JSX.Element;
+
 interface GalleryControlProps {
     label: string;
     value: string;
@@ -802,4 +1005,4 @@ interface ShortcutsMenuProps {
 }
 declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react_jsx_runtime.JSX.Element | null;
 
-export { type ActionConfig, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type OKLCH, type PanelConfig, type Preset, PresetManager, type RGBA, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, addDriver, buildSamplers, clampOklchToSrgb, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, formatHex, hslToRgb, hsvToRgb, normalizeHex, normalizeListItems, oklchToRgb, opacityPercent, parseHex, parseListItemSchema, readComposition, redistributeWeight, removeDriver, removeSegment, rgbToHsl, rgbToHsv, rgbToOklch, setDriverCurvature, setDriverSteepness, setSegmentCurvature, setSegmentSteepness, splitSegment, triggerLevels, triggersCrossed, useDialKit };
+export { type ActionConfig, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type OKLCH, type PanelConfig, type Point, type Preset, PresetManager, type RGBA, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, applyDetentAxis, buildSamplers, centerValue, clamp, clampOklchToSrgb, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, formatHex, hslToRgb, hsvToRgb, invertY, normToValue, normalizeHex, normalizeListItems, normalizeValue, nudge, oklchToRgb, opacityPercent, parseHex, parseListItemSchema, pointFromValue, readComposition, redistributeWeight, removeDriver, removeSegment, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverCurvature, setDriverSteepness, setSegmentCurvature, setSegmentSteepness, snapToStep, splitSegment, triggerLevels, triggersCrossed, useDialKit, valueFromPoint, valueToNorm };
