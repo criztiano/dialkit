@@ -8,6 +8,7 @@ export type { DialPosition, DialMode, DialTheme } from './components/DialRoot';
 
 // Component exports
 export { Slider } from './components/Slider';
+export { RangeSlider } from './components/RangeSlider';
 export { Toggle } from './components/Toggle';
 export { Folder } from './components/Folder';
 export { Module } from './components/Module';

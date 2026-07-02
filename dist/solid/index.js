@@ -227,6 +227,55 @@ function deserializePalette(raw) {
   return slots;
 }
 
+// src/range-slider-core.ts
+function clamp2(v, lo, hi) {
+  return Math.min(hi, Math.max(lo, v));
+}
+function orderRange(v) {
+  return v.min <= v.max ? v : { min: v.max, max: v.min };
+}
+function clampRange(v, min, max) {
+  return orderRange({ min: clamp2(v.min, min, max), max: clamp2(v.max, min, max) });
+}
+function setLow(nextLow, current, min) {
+  return { min: clamp2(nextLow, min, current.max), max: current.max };
+}
+function setHigh(nextHigh, current, max) {
+  return { min: current.min, max: clamp2(nextHigh, current.min, max) };
+}
+function shiftSpan(deltaValue, current, min, max) {
+  const width = current.max - current.min;
+  const desiredMin = clamp2(current.min + deltaValue, min, max - width);
+  return { min: desiredMin, max: desiredMin + width };
+}
+function nearestHandle(atValue, current) {
+  const dMin = Math.abs(atValue - current.min);
+  const dMax = Math.abs(atValue - current.max);
+  if (dMin < dMax) return "min";
+  if (dMax < dMin) return "max";
+  return atValue < current.min ? "min" : "max";
+}
+function pickDragTarget(atValue, current, hitValue) {
+  const nearLow = Math.abs(atValue - current.min) <= hitValue;
+  const nearHigh = Math.abs(atValue - current.max) <= hitValue;
+  if (nearLow && nearHigh) return nearestHandle(atValue, current);
+  if (nearLow) return "min";
+  if (nearHigh) return "max";
+  if (atValue > current.min && atValue < current.max) return "span";
+  return nearestHandle(atValue, current);
+}
+function isOutsideSpan(atValue, current) {
+  return atValue <= current.min || atValue >= current.max;
+}
+function handleLeftStyles(lowPercent, highPercent) {
+  const gap = `(${highPercent}% - ${lowPercent}%)`;
+  const ramp = `clamp(0px, calc(30px - ${gap}), 12px)`;
+  return {
+    low: `max(2px, min(calc(100% - 5px), calc(${lowPercent}% + 6px - ${ramp})))`,
+    high: `min(calc(100% - 5px), max(2px, calc(${highPercent}% - 9px + ${ramp})))`
+  };
+}
+
 // src/store/DialStore.ts
 var EMPTY_VALUES = Object.freeze({});
 var DialStoreClass = class {
@@ -504,7 +553,7 @@ var DialStoreClass = class {
         const hasPhysics = value.stiffness !== void 0 || value.damping !== void 0 || value.mass !== void 0;
         const hasTime = value.visualDuration !== void 0 || value.bounce !== void 0;
         values[`${path}.__mode`] = hasPhysics && !hasTime ? "advanced" : "simple";
-      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isColorConfig(value) && !this.isTextConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isListConfig(value)) {
+      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isColorConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isListConfig(value)) {
         this.initTransitionModes(value, path, values);
       }
     }
@@ -542,6 +591,16 @@ var DialStoreClass = class {
         controls.push({ type: "color", path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: "text", path, label, placeholder: value.placeholder });
+      } else if (this.isRangeConfig(value)) {
+        controls.push({
+          type: "range",
+          path,
+          label,
+          min: value.min,
+          max: value.max,
+          step: value.step ?? this.inferStep(value.min, value.max),
+          rangeDefault: value.default ?? { min: value.min, max: value.max }
+        });
       } else if (this.isGalleryConfig(value)) {
         controls.push({ type: "gallery", path, label, items: value.items, columns: value.columns });
       } else if (this.isFileConfig(value)) {
@@ -594,6 +653,8 @@ var DialStoreClass = class {
         values[path] = value.default ?? "#000000";
       } else if (this.isTextConfig(value)) {
         values[path] = value.default ?? "";
+      } else if (this.isRangeConfig(value)) {
+        values[path] = value.default ?? { min: value.min, max: value.max };
       } else if (this.isGalleryConfig(value)) {
         values[path] = value.default ?? value.items[0]?.id ?? "";
       } else if (this.isFileConfig(value)) {
@@ -624,6 +685,14 @@ var DialStoreClass = class {
   }
   isColorConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "color";
+  }
+  isRangeConfig(value) {
+    return typeof value === "object" && value !== null && "type" in value && value.type === "range";
+  }
+  // A stored range VALUE ({min,max} numbers), as opposed to a range config.
+  // Used to preserve the leaf value by identity across a panel update.
+  isRangeValue(value) {
+    return typeof value === "object" && value !== null && typeof value.min === "number" && typeof value.max === "number";
   }
   isTextConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "text";
@@ -727,6 +796,14 @@ var DialStoreClass = class {
         return typeof existingValue === "string" ? existingValue : defaultValue;
       case "list":
         return Array.isArray(existingValue) ? existingValue : defaultValue;
+      case "range": {
+        if (!this.isRangeValue(existingValue)) {
+          return defaultValue;
+        }
+        const lo = control.min ?? Number.NEGATIVE_INFINITY;
+        const hi = control.max ?? Number.POSITIVE_INFINITY;
+        return clampRange(existingValue, lo, hi);
+      }
       case "gallery": {
         if (typeof existingValue !== "string") {
           return defaultValue;
@@ -913,13 +990,13 @@ function getFirstOptionValue(options) {
 }
 
 // src/solid/components/DialRoot.tsx
-import { template as _$template13 } from "solid-js/web";
+import { template as _$template14 } from "solid-js/web";
 import { memo as _$memo10 } from "solid-js/web";
 import { setAttribute as _$setAttribute10 } from "solid-js/web";
-import { effect as _$effect12 } from "solid-js/web";
-import { insert as _$insert13 } from "solid-js/web";
-import { createComponent as _$createComponent12 } from "solid-js/web";
-import { createSignal as createSignal12, onMount as onMount9, onCleanup as onCleanup11, Show as Show9, For as For6 } from "solid-js";
+import { effect as _$effect13 } from "solid-js/web";
+import { insert as _$insert14 } from "solid-js/web";
+import { createComponent as _$createComponent13 } from "solid-js/web";
+import { createSignal as createSignal13, onMount as onMount10, onCleanup as onCleanup12, Show as Show10, For as For6 } from "solid-js";
 import { Portal as Portal4 } from "solid-js/web";
 
 // src/solid/components/ShortcutListener.tsx
@@ -1241,16 +1318,16 @@ function ShortcutListener(props) {
 }
 
 // src/solid/components/Panel.tsx
-import { template as _$template12 } from "solid-js/web";
-import { delegateEvents as _$delegateEvents9 } from "solid-js/web";
+import { template as _$template13 } from "solid-js/web";
+import { delegateEvents as _$delegateEvents10 } from "solid-js/web";
 import { setAttribute as _$setAttribute9 } from "solid-js/web";
-import { effect as _$effect11 } from "solid-js/web";
-import { use as _$use8 } from "solid-js/web";
-import { insert as _$insert12 } from "solid-js/web";
-import { createComponent as _$createComponent11 } from "solid-js/web";
+import { effect as _$effect12 } from "solid-js/web";
+import { use as _$use9 } from "solid-js/web";
+import { insert as _$insert13 } from "solid-js/web";
+import { createComponent as _$createComponent12 } from "solid-js/web";
 import { memo as _$memo9 } from "solid-js/web";
-import { createSignal as createSignal11, createEffect as createEffect8, onMount as onMount8, onCleanup as onCleanup10, For as For5 } from "solid-js";
-import { animate as animate6 } from "motion";
+import { createSignal as createSignal12, createEffect as createEffect9, onMount as onMount9, onCleanup as onCleanup11, For as For5 } from "solid-js";
+import { animate as animate7 } from "motion";
 
 // src/icons.ts
 var ICON_CHEVRON = "M6 9.5L12 15.5L18 9.5";
@@ -2064,32 +2141,380 @@ function Slider(props) {
 }
 _$delegateEvents2(["pointerdown", "pointermove", "pointerup", "input", "keydown", "click", "mousedown"]);
 
-// src/solid/components/Toggle.tsx
-import { template as _$template4 } from "solid-js/web";
-import { memo as _$memo3 } from "solid-js/web";
-import { createComponent as _$createComponent5 } from "solid-js/web";
-import { className as _$className3 } from "solid-js/web";
-import { effect as _$effect4 } from "solid-js/web";
-import { insert as _$insert4 } from "solid-js/web";
-import { Show as Show4 } from "solid-js";
-
-// src/solid/components/SegmentedControl.tsx
+// src/solid/components/RangeSlider.tsx
 import { template as _$template3 } from "solid-js/web";
 import { delegateEvents as _$delegateEvents3 } from "solid-js/web";
-import { setAttribute as _$setAttribute2 } from "solid-js/web";
 import { setStyleProperty as _$setStyleProperty2 } from "solid-js/web";
+import { className as _$className3 } from "solid-js/web";
+import { createComponent as _$createComponent4 } from "solid-js/web";
 import { effect as _$effect3 } from "solid-js/web";
 import { insert as _$insert3 } from "solid-js/web";
-import { createComponent as _$createComponent4 } from "solid-js/web";
 import { use as _$use3 } from "solid-js/web";
-import { createSignal as createSignal5, createEffect as createEffect3, For, Show as Show3 } from "solid-js";
-var _tmpl$11 = /* @__PURE__ */ _$template3(`<div class=dialkit-segmented>`);
-var _tmpl$23 = /* @__PURE__ */ _$template3(`<div class=dialkit-segmented-pill>`);
-var _tmpl$33 = /* @__PURE__ */ _$template3(`<button class=dialkit-segmented-button>`);
+import { createSignal as createSignal5, createEffect as createEffect3, onMount as onMount4, onCleanup as onCleanup5, Show as Show3 } from "solid-js";
+import { animate as animate3, motionValue as motionValue2 } from "motion";
+var _tmpl$11 = /* @__PURE__ */ _$template3(`<input type=text class=dialkit-range-slider-input>`);
+var _tmpl$23 = /* @__PURE__ */ _$template3(`<div class=dialkit-range-slider-wrapper><div><div class=dialkit-range-slider-fill></div><div class=dialkit-range-slider-handle style=transform:translateY(-50%);opacity:0.35></div><div class=dialkit-range-slider-handle style=transform:translateY(-50%);opacity:0.35></div><span class=dialkit-range-slider-label>`);
+var _tmpl$33 = /* @__PURE__ */ _$template3(`<span class=dialkit-range-slider-value><span class=dialkit-range-slider-bound></span><span class=dialkit-range-slider-dash>\u2013</span><span class=dialkit-range-slider-bound>`);
+var CLICK_THRESHOLD2 = 3;
+var HANDLE_HIT_PX = 12;
+function RangeSlider(props) {
+  const min = () => props.min ?? 0;
+  const max = () => props.max ?? 1;
+  const step = () => props.step ?? 0.01;
+  let wrapperRef;
+  let trackRef;
+  let fillRef;
+  let lowHandleRef;
+  let highHandleRef;
+  let inputRef;
+  const [isInteracting, setIsInteracting] = createSignal5(false);
+  const [isDragging, setIsDragging] = createSignal5(false);
+  const [isHovered, setIsHovered] = createSignal5(false);
+  const [editing, setEditing] = createSignal5(null);
+  const [inputValue, setInputValue] = createSignal5("");
+  const [dragTarget, setDragTarget] = createSignal5(null);
+  const value = () => isInteracting() ? props.value : clampRange(props.value, min(), max());
+  const span = () => max() - min();
+  const lowPercent = () => span() === 0 ? 0 : (value().min - min()) / span() * 100;
+  const highPercent = () => span() === 0 ? 0 : (value().max - min()) / span() * 100;
+  const isActive = () => isInteracting() || isHovered();
+  const lowMotion = motionValue2(lowPercent());
+  const highMotion = motionValue2(highPercent());
+  const applyFillStyles = () => {
+    const lo = lowMotion.get();
+    const hi = highMotion.get();
+    if (fillRef) {
+      fillRef.style.left = `${lo}%`;
+      fillRef.style.width = `${Math.max(0, hi - lo)}%`;
+    }
+    const handles = handleLeftStyles(lo, hi);
+    if (lowHandleRef) lowHandleRef.style.left = handles.low;
+    if (highHandleRef) highHandleRef.style.left = handles.high;
+  };
+  let pointerDownPos = null;
+  let isClickFlag = true;
+  let clickMoves = false;
+  let wrapperRect = null;
+  let scaleVal = 1;
+  let dragStartValue = props.value;
+  let dragStartValueAt = 0;
+  let lowSnapAnim = null;
+  let highSnapAnim = null;
+  const stopSnaps = () => {
+    lowSnapAnim?.stop();
+    highSnapAnim?.stop();
+    lowSnapAnim = null;
+    highSnapAnim = null;
+  };
+  let lowOpacityAnim = null;
+  let highOpacityAnim = null;
+  const positionToValue = (clientX) => {
+    if (!wrapperRect) return value().min;
+    const screenX = clientX - wrapperRect.left;
+    const sceneX = screenX / scaleVal;
+    const nativeWidth = wrapperRef ? wrapperRef.offsetWidth : wrapperRect.width;
+    const percent = Math.max(0, Math.min(1, sceneX / nativeWidth));
+    const rawValue = min() + percent * (max() - min());
+    return Math.max(min(), Math.min(max(), rawValue));
+  };
+  const percentFromValue = (v) => span() === 0 ? 0 : (v - min()) / span() * 100;
+  const syncMotion = (next) => {
+    lowMotion.jump(percentFromValue(next.min));
+    highMotion.jump(percentFromValue(next.max));
+  };
+  createEffect3(() => {
+    if (!isInteracting() && !lowSnapAnim && !highSnapAnim) {
+      lowMotion.jump(lowPercent());
+      highMotion.jump(highPercent());
+    }
+  });
+  const handlePointerDown = (e) => {
+    if (editing()) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    pointerDownPos = {
+      x: e.clientX,
+      y: e.clientY
+    };
+    isClickFlag = true;
+    setIsInteracting(true);
+    if (wrapperRef) {
+      wrapperRect = wrapperRef.getBoundingClientRect();
+      scaleVal = wrapperRect.width / wrapperRef.offsetWidth;
+    }
+    const current = clampRange(props.value, min(), max());
+    const atValue = positionToValue(e.clientX);
+    const trackW = wrapperRef?.offsetWidth ?? 1;
+    const hitV = HANDLE_HIT_PX / trackW * (max() - min());
+    const target = pickDragTarget(atValue, current, hitV);
+    setDragTarget(target);
+    clickMoves = target !== "span" && isOutsideSpan(atValue, current);
+    dragStartValue = current;
+    dragStartValueAt = atValue;
+  };
+  const handlePointerMove = (e) => {
+    if (!isInteracting() || !pointerDownPos) return;
+    const dx = e.clientX - pointerDownPos.x;
+    const dy = e.clientY - pointerDownPos.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    if (isClickFlag && distance > CLICK_THRESHOLD2) {
+      isClickFlag = false;
+      setIsDragging(true);
+    }
+    if (isClickFlag) return;
+    const raw = roundValue(positionToValue(e.clientX), step());
+    const target = dragTarget();
+    const current = value();
+    let next;
+    if (target === "span") {
+      const delta = raw - roundValue(dragStartValueAt, step());
+      next = shiftSpan(delta, dragStartValue, min(), max());
+    } else if (target === "min") {
+      next = setLow(raw, current, min());
+    } else {
+      next = setHigh(raw, current, max());
+    }
+    stopSnaps();
+    syncMotion(next);
+    props.onChange(next);
+  };
+  const handlePointerUp = (e) => {
+    if (!isInteracting()) return;
+    if (isClickFlag && clickMoves) {
+      const raw = roundValue(positionToValue(e.clientX), step());
+      const current = value();
+      const which = dragTarget() ?? nearestHandle(raw, current);
+      const next = which === "min" ? setLow(raw, current, min()) : setHigh(raw, current, max());
+      const handleMotion = which === "min" ? lowMotion : highMotion;
+      const targetPct = percentFromValue(which === "min" ? next.min : next.max);
+      stopSnaps();
+      const anim = animate3(handleMotion, targetPct, {
+        type: "spring",
+        stiffness: 300,
+        damping: 25,
+        mass: 0.8,
+        onComplete: () => {
+          if (which === "min") lowSnapAnim = null;
+          else highSnapAnim = null;
+        }
+      });
+      if (which === "min") lowSnapAnim = anim;
+      else highSnapAnim = anim;
+      props.onChange(next);
+    }
+    setIsInteracting(false);
+    setIsDragging(false);
+    pointerDownPos = null;
+    setDragTarget(null);
+  };
+  const handlePointerCancel = () => {
+    if (!isInteracting()) return;
+    setIsInteracting(false);
+    setIsDragging(false);
+    pointerDownPos = null;
+    setDragTarget(null);
+  };
+  const handleDoubleClick = () => {
+    if (editing() !== null) return;
+    const d = clampRange(props.defaultValue ?? {
+      min: min(),
+      max: max()
+    }, min(), max());
+    stopSnaps();
+    lowSnapAnim = animate3(lowMotion, percentFromValue(d.min), {
+      type: "spring",
+      stiffness: 300,
+      damping: 25,
+      mass: 0.8,
+      onComplete: () => {
+        lowSnapAnim = null;
+      }
+    });
+    highSnapAnim = animate3(highMotion, percentFromValue(d.max), {
+      type: "spring",
+      stiffness: 300,
+      damping: 25,
+      mass: 0.8,
+      onComplete: () => {
+        highSnapAnim = null;
+      }
+    });
+    props.onChange(d);
+  };
+  const restOpacity = 0.35;
+  const lowOpacityMv = motionValue2(restOpacity);
+  const highOpacityMv = motionValue2(restOpacity);
+  const applyLowHandleOpacity = () => {
+    if (lowHandleRef) lowHandleRef.style.opacity = String(lowOpacityMv.get());
+  };
+  const applyHighHandleOpacity = () => {
+    if (highHandleRef) highHandleRef.style.opacity = String(highOpacityMv.get());
+  };
+  createEffect3(() => {
+    const active = isActive();
+    const dragging = isDragging();
+    const target = dragTarget();
+    const lowTarget = !active ? restOpacity : dragging && target === "min" ? 0.95 : 0.7;
+    const highTarget = !active ? restOpacity : dragging && target === "max" ? 0.95 : 0.7;
+    lowOpacityAnim?.stop();
+    highOpacityAnim?.stop();
+    lowOpacityAnim = animate3(lowOpacityMv, lowTarget, {
+      duration: 0.15
+    });
+    highOpacityAnim = animate3(highOpacityMv, highTarget, {
+      duration: 0.15
+    });
+  });
+  onMount4(() => {
+    const unsubLow = lowMotion.on("change", applyFillStyles);
+    const unsubHigh = highMotion.on("change", applyFillStyles);
+    const unsubLowOpacity = lowOpacityMv.on("change", applyLowHandleOpacity);
+    const unsubHighOpacity = highOpacityMv.on("change", applyHighHandleOpacity);
+    applyFillStyles();
+    applyLowHandleOpacity();
+    applyHighHandleOpacity();
+    onCleanup5(() => {
+      unsubLow();
+      unsubHigh();
+      unsubLowOpacity();
+      unsubHighOpacity();
+    });
+  });
+  onCleanup5(() => {
+    stopSnaps();
+    lowOpacityAnim?.stop();
+    highOpacityAnim?.stop();
+  });
+  createEffect3(() => {
+    if (editing() && inputRef) {
+      inputRef.focus();
+      inputRef.select();
+    }
+  });
+  const decimals = () => decimalsForStep(step());
+  const openEditor = (which) => {
+    setEditing(which);
+    setInputValue((which === "min" ? value().min : value().max).toFixed(decimals()));
+  };
+  const commitEditor = () => {
+    const which = editing();
+    if (!which) return;
+    const parsed = parseFloat(inputValue());
+    if (!isNaN(parsed)) {
+      const rounded = roundValue(parsed, step());
+      const current = value();
+      const next = which === "min" ? setLow(rounded, current, min()) : setHigh(rounded, current, max());
+      props.onChange(next);
+    }
+    setEditing(null);
+  };
+  const handleInputKeyDown = (e) => {
+    if (e.key === "Enter") commitEditor();
+    else if (e.key === "Escape") setEditing(null);
+  };
+  const lowText = () => value().min.toFixed(decimals());
+  const highText = () => value().max.toFixed(decimals());
+  return (() => {
+    var _el$ = _tmpl$23(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.nextSibling, _el$6 = _el$5.nextSibling;
+    var _ref$ = wrapperRef;
+    typeof _ref$ === "function" ? _$use3(_ref$, _el$) : wrapperRef = _el$;
+    _el$2.addEventListener("mouseleave", () => setIsHovered(false));
+    _el$2.addEventListener("mouseenter", () => setIsHovered(true));
+    _el$2.$$dblclick = handleDoubleClick;
+    _el$2.addEventListener("pointercancel", handlePointerCancel);
+    _el$2.$$pointerup = handlePointerUp;
+    _el$2.$$pointermove = handlePointerMove;
+    _el$2.$$pointerdown = handlePointerDown;
+    var _ref$2 = trackRef;
+    typeof _ref$2 === "function" ? _$use3(_ref$2, _el$2) : trackRef = _el$2;
+    var _ref$3 = fillRef;
+    typeof _ref$3 === "function" ? _$use3(_ref$3, _el$3) : fillRef = _el$3;
+    var _ref$4 = lowHandleRef;
+    typeof _ref$4 === "function" ? _$use3(_ref$4, _el$4) : lowHandleRef = _el$4;
+    var _ref$5 = highHandleRef;
+    typeof _ref$5 === "function" ? _$use3(_ref$5, _el$5) : highHandleRef = _el$5;
+    _$insert3(_el$6, () => props.label);
+    _$insert3(_el$2, _$createComponent4(Show3, {
+      get when() {
+        return editing() !== null;
+      },
+      get fallback() {
+        return (() => {
+          var _el$8 = _tmpl$33(), _el$9 = _el$8.firstChild, _el$0 = _el$9.nextSibling, _el$1 = _el$0.nextSibling;
+          _el$9.$$pointerdown = (e) => e.stopPropagation();
+          _el$9.$$click = (e) => {
+            e.stopPropagation();
+            openEditor("min");
+          };
+          _$insert3(_el$9, lowText);
+          _el$1.$$pointerdown = (e) => e.stopPropagation();
+          _el$1.$$click = (e) => {
+            e.stopPropagation();
+            openEditor("max");
+          };
+          _$insert3(_el$1, highText);
+          return _el$8;
+        })();
+      },
+      get children() {
+        var _el$7 = _tmpl$11();
+        _el$7.$$pointerdown = (e) => e.stopPropagation();
+        _el$7.$$click = (e) => e.stopPropagation();
+        _el$7.addEventListener("blur", commitEditor);
+        _el$7.$$keydown = handleInputKeyDown;
+        _el$7.$$input = (e) => setInputValue(e.currentTarget.value);
+        var _ref$6 = inputRef;
+        typeof _ref$6 === "function" ? _$use3(_ref$6, _el$7) : inputRef = _el$7;
+        _$effect3(() => _el$7.value = inputValue());
+        return _el$7;
+      }
+    }), null);
+    _$effect3((_p$) => {
+      var _v$ = `dialkit-range-slider ${isActive() ? "dialkit-range-slider-active" : ""}`, _v$2 = `${lowPercent()}%`, _v$3 = `${Math.max(0, highPercent() - lowPercent())}%`, _v$4 = handleLeftStyles(lowPercent(), highPercent()).low, _v$5 = handleLeftStyles(lowPercent(), highPercent()).high;
+      _v$ !== _p$.e && _$className3(_el$2, _p$.e = _v$);
+      _v$2 !== _p$.t && _$setStyleProperty2(_el$3, "left", _p$.t = _v$2);
+      _v$3 !== _p$.a && _$setStyleProperty2(_el$3, "width", _p$.a = _v$3);
+      _v$4 !== _p$.o && _$setStyleProperty2(_el$4, "left", _p$.o = _v$4);
+      _v$5 !== _p$.i && _$setStyleProperty2(_el$5, "left", _p$.i = _v$5);
+      return _p$;
+    }, {
+      e: void 0,
+      t: void 0,
+      a: void 0,
+      o: void 0,
+      i: void 0
+    });
+    return _el$;
+  })();
+}
+_$delegateEvents3(["pointerdown", "pointermove", "pointerup", "dblclick", "input", "keydown", "click"]);
+
+// src/solid/components/Toggle.tsx
+import { template as _$template5 } from "solid-js/web";
+import { memo as _$memo3 } from "solid-js/web";
+import { createComponent as _$createComponent6 } from "solid-js/web";
+import { className as _$className4 } from "solid-js/web";
+import { effect as _$effect5 } from "solid-js/web";
+import { insert as _$insert5 } from "solid-js/web";
+import { Show as Show5 } from "solid-js";
+
+// src/solid/components/SegmentedControl.tsx
+import { template as _$template4 } from "solid-js/web";
+import { delegateEvents as _$delegateEvents4 } from "solid-js/web";
+import { setAttribute as _$setAttribute2 } from "solid-js/web";
+import { setStyleProperty as _$setStyleProperty3 } from "solid-js/web";
+import { effect as _$effect4 } from "solid-js/web";
+import { insert as _$insert4 } from "solid-js/web";
+import { createComponent as _$createComponent5 } from "solid-js/web";
+import { use as _$use4 } from "solid-js/web";
+import { createSignal as createSignal6, createEffect as createEffect4, For, Show as Show4 } from "solid-js";
+var _tmpl$12 = /* @__PURE__ */ _$template4(`<div class=dialkit-segmented>`);
+var _tmpl$24 = /* @__PURE__ */ _$template4(`<div class=dialkit-segmented-pill>`);
+var _tmpl$34 = /* @__PURE__ */ _$template4(`<button class=dialkit-segmented-button>`);
 function SegmentedControl(props) {
   let containerRef;
   let hasAnimated = false;
-  const [pillStyle, setPillStyle] = createSignal5(null);
+  const [pillStyle, setPillStyle] = createSignal6(null);
   const measure = () => {
     if (!containerRef) return;
     const activeButton = containerRef.querySelector('[data-active="true"]');
@@ -2099,7 +2524,7 @@ function SegmentedControl(props) {
       width: activeButton.offsetWidth
     });
   };
-  createEffect3(() => {
+  createEffect4(() => {
     void props.value;
     void props.options.length;
     measure();
@@ -2113,20 +2538,20 @@ function SegmentedControl(props) {
     return "left 0.2s cubic-bezier(0.25, 1, 0.5, 1), width 0.2s cubic-bezier(0.25, 1, 0.5, 1)";
   };
   return (() => {
-    var _el$ = _tmpl$11();
+    var _el$ = _tmpl$12();
     var _ref$ = containerRef;
-    typeof _ref$ === "function" ? _$use3(_ref$, _el$) : containerRef = _el$;
-    _$insert3(_el$, _$createComponent4(Show3, {
+    typeof _ref$ === "function" ? _$use4(_ref$, _el$) : containerRef = _el$;
+    _$insert4(_el$, _$createComponent5(Show4, {
       get when() {
         return pillStyle();
       },
       children: (style) => (() => {
-        var _el$2 = _tmpl$23();
-        _$effect3((_p$) => {
+        var _el$2 = _tmpl$24();
+        _$effect4((_p$) => {
           var _v$ = `${style().left}px`, _v$2 = `${style().width}px`, _v$3 = transition();
-          _v$ !== _p$.e && _$setStyleProperty2(_el$2, "left", _p$.e = _v$);
-          _v$2 !== _p$.t && _$setStyleProperty2(_el$2, "width", _p$.t = _v$2);
-          _v$3 !== _p$.a && _$setStyleProperty2(_el$2, "transition", _p$.a = _v$3);
+          _v$ !== _p$.e && _$setStyleProperty3(_el$2, "left", _p$.e = _v$);
+          _v$2 !== _p$.t && _$setStyleProperty3(_el$2, "width", _p$.t = _v$2);
+          _v$3 !== _p$.a && _$setStyleProperty3(_el$2, "transition", _p$.a = _v$3);
           return _p$;
         }, {
           e: void 0,
@@ -2136,42 +2561,42 @@ function SegmentedControl(props) {
         return _el$2;
       })()
     }), null);
-    _$insert3(_el$, _$createComponent4(For, {
+    _$insert4(_el$, _$createComponent5(For, {
       get each() {
         return props.options;
       },
       children: (option) => (() => {
-        var _el$3 = _tmpl$33();
+        var _el$3 = _tmpl$34();
         _el$3.$$click = () => props.onChange(option.value);
-        _$insert3(_el$3, () => option.label);
-        _$effect3(() => _$setAttribute2(_el$3, "data-active", String(props.value === option.value)));
+        _$insert4(_el$3, () => option.label);
+        _$effect4(() => _$setAttribute2(_el$3, "data-active", String(props.value === option.value)));
         return _el$3;
       })()
     }), null);
     return _el$;
   })();
 }
-_$delegateEvents3(["click"]);
+_$delegateEvents4(["click"]);
 
 // src/solid/components/Toggle.tsx
-var _tmpl$12 = /* @__PURE__ */ _$template4(`<span>`);
-var _tmpl$24 = /* @__PURE__ */ _$template4(`<div class=dialkit-labeled-control><span class=dialkit-labeled-control-label>`);
+var _tmpl$13 = /* @__PURE__ */ _$template5(`<span>`);
+var _tmpl$25 = /* @__PURE__ */ _$template5(`<div class=dialkit-labeled-control><span class=dialkit-labeled-control-label>`);
 function Toggle(props) {
   return (() => {
-    var _el$ = _tmpl$24(), _el$2 = _el$.firstChild;
-    _$insert4(_el$2, () => props.label, null);
-    _$insert4(_el$2, _$createComponent5(Show4, {
+    var _el$ = _tmpl$25(), _el$2 = _el$.firstChild;
+    _$insert5(_el$2, () => props.label, null);
+    _$insert5(_el$2, _$createComponent6(Show5, {
       get when() {
         return props.shortcut;
       },
       get children() {
-        var _el$3 = _tmpl$12();
-        _$insert4(_el$3, () => formatToggleShortcut(props.shortcut));
-        _$effect4(() => _$className3(_el$3, `dialkit-shortcut-pill${props.shortcutActive ? " dialkit-shortcut-pill-active" : ""}`));
+        var _el$3 = _tmpl$13();
+        _$insert5(_el$3, () => formatToggleShortcut(props.shortcut));
+        _$effect5(() => _$className4(_el$3, `dialkit-shortcut-pill${props.shortcutActive ? " dialkit-shortcut-pill-active" : ""}`));
         return _el$3;
       }
     }), null);
-    _$insert4(_el$, _$createComponent5(SegmentedControl, {
+    _$insert5(_el$, _$createComponent6(SegmentedControl, {
       options: [{
         value: "off",
         label: "Off"
@@ -2189,20 +2614,20 @@ function Toggle(props) {
 }
 
 // src/solid/components/SpringControl.tsx
-import { template as _$template6 } from "solid-js/web";
+import { template as _$template7 } from "solid-js/web";
 import { memo as _$memo4 } from "solid-js/web";
-import { insert as _$insert6 } from "solid-js/web";
-import { createComponent as _$createComponent6 } from "solid-js/web";
-import { createSignal as createSignal6, onMount as onMount4, onCleanup as onCleanup5 } from "solid-js";
+import { insert as _$insert7 } from "solid-js/web";
+import { createComponent as _$createComponent7 } from "solid-js/web";
+import { createSignal as createSignal7, onMount as onMount5, onCleanup as onCleanup6 } from "solid-js";
 
 // src/solid/components/SpringVisualization.tsx
-import { template as _$template5 } from "solid-js/web";
-import { effect as _$effect5 } from "solid-js/web";
-import { insert as _$insert5 } from "solid-js/web";
+import { template as _$template6 } from "solid-js/web";
+import { effect as _$effect6 } from "solid-js/web";
+import { insert as _$insert6 } from "solid-js/web";
 import { setAttribute as _$setAttribute3 } from "solid-js/web";
-var _tmpl$13 = /* @__PURE__ */ _$template5(`<svg><line y1=0 y2=140 stroke="rgba(255, 255, 255, 0.08)"stroke-width=1></svg>`, false, true, false);
-var _tmpl$25 = /* @__PURE__ */ _$template5(`<svg><line x1=0 x2=256 stroke="rgba(255, 255, 255, 0.08)"stroke-width=1></svg>`, false, true, false);
-var _tmpl$34 = /* @__PURE__ */ _$template5(`<svg viewBox="0 0 256 140"class=dialkit-spring-viz><line x1=0 y1=70 x2=256 y2=70 stroke="rgba(255, 255, 255, 0.15)"stroke-width=1 stroke-dasharray=4,4></line><path fill=none stroke="rgba(255, 255, 255, 0.6)"stroke-width=2 stroke-linecap=round stroke-linejoin=round>`);
+var _tmpl$14 = /* @__PURE__ */ _$template6(`<svg><line y1=0 y2=140 stroke="rgba(255, 255, 255, 0.08)"stroke-width=1></svg>`, false, true, false);
+var _tmpl$26 = /* @__PURE__ */ _$template6(`<svg><line x1=0 x2=256 stroke="rgba(255, 255, 255, 0.08)"stroke-width=1></svg>`, false, true, false);
+var _tmpl$35 = /* @__PURE__ */ _$template6(`<svg viewBox="0 0 256 140"class=dialkit-spring-viz><line x1=0 y1=70 x2=256 y2=70 stroke="rgba(255, 255, 255, 0.15)"stroke-width=1 stroke-dasharray=4,4></line><path fill=none stroke="rgba(255, 255, 255, 0.6)"stroke-width=2 stroke-linecap=round stroke-linejoin=round>`);
 function generateSpringCurve(stiffness, damping, mass, duration) {
   const points = [];
   const steps = 100;
@@ -2260,12 +2685,12 @@ function SpringVisualization(props) {
       const x = width / 4 * i;
       const y = height / 4 * i;
       lines.push((() => {
-        var _el$ = _tmpl$13();
+        var _el$ = _tmpl$14();
         _$setAttribute3(_el$, "x1", x);
         _$setAttribute3(_el$, "x2", x);
         return _el$;
       })(), (() => {
-        var _el$2 = _tmpl$25();
+        var _el$2 = _tmpl$26();
         _$setAttribute3(_el$2, "y1", y);
         _$setAttribute3(_el$2, "y2", y);
         return _el$2;
@@ -2274,22 +2699,22 @@ function SpringVisualization(props) {
     return lines;
   };
   return (() => {
-    var _el$3 = _tmpl$34(), _el$4 = _el$3.firstChild, _el$5 = _el$4.nextSibling;
-    _$insert5(_el$3, gridLines, _el$4);
-    _$effect5(() => _$setAttribute3(_el$5, "d", params()));
+    var _el$3 = _tmpl$35(), _el$4 = _el$3.firstChild, _el$5 = _el$4.nextSibling;
+    _$insert6(_el$3, gridLines, _el$4);
+    _$effect6(() => _$setAttribute3(_el$5, "d", params()));
     return _el$3;
   })();
 }
 
 // src/solid/components/SpringControl.tsx
-var _tmpl$14 = /* @__PURE__ */ _$template6(`<div style=display:flex;flex-direction:column;gap:6px><div class=dialkit-labeled-control><span class=dialkit-labeled-control-label>Type`);
+var _tmpl$15 = /* @__PURE__ */ _$template7(`<div style=display:flex;flex-direction:column;gap:6px><div class=dialkit-labeled-control><span class=dialkit-labeled-control-label>Type`);
 function SpringControl(props) {
-  const [mode, setMode] = createSignal6(DialStore.getSpringMode(props.panelId, props.path));
-  onMount4(() => {
+  const [mode, setMode] = createSignal7(DialStore.getSpringMode(props.panelId, props.path));
+  onMount5(() => {
     const unsub = DialStore.subscribe(props.panelId, () => {
       setMode(DialStore.getSpringMode(props.panelId, props.path));
     });
-    onCleanup5(unsub);
+    onCleanup6(unsub);
   });
   const isSimpleMode = () => mode() === "simple";
   const cache2 = {
@@ -2342,14 +2767,14 @@ function SpringControl(props) {
       });
     }
   };
-  return _$createComponent6(Folder, {
+  return _$createComponent7(Folder, {
     get title() {
       return props.label;
     },
     defaultOpen: true,
     get children() {
-      var _el$ = _tmpl$14(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild;
-      _$insert6(_el$, _$createComponent6(SpringVisualization, {
+      var _el$ = _tmpl$15(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild;
+      _$insert7(_el$, _$createComponent7(SpringVisualization, {
         get spring() {
           return props.spring;
         },
@@ -2357,7 +2782,7 @@ function SpringControl(props) {
           return isSimpleMode();
         }
       }), _el$2);
-      _$insert6(_el$2, _$createComponent6(SegmentedControl, {
+      _$insert7(_el$2, _$createComponent7(SegmentedControl, {
         options: [{
           value: "simple",
           label: "Time"
@@ -2370,9 +2795,9 @@ function SpringControl(props) {
         },
         onChange: handleModeChange
       }), null);
-      _$insert6(_el$, (() => {
+      _$insert7(_el$, (() => {
         var _c$ = _$memo4(() => !!isSimpleMode());
-        return () => _c$() ? [_$createComponent6(Slider, {
+        return () => _c$() ? [_$createComponent7(Slider, {
           label: "Duration",
           get value() {
             return props.spring.visualDuration ?? 0.3;
@@ -2382,7 +2807,7 @@ function SpringControl(props) {
           max: 1,
           step: 0.05,
           unit: "s"
-        }), _$createComponent6(Slider, {
+        }), _$createComponent7(Slider, {
           label: "Bounce",
           get value() {
             return props.spring.bounce ?? 0.2;
@@ -2391,7 +2816,7 @@ function SpringControl(props) {
           min: 0,
           max: 1,
           step: 0.05
-        })] : [_$createComponent6(Slider, {
+        })] : [_$createComponent7(Slider, {
           label: "Stiffness",
           get value() {
             return props.spring.stiffness ?? 400;
@@ -2400,7 +2825,7 @@ function SpringControl(props) {
           min: 1,
           max: 1e3,
           step: 10
-        }), _$createComponent6(Slider, {
+        }), _$createComponent7(Slider, {
           label: "Damping",
           get value() {
             return props.spring.damping ?? 17;
@@ -2409,7 +2834,7 @@ function SpringControl(props) {
           min: 1,
           max: 100,
           step: 1
-        }), _$createComponent6(Slider, {
+        }), _$createComponent7(Slider, {
           label: "Mass",
           get value() {
             return props.spring.mass ?? 1;
@@ -2426,44 +2851,44 @@ function SpringControl(props) {
 }
 
 // src/solid/components/TextControl.tsx
-import { template as _$template7 } from "solid-js/web";
-import { delegateEvents as _$delegateEvents4 } from "solid-js/web";
-import { effect as _$effect6 } from "solid-js/web";
-import { insert as _$insert7 } from "solid-js/web";
+import { template as _$template8 } from "solid-js/web";
+import { delegateEvents as _$delegateEvents5 } from "solid-js/web";
+import { effect as _$effect7 } from "solid-js/web";
+import { insert as _$insert8 } from "solid-js/web";
 import { setAttribute as _$setAttribute4 } from "solid-js/web";
 import { createUniqueId as createUniqueId2 } from "solid-js";
-var _tmpl$15 = /* @__PURE__ */ _$template7(`<div class=dialkit-text-control><label class=dialkit-text-label></label><input type=text class=dialkit-text-input>`);
+var _tmpl$16 = /* @__PURE__ */ _$template8(`<div class=dialkit-text-control><label class=dialkit-text-label></label><input type=text class=dialkit-text-input>`);
 function TextControl(props) {
   const inputId = createUniqueId2();
   return (() => {
-    var _el$ = _tmpl$15(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling;
+    var _el$ = _tmpl$16(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling;
     _$setAttribute4(_el$2, "for", inputId);
-    _$insert7(_el$2, () => props.label);
+    _$insert8(_el$2, () => props.label);
     _el$3.$$input = (e) => props.onChange(e.currentTarget.value);
     _$setAttribute4(_el$3, "id", inputId);
-    _$effect6(() => _$setAttribute4(_el$3, "placeholder", props.placeholder));
-    _$effect6(() => _el$3.value = props.value);
+    _$effect7(() => _$setAttribute4(_el$3, "placeholder", props.placeholder));
+    _$effect7(() => _el$3.value = props.value);
     return _el$;
   })();
 }
-_$delegateEvents4(["input"]);
+_$delegateEvents5(["input"]);
 
 // src/solid/components/SelectControl.tsx
-import { template as _$template8 } from "solid-js/web";
-import { delegateEvents as _$delegateEvents5 } from "solid-js/web";
+import { template as _$template9 } from "solid-js/web";
+import { delegateEvents as _$delegateEvents6 } from "solid-js/web";
 import { style as _$style2 } from "solid-js/web";
-import { effect as _$effect7 } from "solid-js/web";
-import { createComponent as _$createComponent7 } from "solid-js/web";
+import { effect as _$effect8 } from "solid-js/web";
+import { createComponent as _$createComponent8 } from "solid-js/web";
 import { setAttribute as _$setAttribute5 } from "solid-js/web";
 import { memo as _$memo5 } from "solid-js/web";
-import { insert as _$insert8 } from "solid-js/web";
-import { use as _$use4 } from "solid-js/web";
-import { createSignal as createSignal7, createEffect as createEffect4, onMount as onMount5, onCleanup as onCleanup6, Show as Show5, For as For2 } from "solid-js";
+import { insert as _$insert9 } from "solid-js/web";
+import { use as _$use5 } from "solid-js/web";
+import { createSignal as createSignal8, createEffect as createEffect5, onMount as onMount6, onCleanup as onCleanup7, Show as Show6, For as For2 } from "solid-js";
 import { Portal } from "solid-js/web";
-import { animate as animate3 } from "motion";
-var _tmpl$16 = /* @__PURE__ */ _$template8(`<div class=dialkit-select-dropdown>`);
-var _tmpl$26 = /* @__PURE__ */ _$template8(`<div class=dialkit-select-row><button class=dialkit-select-trigger><span class=dialkit-select-label></span><div class=dialkit-select-right><span class=dialkit-select-value></span><svg class=dialkit-select-chevron viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
-var _tmpl$35 = /* @__PURE__ */ _$template8(`<button class=dialkit-select-option>`);
+import { animate as animate4 } from "motion";
+var _tmpl$17 = /* @__PURE__ */ _$template9(`<div class=dialkit-select-dropdown>`);
+var _tmpl$27 = /* @__PURE__ */ _$template9(`<div class=dialkit-select-row><button class=dialkit-select-trigger><span class=dialkit-select-label></span><div class=dialkit-select-right><span class=dialkit-select-value></span><svg class=dialkit-select-chevron viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
+var _tmpl$36 = /* @__PURE__ */ _$template9(`<button class=dialkit-select-option>`);
 function toTitleCase(s) {
   return s.replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -2474,10 +2899,10 @@ function normalizeOptions(options) {
   } : opt);
 }
 function SelectControl(props) {
-  const [isOpen, setIsOpen] = createSignal7(false);
-  const [mounted, setMounted] = createSignal7(false);
-  const [pos, setPos] = createSignal7(null);
-  const [portalTarget, setPortalTarget] = createSignal7(null);
+  const [isOpen, setIsOpen] = createSignal8(false);
+  const [mounted, setMounted] = createSignal8(false);
+  const [pos, setPos] = createSignal8(null);
+  const [portalTarget, setPortalTarget] = createSignal8(null);
   let triggerRef;
   let dropdownRef;
   let chevronRef;
@@ -2485,22 +2910,22 @@ function SelectControl(props) {
   let chevronAnim = null;
   const normalized = () => normalizeOptions(props.options);
   const selectedOption = () => normalized().find((o) => o.value === props.value);
-  onMount5(() => {
+  onMount6(() => {
     const root = triggerRef?.closest(".dialkit-root");
     setPortalTarget(root ?? document.body);
     if (chevronRef) {
       chevronRef.style.transform = `rotate(${isOpen() ? 180 : 0}deg)`;
     }
-    onCleanup6(() => {
+    onCleanup7(() => {
       closeAnim?.stop();
       chevronAnim?.stop();
     });
   });
-  createEffect4(() => {
+  createEffect5(() => {
     if (!chevronRef) return;
     const open = isOpen();
     chevronAnim?.stop();
-    chevronAnim = animate3(chevronRef, {
+    chevronAnim = animate4(chevronRef, {
       rotate: open ? 180 : 0
     }, {
       type: "spring",
@@ -2536,7 +2961,7 @@ function SelectControl(props) {
     }
     const above = pos()?.above ?? false;
     closeAnim?.stop();
-    closeAnim = animate3(dropdownRef, {
+    closeAnim = animate4(dropdownRef, {
       opacity: 0,
       y: above ? 8 : -8,
       scale: 0.95
@@ -2550,7 +2975,7 @@ function SelectControl(props) {
       }
     });
   };
-  createEffect4(() => {
+  createEffect5(() => {
     if (!isOpen()) return;
     const handleViewportChange = () => updatePos();
     const handleClick = (e) => {
@@ -2563,7 +2988,7 @@ function SelectControl(props) {
     document.addEventListener("mousedown", handleClick);
     window.addEventListener("resize", handleViewportChange);
     window.addEventListener("scroll", handleViewportChange, true);
-    onCleanup6(() => {
+    onCleanup7(() => {
       document.removeEventListener("mousedown", handleClick);
       window.removeEventListener("resize", handleViewportChange);
       window.removeEventListener("scroll", handleViewportChange, true);
@@ -2586,35 +3011,35 @@ function SelectControl(props) {
     };
   };
   return (() => {
-    var _el$ = _tmpl$26(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.firstChild;
+    var _el$ = _tmpl$27(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.firstChild;
     _el$2.$$click = () => isOpen() ? closeDropdown() : openDropdown();
     var _ref$ = triggerRef;
-    typeof _ref$ === "function" ? _$use4(_ref$, _el$2) : triggerRef = _el$2;
-    _$insert8(_el$3, () => props.label);
-    _$insert8(_el$5, () => selectedOption()?.label ?? props.value);
+    typeof _ref$ === "function" ? _$use5(_ref$, _el$2) : triggerRef = _el$2;
+    _$insert9(_el$3, () => props.label);
+    _$insert9(_el$5, () => selectedOption()?.label ?? props.value);
     var _ref$2 = chevronRef;
-    typeof _ref$2 === "function" ? _$use4(_ref$2, _el$6) : chevronRef = _el$6;
+    typeof _ref$2 === "function" ? _$use5(_ref$2, _el$6) : chevronRef = _el$6;
     _$setAttribute5(_el$7, "d", ICON_CHEVRON);
-    _$insert8(_el$, _$createComponent7(Show5, {
+    _$insert9(_el$, _$createComponent8(Show6, {
       get when() {
         return !!portalTarget();
       },
       get children() {
-        return _$createComponent7(Portal, {
+        return _$createComponent8(Portal, {
           get mount() {
             return portalTarget();
           },
           get children() {
-            return _$createComponent7(Show5, {
+            return _$createComponent8(Show6, {
               get when() {
                 return _$memo5(() => !!mounted())() && pos();
               },
               get children() {
-                var _el$8 = _tmpl$16();
-                _$use4((el) => {
+                var _el$8 = _tmpl$17();
+                _$use5((el) => {
                   dropdownRef = el;
                   const above = pos()?.above ?? false;
-                  animate3(el, {
+                  animate4(el, {
                     opacity: [0, 1],
                     y: [above ? 8 : -8, 0],
                     scale: [0.95, 1]
@@ -2624,22 +3049,22 @@ function SelectControl(props) {
                     bounce: 0
                   });
                 }, _el$8);
-                _$insert8(_el$8, _$createComponent7(For2, {
+                _$insert9(_el$8, _$createComponent8(For2, {
                   get each() {
                     return normalized();
                   },
                   children: (option) => (() => {
-                    var _el$9 = _tmpl$35();
+                    var _el$9 = _tmpl$36();
                     _el$9.$$click = () => {
                       props.onChange(option.value);
                       closeDropdown();
                     };
-                    _$insert8(_el$9, () => option.label);
-                    _$effect7(() => _$setAttribute5(_el$9, "data-selected", String(option.value === props.value)));
+                    _$insert9(_el$9, () => option.label);
+                    _$effect8(() => _$setAttribute5(_el$9, "data-selected", String(option.value === props.value)));
                     return _el$9;
                   })()
                 }));
-                _$effect7((_$p) => _$style2(_el$8, dropdownStyle(), _$p));
+                _$effect8((_$p) => _$style2(_el$8, dropdownStyle(), _$p));
                 return _el$8;
               }
             });
@@ -2647,40 +3072,40 @@ function SelectControl(props) {
         });
       }
     }), null);
-    _$effect7(() => _$setAttribute5(_el$2, "data-open", String(isOpen())));
+    _$effect8(() => _$setAttribute5(_el$2, "data-open", String(isOpen())));
     return _el$;
   })();
 }
-_$delegateEvents5(["click"]);
+_$delegateEvents6(["click"]);
 
 // src/solid/components/ColorControl.tsx
-import { template as _$template10 } from "solid-js/web";
-import { delegateEvents as _$delegateEvents7 } from "solid-js/web";
-import { setStyleProperty as _$setStyleProperty4 } from "solid-js/web";
+import { template as _$template11 } from "solid-js/web";
+import { delegateEvents as _$delegateEvents8 } from "solid-js/web";
+import { setStyleProperty as _$setStyleProperty5 } from "solid-js/web";
 import { style as _$style4 } from "solid-js/web";
 import { memo as _$memo7 } from "solid-js/web";
-import { createComponent as _$createComponent9 } from "solid-js/web";
+import { createComponent as _$createComponent10 } from "solid-js/web";
 import { setAttribute as _$setAttribute7 } from "solid-js/web";
-import { effect as _$effect9 } from "solid-js/web";
-import { use as _$use6 } from "solid-js/web";
-import { insert as _$insert10 } from "solid-js/web";
-import { createSignal as createSignal9, createEffect as createEffect6, onMount as onMount6, onCleanup as onCleanup8, Show as Show7 } from "solid-js";
+import { effect as _$effect10 } from "solid-js/web";
+import { use as _$use7 } from "solid-js/web";
+import { insert as _$insert11 } from "solid-js/web";
+import { createSignal as createSignal10, createEffect as createEffect7, onMount as onMount7, onCleanup as onCleanup9, Show as Show8 } from "solid-js";
 import { Portal as Portal2 } from "solid-js/web";
-import { animate as animate4 } from "motion";
+import { animate as animate5 } from "motion";
 
 // src/solid/components/ColorPickerPanel.tsx
-import { template as _$template9 } from "solid-js/web";
-import { delegateEvents as _$delegateEvents6 } from "solid-js/web";
+import { template as _$template10 } from "solid-js/web";
+import { delegateEvents as _$delegateEvents7 } from "solid-js/web";
 import { memo as _$memo6 } from "solid-js/web";
-import { createComponent as _$createComponent8 } from "solid-js/web";
-import { setStyleProperty as _$setStyleProperty3 } from "solid-js/web";
+import { createComponent as _$createComponent9 } from "solid-js/web";
+import { setStyleProperty as _$setStyleProperty4 } from "solid-js/web";
 import { addEventListener as _$addEventListener } from "solid-js/web";
-import { use as _$use5 } from "solid-js/web";
+import { use as _$use6 } from "solid-js/web";
 import { style as _$style3 } from "solid-js/web";
 import { setAttribute as _$setAttribute6 } from "solid-js/web";
-import { insert as _$insert9 } from "solid-js/web";
-import { effect as _$effect8 } from "solid-js/web";
-import { createSignal as createSignal8, createEffect as createEffect5, onCleanup as onCleanup7, Show as Show6, For as For3 } from "solid-js";
+import { insert as _$insert10 } from "solid-js/web";
+import { effect as _$effect9 } from "solid-js/web";
+import { createSignal as createSignal9, createEffect as createEffect6, onCleanup as onCleanup8, Show as Show7, For as For3 } from "solid-js";
 
 // src/color-palette-store.ts
 var cache = null;
@@ -2733,12 +3158,12 @@ function subscribePalette(cb) {
 }
 
 // src/solid/components/ColorPickerPanel.tsx
-var _tmpl$17 = /* @__PURE__ */ _$template9(`<label class=dialkit-color-field><input type=text inputmode=decimal><span class=dialkit-color-field-label>`);
-var _tmpl$27 = /* @__PURE__ */ _$template9(`<label class="dialkit-color-field dialkit-color-field-hex"><input type=text><span class=dialkit-color-field-label>HEX`);
-var _tmpl$36 = /* @__PURE__ */ _$template9(`<button class=dialkit-color-palette-slot>`);
-var _tmpl$43 = /* @__PURE__ */ _$template9(`<div class="dialkit-color-slider dialkit-color-alpha dialkit-checker"><div class=dialkit-color-alpha-gradient></div><div class=dialkit-color-slider-thumb>`);
-var _tmpl$52 = /* @__PURE__ */ _$template9(`<div class=dialkit-color-palette>`);
-var _tmpl$62 = /* @__PURE__ */ _$template9(`<div class=dialkit-color-picker><div class=dialkit-color-sv><div class=dialkit-color-sv-thumb></div></div><div class="dialkit-color-slider dialkit-color-hue"><div class=dialkit-color-slider-thumb></div></div><div class=dialkit-color-fields>`);
+var _tmpl$18 = /* @__PURE__ */ _$template10(`<label class=dialkit-color-field><input type=text inputmode=decimal><span class=dialkit-color-field-label>`);
+var _tmpl$28 = /* @__PURE__ */ _$template10(`<label class="dialkit-color-field dialkit-color-field-hex"><input type=text><span class=dialkit-color-field-label>HEX`);
+var _tmpl$37 = /* @__PURE__ */ _$template10(`<button class=dialkit-color-palette-slot>`);
+var _tmpl$43 = /* @__PURE__ */ _$template10(`<div class="dialkit-color-slider dialkit-color-alpha dialkit-checker"><div class=dialkit-color-alpha-gradient></div><div class=dialkit-color-slider-thumb>`);
+var _tmpl$52 = /* @__PURE__ */ _$template10(`<div class=dialkit-color-palette>`);
+var _tmpl$62 = /* @__PURE__ */ _$template10(`<div class=dialkit-color-picker><div class=dialkit-color-sv><div class=dialkit-color-sv-thumb></div></div><div class="dialkit-color-slider dialkit-color-hue"><div class=dialkit-color-slider-thumb></div></div><div class=dialkit-color-fields>`);
 var FORMAT_OPTIONS = [{
   value: "hex",
   label: "HEX"
@@ -2795,7 +3220,7 @@ function createAreaDrag(onPoint) {
   };
 }
 function ChannelField(props) {
-  const [draft, setDraft] = createSignal8(null);
+  const [draft, setDraft] = createSignal9(null);
   const display = () => draft() ?? String(props.value);
   const commit = () => {
     const d = draft();
@@ -2803,7 +3228,7 @@ function ChannelField(props) {
     setDraft(null);
   };
   return (() => {
-    var _el$ = _tmpl$17(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling;
+    var _el$ = _tmpl$18(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling;
     _el$2.$$keydown = (e) => {
       if (e.key === "Enter") {
         commit();
@@ -2820,13 +3245,13 @@ function ChannelField(props) {
       setDraft(String(props.value));
       e.currentTarget.select();
     });
-    _$insert9(_el$3, () => props.spec.label);
-    _$effect8(() => _el$2.value = display());
+    _$insert10(_el$3, () => props.spec.label);
+    _$effect9(() => _el$2.value = display());
     return _el$;
   })();
 }
 function HexField(props) {
-  const [draft, setDraft] = createSignal8(null);
+  const [draft, setDraft] = createSignal9(null);
   const commit = () => {
     const d = draft();
     if (d !== null) {
@@ -2836,7 +3261,7 @@ function HexField(props) {
     setDraft(null);
   };
   return (() => {
-    var _el$4 = _tmpl$27(), _el$5 = _el$4.firstChild;
+    var _el$4 = _tmpl$28(), _el$5 = _el$4.firstChild;
     _el$5.$$keydown = (e) => {
       if (e.key === "Enter") {
         commit();
@@ -2854,12 +3279,12 @@ function HexField(props) {
       e.currentTarget.select();
     });
     _$setAttribute6(_el$5, "spellcheck", false);
-    _$effect8(() => _el$5.value = (draft() ?? props.value).toUpperCase());
+    _$effect9(() => _el$5.value = (draft() ?? props.value).toUpperCase());
     return _el$4;
   })();
 }
 function PaletteSlot(props) {
-  const [holding, setHolding] = createSignal8(false);
+  const [holding, setHolding] = createSignal9(false);
   let timer = null;
   let origin = null;
   let fired = false;
@@ -2869,9 +3294,9 @@ function PaletteSlot(props) {
     origin = null;
     setHolding(false);
   };
-  onCleanup7(cancelHold);
+  onCleanup8(cancelHold);
   return (() => {
-    var _el$6 = _tmpl$36();
+    var _el$6 = _tmpl$37();
     _el$6.$$click = () => {
       if (fired) {
         fired = false;
@@ -2904,7 +3329,7 @@ function PaletteSlot(props) {
       }, LONG_PRESS_MS);
     };
     _el$6.$$contextmenu = (e) => e.preventDefault();
-    _$effect8((_p$) => {
+    _$effect9((_p$) => {
       var _v$ = String(props.color !== null), _v$2 = String(holding()), _v$3 = props.color ? {
         "--swatch-color": props.color
       } : void 0, _v$4 = props.color ? `${props.color.toUpperCase()} \u2014 click to apply, hold to clear` : "Save current color";
@@ -2926,20 +3351,20 @@ function ColorPickerPanel(props) {
   const alpha = () => props.alpha ?? false;
   const palette = () => props.palette ?? false;
   const initialRgba = parseHex(props.value);
-  const [hsva, setHsva] = createSignal8(initialRgba ? rgbToHsv(initialRgba) : BLACK);
-  const [format, setFormat] = createSignal8(stickyFormat);
-  const [slots, setSlots] = createSignal8(props.palette ? loadPalette() : emptyPalette());
+  const [hsva, setHsva] = createSignal9(initialRgba ? rgbToHsv(initialRgba) : BLACK);
+  const [format, setFormat] = createSignal9(stickyFormat);
+  const [slots, setSlots] = createSignal9(props.palette ? loadPalette() : emptyPalette());
   let lastEmitted = props.value;
-  createEffect5(() => {
+  createEffect6(() => {
     const value = props.value;
     if (value === lastEmitted) return;
     lastEmitted = value;
     const rgba2 = parseHex(value);
     if (rgba2) setHsva(rgbToHsv(rgba2));
   });
-  createEffect5(() => {
+  createEffect6(() => {
     if (!palette()) return;
-    onCleanup7(subscribePalette((s) => setSlots(s)));
+    onCleanup8(subscribePalette((s) => setSlots(s)));
   });
   const emit = (next) => {
     setHsva(next);
@@ -2989,14 +3414,14 @@ function ColorPickerPanel(props) {
     _$addEventListener(_el$8, "pointermove", svDrag.onPointerMove, true);
     _$addEventListener(_el$8, "pointerdown", svDrag.onPointerDown, true);
     var _ref$ = svDrag.ref;
-    typeof _ref$ === "function" ? _$use5(_ref$, _el$8) : svDrag.ref = _el$8;
+    typeof _ref$ === "function" ? _$use6(_ref$, _el$8) : svDrag.ref = _el$8;
     _$addEventListener(_el$0, "pointercancel", hueDrag.onPointerCancel);
     _$addEventListener(_el$0, "pointerup", hueDrag.onPointerUp, true);
     _$addEventListener(_el$0, "pointermove", hueDrag.onPointerMove, true);
     _$addEventListener(_el$0, "pointerdown", hueDrag.onPointerDown, true);
     var _ref$2 = hueDrag.ref;
-    typeof _ref$2 === "function" ? _$use5(_ref$2, _el$0) : hueDrag.ref = _el$0;
-    _$insert9(_el$7, _$createComponent8(Show6, {
+    typeof _ref$2 === "function" ? _$use6(_ref$2, _el$0) : hueDrag.ref = _el$0;
+    _$insert10(_el$7, _$createComponent9(Show7, {
       get when() {
         return alpha();
       },
@@ -3007,13 +3432,13 @@ function ColorPickerPanel(props) {
         _$addEventListener(_el$10, "pointermove", alphaDrag.onPointerMove, true);
         _$addEventListener(_el$10, "pointerdown", alphaDrag.onPointerDown, true);
         var _ref$3 = alphaDrag.ref;
-        typeof _ref$3 === "function" ? _$use5(_ref$3, _el$10) : alphaDrag.ref = _el$10;
-        _$effect8((_p$) => {
+        typeof _ref$3 === "function" ? _$use6(_ref$3, _el$10) : alphaDrag.ref = _el$10;
+        _$effect9((_p$) => {
           var _v$5 = `linear-gradient(to right, transparent, ${opaqueHex()})`, _v$6 = `${hsva().a * 100}%`, _v$7 = opaqueHex(), _v$8 = Math.max(hsva().a, 0.15);
-          _v$5 !== _p$.e && _$setStyleProperty3(_el$11, "background", _p$.e = _v$5);
-          _v$6 !== _p$.t && _$setStyleProperty3(_el$12, "left", _p$.t = _v$6);
-          _v$7 !== _p$.a && _$setStyleProperty3(_el$12, "background", _p$.a = _v$7);
-          _v$8 !== _p$.o && _$setStyleProperty3(_el$12, "opacity", _p$.o = _v$8);
+          _v$5 !== _p$.e && _$setStyleProperty4(_el$11, "background", _p$.e = _v$5);
+          _v$6 !== _p$.t && _$setStyleProperty4(_el$12, "left", _p$.t = _v$6);
+          _v$7 !== _p$.a && _$setStyleProperty4(_el$12, "background", _p$.a = _v$7);
+          _v$8 !== _p$.o && _$setStyleProperty4(_el$12, "opacity", _p$.o = _v$8);
           return _p$;
         }, {
           e: void 0,
@@ -3024,7 +3449,7 @@ function ColorPickerPanel(props) {
         return _el$10;
       }
     }), _el$13);
-    _$insert9(_el$7, _$createComponent8(SegmentedControl, {
+    _$insert10(_el$7, _$createComponent9(SegmentedControl, {
       options: FORMAT_OPTIONS,
       get value() {
         return format();
@@ -3034,16 +3459,16 @@ function ColorPickerPanel(props) {
         setFormat(f);
       }
     }), _el$13);
-    _$insert9(_el$13, _$createComponent8(Show6, {
+    _$insert10(_el$13, _$createComponent9(Show7, {
       get when() {
         return format() === "hex";
       },
       get fallback() {
-        return _$createComponent8(For3, {
+        return _$createComponent9(For3, {
           get each() {
             return channelSpecs();
           },
-          children: (spec, i) => _$createComponent8(ChannelField, {
+          children: (spec, i) => _$createComponent9(ChannelField, {
             spec,
             get value() {
               return channelValues()[i()];
@@ -3053,7 +3478,7 @@ function ColorPickerPanel(props) {
         });
       },
       get children() {
-        return [_$createComponent8(HexField, {
+        return [_$createComponent9(HexField, {
           get value() {
             return currentHex();
           },
@@ -3061,12 +3486,12 @@ function ColorPickerPanel(props) {
             return alpha();
           },
           onCommit: applyHex
-        }), _$createComponent8(Show6, {
+        }), _$createComponent9(Show7, {
           get when() {
             return alpha();
           },
           get children() {
-            return _$createComponent8(ChannelField, {
+            return _$createComponent9(ChannelField, {
               spec: {
                 key: "a",
                 label: "A",
@@ -3087,19 +3512,19 @@ function ColorPickerPanel(props) {
         })];
       }
     }));
-    _$insert9(_el$7, _$createComponent8(Show6, {
+    _$insert10(_el$7, _$createComponent9(Show7, {
       get when() {
         return palette();
       },
       get children() {
         var _el$14 = _tmpl$52();
-        _$insert9(_el$14, _$createComponent8(For3, {
+        _$insert10(_el$14, _$createComponent9(For3, {
           get each() {
             return Array.from({
               length: PALETTE_SIZE
             }, (_, i) => i);
           },
-          children: (i) => _$createComponent8(PaletteSlot, {
+          children: (i) => _$createComponent9(PaletteSlot, {
             get color() {
               return slots()[i] ?? null;
             },
@@ -3114,14 +3539,14 @@ function ColorPickerPanel(props) {
         return _el$14;
       }
     }), null);
-    _$effect8((_p$) => {
+    _$effect9((_p$) => {
       var _v$9 = String(hsva().h), _v$0 = `${hsva().s * 100}%`, _v$1 = `${(1 - hsva().v) * 100}%`, _v$10 = opaqueHex(), _v$11 = `${hsva().h / 360 * 100}%`, _v$12 = `hsl(${hsva().h} 100% 50%)`, _v$13 = format();
-      _v$9 !== _p$.e && _$setStyleProperty3(_el$7, "--picker-hue", _p$.e = _v$9);
-      _v$0 !== _p$.t && _$setStyleProperty3(_el$9, "left", _p$.t = _v$0);
-      _v$1 !== _p$.a && _$setStyleProperty3(_el$9, "top", _p$.a = _v$1);
-      _v$10 !== _p$.o && _$setStyleProperty3(_el$9, "background", _p$.o = _v$10);
-      _v$11 !== _p$.i && _$setStyleProperty3(_el$1, "left", _p$.i = _v$11);
-      _v$12 !== _p$.n && _$setStyleProperty3(_el$1, "background", _p$.n = _v$12);
+      _v$9 !== _p$.e && _$setStyleProperty4(_el$7, "--picker-hue", _p$.e = _v$9);
+      _v$0 !== _p$.t && _$setStyleProperty4(_el$9, "left", _p$.t = _v$0);
+      _v$1 !== _p$.a && _$setStyleProperty4(_el$9, "top", _p$.a = _v$1);
+      _v$10 !== _p$.o && _$setStyleProperty4(_el$9, "background", _p$.o = _v$10);
+      _v$11 !== _p$.i && _$setStyleProperty4(_el$1, "left", _p$.i = _v$11);
+      _v$12 !== _p$.n && _$setStyleProperty4(_el$1, "background", _p$.n = _v$12);
       _v$13 !== _p$.s && _$setAttribute6(_el$13, "data-format", _p$.s = _v$13);
       return _p$;
     }, {
@@ -3136,15 +3561,15 @@ function ColorPickerPanel(props) {
     return _el$7;
   })();
 }
-_$delegateEvents6(["input", "keydown", "contextmenu", "pointerdown", "pointermove", "pointerup", "click"]);
+_$delegateEvents7(["input", "keydown", "contextmenu", "pointerdown", "pointermove", "pointerup", "click"]);
 
 // src/solid/components/ColorControl.tsx
-var _tmpl$18 = /* @__PURE__ */ _$template10(`<input type=text class=dialkit-color-hex-input>`);
-var _tmpl$28 = /* @__PURE__ */ _$template10(`<div class=dialkit-color-picker-popover>`);
-var _tmpl$37 = /* @__PURE__ */ _$template10(`<div class=dialkit-color-control><span class=dialkit-color-label></span><div class=dialkit-color-inputs><span class=dialkit-color-hex-wrap><span class=dialkit-color-hash aria-hidden=true>#</span></span><button class=dialkit-color-swatch title="Pick color">`);
-var _tmpl$44 = /* @__PURE__ */ _$template10(`<span class=dialkit-color-hex>`);
-var _tmpl$53 = /* @__PURE__ */ _$template10(`<span class=dialkit-color-divider aria-hidden=true>`);
-var _tmpl$63 = /* @__PURE__ */ _$template10(`<span class=dialkit-color-opacity> <span class=dialkit-color-opacity-unit>%`);
+var _tmpl$19 = /* @__PURE__ */ _$template11(`<input type=text class=dialkit-color-hex-input>`);
+var _tmpl$29 = /* @__PURE__ */ _$template11(`<div class=dialkit-color-picker-popover>`);
+var _tmpl$38 = /* @__PURE__ */ _$template11(`<div class=dialkit-color-control><span class=dialkit-color-label></span><div class=dialkit-color-inputs><span class=dialkit-color-hex-wrap><span class=dialkit-color-hash aria-hidden=true>#</span></span><button class=dialkit-color-swatch title="Pick color">`);
+var _tmpl$44 = /* @__PURE__ */ _$template11(`<span class=dialkit-color-hex>`);
+var _tmpl$53 = /* @__PURE__ */ _$template11(`<span class=dialkit-color-divider aria-hidden=true>`);
+var _tmpl$63 = /* @__PURE__ */ _$template11(`<span class=dialkit-color-opacity> <span class=dialkit-color-opacity-unit>%`);
 var PICKER_WIDTH = 240;
 var PICKER_BASE_HEIGHT = 270;
 var PICKER_ALPHA_HEIGHT = 22;
@@ -3152,26 +3577,26 @@ var PICKER_PALETTE_HEIGHT = 30;
 function ColorControl(props) {
   const alpha = () => props.alpha ?? false;
   const palette = () => props.palette ?? false;
-  const [isEditing, setIsEditing] = createSignal9(false);
-  const [editValue, setEditValue] = createSignal9(bareHex(props.value));
-  const [isOpen, setIsOpen] = createSignal9(false);
-  const [mounted, setMounted] = createSignal9(false);
-  const [pos, setPos] = createSignal9(null);
-  const [portalTarget, setPortalTarget] = createSignal9(null);
+  const [isEditing, setIsEditing] = createSignal10(false);
+  const [editValue, setEditValue] = createSignal10(bareHex(props.value));
+  const [isOpen, setIsOpen] = createSignal10(false);
+  const [mounted, setMounted] = createSignal10(false);
+  const [pos, setPos] = createSignal10(null);
+  const [portalTarget, setPortalTarget] = createSignal10(null);
   let swatchRef;
   let pickerRef;
   let closeAnim = null;
   const rgba = () => parseHex(props.value);
-  createEffect6(() => {
+  createEffect7(() => {
     const value = props.value;
     if (!isEditing()) {
       setEditValue(bareHex(value));
     }
   });
-  onMount6(() => {
+  onMount7(() => {
     const root = swatchRef?.closest(".dialkit-root");
     setPortalTarget(root ?? document.body);
-    onCleanup8(() => {
+    onCleanup9(() => {
       closeAnim?.stop();
     });
   });
@@ -3193,7 +3618,7 @@ function ColorControl(props) {
     closeAnim = null;
     updatePos();
     if (pickerRef) {
-      animate4(pickerRef, {
+      animate5(pickerRef, {
         opacity: 1,
         y: 0,
         scale: 1
@@ -3214,7 +3639,7 @@ function ColorControl(props) {
     }
     const above = pos()?.above ?? false;
     closeAnim?.stop();
-    closeAnim = animate4(pickerRef, {
+    closeAnim = animate5(pickerRef, {
       opacity: 0,
       y: above ? 8 : -8,
       scale: 0.95
@@ -3229,7 +3654,7 @@ function ColorControl(props) {
       }
     });
   };
-  createEffect6(() => {
+  createEffect7(() => {
     if (!isOpen()) return;
     const handleViewportChange = () => updatePos();
     const handleMouseDown = (e) => {
@@ -3248,7 +3673,7 @@ function ColorControl(props) {
     document.addEventListener("keydown", handleKeyDown2);
     window.addEventListener("resize", handleViewportChange);
     window.addEventListener("scroll", handleViewportChange, true);
-    onCleanup8(() => {
+    onCleanup9(() => {
       document.removeEventListener("mousedown", handleMouseDown);
       document.removeEventListener("keydown", handleKeyDown2);
       window.removeEventListener("resize", handleViewportChange);
@@ -3289,68 +3714,68 @@ function ColorControl(props) {
     };
   };
   return (() => {
-    var _el$ = _tmpl$37(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$4 = _el$3.firstChild, _el$5 = _el$4.firstChild, _el$7 = _el$4.nextSibling;
-    _$insert10(_el$2, () => props.label);
+    var _el$ = _tmpl$38(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$4 = _el$3.firstChild, _el$5 = _el$4.firstChild, _el$7 = _el$4.nextSibling;
+    _$insert11(_el$2, () => props.label);
     _el$4.$$click = () => setIsEditing(true);
-    _$insert10(_el$4, _$createComponent9(Show7, {
+    _$insert11(_el$4, _$createComponent10(Show8, {
       get when() {
         return isEditing();
       },
       get fallback() {
         return (() => {
           var _el$9 = _tmpl$44();
-          _$insert10(_el$9, () => bareHex(props.value));
-          _$effect9(() => _$setAttribute7(_el$9, "aria-label", `Hex color for ${props.label}`));
+          _$insert11(_el$9, () => bareHex(props.value));
+          _$effect10(() => _$setAttribute7(_el$9, "aria-label", `Hex color for ${props.label}`));
           return _el$9;
         })();
       },
       get children() {
-        var _el$6 = _tmpl$18();
+        var _el$6 = _tmpl$19();
         _el$6.$$keydown = handleKeyDown;
         _el$6.addEventListener("blur", handleTextSubmit);
         _el$6.$$input = (e) => setEditValue(e.currentTarget.value);
-        _$use6((el) => queueMicrotask(() => {
+        _$use7((el) => queueMicrotask(() => {
           el.focus();
           el.select();
         }), _el$6);
-        _$effect9(() => _$setAttribute7(_el$6, "aria-label", `Hex color for ${props.label}`));
-        _$effect9(() => _el$6.value = editValue());
+        _$effect10(() => _$setAttribute7(_el$6, "aria-label", `Hex color for ${props.label}`));
+        _$effect10(() => _el$6.value = editValue());
         return _el$6;
       }
     }), null);
-    _$insert10(_el$3, _$createComponent9(Show7, {
+    _$insert11(_el$3, _$createComponent10(Show8, {
       get when() {
         return _$memo7(() => !!alpha())() && rgba();
       },
       children: (r) => [_tmpl$53(), (() => {
         var _el$1 = _tmpl$63(), _el$10 = _el$1.firstChild;
-        _$insert10(_el$1, () => opacityPercent(r()), _el$10);
+        _$insert11(_el$1, () => opacityPercent(r()), _el$10);
         return _el$1;
       })()]
     }), _el$7);
     _el$7.$$click = () => isOpen() ? closePopover() : openPopover();
     var _ref$ = swatchRef;
-    typeof _ref$ === "function" ? _$use6(_ref$, _el$7) : swatchRef = _el$7;
-    _$insert10(_el$, _$createComponent9(Show7, {
+    typeof _ref$ === "function" ? _$use7(_ref$, _el$7) : swatchRef = _el$7;
+    _$insert11(_el$, _$createComponent10(Show8, {
       get when() {
         return !!portalTarget();
       },
       get children() {
-        return _$createComponent9(Portal2, {
+        return _$createComponent10(Portal2, {
           get mount() {
             return portalTarget();
           },
           get children() {
-            return _$createComponent9(Show7, {
+            return _$createComponent10(Show8, {
               get when() {
                 return _$memo7(() => !!mounted())() && pos();
               },
               get children() {
-                var _el$8 = _tmpl$28();
-                _$use6((el) => {
+                var _el$8 = _tmpl$29();
+                _$use7((el) => {
                   pickerRef = el;
                   const above = pos()?.above ?? false;
-                  animate4(el, {
+                  animate5(el, {
                     opacity: [0, 1],
                     y: [above ? 8 : -8, 0],
                     scale: [0.95, 1]
@@ -3360,7 +3785,7 @@ function ColorControl(props) {
                     bounce: 0
                   });
                 }, _el$8);
-                _$insert10(_el$8, _$createComponent9(ColorPickerPanel, {
+                _$insert11(_el$8, _$createComponent10(ColorPickerPanel, {
                   get value() {
                     return props.value;
                   },
@@ -3372,7 +3797,7 @@ function ColorControl(props) {
                     return palette();
                   }
                 }));
-                _$effect9((_$p) => _$style4(_el$8, popoverStyle(), _$p));
+                _$effect10((_$p) => _$style4(_el$8, popoverStyle(), _$p));
                 return _el$8;
               }
             });
@@ -3380,9 +3805,9 @@ function ColorControl(props) {
         });
       }
     }), null);
-    _$effect9((_p$) => {
+    _$effect10((_p$) => {
       var _v$ = props.value, _v$2 = String(isOpen()), _v$3 = `Pick color for ${props.label}`, _v$4 = isOpen();
-      _v$ !== _p$.e && _$setStyleProperty4(_el$7, "--swatch-color", _p$.e = _v$);
+      _v$ !== _p$.e && _$setStyleProperty5(_el$7, "--swatch-color", _p$.e = _v$);
       _v$2 !== _p$.t && _$setAttribute7(_el$7, "data-open", _p$.t = _v$2);
       _v$3 !== _p$.a && _$setAttribute7(_el$7, "aria-label", _p$.a = _v$3);
       _v$4 !== _p$.o && _$setAttribute7(_el$7, "aria-expanded", _p$.o = _v$4);
@@ -3396,33 +3821,33 @@ function ColorControl(props) {
     return _el$;
   })();
 }
-_$delegateEvents7(["click", "input", "keydown"]);
+_$delegateEvents8(["click", "input", "keydown"]);
 
 // src/solid/components/PresetManager.tsx
-import { template as _$template11 } from "solid-js/web";
-import { delegateEvents as _$delegateEvents8 } from "solid-js/web";
-import { setStyleProperty as _$setStyleProperty5 } from "solid-js/web";
-import { effect as _$effect10 } from "solid-js/web";
-import { createComponent as _$createComponent10 } from "solid-js/web";
+import { template as _$template12 } from "solid-js/web";
+import { delegateEvents as _$delegateEvents9 } from "solid-js/web";
+import { setStyleProperty as _$setStyleProperty6 } from "solid-js/web";
+import { effect as _$effect11 } from "solid-js/web";
+import { createComponent as _$createComponent11 } from "solid-js/web";
 import { setAttribute as _$setAttribute8 } from "solid-js/web";
-import { insert as _$insert11 } from "solid-js/web";
+import { insert as _$insert12 } from "solid-js/web";
 import { memo as _$memo8 } from "solid-js/web";
-import { use as _$use7 } from "solid-js/web";
-import { createSignal as createSignal10, createEffect as createEffect7, onMount as onMount7, onCleanup as onCleanup9, Show as Show8, For as For4 } from "solid-js";
+import { use as _$use8 } from "solid-js/web";
+import { createSignal as createSignal11, createEffect as createEffect8, onMount as onMount8, onCleanup as onCleanup10, Show as Show9, For as For4 } from "solid-js";
 import { Portal as Portal3 } from "solid-js/web";
-import { animate as animate5 } from "motion";
-var _tmpl$19 = /* @__PURE__ */ _$template11(`<div class="dialkit-root dialkit-preset-dropdown"style=position:fixed><div class=dialkit-preset-item><span class=dialkit-preset-name>Version 1`);
-var _tmpl$29 = /* @__PURE__ */ _$template11(`<div class=dialkit-preset-manager><button class=dialkit-preset-trigger><span class=dialkit-preset-label></span><svg class=dialkit-select-chevron viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
-var _tmpl$38 = /* @__PURE__ */ _$template11(`<div class=dialkit-preset-item><span class=dialkit-preset-name></span><button class=dialkit-preset-delete title="Delete preset"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round><path></path><path></path><path></path><path></path><path>`);
+import { animate as animate6 } from "motion";
+var _tmpl$20 = /* @__PURE__ */ _$template12(`<div class="dialkit-root dialkit-preset-dropdown"style=position:fixed><div class=dialkit-preset-item><span class=dialkit-preset-name>Version 1`);
+var _tmpl$210 = /* @__PURE__ */ _$template12(`<div class=dialkit-preset-manager><button class=dialkit-preset-trigger><span class=dialkit-preset-label></span><svg class=dialkit-select-chevron viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
+var _tmpl$39 = /* @__PURE__ */ _$template12(`<div class=dialkit-preset-item><span class=dialkit-preset-name></span><button class=dialkit-preset-delete title="Delete preset"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round><path></path><path></path><path></path><path></path><path>`);
 function PresetManager(props) {
-  const [isOpen, setIsOpen] = createSignal10(false);
-  const [mounted, setMounted] = createSignal10(false);
-  const [pos, setPos] = createSignal10({
+  const [isOpen, setIsOpen] = createSignal11(false);
+  const [mounted, setMounted] = createSignal11(false);
+  const [pos, setPos] = createSignal11({
     top: 0,
     left: 0,
     width: 0
   });
-  const [portalTarget, setPortalTarget] = createSignal10(null);
+  const [portalTarget, setPortalTarget] = createSignal11(null);
   let triggerRef;
   let dropdownRef;
   let chevronRef;
@@ -3430,24 +3855,24 @@ function PresetManager(props) {
   let chevronAnim = null;
   const hasPresets = () => props.presets.length > 0;
   const activePreset = () => props.presets.find((p) => p.id === props.activePresetId);
-  onMount7(() => {
+  onMount8(() => {
     const root = triggerRef?.closest(".dialkit-root");
     setPortalTarget(root ?? document.body);
     if (chevronRef) {
       chevronRef.style.transform = `rotate(${isOpen() ? 180 : 0}deg)`;
       chevronRef.style.opacity = String(hasPresets() ? 0.6 : 0.25);
     }
-    onCleanup9(() => {
+    onCleanup10(() => {
       closeAnim?.stop();
       chevronAnim?.stop();
     });
   });
-  createEffect7(() => {
+  createEffect8(() => {
     if (!chevronRef) return;
     const open = isOpen();
     const has = hasPresets();
     chevronAnim?.stop();
-    chevronAnim = animate5(chevronRef, {
+    chevronAnim = animate6(chevronRef, {
       rotate: open ? 180 : 0,
       opacity: has ? 0.6 : 0.25
     }, {
@@ -3480,7 +3905,7 @@ function PresetManager(props) {
       return;
     }
     closeAnim?.stop();
-    closeAnim = animate5(dropdownRef, {
+    closeAnim = animate6(dropdownRef, {
       opacity: 0,
       y: 4,
       scale: 0.97
@@ -3498,7 +3923,7 @@ function PresetManager(props) {
     if (isOpen()) closeDropdown();
     else openDropdown();
   };
-  createEffect7(() => {
+  createEffect8(() => {
     if (!isOpen()) return;
     const handleViewportChange = () => updatePos();
     const handler = (e) => {
@@ -3510,7 +3935,7 @@ function PresetManager(props) {
     document.addEventListener("mousedown", handler);
     window.addEventListener("resize", handleViewportChange);
     window.addEventListener("scroll", handleViewportChange, true);
-    onCleanup9(() => {
+    onCleanup10(() => {
       document.removeEventListener("mousedown", handler);
       window.removeEventListener("resize", handleViewportChange);
       window.removeEventListener("scroll", handleViewportChange, true);
@@ -3526,36 +3951,36 @@ function PresetManager(props) {
     DialStore.deletePreset(props.panelId, presetId);
   };
   return (() => {
-    var _el$ = _tmpl$29(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild;
+    var _el$ = _tmpl$210(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild;
     _el$2.$$click = toggle;
     var _ref$ = triggerRef;
-    typeof _ref$ === "function" ? _$use7(_ref$, _el$2) : triggerRef = _el$2;
-    _$insert11(_el$3, (() => {
+    typeof _ref$ === "function" ? _$use8(_ref$, _el$2) : triggerRef = _el$2;
+    _$insert12(_el$3, (() => {
       var _c$ = _$memo8(() => !!activePreset());
       return () => _c$() ? activePreset().name : "Version 1";
     })());
     var _ref$2 = chevronRef;
-    typeof _ref$2 === "function" ? _$use7(_ref$2, _el$4) : chevronRef = _el$4;
+    typeof _ref$2 === "function" ? _$use8(_ref$2, _el$4) : chevronRef = _el$4;
     _$setAttribute8(_el$5, "d", ICON_CHEVRON);
-    _$insert11(_el$, _$createComponent10(Show8, {
+    _$insert12(_el$, _$createComponent11(Show9, {
       get when() {
         return !!portalTarget();
       },
       get children() {
-        return _$createComponent10(Portal3, {
+        return _$createComponent11(Portal3, {
           get mount() {
             return portalTarget();
           },
           get children() {
-            return _$createComponent10(Show8, {
+            return _$createComponent11(Show9, {
               get when() {
                 return mounted();
               },
               get children() {
-                var _el$6 = _tmpl$19(), _el$7 = _el$6.firstChild;
-                _$use7((el) => {
+                var _el$6 = _tmpl$20(), _el$7 = _el$6.firstChild;
+                _$use8((el) => {
                   dropdownRef = el;
-                  animate5(el, {
+                  animate6(el, {
                     opacity: [0, 1],
                     y: [4, 0],
                     scale: [0.97, 1]
@@ -3566,16 +3991,16 @@ function PresetManager(props) {
                   });
                 }, _el$6);
                 _el$7.$$click = () => handleSelect(null);
-                _$insert11(_el$6, _$createComponent10(For4, {
+                _$insert12(_el$6, _$createComponent11(For4, {
                   get each() {
                     return props.presets;
                   },
                   children: (preset) => (() => {
-                    var _el$8 = _tmpl$38(), _el$9 = _el$8.firstChild, _el$0 = _el$9.nextSibling, _el$1 = _el$0.firstChild, _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$11.nextSibling, _el$13 = _el$12.nextSibling, _el$14 = _el$13.nextSibling;
+                    var _el$8 = _tmpl$39(), _el$9 = _el$8.firstChild, _el$0 = _el$9.nextSibling, _el$1 = _el$0.firstChild, _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$11.nextSibling, _el$13 = _el$12.nextSibling, _el$14 = _el$13.nextSibling;
                     _el$8.$$click = () => handleSelect(preset.id);
-                    _$insert11(_el$9, () => preset.name);
+                    _$insert12(_el$9, () => preset.name);
                     _el$0.$$click = (e) => handleDelete(e, preset.id);
-                    _$effect10((_p$) => {
+                    _$effect11((_p$) => {
                       var _v$8 = String(preset.id === props.activePresetId), _v$9 = ICON_TRASH[0], _v$0 = ICON_TRASH[1], _v$1 = ICON_TRASH[2], _v$10 = ICON_TRASH[3], _v$11 = ICON_TRASH[4];
                       _v$8 !== _p$.e && _$setAttribute8(_el$8, "data-active", _p$.e = _v$8);
                       _v$9 !== _p$.t && _$setAttribute8(_el$10, "d", _p$.t = _v$9);
@@ -3595,11 +4020,11 @@ function PresetManager(props) {
                     return _el$8;
                   })()
                 }), null);
-                _$effect10((_p$) => {
+                _$effect11((_p$) => {
                   var _v$ = `${pos().top}px`, _v$2 = `${pos().left}px`, _v$3 = `${pos().width}px`, _v$4 = String(!props.activePresetId);
-                  _v$ !== _p$.e && _$setStyleProperty5(_el$6, "top", _p$.e = _v$);
-                  _v$2 !== _p$.t && _$setStyleProperty5(_el$6, "left", _p$.t = _v$2);
-                  _v$3 !== _p$.a && _$setStyleProperty5(_el$6, "min-width", _p$.a = _v$3);
+                  _v$ !== _p$.e && _$setStyleProperty6(_el$6, "top", _p$.e = _v$);
+                  _v$2 !== _p$.t && _$setStyleProperty6(_el$6, "left", _p$.t = _v$2);
+                  _v$3 !== _p$.a && _$setStyleProperty6(_el$6, "min-width", _p$.a = _v$3);
                   _v$4 !== _p$.o && _$setAttribute8(_el$7, "data-active", _p$.o = _v$4);
                   return _p$;
                 }, {
@@ -3615,7 +4040,7 @@ function PresetManager(props) {
         });
       }
     }), null);
-    _$effect10((_p$) => {
+    _$effect11((_p$) => {
       var _v$5 = String(isOpen()), _v$6 = String(!!activePreset()), _v$7 = String(!hasPresets());
       _v$5 !== _p$.e && _$setAttribute8(_el$2, "data-open", _p$.e = _v$5);
       _v$6 !== _p$.t && _$setAttribute8(_el$2, "data-has-preset", _p$.t = _v$6);
@@ -3629,21 +4054,21 @@ function PresetManager(props) {
     return _el$;
   })();
 }
-_$delegateEvents8(["click"]);
+_$delegateEvents9(["click"]);
 
 // src/solid/components/Panel.tsx
-var _tmpl$20 = /* @__PURE__ */ _$template12(`<button class=dialkit-button>`);
-var _tmpl$210 = /* @__PURE__ */ _$template12(`<button class=dialkit-toolbar-add title="Add preset"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path></path><path></path><path></path><path></path><path>`);
-var _tmpl$39 = /* @__PURE__ */ _$template12(`<button class=dialkit-toolbar-copy title="Copy parameters"><span class=dialkit-toolbar-copy-icon-wrap><span class=dialkit-toolbar-copy-icon style=opacity:1;transform:scale(1);filter:blur(0px)><svg viewBox="0 0 24 24"fill=none width=16 height=16><path stroke=currentColor stroke-width=2 stroke-linejoin=round></path><path fill=currentColor></path><path stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round></path></svg></span><span class=dialkit-toolbar-copy-icon style=opacity:0;transform:scale(0.5);filter:blur(4px)><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round width=16 height=16><path></path></svg></span></span>Copy`);
-var _tmpl$45 = /* @__PURE__ */ _$template12(`<div class=dialkit-panel-wrapper>`);
+var _tmpl$21 = /* @__PURE__ */ _$template13(`<button class=dialkit-button>`);
+var _tmpl$211 = /* @__PURE__ */ _$template13(`<button class=dialkit-toolbar-add title="Add preset"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path></path><path></path><path></path><path></path><path>`);
+var _tmpl$310 = /* @__PURE__ */ _$template13(`<button class=dialkit-toolbar-copy title="Copy parameters"><span class=dialkit-toolbar-copy-icon-wrap><span class=dialkit-toolbar-copy-icon style=opacity:1;transform:scale(1);filter:blur(0px)><svg viewBox="0 0 24 24"fill=none width=16 height=16><path stroke=currentColor stroke-width=2 stroke-linejoin=round></path><path fill=currentColor></path><path stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round></path></svg></span><span class=dialkit-toolbar-copy-icon style=opacity:0;transform:scale(0.5);filter:blur(4px)><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round width=16 height=16><path></path></svg></span></span>Copy`);
+var _tmpl$45 = /* @__PURE__ */ _$template13(`<div class=dialkit-panel-wrapper>`);
 function Panel(props) {
-  const [copied, setCopied] = createSignal11(false);
-  const [isPanelOpen, setIsPanelOpen] = createSignal11(props.defaultOpen ?? true);
+  const [copied, setCopied] = createSignal12(false);
+  const [isPanelOpen, setIsPanelOpen] = createSignal12(props.defaultOpen ?? true);
   const shortcutCtx = useShortcutContext();
   const hasShortcuts = () => Object.keys(props.panel.shortcuts).length > 0;
-  const [values, setValues] = createSignal11(DialStore.getValues(props.panel.id));
-  const [presets, setPresets] = createSignal11(DialStore.getPresets(props.panel.id));
-  const [activePresetId, setActivePresetId] = createSignal11(DialStore.getActivePresetId(props.panel.id));
+  const [values, setValues] = createSignal12(DialStore.getValues(props.panel.id));
+  const [presets, setPresets] = createSignal12(DialStore.getPresets(props.panel.id));
+  const [activePresetId, setActivePresetId] = createSignal12(DialStore.getActivePresetId(props.panel.id));
   let addButtonRef;
   let copyButtonRef;
   let copyClipboardIconRef;
@@ -3658,7 +4083,7 @@ function Panel(props) {
     visualDuration: 0.15,
     bounce: 0.3
   };
-  onMount8(() => {
+  onMount9(() => {
     const unsub = DialStore.subscribe(props.panel.id, () => {
       setValues(DialStore.getValues(props.panel.id));
       setPresets(DialStore.getPresets(props.panel.id));
@@ -3675,7 +4100,7 @@ function Panel(props) {
       copyCheckIconRef.style.filter = "blur(4px)";
       didInitCopyIcons = true;
     }
-    onCleanup10(unsub);
+    onCleanup11(unsub);
   });
   const handleAddPreset = () => {
     const nextNum = presets().length + 2;
@@ -3694,7 +4119,7 @@ Apply these values as the new defaults in the createDialKit call.`;
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
-  createEffect8(() => {
+  createEffect9(() => {
     const isCopied = copied();
     if (!copyClipboardIconRef || !copyCheckIconRef) return;
     copyClipboardAnim?.stop();
@@ -3705,18 +4130,18 @@ Apply these values as the new defaults in the createDialKit call.`;
       visualDuration: 0.3,
       bounce: 0.2
     };
-    copyClipboardAnim = animate6(copyClipboardIconRef, {
+    copyClipboardAnim = animate7(copyClipboardIconRef, {
       opacity: isCopied ? 0 : 1,
       scale: isCopied ? 0.5 : 1,
       filter: isCopied ? "blur(4px)" : "blur(0px)"
     }, transition);
-    copyCheckAnim = animate6(copyCheckIconRef, {
+    copyCheckAnim = animate7(copyCheckIconRef, {
       opacity: isCopied ? 1 : 0,
       scale: isCopied ? 1 : 0.5,
       filter: isCopied ? "blur(0px)" : "blur(4px)"
     }, transition);
   });
-  onCleanup10(() => {
+  onCleanup11(() => {
     addTapAnim?.stop();
     copyTapAnim?.stop();
     copyClipboardAnim?.stop();
@@ -3725,28 +4150,28 @@ Apply these values as the new defaults in the createDialKit call.`;
   const handleAddTapStart = () => {
     if (!addButtonRef) return;
     addTapAnim?.stop();
-    addTapAnim = animate6(addButtonRef, {
+    addTapAnim = animate7(addButtonRef, {
       scale: 0.9
     }, tapTransition);
   };
   const handleAddTapEnd = () => {
     if (!addButtonRef) return;
     addTapAnim?.stop();
-    addTapAnim = animate6(addButtonRef, {
+    addTapAnim = animate7(addButtonRef, {
       scale: 1
     }, tapTransition);
   };
   const handleCopyTapStart = () => {
     if (!copyButtonRef) return;
     copyTapAnim?.stop();
-    copyTapAnim = animate6(copyButtonRef, {
+    copyTapAnim = animate7(copyButtonRef, {
       scale: 0.95
     }, tapTransition);
   };
   const handleCopyTapEnd = () => {
     if (!copyButtonRef) return;
     copyTapAnim?.stop();
-    copyTapAnim = animate6(copyButtonRef, {
+    copyTapAnim = animate7(copyButtonRef, {
       scale: 1
     }, tapTransition);
   };
@@ -3754,7 +4179,7 @@ Apply these values as the new defaults in the createDialKit call.`;
     const value = () => values()[control.path];
     switch (control.type) {
       case "slider":
-        return _$createComponent11(Slider, {
+        return _$createComponent12(Slider, {
           get label() {
             return control.label;
           },
@@ -3779,7 +4204,7 @@ Apply these values as the new defaults in the createDialKit call.`;
           }
         });
       case "toggle":
-        return _$createComponent11(Toggle, {
+        return _$createComponent12(Toggle, {
           get label() {
             return control.label;
           },
@@ -3795,7 +4220,7 @@ Apply these values as the new defaults in the createDialKit call.`;
           }
         });
       case "spring":
-        return _$createComponent11(SpringControl, {
+        return _$createComponent12(SpringControl, {
           get panelId() {
             return props.panel.id;
           },
@@ -3811,7 +4236,7 @@ Apply these values as the new defaults in the createDialKit call.`;
           onChange: (v) => DialStore.updateValue(props.panel.id, control.path, v)
         });
       case "folder":
-        return _$createComponent11(Folder, {
+        return _$createComponent12(Folder, {
           get title() {
             return control.label;
           },
@@ -3819,7 +4244,7 @@ Apply these values as the new defaults in the createDialKit call.`;
             return control.defaultOpen ?? true;
           },
           get children() {
-            return _$createComponent11(For5, {
+            return _$createComponent12(For5, {
               get each() {
                 return control.children ?? [];
               },
@@ -3828,7 +4253,7 @@ Apply these values as the new defaults in the createDialKit call.`;
           }
         });
       case "text":
-        return _$createComponent11(TextControl, {
+        return _$createComponent12(TextControl, {
           get label() {
             return control.label;
           },
@@ -3841,7 +4266,7 @@ Apply these values as the new defaults in the createDialKit call.`;
           }
         });
       case "select":
-        return _$createComponent11(SelectControl, {
+        return _$createComponent12(SelectControl, {
           get label() {
             return control.label;
           },
@@ -3854,7 +4279,7 @@ Apply these values as the new defaults in the createDialKit call.`;
           onChange: (v) => DialStore.updateValue(props.panel.id, control.path, v)
         });
       case "color":
-        return _$createComponent11(ColorControl, {
+        return _$createComponent12(ColorControl, {
           get label() {
             return control.label;
           },
@@ -3869,33 +4294,55 @@ Apply these values as the new defaults in the createDialKit call.`;
             return control.palette;
           }
         });
+      case "range":
+        return _$createComponent12(RangeSlider, {
+          get label() {
+            return control.label;
+          },
+          get value() {
+            return value();
+          },
+          get min() {
+            return control.min ?? 0;
+          },
+          get max() {
+            return control.max ?? 1;
+          },
+          get step() {
+            return control.step;
+          },
+          get defaultValue() {
+            return control.rangeDefault;
+          },
+          onChange: (v) => DialStore.updateValue(props.panel.id, control.path, v)
+        });
       default:
         return null;
     }
   };
   const renderControls = () => {
-    return _$createComponent11(For5, {
+    return _$createComponent12(For5, {
       get each() {
         return props.panel.controls;
       },
       children: (control) => _$memo9(() => _$memo9(() => control.type === "action")() ? (() => {
-        var _el$ = _tmpl$20();
+        var _el$ = _tmpl$21();
         _el$.$$click = () => DialStore.triggerAction(props.panel.id, control.path);
-        _$insert12(_el$, () => control.label);
+        _$insert13(_el$, () => control.label);
         return _el$;
       })() : renderControl(control))
     });
   };
   const toolbar = [(() => {
-    var _el$2 = _tmpl$210(), _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$4.nextSibling, _el$6 = _el$5.nextSibling, _el$7 = _el$6.nextSibling, _el$8 = _el$7.nextSibling;
+    var _el$2 = _tmpl$211(), _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$4.nextSibling, _el$6 = _el$5.nextSibling, _el$7 = _el$6.nextSibling, _el$8 = _el$7.nextSibling;
     _el$2.addEventListener("pointerleave", handleAddTapEnd);
     _el$2.addEventListener("pointercancel", handleAddTapEnd);
     _el$2.$$pointerup = handleAddTapEnd;
     _el$2.$$pointerdown = handleAddTapStart;
     _el$2.$$click = handleAddPreset;
     var _ref$ = addButtonRef;
-    typeof _ref$ === "function" ? _$use8(_ref$, _el$2) : addButtonRef = _el$2;
-    _$effect11((_p$) => {
+    typeof _ref$ === "function" ? _$use9(_ref$, _el$2) : addButtonRef = _el$2;
+    _$effect12((_p$) => {
       var _v$ = ICON_ADD_PRESET[0], _v$2 = ICON_ADD_PRESET[1], _v$3 = ICON_ADD_PRESET[2], _v$4 = ICON_ADD_PRESET[3], _v$5 = ICON_ADD_PRESET[4];
       _v$ !== _p$.e && _$setAttribute9(_el$4, "d", _p$.e = _v$);
       _v$2 !== _p$.t && _$setAttribute9(_el$5, "d", _p$.t = _v$2);
@@ -3911,7 +4358,7 @@ Apply these values as the new defaults in the createDialKit call.`;
       i: void 0
     });
     return _el$2;
-  })(), _$createComponent11(PresetManager, {
+  })(), _$createComponent12(PresetManager, {
     get panelId() {
       return props.panel.id;
     },
@@ -3923,20 +4370,20 @@ Apply these values as the new defaults in the createDialKit call.`;
     },
     onAdd: handleAddPreset
   }), (() => {
-    var _el$9 = _tmpl$39(), _el$0 = _el$9.firstChild, _el$1 = _el$0.firstChild, _el$10 = _el$1.firstChild, _el$11 = _el$10.firstChild, _el$12 = _el$11.nextSibling, _el$13 = _el$12.nextSibling, _el$14 = _el$1.nextSibling, _el$15 = _el$14.firstChild, _el$16 = _el$15.firstChild;
+    var _el$9 = _tmpl$310(), _el$0 = _el$9.firstChild, _el$1 = _el$0.firstChild, _el$10 = _el$1.firstChild, _el$11 = _el$10.firstChild, _el$12 = _el$11.nextSibling, _el$13 = _el$12.nextSibling, _el$14 = _el$1.nextSibling, _el$15 = _el$14.firstChild, _el$16 = _el$15.firstChild;
     _el$9.addEventListener("pointerleave", handleCopyTapEnd);
     _el$9.addEventListener("pointercancel", handleCopyTapEnd);
     _el$9.$$pointerup = handleCopyTapEnd;
     _el$9.$$pointerdown = handleCopyTapStart;
     _el$9.$$click = handleCopy;
     var _ref$2 = copyButtonRef;
-    typeof _ref$2 === "function" ? _$use8(_ref$2, _el$9) : copyButtonRef = _el$9;
+    typeof _ref$2 === "function" ? _$use9(_ref$2, _el$9) : copyButtonRef = _el$9;
     var _ref$3 = copyClipboardIconRef;
-    typeof _ref$3 === "function" ? _$use8(_ref$3, _el$1) : copyClipboardIconRef = _el$1;
+    typeof _ref$3 === "function" ? _$use9(_ref$3, _el$1) : copyClipboardIconRef = _el$1;
     var _ref$4 = copyCheckIconRef;
-    typeof _ref$4 === "function" ? _$use8(_ref$4, _el$14) : copyCheckIconRef = _el$14;
+    typeof _ref$4 === "function" ? _$use9(_ref$4, _el$14) : copyCheckIconRef = _el$14;
     _$setAttribute9(_el$16, "d", ICON_CHECK);
-    _$effect11((_p$) => {
+    _$effect12((_p$) => {
       var _v$6 = ICON_CLIPBOARD.board, _v$7 = ICON_CLIPBOARD.sparkle, _v$8 = ICON_CLIPBOARD.body;
       _v$6 !== _p$.e && _$setAttribute9(_el$11, "d", _p$.e = _v$6);
       _v$7 !== _p$.t && _$setAttribute9(_el$12, "d", _p$.t = _v$7);
@@ -3951,7 +4398,7 @@ Apply these values as the new defaults in the createDialKit call.`;
   })()];
   return (() => {
     var _el$17 = _tmpl$45();
-    _$insert12(_el$17, _$createComponent11(Folder, {
+    _$insert13(_el$17, _$createComponent12(Folder, {
       get title() {
         return props.panel.name;
       },
@@ -3971,32 +4418,32 @@ Apply these values as the new defaults in the createDialKit call.`;
     return _el$17;
   })();
 }
-_$delegateEvents9(["click", "pointerdown", "pointerup"]);
+_$delegateEvents10(["click", "pointerdown", "pointerup"]);
 
 // src/solid/components/DialRoot.tsx
-var _tmpl$21 = /* @__PURE__ */ _$template13(`<div class=dialkit-root><div class=dialkit-panel>`);
+var _tmpl$30 = /* @__PURE__ */ _$template14(`<div class=dialkit-root><div class=dialkit-panel>`);
 var isDevDefault = typeof process !== "undefined" && process?.env?.NODE_ENV ? process.env.NODE_ENV !== "production" : typeof import.meta !== "undefined" && import.meta.env?.MODE ? import.meta.env.MODE !== "production" : true;
 function DialRoot(props) {
   if ((props.productionEnabled ?? isDevDefault) === false) return null;
-  const [panels, setPanels] = createSignal12([]);
-  const [mounted, setMounted] = createSignal12(false);
+  const [panels, setPanels] = createSignal13([]);
+  const [mounted, setMounted] = createSignal13(false);
   const inline = () => (props.mode ?? "popover") === "inline";
-  onMount9(() => {
+  onMount10(() => {
     setMounted(true);
     setPanels(DialStore.getPanels());
     const unsub = DialStore.subscribeGlobal(() => {
       setPanels(DialStore.getPanels());
     });
-    onCleanup11(unsub);
+    onCleanup12(unsub);
   });
-  const content = () => _$createComponent12(ShortcutListener, {
+  const content = () => _$createComponent13(ShortcutListener, {
     get children() {
-      var _el$ = _tmpl$21(), _el$2 = _el$.firstChild;
-      _$insert13(_el$2, _$createComponent12(For6, {
+      var _el$ = _tmpl$30(), _el$2 = _el$.firstChild;
+      _$insert14(_el$2, _$createComponent13(For6, {
         get each() {
           return panels();
         },
-        children: (panel) => _$createComponent12(Panel, {
+        children: (panel) => _$createComponent13(Panel, {
           panel,
           get defaultOpen() {
             return inline() || (props.defaultOpen ?? true);
@@ -4006,7 +4453,7 @@ function DialRoot(props) {
           }
         })
       }));
-      _$effect12((_p$) => {
+      _$effect13((_p$) => {
         var _v$ = props.mode ?? "popover", _v$2 = props.theme ?? "system", _v$3 = inline() ? void 0 : props.position ?? "top-right", _v$4 = props.mode ?? "popover";
         _v$ !== _p$.e && _$setAttribute10(_el$, "data-mode", _p$.e = _v$);
         _v$2 !== _p$.t && _$setAttribute10(_el$, "data-theme", _p$.t = _v$2);
@@ -4022,12 +4469,12 @@ function DialRoot(props) {
       return _el$;
     }
   });
-  return _$createComponent12(Show9, {
+  return _$createComponent13(Show10, {
     get when() {
       return _$memo10(() => !!(mounted() && typeof window !== "undefined"))() && panels().length > 0;
     },
     get children() {
-      return _$createComponent12(Show9, {
+      return _$createComponent13(Show10, {
         get when() {
           return !inline();
         },
@@ -4035,7 +4482,7 @@ function DialRoot(props) {
           return content();
         },
         get children() {
-          return _$createComponent12(Portal4, {
+          return _$createComponent13(Portal4, {
             get mount() {
               return document.body;
             },
@@ -4050,13 +4497,13 @@ function DialRoot(props) {
 }
 
 // src/solid/components/Module.tsx
-import { template as _$template14 } from "solid-js/web";
+import { template as _$template15 } from "solid-js/web";
 import { setAttribute as _$setAttribute11 } from "solid-js/web";
-import { effect as _$effect13 } from "solid-js/web";
-import { createComponent as _$createComponent13 } from "solid-js/web";
+import { effect as _$effect14 } from "solid-js/web";
+import { createComponent as _$createComponent14 } from "solid-js/web";
 import { memo as _$memo11 } from "solid-js/web";
-import { insert as _$insert14 } from "solid-js/web";
-var _tmpl$30 = /* @__PURE__ */ _$template14(`<div class=dialkit-module><div class=dialkit-module-header><span class=dialkit-module-title></span><div class=dialkit-module-switch></div></div><div class=dialkit-module-collapse><div class=dialkit-module-collapse-clip><div class=dialkit-module-inner>`);
+import { insert as _$insert15 } from "solid-js/web";
+var _tmpl$31 = /* @__PURE__ */ _$template15(`<div class=dialkit-module><div class=dialkit-module-header><span class=dialkit-module-title></span><div class=dialkit-module-switch></div></div><div class=dialkit-module-collapse><div class=dialkit-module-collapse-clip><div class=dialkit-module-inner>`);
 var ENABLE_OPTIONS = [{
   value: "off",
   label: "Off"
@@ -4066,58 +4513,58 @@ var ENABLE_OPTIONS = [{
 }];
 function Module(props) {
   return (() => {
-    var _el$ = _tmpl$30(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$2.nextSibling, _el$6 = _el$5.firstChild, _el$7 = _el$6.firstChild;
-    _$insert14(_el$3, () => props.title);
-    _$insert14(_el$4, _$createComponent13(SegmentedControl, {
+    var _el$ = _tmpl$31(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$2.nextSibling, _el$6 = _el$5.firstChild, _el$7 = _el$6.firstChild;
+    _$insert15(_el$3, () => props.title);
+    _$insert15(_el$4, _$createComponent14(SegmentedControl, {
       options: ENABLE_OPTIONS,
       get value() {
         return props.enabled ? "on" : "off";
       },
       onChange: (v) => props.onEnabledChange(v === "on")
     }));
-    _$insert14(_el$7, () => props.children);
-    _$effect13(() => _$setAttribute11(_el$5, "data-open", props.enabled));
+    _$insert15(_el$7, () => props.children);
+    _$effect14(() => _$setAttribute11(_el$5, "data-open", props.enabled));
     return _el$;
   })();
 }
 
 // src/solid/components/ButtonGroup.tsx
-import { template as _$template15 } from "solid-js/web";
-import { delegateEvents as _$delegateEvents10 } from "solid-js/web";
+import { template as _$template16 } from "solid-js/web";
+import { delegateEvents as _$delegateEvents11 } from "solid-js/web";
 import { addEventListener as _$addEventListener2 } from "solid-js/web";
-import { insert as _$insert15 } from "solid-js/web";
-import { createComponent as _$createComponent14 } from "solid-js/web";
+import { insert as _$insert16 } from "solid-js/web";
+import { createComponent as _$createComponent15 } from "solid-js/web";
 import { For as For7 } from "solid-js";
-var _tmpl$31 = /* @__PURE__ */ _$template15(`<div class=dialkit-button-group>`);
-var _tmpl$211 = /* @__PURE__ */ _$template15(`<button class=dialkit-button>`);
+var _tmpl$40 = /* @__PURE__ */ _$template16(`<div class=dialkit-button-group>`);
+var _tmpl$212 = /* @__PURE__ */ _$template16(`<button class=dialkit-button>`);
 function ButtonGroup(props) {
   return (() => {
-    var _el$ = _tmpl$31();
-    _$insert15(_el$, _$createComponent14(For7, {
+    var _el$ = _tmpl$40();
+    _$insert16(_el$, _$createComponent15(For7, {
       get each() {
         return props.buttons;
       },
       children: (button) => (() => {
-        var _el$2 = _tmpl$211();
+        var _el$2 = _tmpl$212();
         _$addEventListener2(_el$2, "click", button.onClick, true);
-        _$insert15(_el$2, () => button.label);
+        _$insert16(_el$2, () => button.label);
         return _el$2;
       })()
     }));
     return _el$;
   })();
 }
-_$delegateEvents10(["click"]);
+_$delegateEvents11(["click"]);
 
 // src/solid/components/WaveformVisualization.tsx
-import { template as _$template16 } from "solid-js/web";
-import { delegateEvents as _$delegateEvents11 } from "solid-js/web";
-import { setStyleProperty as _$setStyleProperty6 } from "solid-js/web";
-import { effect as _$effect14 } from "solid-js/web";
-import { insert as _$insert16 } from "solid-js/web";
-import { createComponent as _$createComponent15 } from "solid-js/web";
-import { use as _$use9 } from "solid-js/web";
-import { createSignal as createSignal13, mergeProps, onCleanup as onCleanup12, onMount as onMount10, Show as Show10 } from "solid-js";
+import { template as _$template17 } from "solid-js/web";
+import { delegateEvents as _$delegateEvents12 } from "solid-js/web";
+import { setStyleProperty as _$setStyleProperty7 } from "solid-js/web";
+import { effect as _$effect15 } from "solid-js/web";
+import { insert as _$insert17 } from "solid-js/web";
+import { createComponent as _$createComponent16 } from "solid-js/web";
+import { use as _$use10 } from "solid-js/web";
+import { createSignal as createSignal14, mergeProps, onCleanup as onCleanup13, onMount as onMount11, Show as Show11 } from "solid-js";
 
 // src/waveform-dsp.ts
 function mixToMono(buffer) {
@@ -4510,9 +4957,9 @@ function createWaveformEngine(canvas, get) {
 }
 
 // src/solid/components/WaveformVisualization.tsx
-var _tmpl$40 = /* @__PURE__ */ _$template16(`<button type=button aria-label="Zoom out"><svg viewBox="0 0 16 16"fill=none><path d="M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
-var _tmpl$212 = /* @__PURE__ */ _$template16(`<div class=dialkit-waveform-zoom><button type=button aria-label="Zoom in"><svg viewBox="0 0 16 16"fill=none><path d="M8 3.5v9M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
-var _tmpl$310 = /* @__PURE__ */ _$template16(`<div class=dialkit-waveform-viz-wrap><canvas class=dialkit-waveform-viz>`);
+var _tmpl$41 = /* @__PURE__ */ _$template17(`<button type=button aria-label="Zoom out"><svg viewBox="0 0 16 16"fill=none><path d="M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
+var _tmpl$213 = /* @__PURE__ */ _$template17(`<div class=dialkit-waveform-zoom><button type=button aria-label="Zoom in"><svg viewBox="0 0 16 16"fill=none><path d="M8 3.5v9M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
+var _tmpl$311 = /* @__PURE__ */ _$template17(`<div class=dialkit-waveform-viz-wrap><canvas class=dialkit-waveform-viz>`);
 function WaveformVisualization(props) {
   const p = mergeProps({
     buffer: null,
@@ -4528,9 +4975,9 @@ function WaveformVisualization(props) {
     width: 256,
     height: 140
   }, props);
-  const [zoom, setZoom] = createSignal13(1);
+  const [zoom, setZoom] = createSignal14(1);
   let canvasEl;
-  onMount10(() => {
+  onMount11(() => {
     if (!canvasEl) return;
     const engine = createWaveformEngine(canvasEl, () => ({
       buffer: p.buffer,
@@ -4552,39 +4999,39 @@ function WaveformVisualization(props) {
       onSeek: p.onSeek,
       onLoopChange: p.onLoopChange
     }));
-    onCleanup12(() => engine.destroy());
+    onCleanup13(() => engine.destroy());
   });
   const framingLoop = () => p.autoZoomOnLoop && !!p.loop;
   return (() => {
-    var _el$ = _tmpl$310(), _el$2 = _el$.firstChild;
+    var _el$ = _tmpl$311(), _el$2 = _el$.firstChild;
     var _ref$ = canvasEl;
-    typeof _ref$ === "function" ? _$use9(_ref$, _el$2) : canvasEl = _el$2;
-    _$insert16(_el$, _$createComponent15(Show10, {
+    typeof _ref$ === "function" ? _$use10(_ref$, _el$2) : canvasEl = _el$2;
+    _$insert17(_el$, _$createComponent16(Show11, {
       get when() {
         return !framingLoop();
       },
       get children() {
-        var _el$3 = _tmpl$212(), _el$5 = _el$3.firstChild;
-        _$insert16(_el$3, _$createComponent15(Show10, {
+        var _el$3 = _tmpl$213(), _el$5 = _el$3.firstChild;
+        _$insert17(_el$3, _$createComponent16(Show11, {
           get when() {
             return zoom() > 1;
           },
           get children() {
-            var _el$4 = _tmpl$40();
+            var _el$4 = _tmpl$41();
             _el$4.$$click = () => setZoom((z) => Math.max(1, z / 2));
             return _el$4;
           }
         }), _el$5);
         _el$5.$$click = () => setZoom((z) => Math.min(WAVEFORM_MAX_ZOOM, z * 2));
-        _$effect14(() => _el$5.disabled = zoom() >= WAVEFORM_MAX_ZOOM);
+        _$effect15(() => _el$5.disabled = zoom() >= WAVEFORM_MAX_ZOOM);
         return _el$3;
       }
     }), null);
-    _$effect14((_p$) => {
+    _$effect15((_p$) => {
       var _v$ = `${p.width}px`, _v$2 = `${p.width}px`, _v$3 = `${p.height}px`;
-      _v$ !== _p$.e && _$setStyleProperty6(_el$, "width", _p$.e = _v$);
-      _v$2 !== _p$.t && _$setStyleProperty6(_el$2, "width", _p$.t = _v$2);
-      _v$3 !== _p$.a && _$setStyleProperty6(_el$2, "height", _p$.a = _v$3);
+      _v$ !== _p$.e && _$setStyleProperty7(_el$, "width", _p$.e = _v$);
+      _v$2 !== _p$.t && _$setStyleProperty7(_el$2, "width", _p$.t = _v$2);
+      _v$3 !== _p$.a && _$setStyleProperty7(_el$2, "height", _p$.a = _v$3);
       return _p$;
     }, {
       e: void 0,
@@ -4594,19 +5041,19 @@ function WaveformVisualization(props) {
     return _el$;
   })();
 }
-_$delegateEvents11(["click"]);
+_$delegateEvents12(["click"]);
 
 // src/solid/components/CurveComposer.tsx
-import { template as _$template17 } from "solid-js/web";
-import { delegateEvents as _$delegateEvents12 } from "solid-js/web";
+import { template as _$template18 } from "solid-js/web";
+import { delegateEvents as _$delegateEvents13 } from "solid-js/web";
 import { setAttribute as _$setAttribute12 } from "solid-js/web";
-import { setStyleProperty as _$setStyleProperty7 } from "solid-js/web";
-import { effect as _$effect15 } from "solid-js/web";
-import { insert as _$insert17 } from "solid-js/web";
+import { setStyleProperty as _$setStyleProperty8 } from "solid-js/web";
+import { effect as _$effect16 } from "solid-js/web";
+import { insert as _$insert18 } from "solid-js/web";
 import { memo as _$memo12 } from "solid-js/web";
-import { createComponent as _$createComponent16 } from "solid-js/web";
-import { use as _$use10 } from "solid-js/web";
-import { createMemo as createMemo2, createSignal as createSignal14, For as For8, mergeProps as mergeProps2, onCleanup as onCleanup13, onMount as onMount11, Show as Show11 } from "solid-js";
+import { createComponent as _$createComponent17 } from "solid-js/web";
+import { use as _$use11 } from "solid-js/web";
+import { createMemo as createMemo2, createSignal as createSignal15, For as For8, mergeProps as mergeProps2, onCleanup as onCleanup14, onMount as onMount12, Show as Show12 } from "solid-js";
 
 // src/curve-composer-core.ts
 var CURVE_CYCLE = ["linear", "easeIn", "easeOut", "easeInOut", "spring"];
@@ -4913,17 +5360,17 @@ function triggersCrossed(prevValue, curValue, steps) {
 }
 
 // src/solid/components/CurveComposer.tsx
-var _tmpl$41 = /* @__PURE__ */ _$template17(`<div class=dialkit-cc-wrap><svg class=dialkit-cc><rect class=dialkit-cc-lane rx=8></rect><line class=dialkit-cc-playhead x1=0 x2=0></line><circle class=dialkit-cc-dot cx=0 r=3>`);
-var _tmpl$213 = /* @__PURE__ */ _$template17(`<svg><line class=dialkit-cc-grid></svg>`, false, true, false);
-var _tmpl$311 = /* @__PURE__ */ _$template17(`<svg><rect class=dialkit-cc-seg-hover rx=8></svg>`, false, true, false);
-var _tmpl$46 = /* @__PURE__ */ _$template17(`<svg><g><line class=dialkit-cc-diagonal></line><path class=dialkit-cc-curve></path><text class=dialkit-cc-label></svg>`, false, true, false);
-var _tmpl$54 = /* @__PURE__ */ _$template17(`<svg><line class=dialkit-cc-boundary></svg>`, false, true, false);
-var _tmpl$64 = /* @__PURE__ */ _$template17(`<svg><rect class=dialkit-cc-lane rx=8></svg>`, false, true, false);
-var _tmpl$72 = /* @__PURE__ */ _$template17(`<svg><rect class=dialkit-cc-seg-hover x=0 rx=8></svg>`, false, true, false);
-var _tmpl$82 = /* @__PURE__ */ _$template17(`<svg><path class="dialkit-cc-curve dialkit-cc-curve-driver"></svg>`, false, true, false);
-var _tmpl$92 = /* @__PURE__ */ _$template17(`<svg><text class=dialkit-cc-label>driver \xB7 </svg>`, false, true, false);
-var _tmpl$0 = /* @__PURE__ */ _$template17(`<svg><line class=dialkit-cc-playhead x1=0 x2=0></svg>`, false, true, false);
-var _tmpl$1 = /* @__PURE__ */ _$template17(`<svg><line class=dialkit-cc-diagonal></svg>`, false, true, false);
+var _tmpl$46 = /* @__PURE__ */ _$template18(`<div class=dialkit-cc-wrap><svg class=dialkit-cc><rect class=dialkit-cc-lane rx=8></rect><line class=dialkit-cc-playhead x1=0 x2=0></line><circle class=dialkit-cc-dot cx=0 r=3>`);
+var _tmpl$214 = /* @__PURE__ */ _$template18(`<svg><line class=dialkit-cc-grid></svg>`, false, true, false);
+var _tmpl$312 = /* @__PURE__ */ _$template18(`<svg><rect class=dialkit-cc-seg-hover rx=8></svg>`, false, true, false);
+var _tmpl$47 = /* @__PURE__ */ _$template18(`<svg><g><line class=dialkit-cc-diagonal></line><path class=dialkit-cc-curve></path><text class=dialkit-cc-label></svg>`, false, true, false);
+var _tmpl$54 = /* @__PURE__ */ _$template18(`<svg><line class=dialkit-cc-boundary></svg>`, false, true, false);
+var _tmpl$64 = /* @__PURE__ */ _$template18(`<svg><rect class=dialkit-cc-lane rx=8></svg>`, false, true, false);
+var _tmpl$72 = /* @__PURE__ */ _$template18(`<svg><rect class=dialkit-cc-seg-hover x=0 rx=8></svg>`, false, true, false);
+var _tmpl$82 = /* @__PURE__ */ _$template18(`<svg><path class="dialkit-cc-curve dialkit-cc-curve-driver"></svg>`, false, true, false);
+var _tmpl$92 = /* @__PURE__ */ _$template18(`<svg><text class=dialkit-cc-label>driver \xB7 </svg>`, false, true, false);
+var _tmpl$0 = /* @__PURE__ */ _$template18(`<svg><line class=dialkit-cc-playhead x1=0 x2=0></svg>`, false, true, false);
+var _tmpl$1 = /* @__PURE__ */ _$template18(`<svg><line class=dialkit-cc-diagonal></svg>`, false, true, false);
 function CurveComposer(props) {
   const p = mergeProps2({
     driver: null,
@@ -4952,8 +5399,8 @@ function CurveComposer(props) {
   let seriesDotEl;
   let driverPlayheadEl;
   let drag = null;
-  const [hover, setHover] = createSignal14(null);
-  onMount11(() => {
+  const [hover, setHover] = createSignal15(null);
+  onMount12(() => {
     let raf = 0;
     let prevTrigValue = Number.NaN;
     let armKey = "";
@@ -4990,7 +5437,7 @@ function CurveComposer(props) {
       }
     };
     raf = requestAnimationFrame(tick);
-    onCleanup13(() => cancelAnimationFrame(raf));
+    onCleanup14(() => cancelAnimationFrame(raf));
   });
   const hitLayout = () => {
     const dr = driverRect();
@@ -5141,7 +5588,7 @@ function CurveComposer(props) {
     return lines;
   };
   return (() => {
-    var _el$ = _tmpl$41(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.nextSibling;
+    var _el$ = _tmpl$46(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.nextSibling;
     _el$2.$$dblclick = onDoubleClick;
     _el$2.addEventListener("pointerleave", () => !drag && setHover(null));
     _el$2.addEventListener("pointercancel", onPointerCancel);
@@ -5149,14 +5596,14 @@ function CurveComposer(props) {
     _el$2.$$pointermove = onPointerMove;
     _el$2.$$pointerdown = onPointerDown;
     var _ref$ = svgEl;
-    typeof _ref$ === "function" ? _$use10(_ref$, _el$2) : svgEl = _el$2;
-    _$insert17(_el$2, _$createComponent16(For8, {
+    typeof _ref$ === "function" ? _$use11(_ref$, _el$2) : svgEl = _el$2;
+    _$insert18(_el$2, _$createComponent17(For8, {
       get each() {
         return laneGridLines(mainRect());
       },
       children: (g) => (() => {
-        var _el$6 = _tmpl$213();
-        _$effect15((_p$) => {
+        var _el$6 = _tmpl$214();
+        _$effect16((_p$) => {
           var _v$16 = g.gx, _v$17 = g.y1, _v$18 = g.gx, _v$19 = g.y2;
           _v$16 !== _p$.e && _$setAttribute12(_el$6, "x1", _p$.e = _v$16);
           _v$17 !== _p$.t && _$setAttribute12(_el$6, "y1", _p$.t = _v$17);
@@ -5172,7 +5619,7 @@ function CurveComposer(props) {
         return _el$6;
       })()
     }), _el$4);
-    _$insert17(_el$2, _$createComponent16(Show11, {
+    _$insert18(_el$2, _$createComponent17(Show12, {
       get when() {
         return hover()?.kind === "segment" && !drag;
       },
@@ -5181,8 +5628,8 @@ function CurveComposer(props) {
           const span = segmentSpan(p.segments, hover().index);
           const mr = mainRect();
           return (() => {
-            var _el$7 = _tmpl$311();
-            _$effect15((_p$) => {
+            var _el$7 = _tmpl$312();
+            _$effect16((_p$) => {
               var _v$20 = span[0] * W(), _v$21 = mr.y, _v$22 = (span[1] - span[0]) * W(), _v$23 = mr.h;
               _v$20 !== _p$.e && _$setAttribute12(_el$7, "x", _p$.e = _v$20);
               _v$21 !== _p$.t && _$setAttribute12(_el$7, "y", _p$.t = _v$21);
@@ -5200,7 +5647,7 @@ function CurveComposer(props) {
         })();
       }
     }), _el$4);
-    _$insert17(_el$2, _$createComponent16(For8, {
+    _$insert18(_el$2, _$createComponent17(For8, {
       get each() {
         return p.segments;
       },
@@ -5209,9 +5656,9 @@ function CurveComposer(props) {
         const mr = () => mainRect();
         const diag = () => diagonalLine(mr(), span(), W());
         return (() => {
-          var _el$8 = _tmpl$46(), _el$9 = _el$8.firstChild, _el$0 = _el$9.nextSibling, _el$1 = _el$0.nextSibling;
-          _$insert17(_el$1, () => seg.type);
-          _$effect15((_p$) => {
+          var _el$8 = _tmpl$47(), _el$9 = _el$8.firstChild, _el$0 = _el$9.nextSibling, _el$1 = _el$0.nextSibling;
+          _$insert18(_el$1, () => seg.type);
+          _$effect16((_p$) => {
             var _v$24 = diag().x1, _v$25 = diag().y1, _v$26 = diag().x2, _v$27 = diag().y2, _v$28 = curvePath(seg, mr(), span(), W()), _v$29 = (span()[0] + span()[1]) * 0.5 * W(), _v$30 = mr().y + 13;
             _v$24 !== _p$.e && _$setAttribute12(_el$9, "x1", _p$.e = _v$24);
             _v$25 !== _p$.t && _$setAttribute12(_el$9, "y1", _p$.t = _v$25);
@@ -5234,7 +5681,7 @@ function CurveComposer(props) {
         })();
       }
     }), _el$4);
-    _$insert17(_el$2, _$createComponent16(For8, {
+    _$insert18(_el$2, _$createComponent17(For8, {
       get each() {
         return interior();
       },
@@ -5246,7 +5693,7 @@ function CurveComposer(props) {
         };
         return (() => {
           var _el$10 = _tmpl$54();
-          _$effect15((_p$) => {
+          _$effect16((_p$) => {
             var _v$31 = String(active()), _v$32 = bx * W(), _v$33 = mr.y, _v$34 = bx * W(), _v$35 = mr.y + mr.h;
             _v$31 !== _p$.e && _$setAttribute12(_el$10, "data-active", _p$.e = _v$31);
             _v$32 !== _p$.t && _$setAttribute12(_el$10, "x1", _p$.t = _v$32);
@@ -5266,16 +5713,16 @@ function CurveComposer(props) {
       }
     }), _el$4);
     var _ref$2 = seriesPlayheadEl;
-    typeof _ref$2 === "function" ? _$use10(_ref$2, _el$4) : seriesPlayheadEl = _el$4;
+    typeof _ref$2 === "function" ? _$use11(_ref$2, _el$4) : seriesPlayheadEl = _el$4;
     var _ref$3 = seriesDotEl;
-    typeof _ref$3 === "function" ? _$use10(_ref$3, _el$5) : seriesDotEl = _el$5;
-    _$insert17(_el$2, _$createComponent16(Show11, {
+    typeof _ref$3 === "function" ? _$use11(_ref$3, _el$5) : seriesDotEl = _el$5;
+    _$insert18(_el$2, _$createComponent17(Show12, {
       get when() {
         return driverRect();
       },
       children: (dr) => [(() => {
         var _el$11 = _tmpl$64();
-        _$effect15((_p$) => {
+        _$effect16((_p$) => {
           var _v$36 = dr().x, _v$37 = dr().y, _v$38 = dr().w, _v$39 = dr().h;
           _v$36 !== _p$.e && _$setAttribute12(_el$11, "x", _p$.e = _v$36);
           _v$37 !== _p$.t && _$setAttribute12(_el$11, "y", _p$.t = _v$37);
@@ -5289,13 +5736,13 @@ function CurveComposer(props) {
           o: void 0
         });
         return _el$11;
-      })(), _$createComponent16(For8, {
+      })(), _$createComponent17(For8, {
         get each() {
           return laneGridLines(dr());
         },
         children: (g) => (() => {
-          var _el$17 = _tmpl$213();
-          _$effect15((_p$) => {
+          var _el$17 = _tmpl$214();
+          _$effect16((_p$) => {
             var _v$48 = g.gx, _v$49 = g.y1, _v$50 = g.gx, _v$51 = g.y2;
             _v$48 !== _p$.e && _$setAttribute12(_el$17, "x1", _p$.e = _v$48);
             _v$49 !== _p$.t && _$setAttribute12(_el$17, "y1", _p$.t = _v$49);
@@ -5310,13 +5757,13 @@ function CurveComposer(props) {
           });
           return _el$17;
         })()
-      }), _$createComponent16(Show11, {
+      }), _$createComponent17(Show12, {
         get when() {
           return hover()?.kind === "driver" && !drag;
         },
         get children() {
           var _el$12 = _tmpl$72();
-          _$effect15((_p$) => {
+          _$effect16((_p$) => {
             var _v$40 = dr().y, _v$41 = W(), _v$42 = dr().h;
             _v$40 !== _p$.e && _$setAttribute12(_el$12, "y", _p$.e = _v$40);
             _v$41 !== _p$.t && _$setAttribute12(_el$12, "width", _p$.t = _v$41);
@@ -5333,7 +5780,7 @@ function CurveComposer(props) {
         const diag = diagonalLine(dr(), [0, 1], W());
         return (() => {
           var _el$18 = _tmpl$1();
-          _$effect15((_p$) => {
+          _$effect16((_p$) => {
             var _v$52 = diag.x1, _v$53 = diag.y1, _v$54 = diag.x2, _v$55 = diag.y2;
             _v$52 !== _p$.e && _$setAttribute12(_el$18, "x1", _p$.e = _v$52);
             _v$53 !== _p$.t && _$setAttribute12(_el$18, "y1", _p$.t = _v$53);
@@ -5350,12 +5797,12 @@ function CurveComposer(props) {
         })();
       }), (() => {
         var _el$13 = _tmpl$82();
-        _$effect15(() => _$setAttribute12(_el$13, "d", curvePath(p.driver, dr(), [0, 1], W())));
+        _$effect16(() => _$setAttribute12(_el$13, "d", curvePath(p.driver, dr(), [0, 1], W())));
         return _el$13;
       })(), (() => {
         var _el$14 = _tmpl$92(), _el$15 = _el$14.firstChild;
-        _$insert17(_el$14, () => p.driver.type, null);
-        _$effect15((_p$) => {
+        _$insert18(_el$14, () => p.driver.type, null);
+        _$effect16((_p$) => {
           var _v$43 = W() * 0.5, _v$44 = dr().y + 13;
           _v$43 !== _p$.e && _$setAttribute12(_el$14, "x", _p$.e = _v$43);
           _v$44 !== _p$.t && _$setAttribute12(_el$14, "y", _p$.t = _v$44);
@@ -5368,12 +5815,12 @@ function CurveComposer(props) {
       })(), (() => {
         var _el$16 = _tmpl$0();
         var _ref$4 = driverPlayheadEl;
-        typeof _ref$4 === "function" ? _$use10(_ref$4, _el$16) : driverPlayheadEl = _el$16;
-        _$effect15((_p$) => {
+        typeof _ref$4 === "function" ? _$use11(_ref$4, _el$16) : driverPlayheadEl = _el$16;
+        _$effect16((_p$) => {
           var _v$45 = dr().y, _v$46 = dr().y + dr().h, _v$47 = p.playheadColor;
           _v$45 !== _p$.e && _$setAttribute12(_el$16, "y1", _p$.e = _v$45);
           _v$46 !== _p$.t && _$setAttribute12(_el$16, "y2", _p$.t = _v$46);
-          _v$47 !== _p$.a && _$setStyleProperty7(_el$16, "stroke", _p$.a = _v$47);
+          _v$47 !== _p$.a && _$setStyleProperty8(_el$16, "stroke", _p$.a = _v$47);
           return _p$;
         }, {
           e: void 0,
@@ -5383,25 +5830,25 @@ function CurveComposer(props) {
         return _el$16;
       })()]
     }), null);
-    _$effect15((_p$) => {
+    _$effect16((_p$) => {
       var _v$ = `${W()}px`, _v$2 = `0 0 ${W()} ${totalH()}`, _v$3 = W(), _v$4 = totalH(), _v$5 = `${W()}px`, _v$6 = `${totalH()}px`, _v$7 = cursor(), _v$8 = p.curveColor, _v$9 = mainRect().x, _v$0 = mainRect().y, _v$1 = mainRect().w, _v$10 = mainRect().h, _v$11 = mainRect().y, _v$12 = mainRect().y + mainRect().h, _v$13 = p.playheadColor, _v$14 = mapY(mainRect(), 0), _v$15 = p.playheadColor;
-      _v$ !== _p$.e && _$setStyleProperty7(_el$, "width", _p$.e = _v$);
+      _v$ !== _p$.e && _$setStyleProperty8(_el$, "width", _p$.e = _v$);
       _v$2 !== _p$.t && _$setAttribute12(_el$2, "viewBox", _p$.t = _v$2);
       _v$3 !== _p$.a && _$setAttribute12(_el$2, "width", _p$.a = _v$3);
       _v$4 !== _p$.o && _$setAttribute12(_el$2, "height", _p$.o = _v$4);
-      _v$5 !== _p$.i && _$setStyleProperty7(_el$2, "width", _p$.i = _v$5);
-      _v$6 !== _p$.n && _$setStyleProperty7(_el$2, "height", _p$.n = _v$6);
-      _v$7 !== _p$.s && _$setStyleProperty7(_el$2, "cursor", _p$.s = _v$7);
-      _v$8 !== _p$.h && _$setStyleProperty7(_el$2, "color", _p$.h = _v$8);
+      _v$5 !== _p$.i && _$setStyleProperty8(_el$2, "width", _p$.i = _v$5);
+      _v$6 !== _p$.n && _$setStyleProperty8(_el$2, "height", _p$.n = _v$6);
+      _v$7 !== _p$.s && _$setStyleProperty8(_el$2, "cursor", _p$.s = _v$7);
+      _v$8 !== _p$.h && _$setStyleProperty8(_el$2, "color", _p$.h = _v$8);
       _v$9 !== _p$.r && _$setAttribute12(_el$3, "x", _p$.r = _v$9);
       _v$0 !== _p$.d && _$setAttribute12(_el$3, "y", _p$.d = _v$0);
       _v$1 !== _p$.l && _$setAttribute12(_el$3, "width", _p$.l = _v$1);
       _v$10 !== _p$.u && _$setAttribute12(_el$3, "height", _p$.u = _v$10);
       _v$11 !== _p$.c && _$setAttribute12(_el$4, "y1", _p$.c = _v$11);
       _v$12 !== _p$.w && _$setAttribute12(_el$4, "y2", _p$.w = _v$12);
-      _v$13 !== _p$.m && _$setStyleProperty7(_el$4, "stroke", _p$.m = _v$13);
+      _v$13 !== _p$.m && _$setStyleProperty8(_el$4, "stroke", _p$.m = _v$13);
       _v$14 !== _p$.f && _$setAttribute12(_el$5, "cy", _p$.f = _v$14);
-      _v$15 !== _p$.y && _$setStyleProperty7(_el$5, "fill", _p$.y = _v$15);
+      _v$15 !== _p$.y && _$setStyleProperty8(_el$5, "fill", _p$.y = _v$15);
       return _p$;
     }, {
       e: void 0,
@@ -5425,7 +5872,7 @@ function CurveComposer(props) {
     return _el$;
   })();
 }
-_$delegateEvents12(["pointerdown", "pointermove", "pointerup", "dblclick"]);
+_$delegateEvents13(["pointerdown", "pointermove", "pointerup", "dblclick"]);
 export {
   ButtonGroup,
   ColorControl,
@@ -5436,6 +5883,7 @@ export {
   Folder,
   Module,
   PresetManager,
+  RangeSlider,
   SegmentedControl,
   SelectControl,
   Slider,

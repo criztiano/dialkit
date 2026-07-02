@@ -1,11 +1,13 @@
 import { useState, useContext, useSyncExternalStore } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DialStore, ControlMeta, PanelConfig, SpringConfig, TransitionConfig, ListItemValue } from '../store/DialStore';
+import type { RangeValue } from '../store/DialStore';
 import { ShortcutContext } from './ShortcutListener';
 import { ShortcutsMenu } from './ShortcutsMenu';
 import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../icons';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
+import { RangeSlider } from './RangeSlider';
 import { Toggle } from './Toggle';
 import { SpringControl } from './SpringControl';
 import { TransitionControl } from './TransitionControl';
@@ -78,6 +80,20 @@ Apply these values as the new defaults in the useDialKit call.`;
             step={control.step}
             shortcut={control.shortcut}
             shortcutActive={shortcutCtx.activePanelId === panel.id && shortcutCtx.activePath === control.path}
+          />
+        );
+
+      case 'range':
+        return (
+          <RangeSlider
+            key={control.path}
+            label={control.label}
+            value={value as RangeValue}
+            min={control.min ?? 0}
+            max={control.max ?? 1}
+            step={control.step}
+            defaultValue={control.rangeDefault}
+            onChange={(v) => DialStore.updateValue(panel.id, control.path, v)}
           />
         );
 

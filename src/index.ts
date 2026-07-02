@@ -8,6 +8,7 @@ export type { DialPosition, DialMode, DialTheme } from './components/DialRoot';
 
 // Individual components (for advanced usage)
 export { Slider } from './components/Slider';
+export { RangeSlider } from './components/RangeSlider';
 export { Toggle } from './components/Toggle';
 export { Folder } from './components/Folder';
 export { Module } from './components/Module';
@@ -42,6 +43,20 @@ export {
   DEFAULT_TRIGGER_STEPS,
 } from './curve-composer-core';
 export type { Sampler, CompositionSamplers, CompositionRead } from './curve-composer-core';
+export {
+  clamp,
+  valueToPercent,
+  percentToValue,
+  orderRange,
+  clampRange,
+  setLow,
+  setHigh,
+  shiftSpan,
+  nearestHandle,
+  pickDragTarget,
+  isOutsideSpan,
+  handleLeftStyles,
+} from './range-slider-core';
 export { TextControl } from './components/TextControl';
 export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';
@@ -87,6 +102,8 @@ export type {
   SwatchOption,
   ChipsConfig,
   ChipOption,
+  RangeConfig,
+  RangeValue,
   ListConfig,
   ListItemValue,
   ListItemField,
