@@ -38,6 +38,13 @@ function displayHex(value) {
 function bareHex(value) {
   return displayHex(value).replace(/^#/, "");
 }
+function normalizeHexEdit(input, alphaEnabled, currentAlpha) {
+  const rgba = parseHex(input);
+  if (!rgba) return null;
+  const digits = input.trim().replace(/^#/, "").length;
+  if (alphaEnabled && (digits === 3 || digits === 6)) rgba.a = clamp01(currentAlpha);
+  return formatHex(rgba, alphaEnabled);
+}
 function opacityPercent(rgba) {
   return Math.round(clamp01(rgba.a) * 100);
 }
@@ -2649,11 +2656,11 @@ _$delegateEvents5(["click"]);
 // src/solid/components/ColorControl.tsx
 import { template as _$template10 } from "solid-js/web";
 import { delegateEvents as _$delegateEvents7 } from "solid-js/web";
-import { setAttribute as _$setAttribute7 } from "solid-js/web";
 import { setStyleProperty as _$setStyleProperty4 } from "solid-js/web";
 import { style as _$style4 } from "solid-js/web";
 import { memo as _$memo7 } from "solid-js/web";
 import { createComponent as _$createComponent9 } from "solid-js/web";
+import { setAttribute as _$setAttribute7 } from "solid-js/web";
 import { effect as _$effect9 } from "solid-js/web";
 import { use as _$use6 } from "solid-js/web";
 import { insert as _$insert10 } from "solid-js/web";
@@ -3250,7 +3257,7 @@ function ColorControl(props) {
   });
   const handleTextSubmit = () => {
     setIsEditing(false);
-    const normalized = normalizeHex(editValue(), alpha());
+    const normalized = normalizeHexEdit(editValue(), alpha(), rgba()?.a ?? 1);
     if (normalized) {
       props.onChange(normalized);
     } else {
@@ -3284,6 +3291,7 @@ function ColorControl(props) {
   return (() => {
     var _el$ = _tmpl$37(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$4 = _el$3.firstChild, _el$5 = _el$4.firstChild, _el$7 = _el$4.nextSibling;
     _$insert10(_el$2, () => props.label);
+    _el$4.$$click = () => setIsEditing(true);
     _$insert10(_el$4, _$createComponent9(Show7, {
       get when() {
         return isEditing();
@@ -3291,8 +3299,8 @@ function ColorControl(props) {
       get fallback() {
         return (() => {
           var _el$9 = _tmpl$44();
-          _el$9.$$click = () => setIsEditing(true);
           _$insert10(_el$9, () => bareHex(props.value));
+          _$effect9(() => _$setAttribute7(_el$9, "aria-label", `Hex color for ${props.label}`));
           return _el$9;
         })();
       },
@@ -3305,6 +3313,7 @@ function ColorControl(props) {
           el.focus();
           el.select();
         }), _el$6);
+        _$effect9(() => _$setAttribute7(_el$6, "aria-label", `Hex color for ${props.label}`));
         _$effect9(() => _el$6.value = editValue());
         return _el$6;
       }
@@ -3387,7 +3396,7 @@ function ColorControl(props) {
     return _el$;
   })();
 }
-_$delegateEvents7(["input", "keydown", "click"]);
+_$delegateEvents7(["click", "input", "keydown"]);
 
 // src/solid/components/PresetManager.tsx
 import { template as _$template11 } from "solid-js/web";

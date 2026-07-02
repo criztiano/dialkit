@@ -38,6 +38,13 @@ function displayHex(value) {
 function bareHex(value) {
   return displayHex(value).replace(/^#/, "");
 }
+function normalizeHexEdit(input, alphaEnabled, currentAlpha) {
+  const rgba = parseHex(input);
+  if (!rgba) return null;
+  const digits = input.trim().replace(/^#/, "").length;
+  if (alphaEnabled && (digits === 3 || digits === 6)) rgba.a = clamp01(currentAlpha);
+  return formatHex(rgba, alphaEnabled);
+}
 function opacityPercent(rgba) {
   return Math.round(clamp01(rgba.a) * 100);
 }
@@ -2924,7 +2931,7 @@ var ColorControl = defineComponent12({
     });
     const submitText = () => {
       isEditing.value = false;
-      const normalized = normalizeHex(editValue.value, props.alpha);
+      const normalized = normalizeHexEdit(editValue.value, props.alpha, parseHex(props.value)?.a ?? 1);
       if (normalized) {
         emit("change", normalized);
       } else {
@@ -2936,12 +2943,19 @@ var ColorControl = defineComponent12({
       return h12("div", { class: "dialkit-color-control" }, [
         h12("span", { class: "dialkit-color-label" }, props.label),
         h12("div", { class: "dialkit-color-inputs" }, [
-          h12("span", { class: "dialkit-color-hex-wrap" }, [
+          // The whole token (hash included) is the click target for editing.
+          h12("span", {
+            class: "dialkit-color-hex-wrap",
+            onClick: () => {
+              isEditing.value = true;
+            }
+          }, [
             h12("span", { class: "dialkit-color-hash", "aria-hidden": "true" }, "#"),
             isEditing.value ? h12("input", {
               ref: hexInputRef,
               type: "text",
               class: "dialkit-color-hex-input",
+              "aria-label": `Hex color for ${props.label}`,
               value: editValue.value,
               onInput: (event) => {
                 editValue.value = event.target.value;
@@ -2958,9 +2972,7 @@ var ColorControl = defineComponent12({
               }
             }) : h12("span", {
               class: "dialkit-color-hex",
-              onClick: () => {
-                isEditing.value = true;
-              }
+              "aria-label": `Hex color for ${props.label}`
             }, bareHex(props.value))
           ]),
           ...props.alpha && rgba ? [

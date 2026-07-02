@@ -81,6 +81,13 @@ function displayHex(value) {
 function bareHex(value) {
   return displayHex(value).replace(/^#/, "");
 }
+function normalizeHexEdit(input, alphaEnabled, currentAlpha) {
+  const rgba = parseHex(input);
+  if (!rgba) return null;
+  const digits = input.trim().replace(/^#/, "").length;
+  if (alphaEnabled && (digits === 3 || digits === 6)) rgba.a = clamp01(currentAlpha);
+  return formatHex(rgba, alphaEnabled);
+}
 function opacityPercent(rgba) {
   return Math.round(clamp01(rgba.a) * 100);
 }
@@ -3293,7 +3300,7 @@ function ColorControl(props) {
   });
   const handleTextSubmit = () => {
     setIsEditing(false);
-    const normalized = normalizeHex(editValue(), alpha());
+    const normalized = normalizeHexEdit(editValue(), alpha(), rgba()?.a ?? 1);
     if (normalized) {
       props.onChange(normalized);
     } else {
@@ -3327,15 +3334,16 @@ function ColorControl(props) {
   return (() => {
     var _el$ = _tmpl$37(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$4 = _el$3.firstChild, _el$5 = _el$4.firstChild, _el$7 = _el$4.nextSibling;
     (0, import_web78.insert)(_el$2, () => props.label);
-    (0, import_web78.insert)(_el$4, (0, import_web75.createComponent)(import_solid_js11.Show, {
+    _el$4.$$click = () => setIsEditing(true);
+    (0, import_web78.insert)(_el$4, (0, import_web74.createComponent)(import_solid_js11.Show, {
       get when() {
         return isEditing();
       },
       get fallback() {
         return (() => {
           var _el$9 = _tmpl$44();
-          _el$9.$$click = () => setIsEditing(true);
           (0, import_web78.insert)(_el$9, () => bareHex(props.value));
+          (0, import_web76.effect)(() => (0, import_web75.setAttribute)(_el$9, "aria-label", `Hex color for ${props.label}`));
           return _el$9;
         })();
       },
@@ -3348,13 +3356,14 @@ function ColorControl(props) {
           el.focus();
           el.select();
         }), _el$6);
+        (0, import_web76.effect)(() => (0, import_web75.setAttribute)(_el$6, "aria-label", `Hex color for ${props.label}`));
         (0, import_web76.effect)(() => _el$6.value = editValue());
         return _el$6;
       }
     }), null);
-    (0, import_web78.insert)(_el$3, (0, import_web75.createComponent)(import_solid_js11.Show, {
+    (0, import_web78.insert)(_el$3, (0, import_web74.createComponent)(import_solid_js11.Show, {
       get when() {
-        return (0, import_web74.memo)(() => !!alpha())() && rgba();
+        return (0, import_web73.memo)(() => !!alpha())() && rgba();
       },
       children: (r) => [_tmpl$53(), (() => {
         var _el$1 = _tmpl$63(), _el$10 = _el$1.firstChild;
@@ -3365,19 +3374,19 @@ function ColorControl(props) {
     _el$7.$$click = () => isOpen() ? closePopover() : openPopover();
     var _ref$ = swatchRef;
     typeof _ref$ === "function" ? (0, import_web77.use)(_ref$, _el$7) : swatchRef = _el$7;
-    (0, import_web78.insert)(_el$, (0, import_web75.createComponent)(import_solid_js11.Show, {
+    (0, import_web78.insert)(_el$, (0, import_web74.createComponent)(import_solid_js11.Show, {
       get when() {
         return !!portalTarget();
       },
       get children() {
-        return (0, import_web75.createComponent)(import_web79.Portal, {
+        return (0, import_web74.createComponent)(import_web79.Portal, {
           get mount() {
             return portalTarget();
           },
           get children() {
-            return (0, import_web75.createComponent)(import_solid_js11.Show, {
+            return (0, import_web74.createComponent)(import_solid_js11.Show, {
               get when() {
-                return (0, import_web74.memo)(() => !!mounted())() && pos();
+                return (0, import_web73.memo)(() => !!mounted())() && pos();
               },
               get children() {
                 var _el$8 = _tmpl$28();
@@ -3394,7 +3403,7 @@ function ColorControl(props) {
                     bounce: 0
                   });
                 }, _el$8);
-                (0, import_web78.insert)(_el$8, (0, import_web75.createComponent)(ColorPickerPanel, {
+                (0, import_web78.insert)(_el$8, (0, import_web74.createComponent)(ColorPickerPanel, {
                   get value() {
                     return props.value;
                   },
@@ -3406,7 +3415,7 @@ function ColorControl(props) {
                     return palette();
                   }
                 }));
-                (0, import_web76.effect)((_$p) => (0, import_web73.style)(_el$8, popoverStyle(), _$p));
+                (0, import_web76.effect)((_$p) => (0, import_web72.style)(_el$8, popoverStyle(), _$p));
                 return _el$8;
               }
             });
@@ -3416,10 +3425,10 @@ function ColorControl(props) {
     }), null);
     (0, import_web76.effect)((_p$) => {
       var _v$ = props.value, _v$2 = String(isOpen()), _v$3 = `Pick color for ${props.label}`, _v$4 = isOpen();
-      _v$ !== _p$.e && (0, import_web72.setStyleProperty)(_el$7, "--swatch-color", _p$.e = _v$);
-      _v$2 !== _p$.t && (0, import_web71.setAttribute)(_el$7, "data-open", _p$.t = _v$2);
-      _v$3 !== _p$.a && (0, import_web71.setAttribute)(_el$7, "aria-label", _p$.a = _v$3);
-      _v$4 !== _p$.o && (0, import_web71.setAttribute)(_el$7, "aria-expanded", _p$.o = _v$4);
+      _v$ !== _p$.e && (0, import_web71.setStyleProperty)(_el$7, "--swatch-color", _p$.e = _v$);
+      _v$2 !== _p$.t && (0, import_web75.setAttribute)(_el$7, "data-open", _p$.t = _v$2);
+      _v$3 !== _p$.a && (0, import_web75.setAttribute)(_el$7, "aria-label", _p$.a = _v$3);
+      _v$4 !== _p$.o && (0, import_web75.setAttribute)(_el$7, "aria-expanded", _p$.o = _v$4);
       return _p$;
     }, {
       e: void 0,
@@ -3430,7 +3439,7 @@ function ColorControl(props) {
     return _el$;
   })();
 }
-(0, import_web70.delegateEvents)(["input", "keydown", "click"]);
+(0, import_web70.delegateEvents)(["click", "input", "keydown"]);
 
 // src/solid/components/PresetManager.tsx
 var import_web80 = require("solid-js/web");

@@ -36,6 +36,13 @@ function displayHex(value) {
 function bareHex(value) {
   return displayHex(value).replace(/^#/, "");
 }
+function normalizeHexEdit(input, alphaEnabled, currentAlpha) {
+  const rgba = parseHex(input);
+  if (!rgba) return null;
+  const digits = input.trim().replace(/^#/, "").length;
+  if (alphaEnabled && (digits === 3 || digits === 6)) rgba.a = clamp01(currentAlpha);
+  return formatHex(rgba, alphaEnabled);
+}
 function opacityPercent(rgba) {
   return Math.round(clamp01(rgba.a) * 100);
 }
@@ -235,6 +242,7 @@ export {
   hslToRgb,
   hsvToRgb,
   normalizeHex,
+  normalizeHexEdit,
   oklchToRgb,
   opacityPercent,
   parseHex,

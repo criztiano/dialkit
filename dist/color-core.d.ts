@@ -53,6 +53,12 @@ declare function normalizeHex(input: string, alphaEnabled: boolean): string | nu
 declare function displayHex(value: string): string;
 /** displayHex without the leading '#' — the trigger row renders the hash as a fixed symbol. */
 declare function bareHex(value: string): string;
+/**
+ * Commits a typed hex edit. The edit field shows only the RGB digits (alpha
+ * has its own readout), so a 3/6-digit entry inherits `currentAlpha` instead
+ * of silently resetting to opaque; explicit 4/8-digit input overrides it.
+ */
+declare function normalizeHexEdit(input: string, alphaEnabled: boolean, currentAlpha: number): string | null;
 /** 0–100 readout for the trigger row ("60 %"). */
 declare function opacityPercent(rgba: RGBA): number;
 declare function rgbToHsv(rgba: RGBA): HSVA;
@@ -89,4 +95,4 @@ declare function serializePalette(slots: PaletteSlots): string;
 /** Fail-soft: bad JSON, wrong shape, or non-hex entries become empty slots. */
 declare function deserializePalette(raw: string | null | undefined): PaletteSlots;
 
-export { COLOR_FORMATS, type ChannelSpec, type ColorFormat, HEX_COLOR_REGEX, type HSLA, type HSVA, LONG_PRESS_MS, type OKLCH, PALETTE_DRAG_CANCEL_PX, PALETTE_SIZE, PALETTE_STORAGE_KEY, type PaletteSlots, type RGBA, bareHex, channelsToRgba, clampOklchToSrgb, deserializePalette, displayHex, emptyPalette, formatHex, getChannels, hslToRgb, hsvToRgb, normalizeHex, oklchToRgb, opacityPercent, parseHex, rgbToHsl, rgbToHsv, rgbToOklch, rgbaToChannels, serializePalette };
+export { COLOR_FORMATS, type ChannelSpec, type ColorFormat, HEX_COLOR_REGEX, type HSLA, type HSVA, LONG_PRESS_MS, type OKLCH, PALETTE_DRAG_CANCEL_PX, PALETTE_SIZE, PALETTE_STORAGE_KEY, type PaletteSlots, type RGBA, bareHex, channelsToRgba, clampOklchToSrgb, deserializePalette, displayHex, emptyPalette, formatHex, getChannels, hslToRgb, hsvToRgb, normalizeHex, normalizeHexEdit, oklchToRgb, opacityPercent, parseHex, rgbToHsl, rgbToHsv, rgbToOklch, rgbaToChannels, serializePalette };

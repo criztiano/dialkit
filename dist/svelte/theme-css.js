@@ -1693,6 +1693,9 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
 }
 
 .dialkit-color-hex {
+  /* Same fixed box as the edit input so the row doesn't shift on edit toggle. */
+  display: inline-block;
+  width: 6.5ch;
   font-size: 13px;
   font-weight: 500;
   font-family: 'Geist Mono', monospace;
@@ -1758,6 +1761,7 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
   display: flex;
   align-items: center;
   gap: 2px;
+  cursor: text;
 }
 
 /* Fixed hash symbol — the editable value carries only the hex digits. */

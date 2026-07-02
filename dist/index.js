@@ -41,6 +41,13 @@ function displayHex(value) {
 function bareHex(value) {
   return displayHex(value).replace(/^#/, "");
 }
+function normalizeHexEdit(input, alphaEnabled, currentAlpha) {
+  const rgba = parseHex(input);
+  if (!rgba) return null;
+  const digits = input.trim().replace(/^#/, "").length;
+  if (alphaEnabled && (digits === 3 || digits === 6)) rgba.a = clamp01(currentAlpha);
+  return formatHex(rgba, alphaEnabled);
+}
 function opacityPercent(rgba) {
   return Math.round(clamp01(rgba.a) * 100);
 }
@@ -2778,24 +2785,24 @@ var PICKER_PALETTE_HEIGHT = 30;
 function ColorControl({ label, value, onChange, alpha = false, palette = false }) {
   const [isEditing, setIsEditing] = useState8(false);
   const [editValue, setEditValue] = useState8(() => bareHex(value));
-  const hexInputRef = useRef10(null);
-  useEffect7(() => {
-    if (isEditing) {
-      hexInputRef.current?.focus();
-      hexInputRef.current?.select();
-    }
-  }, [isEditing]);
   const [isOpen, setIsOpen] = useState8(false);
   const swatchRef = useRef10(null);
   const pickerRef = useRef10(null);
   const [portalTarget, setPortalTarget] = useState8(null);
   const [pos, setPos] = useState8(null);
+  const hexInputRef = useRef10(null);
   const rgba = parseHex(value);
   useEffect7(() => {
     if (!isEditing) {
       setEditValue(bareHex(value));
     }
   }, [value, isEditing]);
+  useEffect7(() => {
+    if (isEditing) {
+      hexInputRef.current?.focus();
+      hexInputRef.current?.select();
+    }
+  }, [isEditing]);
   const updatePos = useCallback6(() => {
     const el = swatchRef.current;
     if (!el) return;
@@ -2842,7 +2849,7 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
   }, [isOpen, updatePos]);
   function handleTextSubmit() {
     setIsEditing(false);
-    const normalized = normalizeHex(editValue, alpha);
+    const normalized = normalizeHexEdit(editValue, alpha, rgba?.a ?? 1);
     if (normalized) {
       onChange(normalized);
     } else {
@@ -2861,7 +2868,7 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
   return /* @__PURE__ */ jsxs12("div", { className: "dialkit-color-control", children: [
     /* @__PURE__ */ jsx13("span", { className: "dialkit-color-label", children: label }),
     /* @__PURE__ */ jsxs12("div", { className: "dialkit-color-inputs", children: [
-      /* @__PURE__ */ jsxs12("span", { className: "dialkit-color-hex-wrap", children: [
+      /* @__PURE__ */ jsxs12("span", { className: "dialkit-color-hex-wrap", onClick: () => setIsEditing(true), children: [
         /* @__PURE__ */ jsx13("span", { className: "dialkit-color-hash", "aria-hidden": "true", children: "#" }),
         isEditing ? /* @__PURE__ */ jsx13(
           "input",
@@ -2869,19 +2876,13 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
             ref: hexInputRef,
             type: "text",
             className: "dialkit-color-hex-input",
+            "aria-label": `Hex color for ${label}`,
             value: editValue,
             onChange: (e) => setEditValue(e.target.value),
             onBlur: handleTextSubmit,
             onKeyDown: handleKeyDown
           }
-        ) : /* @__PURE__ */ jsx13(
-          "span",
-          {
-            className: "dialkit-color-hex",
-            onClick: () => setIsEditing(true),
-            children: bareHex(value)
-          }
-        )
+        ) : /* @__PURE__ */ jsx13("span", { className: "dialkit-color-hex", "aria-label": `Hex color for ${label}`, children: bareHex(value) })
       ] }),
       alpha && rgba && /* @__PURE__ */ jsxs12(Fragment4, { children: [
         /* @__PURE__ */ jsx13("span", { className: "dialkit-color-divider", "aria-hidden": "true" }),

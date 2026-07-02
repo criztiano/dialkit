@@ -125,6 +125,13 @@ function displayHex(value) {
 function bareHex(value) {
   return displayHex(value).replace(/^#/, "");
 }
+function normalizeHexEdit(input, alphaEnabled, currentAlpha) {
+  const rgba = parseHex(input);
+  if (!rgba) return null;
+  const digits = input.trim().replace(/^#/, "").length;
+  if (alphaEnabled && (digits === 3 || digits === 6)) rgba.a = clamp01(currentAlpha);
+  return formatHex(rgba, alphaEnabled);
+}
 function opacityPercent(rgba) {
   return Math.round(clamp01(rgba.a) * 100);
 }
@@ -2862,24 +2869,24 @@ var PICKER_PALETTE_HEIGHT = 30;
 function ColorControl({ label, value, onChange, alpha = false, palette = false }) {
   const [isEditing, setIsEditing] = (0, import_react13.useState)(false);
   const [editValue, setEditValue] = (0, import_react13.useState)(() => bareHex(value));
-  const hexInputRef = (0, import_react13.useRef)(null);
-  (0, import_react13.useEffect)(() => {
-    if (isEditing) {
-      hexInputRef.current?.focus();
-      hexInputRef.current?.select();
-    }
-  }, [isEditing]);
   const [isOpen, setIsOpen] = (0, import_react13.useState)(false);
   const swatchRef = (0, import_react13.useRef)(null);
   const pickerRef = (0, import_react13.useRef)(null);
   const [portalTarget, setPortalTarget] = (0, import_react13.useState)(null);
   const [pos, setPos] = (0, import_react13.useState)(null);
+  const hexInputRef = (0, import_react13.useRef)(null);
   const rgba = parseHex(value);
   (0, import_react13.useEffect)(() => {
     if (!isEditing) {
       setEditValue(bareHex(value));
     }
   }, [value, isEditing]);
+  (0, import_react13.useEffect)(() => {
+    if (isEditing) {
+      hexInputRef.current?.focus();
+      hexInputRef.current?.select();
+    }
+  }, [isEditing]);
   const updatePos = (0, import_react13.useCallback)(() => {
     const el = swatchRef.current;
     if (!el) return;
@@ -2926,7 +2933,7 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
   }, [isOpen, updatePos]);
   function handleTextSubmit() {
     setIsEditing(false);
-    const normalized = normalizeHex(editValue, alpha);
+    const normalized = normalizeHexEdit(editValue, alpha, rgba?.a ?? 1);
     if (normalized) {
       onChange(normalized);
     } else {
@@ -2945,7 +2952,7 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
   return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "dialkit-color-control", children: [
     /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "dialkit-color-label", children: label }),
     /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "dialkit-color-inputs", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { className: "dialkit-color-hex-wrap", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { className: "dialkit-color-hex-wrap", onClick: () => setIsEditing(true), children: [
         /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "dialkit-color-hash", "aria-hidden": "true", children: "#" }),
         isEditing ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
           "input",
@@ -2953,19 +2960,13 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
             ref: hexInputRef,
             type: "text",
             className: "dialkit-color-hex-input",
+            "aria-label": `Hex color for ${label}`,
             value: editValue,
             onChange: (e) => setEditValue(e.target.value),
             onBlur: handleTextSubmit,
             onKeyDown: handleKeyDown
           }
-        ) : /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
-          "span",
-          {
-            className: "dialkit-color-hex",
-            onClick: () => setIsEditing(true),
-            children: bareHex(value)
-          }
-        )
+        ) : /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "dialkit-color-hex", "aria-label": `Hex color for ${label}`, children: bareHex(value) })
       ] }),
       alpha && rgba && /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(import_jsx_runtime13.Fragment, { children: [
         /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "dialkit-color-divider", "aria-hidden": "true" }),
