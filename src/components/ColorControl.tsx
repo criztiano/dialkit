@@ -120,16 +120,6 @@ export function ColorControl({ label, value, onChange, alpha = false, palette = 
     <div className="dialkit-color-control">
       <span className="dialkit-color-label">{label}</span>
       <div className="dialkit-color-inputs">
-        <button
-          ref={swatchRef}
-          className="dialkit-color-swatch"
-          style={{ '--swatch-color': value } as React.CSSProperties}
-          onClick={() => (isOpen ? setIsOpen(false) : open())}
-          data-open={String(isOpen)}
-          title="Pick color"
-          aria-label={`Pick color for ${label}`}
-          aria-expanded={isOpen}
-        />
         <span className="dialkit-color-hex-wrap">
           <span className="dialkit-color-hash" aria-hidden="true">#</span>
           {isEditing ? (
@@ -159,6 +149,16 @@ export function ColorControl({ label, value, onChange, alpha = false, palette = 
             </span>
           </>
         )}
+        <button
+          ref={swatchRef}
+          className="dialkit-color-swatch"
+          style={{ '--swatch-color': value } as React.CSSProperties}
+          onClick={() => (isOpen ? setIsOpen(false) : open())}
+          data-open={String(isOpen)}
+          title="Pick color"
+          aria-label={`Pick color for ${label}`}
+          aria-expanded={isOpen}
+        />
       </div>
 
       {portalTarget && createPortal(

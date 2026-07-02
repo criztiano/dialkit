@@ -155,16 +155,6 @@ export function ColorControl(props: ColorControlProps) {
     <div class="dialkit-color-control">
       <span class="dialkit-color-label">{props.label}</span>
       <div class="dialkit-color-inputs">
-        <button
-          ref={swatchRef}
-          class="dialkit-color-swatch"
-          style={{ '--swatch-color': props.value }}
-          onClick={() => (isOpen() ? closePopover() : openPopover())}
-          data-open={String(isOpen())}
-          title="Pick color"
-          aria-label={`Pick color for ${props.label}`}
-          aria-expanded={isOpen()}
-        />
         <span class="dialkit-color-hex-wrap">
           <span class="dialkit-color-hash" aria-hidden="true">#</span>
           <Show
@@ -197,6 +187,16 @@ export function ColorControl(props: ColorControlProps) {
             </>
           )}
         </Show>
+        <button
+          ref={swatchRef}
+          class="dialkit-color-swatch"
+          style={{ '--swatch-color': props.value }}
+          onClick={() => (isOpen() ? closePopover() : openPopover())}
+          data-open={String(isOpen())}
+          title="Pick color"
+          aria-label={`Pick color for ${props.label}`}
+          aria-expanded={isOpen()}
+        />
       </div>
 
       <Show when={!!portalTarget()}>

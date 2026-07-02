@@ -137,16 +137,6 @@ export const ColorControl = defineComponent({
       return h('div', { class: 'dialkit-color-control' }, [
         h('span', { class: 'dialkit-color-label' }, props.label),
         h('div', { class: 'dialkit-color-inputs' }, [
-          h('button', {
-            ref: swatchRef,
-            class: 'dialkit-color-swatch',
-            style: { '--swatch-color': props.value },
-            'data-open': String(isOpen.value),
-            title: 'Pick color',
-            'aria-label': `Pick color for ${props.label}`,
-            'aria-expanded': isOpen.value,
-            onClick: togglePicker,
-          }),
           h('span', { class: 'dialkit-color-hex-wrap' }, [
             h('span', { class: 'dialkit-color-hash', 'aria-hidden': 'true' }, '#'),
             isEditing.value
@@ -186,6 +176,16 @@ export const ColorControl = defineComponent({
               ]),
             ]
             : []),
+          h('button', {
+            ref: swatchRef,
+            class: 'dialkit-color-swatch',
+            style: { '--swatch-color': props.value },
+            'data-open': String(isOpen.value),
+            title: 'Pick color',
+            'aria-label': `Pick color for ${props.label}`,
+            'aria-expanded': isOpen.value,
+            onClick: togglePicker,
+          }),
         ]),
         portalTarget.value
           ? h(Teleport, { to: portalTarget.value }, [
