@@ -28,6 +28,22 @@ export { TextControl } from './components/TextControl';
 export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';
 export { ColorPickerPanel } from './components/ColorPickerPanel';
+export { GradientControl } from './components/GradientControl';
+export { GradientPanel } from './components/GradientPanel';
+export {
+  gradientToCss,
+  normalizeGradient,
+  colorAtPosition,
+  addStop,
+  removeStop,
+  moveStop,
+  setStopColor,
+  setGradientType,
+  setGradientAngle,
+  DEFAULT_GRADIENT,
+  MIN_STOPS,
+} from '../gradient-core';
+export type { GradientValue, GradientStop, GradientType } from '../gradient-core';
 export { PresetManager } from './components/PresetManager';
 
 export { DialStore } from '../store/DialStore';
@@ -38,6 +54,7 @@ export type {
   ActionConfig,
   SelectConfig,
   ColorConfig,
+  GradientConfig,
   TextConfig,
   Preset,
   DialValue,

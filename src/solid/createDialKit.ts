@@ -1,6 +1,7 @@
 import { createSignal, createMemo, onMount, onCleanup, createUniqueId, type Accessor } from 'solid-js';
 import { DialStore } from '../store/DialStore';
-import type { DialConfig, ResolvedValues, DialValue, SpringConfig, SelectConfig, ColorConfig, TextConfig, ActionConfig, ShortcutConfig } from '../store/DialStore';
+import type { DialConfig, ResolvedValues, DialValue, SpringConfig, SelectConfig, ColorConfig, GradientConfig, TextConfig, ActionConfig, ShortcutConfig } from '../store/DialStore';
+import { normalizeGradient, DEFAULT_GRADIENT } from '../gradient-core';
 
 export interface CreateDialOptions {
   onAction?: (action: string) => void;
@@ -65,6 +66,11 @@ function buildResolvedValues(
       result[key] = flatValues[path] ?? defaultValue;
     } else if (isColorConfig(configValue)) {
       result[key] = flatValues[path] ?? configValue.default ?? '#000000';
+    } else if (isGradientConfig(configValue)) {
+      // Gradient resolves to a normalized GradientValue object. Must precede the
+      // generic nested-object branch below, or the config is walked as a folder
+      // and the value resolves to the raw config (crashing gradientToCss).
+      result[key] = flatValues[path] ?? normalizeGradient(configValue.default ?? DEFAULT_GRADIENT);
     } else if (isTextConfig(configValue)) {
       result[key] = flatValues[path] ?? configValue.default ?? '';
     } else if (typeof configValue === 'object' && configValue !== null) {
@@ -93,6 +99,10 @@ function isSelectConfig(value: unknown): value is SelectConfig {
 
 function isColorConfig(value: unknown): value is ColorConfig {
   return hasType(value, 'color');
+}
+
+function isGradientConfig(value: unknown): value is GradientConfig {
+  return hasType(value, 'gradient');
 }
 
 function isTextConfig(value: unknown): value is TextConfig {

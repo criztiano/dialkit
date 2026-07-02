@@ -6,12 +6,14 @@ import type {
   DialConfig,
   DialValue,
   EasingConfig,
+  GradientConfig,
   ResolvedValues,
   SelectConfig,
   ShortcutConfig,
   SpringConfig,
   TextConfig,
 } from '../store/DialStore';
+import { normalizeGradient, DEFAULT_GRADIENT } from '../gradient-core';
 
 export interface UseDialOptions {
   onAction?: (action: string) => void;
@@ -105,6 +107,12 @@ function buildResolvedValues(
       result[key] = flatValues[path] ?? defaultValue;
     } else if (isColorConfig(configValue)) {
       result[key] = flatValues[path] ?? configValue.default ?? '#000000';
+    } else if (isGradientConfig(configValue)) {
+      // Gradient config resolves to a normalized GradientValue object. Without
+      // this branch it falls through to the nested-object case below and gets
+      // walked as a folder, resolving to the raw config — which then crashes
+      // gradientToCss with "stops is not iterable".
+      result[key] = flatValues[path] ?? normalizeGradient(configValue.default ?? DEFAULT_GRADIENT);
     } else if (isTextConfig(configValue)) {
       result[key] = flatValues[path] ?? configValue.default ?? '';
     } else if (typeof configValue === 'object' && configValue !== null) {
@@ -137,6 +145,10 @@ function isSelectConfig(value: unknown): value is SelectConfig {
 
 function isColorConfig(value: unknown): value is ColorConfig {
   return hasType(value, 'color');
+}
+
+function isGradientConfig(value: unknown): value is GradientConfig {
+  return hasType(value, 'gradient');
 }
 
 function isTextConfig(value: unknown): value is TextConfig {

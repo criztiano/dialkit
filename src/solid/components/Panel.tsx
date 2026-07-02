@@ -12,7 +12,9 @@ import { SpringControl } from './SpringControl';
 import { TextControl } from './TextControl';
 import { SelectControl } from './SelectControl';
 import { ColorControl } from './ColorControl';
+import { GradientControl } from './GradientControl';
 import { PresetManager } from './PresetManager';
+import type { GradientValue } from '../../gradient-core';
 
 interface PanelProps {
   panel: PanelConfig;
@@ -211,6 +213,15 @@ export function Panel(props: PanelProps) {
             onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
             alpha={control.alpha}
             palette={control.palette}
+          />
+        );
+
+      case 'gradient':
+        return (
+          <GradientControl
+            label={control.label}
+            value={value() as GradientValue}
+            onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
           />
         );
 

@@ -1,4 +1,5 @@
 import { DialStore, normalizeListItems } from 'dialkit/store';
+import { normalizeGradient, DEFAULT_GRADIENT } from '../gradient-core';
 import type {
   ActionConfig,
   ChipsConfig,
@@ -8,6 +9,7 @@ import type {
   DialValue,
   EasingConfig,
   FileConfig,
+  GradientConfig,
   ListConfig,
   ResolvedValues,
   SelectConfig,
@@ -89,6 +91,11 @@ function buildResolvedValues(
       result[key] = flatValues[path] ?? defaultValue;
     } else if (isColorConfig(configValue)) {
       result[key] = flatValues[path] ?? configValue.default ?? '#000000';
+    } else if (isGradientConfig(configValue)) {
+      // Must precede the generic nested-object branch below — otherwise a
+      // gradient config is walked as a folder and resolves to the raw config,
+      // crashing gradientToCss with "stops is not iterable".
+      result[key] = flatValues[path] ?? normalizeGradient(configValue.default ?? DEFAULT_GRADIENT);
     } else if (isTextConfig(configValue)) {
       result[key] = flatValues[path] ?? configValue.default ?? '';
     } else if (isFileConfig(configValue)) {
@@ -129,6 +136,10 @@ function isSelectConfig(value: unknown): value is SelectConfig {
 
 function isColorConfig(value: unknown): value is ColorConfig {
   return hasType(value, 'color');
+}
+
+function isGradientConfig(value: unknown): value is GradientConfig {
+  return hasType(value, 'gradient');
 }
 
 function isTextConfig(value: unknown): value is TextConfig {

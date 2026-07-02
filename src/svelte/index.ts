@@ -31,6 +31,22 @@ export { default as TextControl } from './components/TextControl.svelte';
 export { default as SelectControl } from './components/SelectControl.svelte';
 export { default as ColorControl } from './components/ColorControl.svelte';
 export { default as ColorPickerPanel } from './components/ColorPickerPanel.svelte';
+export { default as GradientControl } from './components/GradientControl.svelte';
+export { default as GradientPanel } from './components/GradientPanel.svelte';
+export {
+  gradientToCss,
+  normalizeGradient,
+  colorAtPosition,
+  addStop,
+  removeStop,
+  moveStop,
+  setStopColor,
+  setGradientType,
+  setGradientAngle,
+  DEFAULT_GRADIENT,
+  MIN_STOPS,
+} from '../gradient-core';
+export type { GradientValue, GradientStop, GradientType } from '../gradient-core';
 export { default as FileControl } from './components/FileControl.svelte';
 export { default as SwatchControl } from './components/SwatchControl.svelte';
 export { default as ChipsControl } from './components/ChipsControl.svelte';

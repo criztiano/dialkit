@@ -68,6 +68,7 @@ export default defineConfig([
       'curve-composer-core': 'src/curve-composer-core.ts',
       'color-core': 'src/color-core.ts',
       'color-palette-store': 'src/color-palette-store.ts',
+      'gradient-core': 'src/gradient-core.ts',
     },
     outDir: 'dist',
     format: ['esm'],

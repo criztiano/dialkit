@@ -23,6 +23,10 @@ export { TextControl } from './components/TextControl';
 export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';
 export { ColorPickerPanel } from './components/ColorPickerPanel';
+export { GradientControl } from './components/GradientControl';
+export { GradientPanel } from './components/GradientPanel';
+export { gradientToCss, DEFAULT_GRADIENT } from '../gradient-core';
+export type { GradientValue, GradientStop, GradientType } from '../gradient-core';
 export { PresetManager } from './components/PresetManager';
 
 // Store exports
