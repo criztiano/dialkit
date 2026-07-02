@@ -1,5 +1,11 @@
 // Lightweight state store with subscriptions for dialkit
 
+import { HEX_COLOR_REGEX } from '../color-core';
+import { clampRange } from '../range-slider-core';
+// Type-only (erased in JS): lets consumers import `RangeValue` from the package types.
+import type { RangeValue } from '../range-slider-core';
+export type { RangeValue };
+
 export type SpringConfig = {
   type: 'spring';
   stiffness?: number;
@@ -31,12 +37,26 @@ export type SelectConfig = {
 export type ColorConfig = {
   type: 'color';
   default?: string;
+  /** Enables the alpha slider; the emitted value becomes #rrggbbaa. Default false. */
+  alpha?: boolean;
+  /** Shows the shared saved-swatches row (persisted per machine). Default false. */
+  palette?: boolean;
 };
 
 export type TextConfig = {
   type: 'text';
   default?: string;
   placeholder?: string;
+};
+
+export type RangeConfig = {
+  type: 'range';
+  min: number;
+  max: number;
+  /** Falls back to the full span { min, max } when omitted. */
+  default?: RangeValue;
+  /** Falls back to inferStep(min, max) when omitted. */
+  step?: number;
 };
 
 export type FileConfig = {
@@ -145,7 +165,7 @@ export type ListField = {
   defaultValue: number | boolean | string;
 };
 
-export type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[];
+export type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 
 export type DialConfig = {
   [key: string]: DialValue | [number, number, number, number?] | DialConfig;
@@ -164,19 +184,21 @@ export type ResolvedValues<T extends DialConfig> = {
             ? string
             : T[K] extends TextConfig
               ? string
-              : T[K] extends GalleryConfig
-                ? string
-                : T[K] extends FileConfig
+              : T[K] extends RangeConfig
+                ? RangeValue
+                : T[K] extends GalleryConfig
                   ? string
-                  : T[K] extends SwatchConfig
+                  : T[K] extends FileConfig
                     ? string
-                    : T[K] extends ChipsConfig
+                    : T[K] extends SwatchConfig
                       ? string
-                      : T[K] extends ListConfig
-                        ? ListItemValue[]
-                        : T[K] extends DialConfig
-                          ? ResolvedValues<T[K]>
-                          : T[K];
+                      : T[K] extends ChipsConfig
+                        ? string
+                        : T[K] extends ListConfig
+                          ? ListItemValue[]
+                          : T[K] extends DialConfig
+                            ? ResolvedValues<T[K]>
+                            : T[K];
 };
 
 export type ShortcutMode = 'fine' | 'normal' | 'coarse';
@@ -190,12 +212,14 @@ export type ShortcutConfig = {
 };
 
 export type ControlMeta = {
-  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'text' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
   path: string;
   label: string;
   min?: number;
   max?: number;
   step?: number;
+  /** Range control's configured reset target — its `default`, else the full {min,max} span. */
+  rangeDefault?: RangeValue;
   children?: ControlMeta[];
   defaultOpen?: boolean;
   options?: (string | { value: string; label: string })[];
@@ -209,6 +233,8 @@ export type ControlMeta = {
   itemTypes?: Record<string, ListItemType>;
   addLabel?: string;
   maxItems?: number;
+  alpha?: boolean;
+  palette?: boolean;
   shortcut?: ShortcutConfig;
 };
 
@@ -596,7 +622,7 @@ class DialStoreClass {
         const hasPhysics = value.stiffness !== undefined || value.damping !== undefined || value.mass !== undefined;
         const hasTime = value.visualDuration !== undefined || value.bounce !== undefined;
         values[`${path}.__mode`] = hasPhysics && !hasTime ? 'advanced' : 'simple';
-      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isColorConfig(value) && !this.isTextConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isListConfig(value)) {
+      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isColorConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isListConfig(value)) {
         this.initTransitionModes(value as DialConfig, path, values);
       }
     }
@@ -637,9 +663,15 @@ class DialStoreClass {
       } else if (this.isSelectConfig(value)) {
         controls.push({ type: 'select', path, label, options: value.options });
       } else if (this.isColorConfig(value)) {
-        controls.push({ type: 'color', path, label });
+        controls.push({ type: 'color', path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: 'text', path, label, placeholder: value.placeholder });
+      } else if (this.isRangeConfig(value)) {
+        // No `shortcut`: a range value is {min,max}, which the numeric-nudge
+        // shortcut path can't drive, and RangeSlider has no shortcut prop.
+        controls.push({ type: 'range', path, label, min: value.min, max: value.max,
+          step: value.step ?? this.inferStep(value.min, value.max),
+          rangeDefault: value.default ?? { min: value.min, max: value.max } });
       } else if (this.isGalleryConfig(value)) {
         controls.push({ type: 'gallery', path, label, items: value.items, columns: value.columns });
       } else if (this.isFileConfig(value)) {
@@ -651,9 +683,11 @@ class DialStoreClass {
       } else if (this.isListConfig(value)) {
         controls.push({ type: 'list', path, label, itemTypes: value.itemTypes, addLabel: value.addLabel, maxItems: value.max });
       } else if (typeof value === 'string') {
-        // Auto-detect: hex color vs text
+        // Auto-detect: hex color vs text. Alpha digits in the default
+        // (#rgba / #rrggbbaa) opt the control into the alpha slider.
         if (this.isHexColor(value)) {
-          controls.push({ type: 'color', path, label });
+          const hasAlpha = value.length === 5 || value.length === 9;
+          controls.push({ type: 'color', path, label, alpha: hasAlpha || undefined });
         } else {
           controls.push({ type: 'text', path, label });
         }
@@ -699,6 +733,8 @@ class DialStoreClass {
         values[path] = value.default ?? '#000000';
       } else if (this.isTextConfig(value)) {
         values[path] = value.default ?? '';
+      } else if (this.isRangeConfig(value)) {
+        values[path] = value.default ?? { min: value.min, max: value.max };
       } else if (this.isGalleryConfig(value)) {
         // Resolve to the selected item id — default, else the first item.
         values[path] = value.default ?? value.items[0]?.id ?? '';
@@ -766,6 +802,26 @@ class DialStoreClass {
     );
   }
 
+  private isRangeConfig(value: unknown): value is RangeConfig {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'type' in value &&
+      (value as RangeConfig).type === 'range'
+    );
+  }
+
+  // A stored range VALUE ({min,max} numbers), as opposed to a range config.
+  // Used to preserve the leaf value by identity across a panel update.
+  private isRangeValue(value: unknown): value is RangeValue {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      typeof (value as RangeValue).min === 'number' &&
+      typeof (value as RangeValue).max === 'number'
+    );
+  }
+
   private isTextConfig(value: unknown): value is TextConfig {
     return (
       typeof value === 'object' &&
@@ -829,7 +885,7 @@ class DialStoreClass {
   }
 
   private isHexColor(value: string): boolean {
-    return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(value);
+    return HEX_COLOR_REGEX.test(value);
   }
 
   private formatLabel(key: string): string {
@@ -913,7 +969,20 @@ class DialStoreClass {
         const validValues = new Set((control.chipOptions ?? []).map((option) => option.value));
         return validValues.has(existingValue) ? existingValue : defaultValue;
       }
-      case 'color':
+      case 'color': {
+        if (typeof existingValue !== 'string' || !this.isHexColor(existingValue)) {
+          return defaultValue;
+        }
+        // Config dropped alpha: reconcile stored 8-digit values back to opaque hex.
+        if (!control.alpha && (existingValue.length === 5 || existingValue.length === 9)) {
+          return existingValue.length === 9 ? existingValue.slice(0, 7) : existingValue.slice(0, 4);
+        }
+        // Config gained alpha: uphold the #rrggbbaa invariant from load, not first edit.
+        if (control.alpha && (existingValue.length === 4 || existingValue.length === 7)) {
+          return existingValue + (existingValue.length === 7 ? 'ff' : 'f');
+        }
+        return existingValue;
+      }
       case 'text':
       case 'file':
         return typeof existingValue === 'string' ? existingValue : defaultValue;
@@ -921,6 +990,19 @@ class DialStoreClass {
         // Items are self-validating ({type, params}); preserve the user's array
         // across config edits, falling back to the default when shape is lost.
         return Array.isArray(existingValue) ? existingValue : defaultValue;
+      case 'range': {
+        // A range value is a leaf {min,max} preserved by identity (like color),
+        // not a folder — never let a panel update drop it. Reconcile the stored
+        // pair against (possibly changed) bounds: clamp both ends and re-order.
+        if (!this.isRangeValue(existingValue)) {
+          return defaultValue;
+        }
+        // clampRange does exactly clamp-both-ends-then-order. Missing bounds fall
+        // back to ±Infinity so the clamp is a no-op there.
+        const lo = control.min ?? Number.NEGATIVE_INFINITY;
+        const hi = control.max ?? Number.POSITIVE_INFINITY;
+        return clampRange(existingValue, lo, hi);
+      }
       case 'gallery': {
         if (typeof existingValue !== 'string') {
           return defaultValue;

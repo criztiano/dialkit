@@ -1,8 +1,9 @@
 <script lang="ts">
   import { getContext } from 'svelte';
   import { DialStore } from 'dialkit/store';
-  import type { ControlMeta, DialValue, SpringConfig, TransitionConfig, ListItemValue } from 'dialkit/store';
+  import type { ControlMeta, DialValue, SpringConfig, TransitionConfig, ListItemValue, RangeValue } from 'dialkit/store';
   import Slider from './Slider.svelte';
+  import RangeSlider from './RangeSlider.svelte';
   import Toggle from './Toggle.svelte';
   import Folder from './Folder.svelte';
   import SpringControl from './SpringControl.svelte';
@@ -42,6 +43,16 @@
     step={control.step}
     shortcut={control.shortcut}
     shortcutActive={isShortcutActive}
+  />
+{:else if control.type === 'range'}
+  <RangeSlider
+    label={control.label}
+    value={controlValue as RangeValue}
+    min={control.min ?? 0}
+    max={control.max ?? 1}
+    step={control.step}
+    defaultValue={control.rangeDefault}
+    onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
   />
 {:else if control.type === 'toggle'}
   <Toggle
@@ -92,6 +103,8 @@
     label={control.label}
     value={controlValue as string}
     onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+    alpha={control.alpha}
+    palette={control.palette}
   />
 {:else if control.type === 'file'}
   <FileControl

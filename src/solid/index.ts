@@ -8,6 +8,7 @@ export type { DialPosition, DialMode, DialTheme } from './components/DialRoot';
 
 // Component exports
 export { Slider } from './components/Slider';
+export { RangeSlider } from './components/RangeSlider';
 export { Toggle } from './components/Toggle';
 export { Folder } from './components/Folder';
 export { Module } from './components/Module';
@@ -22,6 +23,7 @@ export type { CurveType, CurveSegment, CurveDriver, CurveComposition, DriverDire
 export { TextControl } from './components/TextControl';
 export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';
+export { ColorPickerPanel } from './components/ColorPickerPanel';
 export { PresetManager } from './components/PresetManager';
 
 // Store exports

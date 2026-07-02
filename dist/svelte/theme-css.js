@@ -496,6 +496,126 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
   color: var(--dial-text-focus);
 }
 
+/* Range Slider — dual-handle sibling of the slider. Track is identical; the fill
+   spans BETWEEN the two handles and both handles stay subtly visible at rest. */
+.dialkit-range-slider-wrapper {
+  position: relative;
+  height: var(--dial-row-height);
+}
+
+.dialkit-range-slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  user-select: none;
+  overflow: hidden;
+  background: var(--dial-surface);
+  border-radius: var(--dial-radius);
+  touch-action: none;
+}
+
+.dialkit-range-slider-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: var(--dial-surface-active);
+  transition: background 0.15s;
+  pointer-events: none;
+}
+
+.dialkit-range-slider-active .dialkit-range-slider-fill {
+  background: var(--dial-border-hover);
+}
+
+.dialkit-range-slider-active .dialkit-range-slider-value {
+  color: var(--dial-text-focus);
+}
+
+.dialkit-range-slider-handle {
+  position: absolute;
+  top: 50%;
+  width: 3px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--dial-text-primary);
+  pointer-events: none;
+}
+
+.dialkit-range-slider-label {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(calc(-50% - 0.5px));
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dial-text-label);
+  pointer-events: none;
+  transition: color 0.15s;
+  display: inline-flex;
+  align-items: center;
+}
+
+.dialkit-range-slider-value {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(calc(-50% + 0.5px));
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'Geist Mono', monospace;
+  color: var(--dial-text-label);
+  pointer-events: auto;
+  transition: color 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.dialkit-range-slider-dash {
+  color: var(--dial-text-tertiary);
+  pointer-events: none;
+}
+
+.dialkit-range-slider-bound {
+  cursor: text;
+  border-bottom: 1px solid transparent;
+  padding-bottom: 1px;
+  transition: border-color 0.15s;
+}
+
+.dialkit-range-slider-active .dialkit-range-slider-bound:hover,
+.dialkit-range-slider-bound:hover {
+  border-bottom-color: var(--dial-text-label);
+}
+
+.dialkit-range-slider-input {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4ch;
+  min-width: 3ch;
+  max-width: 6ch;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'Geist Mono', monospace;
+  color: var(--dial-text-label);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--dial-text-label);
+  padding: 0 0 1px 0;
+  outline: none;
+  text-align: right;
+}
+
+.dialkit-range-slider-input:focus {
+  color: var(--dial-text-focus);
+}
+
 /* Segmented Control */
 .dialkit-segmented {
   position: relative;
@@ -1693,6 +1813,9 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
 }
 
 .dialkit-color-hex {
+  /* Same fixed box as the edit input so the row doesn't shift on edit toggle. */
+  display: inline-block;
+  width: 6.5ch;
   font-size: 13px;
   font-weight: 500;
   font-family: 'Geist Mono', monospace;
@@ -1702,7 +1825,7 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
 }
 
 .dialkit-color-hex-input {
-  width: 7ch;
+  width: 6.5ch;
   font-size: 13px;
   font-weight: 500;
   font-family: 'Geist Mono', monospace;
@@ -1722,22 +1845,224 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
 .dialkit-color-swatch {
   width: 20px;
   height: 20px;
+  padding: 0;
   border-radius: 4px;
   border: 1px solid var(--dial-border-hover);
   cursor: pointer;
   transition: transform 0.15s;
+  /* Current color layered over a checkerboard so translucent values read correctly. */
+  background:
+    linear-gradient(var(--swatch-color, transparent), var(--swatch-color, transparent)),
+    conic-gradient(rgba(127, 127, 127, 0.35) 25%, transparent 0 50%, rgba(127, 127, 127, 0.35) 0 75%, transparent 0) 0 0 / 8px 8px;
 }
 
 .dialkit-color-swatch:hover {
   transform: scale(1.1);
 }
 
-.dialkit-color-picker-native {
+.dialkit-color-swatch[data-open="true"] {
+  transform: scale(1.1);
+}
+
+.dialkit-color-opacity {
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'Geist Mono', monospace;
+  color: var(--dial-text-label);
+  transform: translateY(-0.5px);
+  white-space: nowrap;
+}
+
+.dialkit-color-opacity-unit {
+  color: var(--dial-text-tertiary);
+}
+
+.dialkit-color-hex-wrap {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  cursor: text;
+}
+
+/* Fixed hash symbol — the editable value carries only the hex digits. */
+.dialkit-color-hash {
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'Geist Mono', monospace;
+  color: var(--dial-text-tertiary);
+  transform: translateY(-0.5px);
+  user-select: none;
+}
+
+.dialkit-color-divider {
+  width: 1px;
+  height: 14px;
+  flex-shrink: 0;
+  background: var(--dial-surface-active);
+}
+
+/* ── Color picker popover ── */
+
+.dialkit-color-picker-popover {
+  z-index: 10000;
+}
+
+.dialkit-color-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  background: var(--dial-dropdown-bg);
+  border: 1px solid var(--dial-border);
+  border-radius: 12px;
+  box-shadow: var(--dial-shadow-dropdown);
+  box-sizing: border-box;
+}
+
+.dialkit-checker {
+  background: conic-gradient(rgba(127, 127, 127, 0.35) 25%, transparent 0 50%, rgba(127, 127, 127, 0.35) 0 75%, transparent 0) 0 0 / 8px 8px;
+}
+
+.dialkit-color-sv {
+  position: relative;
+  aspect-ratio: 3 / 2;
+  border-radius: 6px;
+  cursor: crosshair;
+  touch-action: none;
+  background:
+    linear-gradient(to top, #000, transparent),
+    linear-gradient(to right, #fff, hsl(var(--picker-hue, 0) 100% 50%));
+}
+
+.dialkit-color-sv-thumb,
+.dialkit-color-slider-thumb {
   position: absolute;
-  width: 0;
-  height: 0;
-  opacity: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 1px 4px rgba(0, 0, 0, 0.4);
+  transform: translate(-50%, -50%);
   pointer-events: none;
+  box-sizing: border-box;
+}
+
+.dialkit-color-slider {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.dialkit-color-slider .dialkit-color-slider-thumb {
+  top: 50%;
+}
+
+.dialkit-color-hue {
+  background: linear-gradient(to right,
+    hsl(0 100% 50%), hsl(60 100% 50%), hsl(120 100% 50%),
+    hsl(180 100% 50%), hsl(240 100% 50%), hsl(300 100% 50%), hsl(360 100% 50%));
+}
+
+.dialkit-color-alpha-gradient {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+/* ── Per-format value fields ── */
+
+.dialkit-color-fields {
+  display: flex;
+  gap: 6px;
+}
+
+.dialkit-color-field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+}
+
+.dialkit-color-field input {
+  width: 100%;
+  height: 26px;
+  padding: 0 4px;
+  font-family: 'Geist Mono', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+  color: var(--dial-text-label);
+  background: var(--dial-surface);
+  border: none;
+  border-radius: 6px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.dialkit-color-field input:focus {
+  color: var(--dial-text-focus);
+  background: var(--dial-surface-hover);
+}
+
+.dialkit-color-field-hex {
+  flex: 2.5;
+}
+
+.dialkit-color-field-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-align: center;
+  color: var(--dial-text-tertiary);
+  user-select: none;
+}
+
+/* ── Saved palette row ── */
+
+.dialkit-color-palette {
+  display: flex;
+  gap: 6px;
+}
+
+.dialkit-color-palette-slot {
+  flex: 1;
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0;
+  border-radius: 5px;
+  cursor: pointer;
+  border: none;
+  transition: transform 0.45s ease;
+  touch-action: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+}
+
+.dialkit-color-palette-slot[data-filled="false"] {
+  background: transparent;
+  border: 1px dashed var(--dial-border-hover);
+  transition: transform 0.15s ease, background 0.15s;
+}
+
+.dialkit-color-palette-slot[data-filled="false"]:hover {
+  background: var(--dial-surface-hover);
+}
+
+.dialkit-color-palette-slot[data-filled="true"] {
+  background:
+    linear-gradient(var(--swatch-color, transparent), var(--swatch-color, transparent)),
+    conic-gradient(rgba(127, 127, 127, 0.35) 25%, transparent 0 50%, rgba(127, 127, 127, 0.35) 0 75%, transparent 0) 0 0 / 8px 8px;
+  box-shadow: inset 0 0 0 1px var(--dial-border);
+}
+
+/* Long-press telegraph: the slot sinks while the hold timer runs. */
+.dialkit-color-palette-slot[data-holding="true"] {
+  transform: scale(0.82);
 }
 
 /* Preset Manager */

@@ -2,6 +2,8 @@ type $$ComponentProps = {
     label: string;
     value: string;
     onChange: (value: string) => void;
+    alpha?: boolean;
+    palette?: boolean;
 };
 declare const ColorControl: import("svelte").Component<$$ComponentProps, {}, "">;
 type ColorControl = ReturnType<typeof ColorControl>;

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
+import { PresenceMotionDiv } from './PresenceMotionDiv';
 import { DialStore, ShortcutConfig } from '../store/DialStore';
 
 interface ShortcutsMenuProps {
@@ -113,8 +114,8 @@ export function ShortcutsMenu({ panelId }: ShortcutsMenuProps) {
       {createPortal(
         <AnimatePresence>
           {isOpen && (
-            <motion.div
-              ref={dropdownRef}
+            <PresenceMotionDiv
+              divRef={dropdownRef}
               className="dialkit-root dialkit-shortcuts-dropdown"
               style={{ position: 'fixed', top: pos.top, right: pos.right }}
               initial={{ opacity: 0, y: 4, scale: 0.97 }}
@@ -135,7 +136,7 @@ export function ShortcutsMenu({ panelId }: ShortcutsMenuProps) {
                 ))}
               </div>
               <div className="dialkit-shortcuts-hint">See pill badges on controls for keys</div>
-            </motion.div>
+            </PresenceMotionDiv>
           )}
         </AnimatePresence>,
         document.body

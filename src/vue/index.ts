@@ -11,6 +11,7 @@ export type { ShortcutState } from './components/ShortcutListener';
 export { ShortcutsMenu } from './components/ShortcutsMenu';
 
 export { Slider } from './components/Slider';
+export { RangeSlider } from './components/RangeSlider';
 export { Toggle } from './components/Toggle';
 export { Folder } from './components/Folder';
 export { Module } from './components/Module';
@@ -27,6 +28,7 @@ export type { CurveType, CurveSegment, CurveDriver, CurveComposition, DriverDire
 export { TextControl } from './components/TextControl';
 export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';
+export { ColorPickerPanel } from './components/ColorPickerPanel';
 export { PresetManager } from './components/PresetManager';
 
 export { DialStore } from '../store/DialStore';
