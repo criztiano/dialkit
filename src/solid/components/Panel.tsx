@@ -2,7 +2,7 @@ import { createSignal, createEffect, onMount, onCleanup, Show, For, JSX } from '
 import { animate } from 'motion';
 import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../../icons';
 import { DialStore } from '../../store/DialStore';
-import type { ControlMeta, PanelConfig, SpringConfig, DialValue, RangeValue } from '../../store/DialStore';
+import type { ControlMeta, PanelConfig, SpringConfig, DialValue, XYValue, RangeValue } from '../../store/DialStore';
 import { useShortcutContext } from './ShortcutListener';
 import { ShortcutsMenu } from './ShortcutsMenu';
 import { Folder } from './Folder';
@@ -13,6 +13,7 @@ import { SpringControl } from './SpringControl';
 import { TextControl } from './TextControl';
 import { SelectControl } from './SelectControl';
 import { ColorControl } from './ColorControl';
+import { XYControl } from './XYControl';
 import { PresetManager } from './PresetManager';
 
 interface PanelProps {
@@ -212,6 +213,24 @@ export function Panel(props: PanelProps) {
             onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
             alpha={control.alpha}
             palette={control.palette}
+          />
+        );
+
+      case 'xy':
+        return (
+          <XYControl
+            label={control.label}
+            value={value() as XYValue}
+            onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
+            x={control.xAxis}
+            y={control.yAxis}
+            grid={control.grid}
+            density={control.density}
+            snap={control.snap}
+            returnToCenter={control.returnToCenter}
+            showValues={control.showValues}
+            shortcut={control.shortcut}
+            shortcutActive={shortcutCtx().activePanelId === props.panel.id && shortcutCtx().activePath === control.path}
           />
         );
 

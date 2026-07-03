@@ -1,6 +1,6 @@
 import { useState, useContext, useSyncExternalStore } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { DialStore, ControlMeta, PanelConfig, SpringConfig, TransitionConfig, ListItemValue } from '../store/DialStore';
+import { DialStore, ControlMeta, PanelConfig, SpringConfig, TransitionConfig, ListItemValue, XYValue } from '../store/DialStore';
 import type { RangeValue } from '../store/DialStore';
 import { ShortcutContext } from './ShortcutListener';
 import { ShortcutsMenu } from './ShortcutsMenu';
@@ -14,6 +14,7 @@ import { TransitionControl } from './TransitionControl';
 import { TextControl } from './TextControl';
 import { SelectControl } from './SelectControl';
 import { ColorControl } from './ColorControl';
+import { XYControl } from './XYControl';
 import { GalleryControl } from './GalleryControl';
 import { FileControl } from './FileControl';
 import { SwatchControl } from './SwatchControl';
@@ -170,6 +171,25 @@ Apply these values as the new defaults in the useDialKit call.`;
             value={value as string}
             alpha={control.alpha}
             palette={control.palette}
+            onChange={(v) => DialStore.updateValue(panel.id, control.path, v)}
+          />
+        );
+
+      case 'xy':
+        return (
+          <XYControl
+            key={control.path}
+            label={control.label}
+            value={value as XYValue}
+            x={control.xAxis}
+            y={control.yAxis}
+            grid={control.grid}
+            density={control.density}
+            snap={control.snap}
+            returnToCenter={control.returnToCenter}
+            showValues={control.showValues}
+            shortcut={control.shortcut}
+            shortcutActive={shortcutCtx.activePanelId === panel.id && shortcutCtx.activePath === control.path}
             onChange={(v) => DialStore.updateValue(panel.id, control.path, v)}
           />
         );

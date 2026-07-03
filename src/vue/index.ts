@@ -29,6 +29,8 @@ export { TextControl } from './components/TextControl';
 export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';
 export { ColorPickerPanel } from './components/ColorPickerPanel';
+export { XYPad } from './components/XYPad';
+export { XYControl } from './components/XYControl';
 export { PresetManager } from './components/PresetManager';
 
 export { DialStore } from '../store/DialStore';
@@ -39,6 +41,9 @@ export type {
   ActionConfig,
   SelectConfig,
   ColorConfig,
+  XYConfig,
+  XYValue,
+  XYAxis,
   TextConfig,
   Preset,
   DialValue,

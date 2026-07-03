@@ -2588,4 +2588,184 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
   pointer-events: none;
   text-transform: capitalize;
 }
+
+/* XY Pad — a 2D value control: a header label over a fluid landscape surface that
+   fills the container width (height from the inline \`height\`, not forced square).
+   The live values render inside the pad (X along the bottom, Y up the left). The
+   grid stays faintly visible at rest and strengthens on data-active (hover / focus
+   / drag); the crosshair guides stay hidden at rest and reveal on data-active,
+   matching the kit's "affordance on interaction" pattern. */
+.dialkit-xy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.dialkit-xy-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dialkit-xy-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dial-text-label);
+}
+
+.dialkit-xy-area {
+  position: relative;
+  /* Height comes from the inline \`height\`; width is fluid so the pad fills its
+     container (landscape, not forced square). \`align-self: stretch\` keeps a flex
+     parent from shrinking it below full width. */
+  width: 100%;
+  align-self: stretch;
+  min-height: 80px;
+  border-radius: var(--dial-radius);
+  background: var(--dial-surface);
+  border: 1px solid var(--dial-border);
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.dialkit-xy-area[data-active="true"] {
+  border-color: var(--dial-border-hover);
+  background: var(--dial-surface-hover);
+}
+
+.dialkit-xy-area:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dial-text-focus);
+}
+
+/* Grid: even subdivisions via repeating gradients, at the curve-grid opacity so
+   it themes for free (light/dark) off currentColor. */
+.dialkit-xy-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  transition: opacity 0.15s ease;
+  background-image:
+    repeating-linear-gradient(to right, currentColor 0, currentColor 1px, transparent 1px, transparent var(--dial-xy-grid-step-x, 20%)),
+    repeating-linear-gradient(to bottom, currentColor 0, currentColor 1px, transparent 1px, transparent var(--dial-xy-grid-step-y, 20%));
+  color: var(--dial-text-root);
+  mix-blend-mode: normal;
+}
+
+.dialkit-xy-area[data-active="true"] .dialkit-xy-grid {
+  opacity: 0.1;
+}
+
+/* Live axis labels inside the pad: X centered along the bottom, Y up the left
+   edge (vertical, reading bottom-to-top). Decorative (aria-hidden) — the pad's
+   aria-valuetext remains the accessible source of truth. They brighten on
+   interaction, matching the kit's readout pattern. */
+.dialkit-xy-axis {
+  position: absolute;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--dial-text-label);
+  pointer-events: none;
+  white-space: nowrap;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.dialkit-xy-axis-x {
+  left: 0;
+  right: 0;
+  bottom: 6px;
+  text-align: center;
+}
+
+.dialkit-xy-axis-y {
+  left: 6px;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+.dialkit-xy-area[data-active="true"] .dialkit-xy-axis {
+  color: var(--dial-text-focus);
+}
+
+/* Crosshair guides from the thumb to the axes. Position eases with the thumb
+   (keyboard / return); the reveal is opacity, gated by data-active. */
+.dialkit-xy-guide {
+  position: absolute;
+  background: currentColor;
+  color: var(--dial-text-root);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, left 0.12s ease, top 0.12s ease;
+}
+
+.dialkit-xy-guide-v {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  transform: translateX(-0.5px);
+}
+
+.dialkit-xy-guide-h {
+  left: 0;
+  right: 0;
+  height: 1px;
+  transform: translateY(-0.5px);
+}
+
+.dialkit-xy-area[data-active="true"] .dialkit-xy-guide {
+  opacity: 0.15;
+}
+
+/* Thumb — derived from .dialkit-color-sv-thumb (12px, 2px white ring, layered
+   shadow). Neutral fill via --dial-text-primary (same token as the slider
+   handle) so it themes with the kit instead of baking in a brand hue.
+   Positioned by left/top; those transition for keyboard nudges and the joystick
+   return, and the transition is cut during drag so pointer tracking is instant. */
+.dialkit-xy-thumb {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: var(--dial-text-primary);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 1px 4px rgba(0, 0, 0, 0.4);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  box-sizing: border-box;
+  transition: left 0.12s ease, top 0.12s ease;
+}
+
+.dialkit-xy-area[data-dragging="true"] .dialkit-xy-thumb,
+.dialkit-xy-area[data-dragging="true"] .dialkit-xy-guide {
+  transition: opacity 0.15s ease;
+}
+
+.dialkit-xy[data-disabled="true"] .dialkit-xy-area,
+.dialkit-xy-area[data-disabled="true"] {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialkit-xy-area,
+  .dialkit-xy-grid,
+  .dialkit-xy-guide,
+  .dialkit-xy-thumb {
+    transition: none;
+  }
+}
 `;

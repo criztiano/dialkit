@@ -83,6 +83,27 @@ export {
   clampOklchToSrgb,
 } from './color-core';
 export type { RGBA, HSVA, HSLA, OKLCH, ColorFormat } from './color-core';
+export { XYPad } from './components/XYPad';
+export type { XYPadProps } from './components/XYPad';
+export { XYControl } from './components/XYControl';
+export {
+  XY_DETENT_PX,
+  XY_DEFAULT_STEP,
+  resolveAxis,
+  // `clamp` is re-exported once from './range-slider-core' above; xy-pad-core's
+  // identical `clamp` is intentionally not re-exported here to avoid a duplicate.
+  snapToStep,
+  valueToNorm,
+  normToValue,
+  invertY,
+  valueFromPoint,
+  pointFromValue,
+  applyDetentAxis,
+  nudge,
+  centerValue,
+  normalizeValue,
+} from './xy-pad-core';
+export type { XYValue, AxisSpec, Point } from './xy-pad-core';
 export { GalleryControl } from './components/GalleryControl';
 export { FileControl } from './components/FileControl';
 export { SwatchControl } from './components/SwatchControl';
@@ -100,6 +121,8 @@ export type {
   ActionConfig,
   SelectConfig,
   ColorConfig,
+  XYConfig,
+  XYAxis,
   TextConfig,
   GalleryConfig,
   GalleryItem,

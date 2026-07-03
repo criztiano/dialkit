@@ -2,7 +2,7 @@ import { Fragment, defineComponent, h, onMounted, onUnmounted, ref, type PropTyp
 import { AnimatePresence, motion } from 'motion-v';
 import { ICON_ADD_PRESET, ICON_CHECK, ICON_CLIPBOARD } from '../../icons';
 import { DialStore } from '../../store/DialStore';
-import type { ControlMeta, DialValue, PanelConfig, RangeValue, SpringConfig, TransitionConfig } from '../../store/DialStore';
+import type { ControlMeta, DialValue, PanelConfig, RangeValue, SpringConfig, TransitionConfig, XYValue } from '../../store/DialStore';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
 import { RangeSlider } from './RangeSlider';
@@ -12,6 +12,7 @@ import { TransitionControl } from './TransitionControl';
 import { TextControl } from './TextControl';
 import { SelectControl } from './SelectControl';
 import { ColorControl } from './ColorControl';
+import { XYControl } from './XYControl';
 import { PresetManager } from './PresetManager';
 import { useShortcutContext } from './ShortcutListener';
 import { ShortcutsMenu } from './ShortcutsMenu';
@@ -170,6 +171,22 @@ export const Panel = defineComponent({
             alpha: control.alpha,
             palette: control.palette,
             onChange: (next: string) => DialStore.updateValue(props.panel.id, control.path, next),
+          });
+        case 'xy':
+          return h(XYControl, {
+            key: control.path,
+            label: control.label,
+            value: value as XYValue,
+            x: control.xAxis,
+            y: control.yAxis,
+            grid: control.grid,
+            density: control.density,
+            snap: control.snap,
+            returnToCenter: control.returnToCenter,
+            showValues: control.showValues,
+            shortcut: control.shortcut,
+            shortcutActive: shortcutCtx.activePanelId.value === props.panel.id && shortcutCtx.activePath.value === control.path,
+            onChange: (next: XYValue) => DialStore.updateValue(props.panel.id, control.path, next),
           });
         case 'action':
           return h('button', {
