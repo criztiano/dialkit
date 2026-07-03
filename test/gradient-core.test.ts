@@ -10,7 +10,10 @@ import {
   setGradientType,
   setGradientAngle,
   setGradientCenter,
-  setGradientShape,
+  setGradientScale,
+  setGradientSquash,
+  setGradientRotation,
+  gradientToTransform,
   DEFAULT_GRADIENT,
   MIN_STOPS,
   type GradientValue,
@@ -43,9 +46,25 @@ describe('gradientToCss', () => {
     );
   });
 
-  it('renders a radial ellipse with an off-center origin', () => {
-    expect(gradientToCss(grad({ type: 'radial', shape: 'ellipse', centerX: 30, centerY: 70 }))).toBe(
-      'radial-gradient(ellipse at 30% 70%, #000000ff 0%, #ffffffff 100%)'
+  it('keeps a round default radial as a circle even off-center', () => {
+    expect(gradientToCss(grad({ type: 'radial', centerX: 30, centerY: 70 }))).toBe(
+      'radial-gradient(circle at 30% 70%, #000000ff 0%, #ffffffff 100%)'
+    );
+  });
+
+  it('renders explicit radii once squashed or resized', () => {
+    expect(gradientToCss(grad({ type: 'radial', squash: 50 }))).toBe(
+      'radial-gradient(100% 50% at 50% 50%, #000000ff 0%, #ffffffff 100%)'
+    );
+    expect(gradientToCss(grad({ type: 'radial', scale: 60 }))).toBe(
+      'radial-gradient(60% 60% at 50% 50%, #000000ff 0%, #ffffffff 100%)'
+    );
+  });
+
+  it('floors the minor radius at full squash so the gradient never blanks out', () => {
+    // squash 100 would give a 0% vertical radius (degenerate → blank); floored to 1%.
+    expect(gradientToCss(grad({ type: 'radial', squash: 100 }))).toBe(
+      'radial-gradient(100% 1% at 50% 50%, #000000ff 0%, #ffffffff 100%)'
     );
   });
 
@@ -53,6 +72,21 @@ describe('gradientToCss', () => {
     expect(gradientToCss(grad({ type: 'conic', angle: 0, centerX: 25, centerY: 75 }))).toBe(
       'conic-gradient(from 0deg at 25% 75%, #000000ff 0%, #ffffffff 100%)'
     );
+  });
+});
+
+describe('gradientToTransform', () => {
+  it('is identity for linear/conic and for a round or unrotated radial', () => {
+    expect(gradientToTransform(grad())).toEqual({ transform: 'none', transformOrigin: '50% 50%' });
+    expect(gradientToTransform(grad({ type: 'radial', rotation: 45 }))).toEqual({ transform: 'none', transformOrigin: '50% 50%' });
+    expect(gradientToTransform(grad({ type: 'conic', rotation: 45, squash: 50 }))).toEqual({ transform: 'none', transformOrigin: '50% 50%' });
+  });
+
+  it('tilts only a squashed radial, around its center', () => {
+    expect(gradientToTransform(grad({ type: 'radial', squash: 40, rotation: 30, centerX: 20, centerY: 80 }))).toEqual({
+      transform: 'rotate(30deg)',
+      transformOrigin: '20% 80%',
+    });
   });
 
   it('sorts stops defensively and rounds percentages', () => {
@@ -125,21 +159,28 @@ describe('normalizeGradient', () => {
     expect(out.stops).toEqual(DEFAULT_GRADIENT.stops);
   });
 
-  it('preserves and clamps center/shape when present, omits when absent', () => {
-    const withGeo = normalizeGradient({ type: 'radial', angle: 0, stops: grad().stops, centerX: 150, centerY: -20, shape: 'ellipse' });
+  it('preserves and clamps geometry when present, omits when absent', () => {
+    const withGeo = normalizeGradient({
+      type: 'radial', angle: 0, stops: grad().stops,
+      centerX: 150, centerY: -20, scale: 500, squash: 120, rotation: 400,
+    });
     expect(withGeo.centerX).toBe(100);
     expect(withGeo.centerY).toBe(0);
-    expect(withGeo.shape).toBe('ellipse');
+    expect(withGeo.scale).toBe(200);
+    expect(withGeo.squash).toBe(100);
+    expect(withGeo.rotation).toBe(40);
 
     const plain = normalizeGradient({ type: 'radial', angle: 0, stops: grad().stops });
     expect(plain.centerX).toBeUndefined();
-    expect(plain.shape).toBeUndefined();
+    expect(plain.scale).toBeUndefined();
+    expect(plain.squash).toBeUndefined();
+    expect(plain.rotation).toBeUndefined();
   });
 
-  it('drops an invalid shape and non-finite center', () => {
-    const out = normalizeGradient({ type: 'radial', angle: 0, stops: grad().stops, centerX: NaN, shape: 'square' });
+  it('drops non-finite geometry', () => {
+    const out = normalizeGradient({ type: 'radial', angle: 0, stops: grad().stops, centerX: NaN, squash: Infinity });
     expect(out.centerX).toBeUndefined();
-    expect(out.shape).toBeUndefined();
+    expect(out.squash).toBeUndefined();
   });
 });
 
@@ -254,7 +295,10 @@ describe('setStopColor / setGradientType / setGradientAngle', () => {
     expect(out.centerY).toBe(40);
   });
 
-  it('sets the radial shape', () => {
-    expect(setGradientShape(grad(), 'ellipse').shape).toBe('ellipse');
+  it('sets and clamps scale, squash, and rotation', () => {
+    expect(setGradientScale(grad(), 5).scale).toBe(10);
+    expect(setGradientScale(grad(), 300).scale).toBe(200);
+    expect(setGradientSquash(grad(), 150).squash).toBe(100);
+    expect(setGradientRotation(grad(), 400).rotation).toBe(40);
   });
 });

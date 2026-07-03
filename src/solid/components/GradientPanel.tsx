@@ -12,7 +12,9 @@ import {
   setGradientType,
   setGradientAngle,
   setGradientCenter,
-  setGradientShape,
+  setGradientScale,
+  setGradientSquash,
+  setGradientRotation,
   MIN_STOPS,
   STOP_DETACH_PX,
   LONG_PRESS_MS,
@@ -20,7 +22,6 @@ import {
   type GradientValue,
   type GradientType,
   type GradientStop,
-  type RadialShape,
 } from '../../gradient-core';
 
 interface GradientPanelProps {
@@ -34,11 +35,6 @@ const TYPE_OPTIONS: { value: GradientType; label: string }[] = [
   { value: 'linear', label: 'Linear' },
   { value: 'radial', label: 'Radial' },
   { value: 'conic', label: 'Conic' },
-];
-
-const SHAPE_OPTIONS: { value: RadialShape; label: string }[] = [
-  { value: 'circle', label: 'Circle' },
-  { value: 'ellipse', label: 'Ellipse' },
 ];
 
 type DragMode = 'idle' | 'pending' | 'dragging' | 'detached';
@@ -301,11 +297,35 @@ export function GradientPanel(props: GradientPanelProps) {
             onChange={(y) => props.onChange(setGradientCenter(props.value, props.value.centerX ?? 50, y))}
           />
           <Show when={props.value.type === 'radial'}>
-            <SegmentedControl
-              options={SHAPE_OPTIONS}
-              value={props.value.shape ?? 'circle'}
-              onChange={(s) => props.onChange(setGradientShape(props.value, s))}
+            <Slider
+              label="Size"
+              value={props.value.scale ?? 100}
+              min={10}
+              max={200}
+              step={1}
+              unit="%"
+              onChange={(s) => props.onChange(setGradientScale(props.value, s))}
             />
+            <Slider
+              label="Squash"
+              value={props.value.squash ?? 0}
+              min={0}
+              max={100}
+              step={1}
+              unit="%"
+              onChange={(s) => props.onChange(setGradientSquash(props.value, s))}
+            />
+            <Show when={(props.value.squash ?? 0) > 0}>
+              <Slider
+                label="Rotation"
+                value={props.value.rotation ?? 0}
+                min={0}
+                max={360}
+                step={1}
+                unit="°"
+                onChange={(r) => props.onChange(setGradientRotation(props.value, r))}
+              />
+            </Show>
           </Show>
         </div>
       </Show>

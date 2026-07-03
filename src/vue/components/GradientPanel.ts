@@ -12,25 +12,21 @@ import {
   setGradientType,
   setGradientAngle,
   setGradientCenter,
-  setGradientShape,
+  setGradientScale,
+  setGradientSquash,
+  setGradientRotation,
   MIN_STOPS,
   STOP_DETACH_PX,
   LONG_PRESS_MS,
   PALETTE_DRAG_CANCEL_PX,
   type GradientValue,
   type GradientType,
-  type RadialShape,
 } from '../../gradient-core';
 
 const TYPE_OPTIONS: { value: GradientType; label: string }[] = [
   { value: 'linear', label: 'Linear' },
   { value: 'radial', label: 'Radial' },
   { value: 'conic', label: 'Conic' },
-];
-
-const SHAPE_OPTIONS: { value: RadialShape; label: string }[] = [
-  { value: 'circle', label: 'Circle' },
-  { value: 'ellipse', label: 'Ellipse' },
 ];
 
 type DragMode = 'idle' | 'pending' | 'dragging' | 'detached';
@@ -295,13 +291,39 @@ export const GradientPanel = defineComponent({
               unit: '%',
               onChange: (y: number) => emit('change', setGradientCenter(value, value.centerX ?? 50, y)),
             }),
-            value.type === 'radial'
-              ? h(SegmentedControl, {
-                options: SHAPE_OPTIONS,
-                value: value.shape ?? 'circle',
-                onChange: (s: RadialShape) => emit('change', setGradientShape(value, s)),
-              })
-              : null,
+            ...(value.type === 'radial'
+              ? [
+                h(Slider, {
+                  label: 'Size',
+                  value: value.scale ?? 100,
+                  min: 10,
+                  max: 200,
+                  step: 1,
+                  unit: '%',
+                  onChange: (s: number) => emit('change', setGradientScale(value, s)),
+                }),
+                h(Slider, {
+                  label: 'Squash',
+                  value: value.squash ?? 0,
+                  min: 0,
+                  max: 100,
+                  step: 1,
+                  unit: '%',
+                  onChange: (s: number) => emit('change', setGradientSquash(value, s)),
+                }),
+                (value.squash ?? 0) > 0
+                  ? h(Slider, {
+                    label: 'Rotation',
+                    value: value.rotation ?? 0,
+                    min: 0,
+                    max: 360,
+                    step: 1,
+                    unit: '°',
+                    onChange: (r: number) => emit('change', setGradientRotation(value, r)),
+                  })
+                  : null,
+              ]
+              : []),
           ])
           : null,
 

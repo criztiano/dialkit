@@ -185,22 +185,30 @@ hero: {
       { color: '#ec4899ff', position: 1 },
     ],
     centerX: 30, centerY: 70,                               // optional radial/conic origin, 0–100 (%)
-    shape: 'ellipse',                                       // optional radial extent: 'circle' | 'ellipse'
+    scale: 120,                                             // optional radial size, 10–200 (% of box)
+    squash: 40,                                             // optional radial ovality, 0 = round … 100
+    rotation: 30,                                           // optional tilt in degrees (squashed radial only)
   },
 }
 ```
 
-The control shows a live gradient strip; clicking it opens the editor: a linear / radial / conic switcher, an angle, and a ramp of draggable color stops. Click an empty spot on the ramp to add a stop (seeded with the color under the cursor), drag a stop to reposition it (stops swap past each other live), and drag a stop off the strip or long-press it to remove one (minimum two). Selecting a stop opens the full color picker below it — stops always carry alpha. Drag the panel by the grip in its top-left to reposition it; the settings toggle beside the tabs (radial/conic only) reveals the origin offset and, for radial, the circle/ellipse extent.
+The control shows a live gradient strip; clicking it opens the editor: a linear / radial / conic switcher, an angle, and a ramp of draggable color stops. Click an empty spot on the ramp to add a stop (seeded with the color under the cursor), drag a stop to reposition it (stops swap past each other live), and drag a stop off the strip or long-press it to remove one (minimum two). Selecting a stop opens the full color picker below it — stops always carry alpha. Drag the panel by the grip in its top-left to reposition it; the settings toggle beside the tabs (radial/conic only) reveals the origin offset and, for radial, sliders for size, squash (ovality), and — once squashed — rotation.
 
 Turn the value into CSS with the exported helper:
 
 ```tsx
-import { gradientToCss } from 'dialkit';
+import { gradientToCss, gradientToTransform } from 'dialkit';
 
 <div style={{ background: gradientToCss(p.bg) }} />
 ```
 
-**Returns:** `GradientValue` — `{ type, angle, stops: { color, position }[], centerX?, centerY?, shape? }`
+CSS radial gradients can't tilt on their own, so a squashed radial's `rotation` comes back separately. Apply it with `gradientToTransform` on the element (or a clipping layer, since a rotated box exposes its corners):
+
+```tsx
+<div style={{ background: gradientToCss(p.bg), ...gradientToTransform(p.bg) }} />
+```
+
+**Returns:** `GradientValue` — `{ type, angle, stops: { color, position }[], centerX?, centerY?, scale?, squash?, rotation? }`
 
 ### Select
 

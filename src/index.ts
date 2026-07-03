@@ -66,6 +66,7 @@ export { GradientControl } from './components/GradientControl';
 export { GradientPanel } from './components/GradientPanel';
 export {
   gradientToCss,
+  gradientToTransform,
   normalizeGradient,
   colorAtPosition,
   addStop,
@@ -75,11 +76,13 @@ export {
   setGradientType,
   setGradientAngle,
   setGradientCenter,
-  setGradientShape,
+  setGradientScale,
+  setGradientSquash,
+  setGradientRotation,
   DEFAULT_GRADIENT,
   MIN_STOPS,
 } from './gradient-core';
-export type { GradientValue, GradientStop, GradientType, RadialShape } from './gradient-core';
+export type { GradientValue, GradientStop, GradientType, GradientTransform } from './gradient-core';
 export { GalleryControl } from './components/GalleryControl';
 export { FileControl } from './components/FileControl';
 export { SwatchControl } from './components/SwatchControl';

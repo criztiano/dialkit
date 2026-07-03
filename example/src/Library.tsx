@@ -21,6 +21,7 @@ import {
   DialStore,
   useDialKit,
   gradientToCss,
+  gradientToTransform,
   DEFAULT_GRADIENT,
 } from 'dialkit';
 import type { SpringConfig, TransitionConfig, EasingConfig, GalleryItem, GradientValue } from 'dialkit';
@@ -176,6 +177,8 @@ export function Library() {
       fontSize: 15,
       fontWeight: 600,
       transition: 'all 0.2s ease',
+      position: 'relative',
+      zIndex: 1,
     } as const;
   })();
 
@@ -278,7 +281,9 @@ export function Library() {
         <Section index="06" title="Gradient" hint="A gradient control — click the strip to open the editor: linear / radial / conic, an angle, and draggable color stops that each open the full color picker. Click the strip to add a stop, drag to move, drag it off or long-press to remove (minimum two)." single>
           <Card title="Stop editor" desc="Click an empty spot on the ramp to add a stop (seeded with the color under the cursor); drag stops to reposition (they swap past each other live); drag a stop off the strip or long-press it to remove. The selected stop opens the alpha-enabled color picker below. Emits a { type, angle, stops } object; gradientToCss turns it into a ready CSS string." code="bg: { type: 'gradient', default }">
             <div className="lib-gradient-demo">
-              <div className="lib-gradient-swatch" style={{ background: gradientToCss(gradientValue) }} />
+              <div className="lib-gradient-swatch">
+                <div className="lib-gradient-fill" style={gradientFillStyle(gradientValue)} />
+              </div>
               <GradientControl label="bg" value={gradientValue} onChange={setGradientValue} />
             </div>
           </Card>
@@ -361,7 +366,8 @@ export function Library() {
           </div>
 
           <div className="lib-live">
-            <div className="lib-preview-stage" style={{ background: gradientToCss(p.backdrop) }}>
+            <div className="lib-preview-stage">
+              <div className="lib-gradient-fill" style={gradientFillStyle(p.backdrop)} />
               <div style={previewStyle}>{p.label}</div>
             </div>
             <div className="lib-window">
@@ -376,6 +382,17 @@ export function Library() {
       </footer>
     </div>
   );
+}
+
+function gradientFillStyle(v: GradientValue) {
+  const { transform, transformOrigin } = gradientToTransform(v);
+  const rotating = transform !== 'none';
+  // A rotated fill exposes the box corners; overscale so they stay covered.
+  return {
+    background: gradientToCss(v),
+    transform: rotating ? `scale(1.5) ${transform}` : undefined,
+    transformOrigin,
+  };
 }
 
 function withAlpha(hex: string, alpha: number): string {
@@ -498,7 +515,8 @@ const CSS = `
 .lib-viz { padding: 4px 0; }
 
 .lib-gradient-demo { display: flex; flex-direction: column; gap: 10px; }
-.lib-gradient-swatch { width: 100%; height: 72px; border-radius: 10px; border: 1px solid var(--dial-border); }
+.lib-gradient-swatch { position: relative; overflow: hidden; width: 100%; height: 72px; border-radius: 10px; border: 1px solid var(--dial-border); }
+.lib-gradient-fill { position: absolute; inset: 0; z-index: 0; }
 
 .lib-action-log { font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--dial-text-tertiary); padding-left: 2px; }
 .lib-action-log span { color: var(--dial-text-label); }
@@ -512,12 +530,12 @@ const CSS = `
 /* Live panel section */
 .lib-live { display: grid; grid-template-columns: 1fr 320px; gap: 16px; align-items: stretch; }
 .lib-preview-stage {
+  position: relative; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
   min-height: 540px;
   background: var(--dial-glass-bg);
   border: 1px solid var(--dial-border);
   border-radius: 16px;
-  background-image: radial-gradient(circle at center, color-mix(in srgb, var(--lib-accent) 8%, transparent), transparent 70%);
 }
 .lib-window {
   height: 540px;

@@ -20,8 +20,6 @@ export { LONG_PRESS_MS, PALETTE_DRAG_CANCEL_PX };
 // ── Types ───────────────────────────────────────────────────────────
 
 export type GradientType = 'linear' | 'radial' | 'conic';
-/** Radial extent — a round `circle` or a stretched `ellipse`. */
-export type RadialShape = 'circle' | 'ellipse';
 /** color is always #rrggbbaa; position is 0–1. */
 export type GradientStop = { color: string; position: number };
 export type GradientValue = {
@@ -31,9 +29,17 @@ export type GradientValue = {
   /** Radial/conic origin as 0–100 (%). Absent = centered (50). */
   centerX?: number;
   centerY?: number;
-  /** Radial extent. Absent = 'circle'. */
-  shape?: RadialShape;
+  /** Radial extent as % of the box, 10–200. Absent = 100 (fills to a circle). */
+  scale?: number;
+  /** Radial ovality, 0–100. 0 = round; higher flattens one axis. Absent = 0. */
+  squash?: number;
+  /** Radial ellipse tilt in degrees. Renders via the companion transform, since
+   *  CSS radial gradients are axis-aligned. Absent = 0. */
+  rotation?: number;
 };
+
+/** Transform + origin that renders a radial gradient's rotation (see gradientToTransform). */
+export type GradientTransform = { transform: string; transformOrigin: string };
 
 // ── Constants ───────────────────────────────────────────────────────
 
@@ -54,6 +60,8 @@ export const DEFAULT_GRADIENT: GradientValue = {
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 const clampPct = (n: number) => Math.min(100, Math.max(0, n));
+/** Radial size bounds — below 10% is a dot, above 200% is off the box. */
+const clampScale = (n: number) => Math.min(200, Math.max(10, n));
 const wrapAngle = (a: number) => ((a % 360) + 360) % 360;
 const round = (n: number, p: number) => {
   const f = 10 ** p;
@@ -83,8 +91,18 @@ export function gradientToCss(value: GradientValue): string {
   const cy = round(clampPct(value.centerY ?? 50), 2);
   switch (value.type) {
     case 'radial': {
-      const shape = value.shape === 'ellipse' ? 'ellipse' : 'circle';
-      return `radial-gradient(${shape} at ${cx}% ${cy}%, ${stopStr})`;
+      const scale = value.scale ?? 100;
+      const squash = clampPct(value.squash ?? 0);
+      // Round default stays a `circle` (farthest-corner) so untouched radials look
+      // exactly as before; size/ovality switch to explicit box-relative radii.
+      if (scale === 100 && squash === 0) {
+        return `radial-gradient(circle at ${cx}% ${cy}%, ${stopStr})`;
+      }
+      const rx = round(clampScale(scale), 2);
+      // Floor the minor radius: a 0% radius is a degenerate size that browsers
+      // reject (blank fill), so full squash renders a thin sliver instead.
+      const ry = round(Math.max(1, clampScale(scale) * (1 - squash / 100)), 2);
+      return `radial-gradient(${rx}% ${ry}% at ${cx}% ${cy}%, ${stopStr})`;
     }
     case 'conic':
       return `conic-gradient(from ${angle}deg at ${cx}% ${cy}%, ${stopStr})`;
@@ -92,6 +110,26 @@ export function gradientToCss(value: GradientValue): string {
     default:
       return `linear-gradient(${angle}deg, ${stopStr})`;
   }
+}
+
+/**
+ * The CSS transform that rotates a radial gradient's ellipse — CSS radial
+ * gradients are axis-aligned, so tilt has to ride the element (or a background
+ * layer) that shows the gradient. Identity (`none`) for a round radial, a
+ * non-radial type, or zero rotation. Apply alongside gradientToCss:
+ *   `<div style={{ background: gradientToCss(v), ...gradientToTransform(v) }} />`
+ * (on a clipping layer, since a rotated fill overflows its box).
+ */
+export function gradientToTransform(value: GradientValue): GradientTransform {
+  const cx = round(clampPct(value.centerX ?? 50), 2);
+  const cy = round(clampPct(value.centerY ?? 50), 2);
+  const rotation = wrapAngle(value.rotation ?? 0);
+  // Rotating a round gradient is a no-op; only a squashed ellipse tilts.
+  const squashed = clampPct(value.squash ?? 0) > 0;
+  if (value.type !== 'radial' || rotation === 0 || !squashed) {
+    return { transform: 'none', transformOrigin: '50% 50%' };
+  }
+  return { transform: `rotate(${round(rotation, 2)}deg)`, transformOrigin: `${cx}% ${cy}%` };
 }
 
 // ── Interpolation ───────────────────────────────────────────────────
@@ -149,14 +187,19 @@ export function normalizeGradient(input: unknown): GradientValue {
   const rawAngle = Number(obj.angle);
   const angle = Number.isFinite(rawAngle) ? wrapAngle(rawAngle) : DEFAULT_GRADIENT.angle;
 
-  // Optional radial/conic geometry — preserved only when valid, so plain
-  // values stay lean and the defaults live in gradientToCss.
-  const extras: Pick<GradientValue, 'centerX' | 'centerY' | 'shape'> = {};
+  // Optional radial geometry — preserved only when valid, so plain values stay
+  // lean and the defaults live in gradientToCss / gradientToTransform.
+  const extras: Pick<GradientValue, 'centerX' | 'centerY' | 'scale' | 'squash' | 'rotation'> = {};
   const cx = Number(obj.centerX);
   if (Number.isFinite(cx)) extras.centerX = clampPct(cx);
   const cy = Number(obj.centerY);
   if (Number.isFinite(cy)) extras.centerY = clampPct(cy);
-  if (obj.shape === 'circle' || obj.shape === 'ellipse') extras.shape = obj.shape;
+  const scale = Number(obj.scale);
+  if (Number.isFinite(scale)) extras.scale = clampScale(scale);
+  const squash = Number(obj.squash);
+  if (Number.isFinite(squash)) extras.squash = clampPct(squash);
+  const rotation = Number(obj.rotation);
+  if (Number.isFinite(rotation)) extras.rotation = wrapAngle(rotation);
 
   const stops: GradientStop[] = [];
   for (const raw of obj.stops) {
@@ -220,6 +263,17 @@ export function setGradientCenter(value: GradientValue, centerX: number, centerY
   return { ...value, centerX: clampPct(centerX), centerY: clampPct(centerY) };
 }
 
-export function setGradientShape(value: GradientValue, shape: RadialShape): GradientValue {
-  return { ...value, shape };
+/** Set the radial extent (10–200 % of the box). */
+export function setGradientScale(value: GradientValue, scale: number): GradientValue {
+  return { ...value, scale: clampScale(scale) };
+}
+
+/** Set the radial ovality (0 = round, up to 100). */
+export function setGradientSquash(value: GradientValue, squash: number): GradientValue {
+  return { ...value, squash: clampPct(squash) };
+}
+
+/** Set the radial ellipse tilt (degrees). Renders via gradientToTransform. */
+export function setGradientRotation(value: GradientValue, rotation: number): GradientValue {
+  return { ...value, rotation: wrapAngle(rotation) };
 }
