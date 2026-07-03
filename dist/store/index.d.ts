@@ -15,8 +15,6 @@
  */
 
 type GradientType = 'linear' | 'radial' | 'conic';
-/** Radial extent — a round `circle` or a stretched `ellipse`. */
-type RadialShape = 'circle' | 'ellipse';
 /** color is always #rrggbbaa; position is 0–1. */
 type GradientStop = {
     color: string;
@@ -29,8 +27,13 @@ type GradientValue = {
     /** Radial/conic origin as 0–100 (%). Absent = centered (50). */
     centerX?: number;
     centerY?: number;
-    /** Radial extent. Absent = 'circle'. */
-    shape?: RadialShape;
+    /** Radial extent as % of the box, 10–200. Absent = 100 (fills to a circle). */
+    scale?: number;
+    /** Radial ovality, 0–100. 0 = round; higher flattens one axis. Absent = 0. */
+    squash?: number;
+    /** Radial ellipse tilt in degrees. Renders via the companion transform, since
+     *  CSS radial gradients are axis-aligned. Absent = 0. */
+    rotation?: number;
 };
 
 type SpringConfig = {

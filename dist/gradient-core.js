@@ -37,6 +37,7 @@ var DEFAULT_GRADIENT = {
 };
 var clamp012 = (n) => Math.min(1, Math.max(0, n));
 var clampPct = (n) => Math.min(100, Math.max(0, n));
+var clampScale = (n) => Math.min(200, Math.max(10, n));
 var wrapAngle = (a) => (a % 360 + 360) % 360;
 var round = (n, p) => {
   const f = 10 ** p;
@@ -60,8 +61,14 @@ function gradientToCss(value) {
   const cy = round(clampPct(value.centerY ?? 50), 2);
   switch (value.type) {
     case "radial": {
-      const shape = value.shape === "ellipse" ? "ellipse" : "circle";
-      return `radial-gradient(${shape} at ${cx}% ${cy}%, ${stopStr})`;
+      const scale = value.scale ?? 100;
+      const squash = clampPct(value.squash ?? 0);
+      if (scale === 100 && squash === 0) {
+        return `radial-gradient(circle at ${cx}% ${cy}%, ${stopStr})`;
+      }
+      const rx = round(clampScale(scale), 2);
+      const ry = round(Math.max(1, clampScale(scale) * (1 - squash / 100)), 2);
+      return `radial-gradient(${rx}% ${ry}% at ${cx}% ${cy}%, ${stopStr})`;
     }
     case "conic":
       return `conic-gradient(from ${angle}deg at ${cx}% ${cy}%, ${stopStr})`;
@@ -69,6 +76,16 @@ function gradientToCss(value) {
     default:
       return `linear-gradient(${angle}deg, ${stopStr})`;
   }
+}
+function gradientToTransform(value) {
+  const cx = round(clampPct(value.centerX ?? 50), 2);
+  const cy = round(clampPct(value.centerY ?? 50), 2);
+  const rotation = wrapAngle(value.rotation ?? 0);
+  const squashed = clampPct(value.squash ?? 0) > 0;
+  if (value.type !== "radial" || rotation === 0 || !squashed) {
+    return { transform: "none", transformOrigin: "50% 50%" };
+  }
+  return { transform: `rotate(${round(rotation, 2)}deg)`, transformOrigin: `${cx}% ${cy}%` };
 }
 function lerpPremult(a, b, t) {
   const pa = a.a + (b.a - a.a) * t;
@@ -110,7 +127,12 @@ function normalizeGradient(input) {
   if (Number.isFinite(cx)) extras.centerX = clampPct(cx);
   const cy = Number(obj.centerY);
   if (Number.isFinite(cy)) extras.centerY = clampPct(cy);
-  if (obj.shape === "circle" || obj.shape === "ellipse") extras.shape = obj.shape;
+  const scale = Number(obj.scale);
+  if (Number.isFinite(scale)) extras.scale = clampScale(scale);
+  const squash = Number(obj.squash);
+  if (Number.isFinite(squash)) extras.squash = clampPct(squash);
+  const rotation = Number(obj.rotation);
+  if (Number.isFinite(rotation)) extras.rotation = wrapAngle(rotation);
   const stops = [];
   for (const raw of obj.stops) {
     if (!raw || typeof raw !== "object") continue;
@@ -156,8 +178,14 @@ function setGradientAngle(value, angle) {
 function setGradientCenter(value, centerX, centerY) {
   return { ...value, centerX: clampPct(centerX), centerY: clampPct(centerY) };
 }
-function setGradientShape(value, shape) {
-  return { ...value, shape };
+function setGradientScale(value, scale) {
+  return { ...value, scale: clampScale(scale) };
+}
+function setGradientSquash(value, squash) {
+  return { ...value, squash: clampPct(squash) };
+}
+function setGradientRotation(value, rotation) {
+  return { ...value, rotation: wrapAngle(rotation) };
 }
 export {
   DEFAULT_GRADIENT,
@@ -168,12 +196,15 @@ export {
   addStop,
   colorAtPosition,
   gradientToCss,
+  gradientToTransform,
   moveStop,
   normalizeGradient,
   removeStop,
   setGradientAngle,
   setGradientCenter,
-  setGradientShape,
+  setGradientRotation,
+  setGradientScale,
+  setGradientSquash,
   setGradientType,
   setStopColor
 };

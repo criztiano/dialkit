@@ -63,6 +63,7 @@ var DEFAULT_GRADIENT = {
 };
 var clamp012 = (n) => Math.min(1, Math.max(0, n));
 var clampPct = (n) => Math.min(100, Math.max(0, n));
+var clampScale = (n) => Math.min(200, Math.max(10, n));
 var wrapAngle = (a) => (a % 360 + 360) % 360;
 var cloneDefaultStops = () => DEFAULT_GRADIENT.stops.map((s) => ({ ...s }));
 var cloneDefault = () => ({
@@ -82,7 +83,12 @@ function normalizeGradient(input) {
   if (Number.isFinite(cx)) extras.centerX = clampPct(cx);
   const cy = Number(obj.centerY);
   if (Number.isFinite(cy)) extras.centerY = clampPct(cy);
-  if (obj.shape === "circle" || obj.shape === "ellipse") extras.shape = obj.shape;
+  const scale = Number(obj.scale);
+  if (Number.isFinite(scale)) extras.scale = clampScale(scale);
+  const squash = Number(obj.squash);
+  if (Number.isFinite(squash)) extras.squash = clampPct(squash);
+  const rotation = Number(obj.rotation);
+  if (Number.isFinite(rotation)) extras.rotation = wrapAngle(rotation);
   const stops = [];
   for (const raw of obj.stops) {
     if (!raw || typeof raw !== "object") continue;

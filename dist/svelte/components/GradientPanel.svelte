@@ -3,6 +3,7 @@
   import SegmentedControl from './SegmentedControl.svelte';
   import Slider from './Slider.svelte';
   import ColorPickerPanel from './ColorPickerPanel.svelte';
+  import GradientTransformPad from './GradientTransformPad.svelte';
   import { ICON_GRIP, ICON_PANEL } from '../../icons';
   import {
     gradientToCss,
@@ -12,15 +13,15 @@
     setStopColor,
     setGradientType,
     setGradientAngle,
-    setGradientCenter,
-    setGradientShape,
+    setGradientScale,
+    setGradientSquash,
+    setGradientRotation,
     MIN_STOPS,
     STOP_DETACH_PX,
     LONG_PRESS_MS,
     PALETTE_DRAG_CANCEL_PX,
     type GradientValue,
     type GradientType,
-    type RadialShape,
   } from '../../gradient-core';
 
   let { value, onChange, onDrag } = $props<{
@@ -34,11 +35,6 @@
     { value: 'linear', label: 'Linear' },
     { value: 'radial', label: 'Radial' },
     { value: 'conic', label: 'Conic' },
-  ];
-
-  const SHAPE_OPTIONS: { value: RadialShape; label: string }[] = [
-    { value: 'circle', label: 'Circle' },
-    { value: 'ellipse', label: 'Ellipse' },
   ];
 
   type DragMode = 'idle' | 'pending' | 'dragging' | 'detached';
@@ -282,30 +278,37 @@
 
   {#if advanced}
     <div class="dialkit-gradient-advanced">
-      <Slider
-        label="Center X"
-        value={value.centerX ?? 50}
-        min={0}
-        max={100}
-        step={1}
-        unit="%"
-        onChange={(x: number) => onChange(setGradientCenter(value, x, value.centerY ?? 50))}
-      />
-      <Slider
-        label="Center Y"
-        value={value.centerY ?? 50}
-        min={0}
-        max={100}
-        step={1}
-        unit="%"
-        onChange={(y: number) => onChange(setGradientCenter(value, value.centerX ?? 50, y))}
-      />
+      <GradientTransformPad {value} {onChange} />
       {#if value.type === 'radial'}
-        <SegmentedControl
-          options={SHAPE_OPTIONS}
-          value={value.shape ?? 'circle'}
-          onChange={(s: string) => onChange(setGradientShape(value, s as RadialShape))}
+        <Slider
+          label="Size"
+          value={value.scale ?? 100}
+          min={10}
+          max={200}
+          step={1}
+          unit="%"
+          onChange={(s: number) => onChange(setGradientScale(value, s))}
         />
+        <Slider
+          label="Squash"
+          value={value.squash ?? 0}
+          min={0}
+          max={100}
+          step={1}
+          unit="%"
+          onChange={(s: number) => onChange(setGradientSquash(value, s))}
+        />
+        {#if (value.squash ?? 0) > 0}
+          <Slider
+            label="Rotation"
+            value={value.rotation ?? 0}
+            min={0}
+            max={360}
+            step={1}
+            unit="°"
+            onChange={(r: number) => onChange(setGradientRotation(value, r))}
+          />
+        {/if}
       {/if}
     </div>
   {/if}

@@ -2089,6 +2089,56 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
   gap: 8px;
 }
 
+.dialkit-gradient-pad {
+  position: relative;
+  width: 100%;
+  height: 120px;
+  border-radius: 8px;
+  border: 1px solid var(--dial-border);
+  overflow: hidden;
+  touch-action: none;
+}
+
+.dialkit-gradient-pad-fill {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.dialkit-gradient-pad-line {
+  position: absolute;
+  height: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.35);
+  transform-origin: left center;
+  pointer-events: none;
+}
+
+.dialkit-gradient-pad-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  margin: 0;
+  transform: translate(-50%, -50%);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.25);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.35);
+  cursor: grab;
+  touch-action: none;
+}
+
+.dialkit-gradient-pad-handle:active {
+  cursor: grabbing;
+}
+
+.dialkit-gradient-pad-handle[data-kind="center"] {
+  border-radius: 3px;
+  width: 13px;
+  height: 13px;
+}
+
 .dialkit-gradient-strip {
   position: relative;
   height: 28px;

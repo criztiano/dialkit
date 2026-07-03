@@ -80,8 +80,6 @@ declare function oklchToRgb(oklch: OKLCH): RGBA;
  */
 
 type GradientType = 'linear' | 'radial' | 'conic';
-/** Radial extent — a round `circle` or a stretched `ellipse`. */
-type RadialShape = 'circle' | 'ellipse';
 /** color is always #rrggbbaa; position is 0–1. */
 type GradientStop = {
     color: string;
@@ -94,13 +92,32 @@ type GradientValue = {
     /** Radial/conic origin as 0–100 (%). Absent = centered (50). */
     centerX?: number;
     centerY?: number;
-    /** Radial extent. Absent = 'circle'. */
-    shape?: RadialShape;
+    /** Radial extent as % of the box, 10–200. Absent = 100 (fills to a circle). */
+    scale?: number;
+    /** Radial ovality, 0–100. 0 = round; higher flattens one axis. Absent = 0. */
+    squash?: number;
+    /** Radial ellipse tilt in degrees. Renders via the companion transform, since
+     *  CSS radial gradients are axis-aligned. Absent = 0. */
+    rotation?: number;
+};
+/** Transform + origin that renders a radial gradient's rotation (see gradientToTransform). */
+type GradientTransform = {
+    transform: string;
+    transformOrigin: string;
 };
 declare const MIN_STOPS = 2;
 declare const DEFAULT_GRADIENT: GradientValue;
 /** Ready CSS gradient string for any of the three types. #rrggbbaa is valid CSS. */
 declare function gradientToCss(value: GradientValue): string;
+/**
+ * The CSS transform that rotates a radial gradient's ellipse — CSS radial
+ * gradients are axis-aligned, so tilt has to ride the element (or a background
+ * layer) that shows the gradient. Identity (`none`) for a round radial, a
+ * non-radial type, or zero rotation. Apply alongside gradientToCss:
+ *   `<div style={{ background: gradientToCss(v), ...gradientToTransform(v) }} />`
+ * (on a clipping layer, since a rotated fill overflows its box).
+ */
+declare function gradientToTransform(value: GradientValue): GradientTransform;
 /**
  * The color the gradient shows at `position` (0–1), as #rrggbbaa. Interpolated
  * in sRGB with premultiplied alpha so a stop seeded here equals the pixel the
@@ -131,7 +148,12 @@ declare function setGradientType(value: GradientValue, type: GradientType): Grad
 declare function setGradientAngle(value: GradientValue, angle: number): GradientValue;
 /** Set the radial/conic origin (each 0–100 %). */
 declare function setGradientCenter(value: GradientValue, centerX: number, centerY: number): GradientValue;
-declare function setGradientShape(value: GradientValue, shape: RadialShape): GradientValue;
+/** Set the radial extent (10–200 % of the box). */
+declare function setGradientScale(value: GradientValue, scale: number): GradientValue;
+/** Set the radial ovality (0 = round, up to 100). */
+declare function setGradientSquash(value: GradientValue, squash: number): GradientValue;
+/** Set the radial ellipse tilt (degrees). Renders via gradientToTransform. */
+declare function setGradientRotation(value: GradientValue, rotation: number): GradientValue;
 
 type SpringConfig = {
     type: 'spring';
@@ -892,4 +914,4 @@ interface ShortcutsMenuProps {
 }
 declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react_jsx_runtime.JSX.Element | null;
 
-export { type ActionConfig, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientType, type GradientValue, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, MIN_STOPS, Module, type OKLCH, type PanelConfig, type Preset, PresetManager, type RGBA, type RadialShape, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, addDriver, addStop, buildSamplers, clampOklchToSrgb, colorAtPosition, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, formatHex, gradientToCss, hslToRgb, hsvToRgb, moveStop, normalizeGradient, normalizeHex, normalizeListItems, oklchToRgb, opacityPercent, parseHex, parseListItemSchema, readComposition, redistributeWeight, removeDriver, removeSegment, removeStop, rgbToHsl, rgbToHsv, rgbToOklch, setDriverCurvature, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientShape, setGradientType, setSegmentCurvature, setSegmentSteepness, setStopColor, splitSegment, triggerLevels, triggersCrossed, useDialKit };
+export { type ActionConfig, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, MIN_STOPS, Module, type OKLCH, type PanelConfig, type Preset, PresetManager, type RGBA, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, addDriver, addStop, buildSamplers, clampOklchToSrgb, colorAtPosition, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, formatHex, gradientToCss, gradientToTransform, hslToRgb, hsvToRgb, moveStop, normalizeGradient, normalizeHex, normalizeListItems, oklchToRgb, opacityPercent, parseHex, parseListItemSchema, readComposition, redistributeWeight, removeDriver, removeSegment, removeStop, rgbToHsl, rgbToHsv, rgbToOklch, setDriverCurvature, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setSegmentCurvature, setSegmentSteepness, setStopColor, splitSegment, triggerLevels, triggersCrossed, useDialKit };
