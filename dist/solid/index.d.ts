@@ -99,6 +99,12 @@ declare function centerValue(xAxis: AxisSpec, yAxis: AxisSpec): XYValue;
  */
 declare function normalizeValue(value: Partial<XYValue> | undefined, xAxis: AxisSpec, yAxis: AxisSpec, snap?: boolean): XYValue;
 
+/** A resolved range value. Invariant (upheld by the helpers): min <= max. */
+type RangeValue = {
+    min: number;
+    max: number;
+};
+
 /**
  * One axis of an XY pad control. Partial — every field falls back through
  * `resolveAxis` (min 0, max 1, step 0.01). `origin`/`bipolar` mirror the
@@ -168,6 +174,15 @@ type TextConfig = {
     type: 'text';
     default?: string;
     placeholder?: string;
+};
+type RangeConfig = {
+    type: 'range';
+    min: number;
+    max: number;
+    /** Falls back to the full span { min, max } when omitted. */
+    default?: RangeValue;
+    /** Falls back to inferStep(min, max) when omitted. */
+    step?: number;
 };
 type FileConfig = {
     type: 'file';
@@ -241,12 +256,12 @@ type ListConfig = {
     /** Label for the add affordance. Defaults to 'Add'. */
     addLabel?: string;
 };
-type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[];
+type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 type DialConfig = {
     [key: string]: DialValue | [number, number, number, number?] | DialConfig;
 };
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -257,12 +272,14 @@ type ShortcutConfig = {
     interaction?: ShortcutInteraction;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'xy' | 'text' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
     path: string;
     label: string;
     min?: number;
     max?: number;
     step?: number;
+    /** Range control's configured reset target — its `default`, else the full {min,max} span. */
+    rangeDefault?: RangeValue;
     children?: ControlMeta[];
     defaultOpen?: boolean;
     options?: (string | {
@@ -382,6 +399,8 @@ declare class DialStoreClass {
     private isSelectConfig;
     private isColorConfig;
     private isXYConfig;
+    private isRangeConfig;
+    private isRangeValue;
     private isTextConfig;
     private isGalleryConfig;
     private isFileConfig;
@@ -438,6 +457,20 @@ interface SliderProps {
     shortcutActive?: boolean;
 }
 declare function Slider(props: SliderProps): solid_js.JSX.Element;
+
+interface RangeSliderProps {
+    label: string;
+    value: RangeValue;
+    onChange: (value: RangeValue) => void;
+    /** Lower bound of the track. */
+    min?: number;
+    /** Upper bound of the track. */
+    max?: number;
+    step?: number;
+    /** Reset target for a double-click on the track. Falls back to the full {min,max} span. */
+    defaultValue?: RangeValue;
+}
+declare function RangeSlider(props: RangeSliderProps): solid_js.JSX.Element;
 
 interface ToggleProps {
     label: string;
@@ -548,11 +581,22 @@ interface CurveSegment {
     curvature: number;
     /**
      * Bipolar -1..1 steepness — how pronounced the ease is, independent of the energy bias.
-     * Scales each control point's deviation from the linear diagonal: 0 = canonical preset,
-     * +1 = sharper (e.g. easeInOut gets much slower start/end), −1 = flatter toward linear.
-     * Spring maps it to stiffness (snappier rise).
+     * Sweeps linear (−1) ← canonical preset (0) → the explosive extreme (+1, expo-grade: the
+     * eased side's far control point drops to the floor). So steepness is the continuous power
+     * ladder (gentle → quad → … → expo), with circ reachable mid-range. Spring maps it to stiffness.
      */
     steepness: number;
+    /**
+     * 0..1 overshoot — pushes the curve above 1 at the END before settling (easeOutBack),
+     * 0 = none. Independent of `anticipate`; set both for easeInOutBack. Beyond ~1 is
+     * elastic/bounce — use spring. Optional; treated as 0 when absent. No-op for spring.
+     */
+    overshoot?: number;
+    /**
+     * 0..1 anticipation — dips the curve below 0 at the START before launching (easeInBack),
+     * 0 = none. Independent of `overshoot`. Optional; treated as 0 when absent. No-op for spring.
+     */
+    anticipate?: number;
 }
 /** The stacked driver curve (a single curve, no internal splits). */
 interface CurveDriver {
@@ -561,6 +605,10 @@ interface CurveDriver {
     curvature: number;
     /** Bipolar -1..1 steepness — see CurveSegment.steepness. */
     steepness: number;
+    /** 0..1 overshoot — see CurveSegment.overshoot. */
+    overshoot?: number;
+    /** 0..1 anticipation — see CurveSegment.anticipate. */
+    anticipate?: number;
 }
 type DriverDirection = 'forward' | 'mirror' | 'reverse';
 interface CurveComposition {
@@ -568,6 +616,13 @@ interface CurveComposition {
     /** null → no driver lane (the component renders a single lane). */
     driver: CurveDriver | null;
     direction: DriverDirection;
+    /**
+     * 0..1 — fraction of the timeline given to gaps between segments (distributed equally,
+     * one gap after each segment, the last wrapping to the first). In a gap the value glides
+     * smoothly from the segment's end down to the next segment's start (a faint connector)
+     * instead of snapping. 0 = contiguous (default). Optional.
+     */
+    gap?: number;
 }
 
 interface CurveComposerProps {
@@ -599,10 +654,16 @@ interface CurveComposerProps {
     triggerSteps?: number;
     /** Fired in trigger mode when the value crosses a trigger level; `index` is into `triggerLevels`. */
     onTrigger?: (index: number) => void;
+    /** Index of the currently selected segment (highlighted); null/undefined for none. */
+    selectedIndex?: number | null;
+    /** Fired when a segment's header strip is clicked — lets the consumer target it (flip/remove/…). */
+    onSelect?: (index: number) => void;
     /** Curve stroke color. Defaults to the theme text color. */
     curveColor?: string;
     /** Playhead / marker color. Defaults to the theme text color. */
     playheadColor?: string;
+    /** 0..1 — space between segments; the value glides smoothly across each gap (faint connector). */
+    gap?: number;
     /** Faint vertical reference grid behind each lane. */
     grid?: boolean;
     gridSubdivisions?: number;
@@ -722,4 +783,4 @@ interface PresetManagerProps {
 }
 declare function PresetManager(props: PresetManagerProps): solid_js.JSX.Element;
 
-export { type ActionConfig, type AxisSpec, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, type CreateDialOptions, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, type DialConfig, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, Folder, Module, type PanelConfig, type Point, type Preset, PresetManager, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, applyDetentAxis, centerValue, clamp, createDialKit, invertY, normToValue, normalizeValue, nudge, pointFromValue, resolveAxis, snapToStep, valueFromPoint, valueToNorm };
+export { type ActionConfig, type AxisSpec, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, type CreateDialOptions, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, type DialConfig, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, Folder, Module, type PanelConfig, type Point, type Preset, PresetManager, RangeSlider, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, applyDetentAxis, centerValue, clamp, createDialKit, invertY, normToValue, normalizeValue, nudge, pointFromValue, resolveAxis, snapToStep, valueFromPoint, valueToNorm };

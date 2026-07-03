@@ -6,6 +6,12 @@ type XYValue = {
     y: number;
 };
 
+/** A resolved range value. Invariant (upheld by the helpers): min <= max. */
+type RangeValue = {
+    min: number;
+    max: number;
+};
+
 /**
  * One axis of an XY pad control. Partial — every field falls back through
  * `resolveAxis` (min 0, max 1, step 0.01). `origin`/`bipolar` mirror the
@@ -75,6 +81,15 @@ type TextConfig = {
     type: 'text';
     default?: string;
     placeholder?: string;
+};
+type RangeConfig = {
+    type: 'range';
+    min: number;
+    max: number;
+    /** Falls back to the full span { min, max } when omitted. */
+    default?: RangeValue;
+    /** Falls back to inferStep(min, max) when omitted. */
+    step?: number;
 };
 type FileConfig = {
     type: 'file';
@@ -148,12 +163,12 @@ type ListConfig = {
     /** Label for the add affordance. Defaults to 'Add'. */
     addLabel?: string;
 };
-type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[];
+type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 type DialConfig = {
     [key: string]: DialValue | [number, number, number, number?] | DialConfig;
 };
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -164,12 +179,14 @@ type ShortcutConfig = {
     interaction?: ShortcutInteraction;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'xy' | 'text' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
     path: string;
     label: string;
     min?: number;
     max?: number;
     step?: number;
+    /** Range control's configured reset target — its `default`, else the full {min,max} span. */
+    rangeDefault?: RangeValue;
     children?: ControlMeta[];
     defaultOpen?: boolean;
     options?: (string | {
@@ -289,6 +306,8 @@ declare class DialStoreClass {
     private isSelectConfig;
     private isColorConfig;
     private isXYConfig;
+    private isRangeConfig;
+    private isRangeValue;
     private isTextConfig;
     private isGalleryConfig;
     private isFileConfig;
@@ -504,6 +523,72 @@ declare const Slider: vue.DefineComponent<vue.ExtractPropTypes<{
     bipolar: boolean;
     shortcut: ShortcutConfig;
     shortcutActive: boolean;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+declare const RangeSlider: vue.DefineComponent<vue.ExtractPropTypes<{
+    label: {
+        type: StringConstructor;
+        required: true;
+    };
+    value: {
+        type: PropType<RangeValue>;
+        required: true;
+    };
+    /** Lower bound of the track. */
+    min: {
+        type: NumberConstructor;
+        required: false;
+    };
+    /** Upper bound of the track. */
+    max: {
+        type: NumberConstructor;
+        required: false;
+    };
+    step: {
+        type: NumberConstructor;
+        required: false;
+    };
+    /** Reset target for a double-click on the track. Falls back to the full {min,max} span. */
+    defaultValue: {
+        type: PropType<RangeValue>;
+        required: false;
+        default: undefined;
+    };
+}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, "change"[], "change", vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    label: {
+        type: StringConstructor;
+        required: true;
+    };
+    value: {
+        type: PropType<RangeValue>;
+        required: true;
+    };
+    /** Lower bound of the track. */
+    min: {
+        type: NumberConstructor;
+        required: false;
+    };
+    /** Upper bound of the track. */
+    max: {
+        type: NumberConstructor;
+        required: false;
+    };
+    step: {
+        type: NumberConstructor;
+        required: false;
+    };
+    /** Reset target for a double-click on the track. Falls back to the full {min,max} span. */
+    defaultValue: {
+        type: PropType<RangeValue>;
+        required: false;
+        default: undefined;
+    };
+}>> & Readonly<{
+    onChange?: ((...args: any[]) => any) | undefined;
+}>, {
+    defaultValue: RangeValue;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 declare const Toggle: vue.DefineComponent<vue.ExtractPropTypes<{
@@ -986,11 +1071,22 @@ interface CurveSegment {
     curvature: number;
     /**
      * Bipolar -1..1 steepness — how pronounced the ease is, independent of the energy bias.
-     * Scales each control point's deviation from the linear diagonal: 0 = canonical preset,
-     * +1 = sharper (e.g. easeInOut gets much slower start/end), −1 = flatter toward linear.
-     * Spring maps it to stiffness (snappier rise).
+     * Sweeps linear (−1) ← canonical preset (0) → the explosive extreme (+1, expo-grade: the
+     * eased side's far control point drops to the floor). So steepness is the continuous power
+     * ladder (gentle → quad → … → expo), with circ reachable mid-range. Spring maps it to stiffness.
      */
     steepness: number;
+    /**
+     * 0..1 overshoot — pushes the curve above 1 at the END before settling (easeOutBack),
+     * 0 = none. Independent of `anticipate`; set both for easeInOutBack. Beyond ~1 is
+     * elastic/bounce — use spring. Optional; treated as 0 when absent. No-op for spring.
+     */
+    overshoot?: number;
+    /**
+     * 0..1 anticipation — dips the curve below 0 at the START before launching (easeInBack),
+     * 0 = none. Independent of `overshoot`. Optional; treated as 0 when absent. No-op for spring.
+     */
+    anticipate?: number;
 }
 /** The stacked driver curve (a single curve, no internal splits). */
 interface CurveDriver {
@@ -999,6 +1095,10 @@ interface CurveDriver {
     curvature: number;
     /** Bipolar -1..1 steepness — see CurveSegment.steepness. */
     steepness: number;
+    /** 0..1 overshoot — see CurveSegment.overshoot. */
+    overshoot?: number;
+    /** 0..1 anticipation — see CurveSegment.anticipate. */
+    anticipate?: number;
 }
 type DriverDirection = 'forward' | 'mirror' | 'reverse';
 interface CurveComposition {
@@ -1006,6 +1106,13 @@ interface CurveComposition {
     /** null → no driver lane (the component renders a single lane). */
     driver: CurveDriver | null;
     direction: DriverDirection;
+    /**
+     * 0..1 — fraction of the timeline given to gaps between segments (distributed equally,
+     * one gap after each segment, the last wrapping to the first). In a gap the value glides
+     * smoothly from the segment's end down to the next segment's start (a faint connector)
+     * instead of snapping. 0 = contiguous (default). Optional.
+     */
+    gap?: number;
 }
 
 declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
@@ -1059,6 +1166,16 @@ declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
         type: PropType<(index: number) => void>;
         default: undefined;
     };
+    /** Index of the currently selected segment (highlighted); null/undefined for none. */
+    selectedIndex: {
+        type: PropType<number | null>;
+        default: null;
+    };
+    /** Fired when a segment's header strip is clicked — lets the consumer target it (flip/remove/…). */
+    onSelect: {
+        type: PropType<(index: number) => void>;
+        default: undefined;
+    };
     /** Curve stroke color. Defaults to the theme text color. */
     curveColor: {
         type: StringConstructor;
@@ -1068,6 +1185,11 @@ declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
     playheadColor: {
         type: StringConstructor;
         default: undefined;
+    };
+    /** 0..1 — space between segments; the value glides smoothly across each gap (faint connector). */
+    gap: {
+        type: NumberConstructor;
+        default: number;
     };
     /** Faint vertical reference grid behind each lane. */
     grid: {
@@ -1140,6 +1262,16 @@ declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
         type: PropType<(index: number) => void>;
         default: undefined;
     };
+    /** Index of the currently selected segment (highlighted); null/undefined for none. */
+    selectedIndex: {
+        type: PropType<number | null>;
+        default: null;
+    };
+    /** Fired when a segment's header strip is clicked — lets the consumer target it (flip/remove/…). */
+    onSelect: {
+        type: PropType<(index: number) => void>;
+        default: undefined;
+    };
     /** Curve stroke color. Defaults to the theme text color. */
     curveColor: {
         type: StringConstructor;
@@ -1149,6 +1281,11 @@ declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
     playheadColor: {
         type: StringConstructor;
         default: undefined;
+    };
+    /** 0..1 — space between segments; the value glides smoothly across each gap (faint connector). */
+    gap: {
+        type: NumberConstructor;
+        default: number;
     };
     /** Faint vertical reference grid behind each lane. */
     grid: {
@@ -1171,9 +1308,11 @@ declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
 }>> & Readonly<{}>, {
     mode: "continuous" | "trigger";
     grid: boolean;
+    onSelect: (index: number) => void;
     height: number;
     width: number;
     direction: DriverDirection;
+    gap: number;
     driver: CurveDriver | null;
     gridSubdivisions: number;
     playheadColor: string;
@@ -1183,6 +1322,7 @@ declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
     phase: number;
     triggerSteps: number;
     onTrigger: (index: number) => void;
+    selectedIndex: number | null;
     curveColor: string;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
@@ -1648,4 +1788,4 @@ declare const PresetManager: vue.DefineComponent<vue.ExtractPropTypes<{
     activePresetId: string | null;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
-export { type ActionConfig, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, type DialConfig, type DialKitDirectiveOptions, type DialKitDirectiveValue, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, Folder, Module, type PanelConfig, type Preset, PresetManager, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, ShortcutKey, ShortcutListener, type ShortcutState, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYValue, useDialKit, useShortcutContext, vDialKit };
+export { type ActionConfig, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, type DialConfig, type DialKitDirectiveOptions, type DialKitDirectiveValue, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, Folder, Module, type PanelConfig, type Preset, PresetManager, RangeSlider, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, ShortcutKey, ShortcutListener, type ShortcutState, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYValue, useDialKit, useShortcutContext, vDialKit };

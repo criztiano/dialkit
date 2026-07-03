@@ -1,3 +1,5 @@
+import { RangeValue } from './range-slider-core.js';
+
 /**
  * One axis of an XY pad control. Partial — every field falls back through
  * `resolveAxis` (min 0, max 1, step 0.01). `origin`/`bipolar` mirror the
@@ -72,12 +74,14 @@ type ShortcutConfig = {
     interaction?: ShortcutInteraction;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'xy' | 'text' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
     path: string;
     label: string;
     min?: number;
     max?: number;
     step?: number;
+    /** Range control's configured reset target — its `default`, else the full {min,max} span. */
+    rangeDefault?: RangeValue;
     children?: ControlMeta[];
     defaultOpen?: boolean;
     options?: (string | {

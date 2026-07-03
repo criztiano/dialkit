@@ -2,8 +2,12 @@
 
 import { HEX_COLOR_REGEX } from '../color-core';
 import { resolveAxis, normalizeValue as normalizeXYValue, type XYValue } from '../xy-pad-core';
+import { clampRange } from '../range-slider-core';
+// Type-only (erased in JS): lets consumers import `RangeValue` from the package types.
+import type { RangeValue } from '../range-slider-core';
 
 export type { XYValue };
+export type { RangeValue };
 
 /**
  * One axis of an XY pad control. Partial — every field falls back through
@@ -79,6 +83,16 @@ export type TextConfig = {
   type: 'text';
   default?: string;
   placeholder?: string;
+};
+
+export type RangeConfig = {
+  type: 'range';
+  min: number;
+  max: number;
+  /** Falls back to the full span { min, max } when omitted. */
+  default?: RangeValue;
+  /** Falls back to inferStep(min, max) when omitted. */
+  step?: number;
 };
 
 export type FileConfig = {
@@ -187,7 +201,7 @@ export type ListField = {
   defaultValue: number | boolean | string;
 };
 
-export type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[];
+export type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 
 export type DialConfig = {
   [key: string]: DialValue | [number, number, number, number?] | DialConfig;
@@ -208,6 +222,8 @@ export type ResolvedValues<T extends DialConfig> = {
               ? XYValue
               : T[K] extends TextConfig
                 ? string
+                : T[K] extends RangeConfig
+                  ? RangeValue
                 : T[K] extends GalleryConfig
                   ? string
                   : T[K] extends FileConfig
@@ -234,12 +250,14 @@ export type ShortcutConfig = {
 };
 
 export type ControlMeta = {
-  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'xy' | 'text' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
   path: string;
   label: string;
   min?: number;
   max?: number;
   step?: number;
+  /** Range control's configured reset target — its `default`, else the full {min,max} span. */
+  rangeDefault?: RangeValue;
   children?: ControlMeta[];
   defaultOpen?: boolean;
   options?: (string | { value: string; label: string })[];
@@ -650,7 +668,7 @@ class DialStoreClass {
         const hasPhysics = value.stiffness !== undefined || value.damping !== undefined || value.mass !== undefined;
         const hasTime = value.visualDuration !== undefined || value.bounce !== undefined;
         values[`${path}.__mode`] = hasPhysics && !hasTime ? 'advanced' : 'simple';
-      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isColorConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isListConfig(value)) {
+      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isColorConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isListConfig(value)) {
         this.initTransitionModes(value as DialConfig, path, values);
       }
     }
@@ -696,6 +714,12 @@ class DialStoreClass {
         controls.push({ type: 'xy', path, label, xAxis: value.x, yAxis: value.y, grid: value.grid, density: value.density, snap: value.snap, returnToCenter: value.returnToCenter, showValues: value.showValues });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: 'text', path, label, placeholder: value.placeholder });
+      } else if (this.isRangeConfig(value)) {
+        // No `shortcut`: a range value is {min,max}, which the numeric-nudge
+        // shortcut path can't drive, and RangeSlider has no shortcut prop.
+        controls.push({ type: 'range', path, label, min: value.min, max: value.max,
+          step: value.step ?? this.inferStep(value.min, value.max),
+          rangeDefault: value.default ?? { min: value.min, max: value.max } });
       } else if (this.isGalleryConfig(value)) {
         controls.push({ type: 'gallery', path, label, items: value.items, columns: value.columns });
       } else if (this.isFileConfig(value)) {
@@ -763,6 +787,8 @@ class DialStoreClass {
         values[path] = normalizeXYValue(value.default, xAxis, yAxis, value.snap ?? false);
       } else if (this.isTextConfig(value)) {
         values[path] = value.default ?? '';
+      } else if (this.isRangeConfig(value)) {
+        values[path] = value.default ?? { min: value.min, max: value.max };
       } else if (this.isGalleryConfig(value)) {
         // Resolve to the selected item id — default, else the first item.
         values[path] = value.default ?? value.items[0]?.id ?? '';
@@ -838,6 +864,26 @@ class DialStoreClass {
       value !== null &&
       'type' in value &&
       (value as XYConfig).type === 'xy'
+    );
+  }
+
+  private isRangeConfig(value: unknown): value is RangeConfig {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'type' in value &&
+      (value as RangeConfig).type === 'range'
+    );
+  }
+
+  // A stored range VALUE ({min,max} numbers), as opposed to a range config.
+  // Used to preserve the leaf value by identity across a panel update.
+  private isRangeValue(value: unknown): value is RangeValue {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      typeof (value as RangeValue).min === 'number' &&
+      typeof (value as RangeValue).max === 'number'
     );
   }
 
@@ -1024,6 +1070,19 @@ class DialStoreClass {
         // Items are self-validating ({type, params}); preserve the user's array
         // across config edits, falling back to the default when shape is lost.
         return Array.isArray(existingValue) ? existingValue : defaultValue;
+      case 'range': {
+        // A range value is a leaf {min,max} preserved by identity (like color),
+        // not a folder — never let a panel update drop it. Reconcile the stored
+        // pair against (possibly changed) bounds: clamp both ends and re-order.
+        if (!this.isRangeValue(existingValue)) {
+          return defaultValue;
+        }
+        // clampRange does exactly clamp-both-ends-then-order. Missing bounds fall
+        // back to ±Infinity so the clamp is a no-op there.
+        const lo = control.min ?? Number.NEGATIVE_INFINITY;
+        const hi = control.max ?? Number.POSITIVE_INFINITY;
+        return clampRange(existingValue, lo, hi);
+      }
       case 'gallery': {
         if (typeof existingValue !== 'string') {
           return defaultValue;

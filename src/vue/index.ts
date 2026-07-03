@@ -11,6 +11,7 @@ export type { ShortcutState } from './components/ShortcutListener';
 export { ShortcutsMenu } from './components/ShortcutsMenu';
 
 export { Slider } from './components/Slider';
+export { RangeSlider } from './components/RangeSlider';
 export { Toggle } from './components/Toggle';
 export { Folder } from './components/Folder';
 export { Module } from './components/Module';

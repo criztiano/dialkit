@@ -8,6 +8,7 @@ export { SHORTCUT_CTX } from './components/ShortcutListener.svelte';
 export { default as ShortcutsMenu } from './components/ShortcutsMenu.svelte';
 // Component exports
 export { default as Slider } from './components/Slider.svelte';
+export { default as RangeSlider } from './components/RangeSlider.svelte';
 export { default as Toggle } from './components/Toggle.svelte';
 export { default as Folder } from './components/Folder.svelte';
 export { default as Module } from './components/Module.svelte';

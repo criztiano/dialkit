@@ -8,6 +8,7 @@ export type { DialPosition, DialMode, DialTheme } from './components/DialRoot';
 
 // Individual components (for advanced usage)
 export { Slider } from './components/Slider';
+export { RangeSlider } from './components/RangeSlider';
 export { Toggle } from './components/Toggle';
 export { Folder } from './components/Folder';
 export { Module } from './components/Module';
@@ -26,15 +27,21 @@ export {
   defaultComposition,
   splitSegment,
   removeSegment,
+  flipSegment,
+  flipDriver,
   cycleSegmentType,
   setSegmentCurvature,
   setSegmentSteepness,
+  setSegmentOvershoot,
+  setSegmentAnticipate,
   redistributeWeight,
   addDriver,
   removeDriver,
   cycleDriverType,
   setDriverCurvature,
   setDriverSteepness,
+  setDriverOvershoot,
+  setDriverAnticipate,
   buildSamplers,
   readComposition,
   triggerLevels,
@@ -42,6 +49,20 @@ export {
   DEFAULT_TRIGGER_STEPS,
 } from './curve-composer-core';
 export type { Sampler, CompositionSamplers, CompositionRead } from './curve-composer-core';
+export {
+  clamp,
+  valueToPercent,
+  percentToValue,
+  orderRange,
+  clampRange,
+  setLow,
+  setHigh,
+  shiftSpan,
+  nearestHandle,
+  pickDragTarget,
+  isOutsideSpan,
+  handleLeftStyles,
+} from './range-slider-core';
 export { TextControl } from './components/TextControl';
 export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';
@@ -69,7 +90,8 @@ export {
   XY_DETENT_PX,
   XY_DEFAULT_STEP,
   resolveAxis,
-  clamp,
+  // `clamp` is re-exported once from './range-slider-core' above; xy-pad-core's
+  // identical `clamp` is intentionally not re-exported here to avoid a duplicate.
   snapToStep,
   valueToNorm,
   normToValue,
@@ -109,6 +131,8 @@ export type {
   SwatchOption,
   ChipsConfig,
   ChipOption,
+  RangeConfig,
+  RangeValue,
   ListConfig,
   ListItemValue,
   ListItemField,

@@ -2,9 +2,10 @@ import { Fragment, defineComponent, h, onMounted, onUnmounted, ref, type PropTyp
 import { AnimatePresence, motion } from 'motion-v';
 import { ICON_ADD_PRESET, ICON_CHECK, ICON_CLIPBOARD } from '../../icons';
 import { DialStore } from '../../store/DialStore';
-import type { ControlMeta, DialValue, PanelConfig, SpringConfig, TransitionConfig, XYValue } from '../../store/DialStore';
+import type { ControlMeta, DialValue, PanelConfig, RangeValue, SpringConfig, TransitionConfig, XYValue } from '../../store/DialStore';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
+import { RangeSlider } from './RangeSlider';
 import { Toggle } from './Toggle';
 import { SpringControl } from './SpringControl';
 import { TransitionControl } from './TransitionControl';
@@ -99,6 +100,17 @@ export const Panel = defineComponent({
             shortcut: control.shortcut,
             shortcutActive: shortcutCtx.activePanelId.value === props.panel.id && shortcutCtx.activePath.value === control.path,
             onChange: (next: number) => DialStore.updateValue(props.panel.id, control.path, next),
+          });
+        case 'range':
+          return h(RangeSlider, {
+            key: control.path,
+            label: control.label,
+            value: value as RangeValue,
+            min: control.min ?? 0,
+            max: control.max ?? 1,
+            step: control.step,
+            defaultValue: control.rangeDefault,
+            onChange: (next: RangeValue) => DialStore.updateValue(props.panel.id, control.path, next),
           });
         case 'toggle':
           return h(Toggle, {

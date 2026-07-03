@@ -495,6 +495,126 @@
   color: var(--dial-text-focus);
 }
 
+/* Range Slider — dual-handle sibling of the slider. Track is identical; the fill
+   spans BETWEEN the two handles and both handles stay subtly visible at rest. */
+.dialkit-range-slider-wrapper {
+  position: relative;
+  height: var(--dial-row-height);
+}
+
+.dialkit-range-slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  user-select: none;
+  overflow: hidden;
+  background: var(--dial-surface);
+  border-radius: var(--dial-radius);
+  touch-action: none;
+}
+
+.dialkit-range-slider-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: var(--dial-surface-active);
+  transition: background 0.15s;
+  pointer-events: none;
+}
+
+.dialkit-range-slider-active .dialkit-range-slider-fill {
+  background: var(--dial-border-hover);
+}
+
+.dialkit-range-slider-active .dialkit-range-slider-value {
+  color: var(--dial-text-focus);
+}
+
+.dialkit-range-slider-handle {
+  position: absolute;
+  top: 50%;
+  width: 3px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--dial-text-primary);
+  pointer-events: none;
+}
+
+.dialkit-range-slider-label {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(calc(-50% - 0.5px));
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dial-text-label);
+  pointer-events: none;
+  transition: color 0.15s;
+  display: inline-flex;
+  align-items: center;
+}
+
+.dialkit-range-slider-value {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(calc(-50% + 0.5px));
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'Geist Mono', monospace;
+  color: var(--dial-text-label);
+  pointer-events: auto;
+  transition: color 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.dialkit-range-slider-dash {
+  color: var(--dial-text-tertiary);
+  pointer-events: none;
+}
+
+.dialkit-range-slider-bound {
+  cursor: text;
+  border-bottom: 1px solid transparent;
+  padding-bottom: 1px;
+  transition: border-color 0.15s;
+}
+
+.dialkit-range-slider-active .dialkit-range-slider-bound:hover,
+.dialkit-range-slider-bound:hover {
+  border-bottom-color: var(--dial-text-label);
+}
+
+.dialkit-range-slider-input {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4ch;
+  min-width: 3ch;
+  max-width: 6ch;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'Geist Mono', monospace;
+  color: var(--dial-text-label);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--dial-text-label);
+  padding: 0 0 1px 0;
+  outline: none;
+  text-align: right;
+}
+
+.dialkit-range-slider-input:focus {
+  color: var(--dial-text-focus);
+}
+
 /* Segmented Control */
 .dialkit-segmented {
   position: relative;
@@ -2388,6 +2508,14 @@
   pointer-events: none;
 }
 
+.dialkit-cc-seg-selected {
+  fill: var(--dial-surface-hover);
+  stroke: currentColor;
+  stroke-opacity: 0.5;
+  stroke-width: 1;
+  pointer-events: none;
+}
+
 .dialkit-cc-grid {
   stroke: currentColor;
   stroke-opacity: 0.08;
@@ -2407,6 +2535,16 @@
   fill: none;
   stroke: currentColor;
   stroke-opacity: 0.85;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.dialkit-cc-connector {
+  fill: none;
+  stroke: currentColor;
+  stroke-opacity: 0.3;
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;

@@ -39,8 +39,6 @@ declare function resolveAxis(axis?: Partial<{
     origin: number;
     bipolar: boolean;
 }>): AxisSpec;
-/** Clamp `v` into [min, max]. */
-declare function clamp(v: number, min: number, max: number): number;
 /**
  * Snap `v` to the nearest multiple of `step` measured from `min`, then round to the
  * step's precision to kill float dust. A non-positive step means "no grid" → passthrough.
@@ -98,6 +96,79 @@ declare function centerValue(xAxis: AxisSpec, yAxis: AxisSpec): XYValue;
  * is never mutated.
  */
 declare function normalizeValue(value: Partial<XYValue> | undefined, xAxis: AxisSpec, yAxis: AxisSpec, snap?: boolean): XYValue;
+
+/** A resolved range value. Invariant (upheld by the helpers): min <= max. */
+type RangeValue = {
+    min: number;
+    max: number;
+};
+/** Clamp `v` into the inclusive `[lo, hi]` interval. */
+declare function clamp(v: number, lo: number, hi: number): number;
+/**
+ * Position of `v` within `[min, max]` as a 0..100 percentage. When the bounds are
+ * degenerate (`max === min`) there is no span to map onto, so return 0 rather than
+ * dividing by zero (which would yield NaN/Infinity).
+ */
+declare function valueToPercent(v: number, min: number, max: number): number;
+/** Inverse of {@link valueToPercent}: a 0..1 fraction back to a value in `[min, max]`. */
+declare function percentToValue(pct01: number, min: number, max: number): number;
+/** Order a pair so `min <= max`, swapping a reversed pair. */
+declare function orderRange(v: RangeValue): RangeValue;
+/** Clamp both ends into `[min, max]`, then order so `min <= max`. */
+declare function clampRange(v: RangeValue, min: number, max: number): RangeValue;
+/**
+ * Move the low handle to `nextLow`, clamped to `[min, current.max]` so it cannot
+ * cross the high handle. Equal handles (zero-width) are allowed.
+ */
+declare function setLow(nextLow: number, current: RangeValue, min: number): RangeValue;
+/**
+ * Move the high handle to `nextHigh`, clamped to `[current.min, max]` so it cannot
+ * cross the low handle. Equal handles (zero-width) are allowed.
+ */
+declare function setHigh(nextHigh: number, current: RangeValue, max: number): RangeValue;
+/**
+ * Shift the whole span by `deltaValue`, preserving its width. When the shift would
+ * push the span past an edge, the desired low is clamped to `[min, max - width]`
+ * so the entire span parks flush at that edge instead of shrinking.
+ */
+declare function shiftSpan(deltaValue: number, current: RangeValue, min: number, max: number): RangeValue;
+/**
+ * Pick the handle nearer to `atValue`. On a tie (or when the handles overlap and
+ * distance can't disambiguate) fall back to side: a value below the low handle
+ * grabs 'min', otherwise 'max' — so a press to the left of an overlapped pair drags
+ * low and a press to the right drags high.
+ */
+declare function nearestHandle(atValue: number, current: RangeValue): 'min' | 'max';
+/**
+ * Decide what a pointer-down grabs. A handle gets a grab radius (`hitValue`, in
+ * VALUE units) that reaches INTO the span, so a handle parked at its bound — with
+ * no empty track outside to press — is still grabbable from just inside the fill.
+ * Priority: a press within the grab radius of a handle grabs that handle even
+ * inside the span; overlapping zones pick the nearer handle (tie broken by side
+ * via nearestHandle); a strictly-interior press outside both zones drags the
+ * span; anything else targets the nearer handle.
+ */
+declare function pickDragTarget(atValue: number, current: RangeValue, hitValue: number): 'min' | 'max' | 'span';
+/**
+ * True when the press landed on empty track (at or beyond either handle). This is
+ * the only case where a plain click (no drag) may jump the nearest handle to the
+ * click point; a press inside the span stays a no-op so it can't shrink the range.
+ */
+declare function isOutsideSpan(atValue: number, current: RangeValue): boolean;
+/**
+ * CSS `left` strings for the two 3px handle lines. `gap` is the fill width, resolved to
+ * px at layout. Wide apart the `ramp` is 0 and each handle keeps its inside offset
+ * (low `+6px`, high `-9px` — the unchanged look). As the fill shrinks below ~30px the
+ * `clamp` ramp grows to 12px, sliding each handle from ~inside its fill edge to ~4.5px
+ * OUTSIDE it (low `-6px`, high `+3px`), so a small range is framed by two distinct
+ * handles just BEYOND the fill and a collapsed range shows them symmetric around the
+ * point (± 4.5px). The lines never cross (min ~9px center separation). Pure string math —
+ * no DOM; CSS min()/max()/clamp() resolve the px/%% mix at layout.
+ */
+declare function handleLeftStyles(lowPercent: number, highPercent: number): {
+    low: string;
+    high: string;
+};
 
 /**
  * One axis of an XY pad control. Partial — every field falls back through
@@ -168,6 +239,15 @@ type TextConfig = {
     type: 'text';
     default?: string;
     placeholder?: string;
+};
+type RangeConfig = {
+    type: 'range';
+    min: number;
+    max: number;
+    /** Falls back to the full span { min, max } when omitted. */
+    default?: RangeValue;
+    /** Falls back to inferStep(min, max) when omitted. */
+    step?: number;
 };
 type FileConfig = {
     type: 'file';
@@ -257,12 +337,12 @@ type ListField = {
     placeholder?: string;
     defaultValue: number | boolean | string;
 };
-type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[];
+type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 type DialConfig = {
     [key: string]: DialValue | [number, number, number, number?] | DialConfig;
 };
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -273,12 +353,14 @@ type ShortcutConfig = {
     interaction?: ShortcutInteraction;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'xy' | 'text' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
     path: string;
     label: string;
     min?: number;
     max?: number;
     step?: number;
+    /** Range control's configured reset target — its `default`, else the full {min,max} span. */
+    rangeDefault?: RangeValue;
     children?: ControlMeta[];
     defaultOpen?: boolean;
     options?: (string | {
@@ -398,6 +480,8 @@ declare class DialStoreClass {
     private isSelectConfig;
     private isColorConfig;
     private isXYConfig;
+    private isRangeConfig;
+    private isRangeValue;
     private isTextConfig;
     private isGalleryConfig;
     private isFileConfig;
@@ -474,6 +558,20 @@ interface SliderProps {
     shortcutActive?: boolean;
 }
 declare function Slider({ label, value, onChange, min, max, step, unit, formatValue, valueIcon, origin, bipolar, shortcut, shortcutActive, }: SliderProps): react_jsx_runtime.JSX.Element;
+
+interface RangeSliderProps {
+    label: string;
+    value: RangeValue;
+    onChange: (value: RangeValue) => void;
+    /** Lower bound of the track. */
+    min?: number;
+    /** Upper bound of the track. */
+    max?: number;
+    step?: number;
+    /** Reset target for a double-click on the track. Falls back to the full {min,max} span. */
+    defaultValue?: RangeValue;
+}
+declare function RangeSlider({ label, value: rawValue, onChange, min, max, step, defaultValue, }: RangeSliderProps): react_jsx_runtime.JSX.Element;
 
 interface ToggleProps {
     label: string;
@@ -637,11 +735,22 @@ interface CurveSegment {
     curvature: number;
     /**
      * Bipolar -1..1 steepness — how pronounced the ease is, independent of the energy bias.
-     * Scales each control point's deviation from the linear diagonal: 0 = canonical preset,
-     * +1 = sharper (e.g. easeInOut gets much slower start/end), −1 = flatter toward linear.
-     * Spring maps it to stiffness (snappier rise).
+     * Sweeps linear (−1) ← canonical preset (0) → the explosive extreme (+1, expo-grade: the
+     * eased side's far control point drops to the floor). So steepness is the continuous power
+     * ladder (gentle → quad → … → expo), with circ reachable mid-range. Spring maps it to stiffness.
      */
     steepness: number;
+    /**
+     * 0..1 overshoot — pushes the curve above 1 at the END before settling (easeOutBack),
+     * 0 = none. Independent of `anticipate`; set both for easeInOutBack. Beyond ~1 is
+     * elastic/bounce — use spring. Optional; treated as 0 when absent. No-op for spring.
+     */
+    overshoot?: number;
+    /**
+     * 0..1 anticipation — dips the curve below 0 at the START before launching (easeInBack),
+     * 0 = none. Independent of `overshoot`. Optional; treated as 0 when absent. No-op for spring.
+     */
+    anticipate?: number;
 }
 /** The stacked driver curve (a single curve, no internal splits). */
 interface CurveDriver {
@@ -650,6 +759,10 @@ interface CurveDriver {
     curvature: number;
     /** Bipolar -1..1 steepness — see CurveSegment.steepness. */
     steepness: number;
+    /** 0..1 overshoot — see CurveSegment.overshoot. */
+    overshoot?: number;
+    /** 0..1 anticipation — see CurveSegment.anticipate. */
+    anticipate?: number;
 }
 type DriverDirection = 'forward' | 'mirror' | 'reverse';
 interface CurveComposition {
@@ -657,6 +770,13 @@ interface CurveComposition {
     /** null → no driver lane (the component renders a single lane). */
     driver: CurveDriver | null;
     direction: DriverDirection;
+    /**
+     * 0..1 — fraction of the timeline given to gaps between segments (distributed equally,
+     * one gap after each segment, the last wrapping to the first). In a gap the value glides
+     * smoothly from the segment's end down to the next segment's start (a faint connector)
+     * instead of snapping. 0 = contiguous (default). Optional.
+     */
+    gap?: number;
 }
 /** A pure `(t) -> value` sampler over local time, both in 0..1 (value may overshoot for springs). */
 type Sampler = (t: number) => number;
@@ -668,8 +788,12 @@ declare function splitSegment(comp: CurveComposition, index: number): CurveCompo
 /** Remove the segment at `index` (no-op when it's the only one). */
 declare function removeSegment(comp: CurveComposition, index: number): CurveComposition;
 declare function cycleSegmentType(comp: CurveComposition, index: number): CurveComposition;
+declare function flipSegment(comp: CurveComposition, index: number): CurveComposition;
+declare function flipDriver(comp: CurveComposition): CurveComposition;
 declare function setSegmentCurvature(comp: CurveComposition, index: number, curvature: number): CurveComposition;
 declare function setSegmentSteepness(comp: CurveComposition, index: number, steepness: number): CurveComposition;
+declare function setSegmentOvershoot(comp: CurveComposition, index: number, overshoot: number): CurveComposition;
+declare function setSegmentAnticipate(comp: CurveComposition, index: number, anticipate: number): CurveComposition;
 /**
  * Move `deltaFrac` (0..1 of the whole series) across the boundary between segment
  * `boundaryIndex` and the next, keeping the rest untouched and the pair's combined
@@ -681,6 +805,8 @@ declare function removeDriver(comp: CurveComposition): CurveComposition;
 declare function cycleDriverType(comp: CurveComposition): CurveComposition;
 declare function setDriverCurvature(comp: CurveComposition, curvature: number): CurveComposition;
 declare function setDriverSteepness(comp: CurveComposition, steepness: number): CurveComposition;
+declare function setDriverOvershoot(comp: CurveComposition, overshoot: number): CurveComposition;
+declare function setDriverAnticipate(comp: CurveComposition, anticipate: number): CurveComposition;
 interface CompositionSamplers {
     segments: Sampler[];
     driver: Sampler | null;
@@ -766,10 +892,16 @@ interface CurveComposerProps {
     triggerSteps?: number;
     /** Fired in trigger mode when the value crosses a trigger level; `index` is into `triggerLevels`. */
     onTrigger?: (index: number) => void;
+    /** Index of the currently selected segment (highlighted); null/undefined for none. */
+    selectedIndex?: number | null;
+    /** Fired when a segment's header strip is clicked — lets the consumer target it (flip/remove/…). */
+    onSelect?: (index: number) => void;
     /** Curve stroke color. Defaults to the theme text color. */
     curveColor?: string;
     /** Playhead / marker color. Defaults to the theme text color. */
     playheadColor?: string;
+    /** 0..1 — space between segments; the value glides smoothly across each gap (faint connector). */
+    gap?: number;
     /** Faint vertical reference grid behind each lane. */
     grid?: boolean;
     gridSubdivisions?: number;
@@ -777,7 +909,7 @@ interface CurveComposerProps {
     /** Height of the main lane; the driver lane adds height below it. */
     height?: number;
 }
-declare function CurveComposer({ segments, driver, direction, onSegmentsChange, onDriverChange, getPhase, phase, mode, triggerSteps, onTrigger, curveColor, playheadColor, grid, gridSubdivisions, width, height, }: CurveComposerProps): react_jsx_runtime.JSX.Element;
+declare function CurveComposer({ segments, driver, direction, onSegmentsChange, onDriverChange, getPhase, phase, mode, triggerSteps, onTrigger, selectedIndex, onSelect, gap, curveColor, playheadColor, grid, gridSubdivisions, width, height, }: CurveComposerProps): react_jsx_runtime.JSX.Element;
 
 interface TextControlProps {
     label: string;
@@ -1005,4 +1137,4 @@ interface ShortcutsMenuProps {
 }
 declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react_jsx_runtime.JSX.Element | null;
 
-export { type ActionConfig, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type OKLCH, type PanelConfig, type Point, type Preset, PresetManager, type RGBA, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, applyDetentAxis, buildSamplers, centerValue, clamp, clampOklchToSrgb, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, formatHex, hslToRgb, hsvToRgb, invertY, normToValue, normalizeHex, normalizeListItems, normalizeValue, nudge, oklchToRgb, opacityPercent, parseHex, parseListItemSchema, pointFromValue, readComposition, redistributeWeight, removeDriver, removeSegment, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverCurvature, setDriverSteepness, setSegmentCurvature, setSegmentSteepness, snapToStep, splitSegment, triggerLevels, triggersCrossed, useDialKit, valueFromPoint, valueToNorm };
+export { type ActionConfig, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type OKLCH, type PanelConfig, type Point, type Preset, PresetManager, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, applyDetentAxis, buildSamplers, centerValue, clamp, clampOklchToSrgb, clampRange, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, flipDriver, flipSegment, formatHex, handleLeftStyles, hslToRgb, hsvToRgb, invertY, isOutsideSpan, nearestHandle, normToValue, normalizeHex, normalizeListItems, normalizeValue, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, pointFromValue, readComposition, redistributeWeight, removeDriver, removeSegment, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, shiftSpan, snapToStep, splitSegment, triggerLevels, triggersCrossed, useDialKit, valueFromPoint, valueToNorm, valueToPercent };
