@@ -2,6 +2,7 @@ import { createSignal, For, Show, onCleanup } from 'solid-js';
 import { SegmentedControl } from './SegmentedControl';
 import { Slider } from './Slider';
 import { ColorPickerPanel } from './ColorPickerPanel';
+import { GradientTransformPad } from './GradientTransformPad';
 import { ICON_GRIP, ICON_PANEL } from '../../icons';
 import {
   gradientToCss,
@@ -11,7 +12,6 @@ import {
   setStopColor,
   setGradientType,
   setGradientAngle,
-  setGradientCenter,
   setGradientScale,
   setGradientSquash,
   setGradientRotation,
@@ -278,24 +278,7 @@ export function GradientPanel(props: GradientPanelProps) {
 
       <Show when={advanced()}>
         <div class="dialkit-gradient-advanced">
-          <Slider
-            label="Center X"
-            value={props.value.centerX ?? 50}
-            min={0}
-            max={100}
-            step={1}
-            unit="%"
-            onChange={(x) => props.onChange(setGradientCenter(props.value, x, props.value.centerY ?? 50))}
-          />
-          <Slider
-            label="Center Y"
-            value={props.value.centerY ?? 50}
-            min={0}
-            max={100}
-            step={1}
-            unit="%"
-            onChange={(y) => props.onChange(setGradientCenter(props.value, props.value.centerX ?? 50, y))}
-          />
+          <GradientTransformPad value={props.value} onChange={props.onChange} />
           <Show when={props.value.type === 'radial'}>
             <Slider
               label="Size"

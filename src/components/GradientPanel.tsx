@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { SegmentedControl } from './SegmentedControl';
 import { Slider } from './Slider';
 import { ColorPickerPanel } from './ColorPickerPanel';
+import { GradientTransformPad } from './GradientTransformPad';
 import { ICON_GRIP, ICON_PANEL } from '../icons';
 import {
   gradientToCss,
@@ -11,7 +12,6 @@ import {
   setStopColor,
   setGradientType,
   setGradientAngle,
-  setGradientCenter,
   setGradientScale,
   setGradientSquash,
   setGradientRotation,
@@ -285,24 +285,7 @@ export function GradientPanel({ value, onChange, onDrag }: GradientPanelProps) {
 
       {advanced && (
         <div className="dialkit-gradient-advanced">
-          <Slider
-            label="Center X"
-            value={value.centerX ?? 50}
-            min={0}
-            max={100}
-            step={1}
-            unit="%"
-            onChange={(x) => onChange(setGradientCenter(value, x, value.centerY ?? 50))}
-          />
-          <Slider
-            label="Center Y"
-            value={value.centerY ?? 50}
-            min={0}
-            max={100}
-            step={1}
-            unit="%"
-            onChange={(y) => onChange(setGradientCenter(value, value.centerX ?? 50, y))}
-          />
+          <GradientTransformPad value={value} onChange={onChange} />
           {value.type === 'radial' && (
             <>
               <Slider

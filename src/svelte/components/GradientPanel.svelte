@@ -3,6 +3,7 @@
   import SegmentedControl from './SegmentedControl.svelte';
   import Slider from './Slider.svelte';
   import ColorPickerPanel from './ColorPickerPanel.svelte';
+  import GradientTransformPad from './GradientTransformPad.svelte';
   import { ICON_GRIP, ICON_PANEL } from '../../icons';
   import {
     gradientToCss,
@@ -12,7 +13,6 @@
     setStopColor,
     setGradientType,
     setGradientAngle,
-    setGradientCenter,
     setGradientScale,
     setGradientSquash,
     setGradientRotation,
@@ -278,24 +278,7 @@
 
   {#if advanced}
     <div class="dialkit-gradient-advanced">
-      <Slider
-        label="Center X"
-        value={value.centerX ?? 50}
-        min={0}
-        max={100}
-        step={1}
-        unit="%"
-        onChange={(x: number) => onChange(setGradientCenter(value, x, value.centerY ?? 50))}
-      />
-      <Slider
-        label="Center Y"
-        value={value.centerY ?? 50}
-        min={0}
-        max={100}
-        step={1}
-        unit="%"
-        onChange={(y: number) => onChange(setGradientCenter(value, value.centerX ?? 50, y))}
-      />
+      <GradientTransformPad {value} {onChange} />
       {#if value.type === 'radial'}
         <Slider
           label="Size"

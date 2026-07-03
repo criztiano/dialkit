@@ -192,7 +192,7 @@ hero: {
 }
 ```
 
-The control shows a live gradient strip; clicking it opens the editor: a linear / radial / conic switcher, an angle, and a ramp of draggable color stops. Click an empty spot on the ramp to add a stop (seeded with the color under the cursor), drag a stop to reposition it (stops swap past each other live), and drag a stop off the strip or long-press it to remove one (minimum two). Selecting a stop opens the full color picker below it — stops always carry alpha. Drag the panel by the grip in its top-left to reposition it; the settings toggle beside the tabs (radial/conic only) reveals the origin offset and, for radial, sliders for size, squash (ovality), and — once squashed — rotation.
+The control shows a live gradient strip; clicking it opens the editor: a linear / radial / conic switcher, an angle, and a ramp of draggable color stops. Click an empty spot on the ramp to add a stop (seeded with the color under the cursor), drag a stop to reposition it (stops swap past each other live), and drag a stop off the strip or long-press it to remove one (minimum two). Selecting a stop opens the full color picker below it — stops always carry alpha. Drag the panel by the grip in its top-left to reposition it; the settings toggle beside the tabs (radial/conic only) reveals a transform pad — drag the center handle to move the origin, the axis handle to resize and rotate, and the perpendicular handle to squash into an oval — plus, for radial, sliders for size, squash, and (once squashed) rotation for precise values.
 
 Turn the value into CSS with the exported helper:
 

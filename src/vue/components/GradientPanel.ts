@@ -2,6 +2,7 @@ import { computed, defineComponent, h, ref, onBeforeUnmount, type PropType } fro
 import { SegmentedControl } from './SegmentedControl';
 import { Slider } from './Slider';
 import { ColorPickerPanel } from './ColorPickerPanel';
+import { GradientTransformPad } from './GradientTransformPad';
 import { ICON_GRIP, ICON_PANEL } from '../../icons';
 import {
   gradientToCss,
@@ -11,7 +12,6 @@ import {
   setStopColor,
   setGradientType,
   setGradientAngle,
-  setGradientCenter,
   setGradientScale,
   setGradientSquash,
   setGradientRotation,
@@ -273,23 +273,9 @@ export const GradientPanel = defineComponent({
 
         advanced
           ? h('div', { class: 'dialkit-gradient-advanced' }, [
-            h(Slider, {
-              label: 'Center X',
-              value: value.centerX ?? 50,
-              min: 0,
-              max: 100,
-              step: 1,
-              unit: '%',
-              onChange: (x: number) => emit('change', setGradientCenter(value, x, value.centerY ?? 50)),
-            }),
-            h(Slider, {
-              label: 'Center Y',
-              value: value.centerY ?? 50,
-              min: 0,
-              max: 100,
-              step: 1,
-              unit: '%',
-              onChange: (y: number) => emit('change', setGradientCenter(value, value.centerX ?? 50, y)),
+            h(GradientTransformPad, {
+              value,
+              onChange: (v: GradientValue) => emit('change', v),
             }),
             ...(value.type === 'radial'
               ? [
