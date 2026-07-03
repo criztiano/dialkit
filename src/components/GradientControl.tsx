@@ -22,6 +22,19 @@ export function GradientControl({ label, value, onChange }: GradientControlProps
   const panelRef = useRef<HTMLDivElement>(null);
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number; above: boolean } | null>(null);
+  // Manual position once the user drags the panel by its grip; overrides `pos`.
+  const [dragPos, setDragPos] = useState<{ left: number; top: number } | null>(null);
+
+  const onPanelDrag = useCallback((dx: number, dy: number) => {
+    setDragPos((prev) => {
+      const rect = panelRef.current?.getBoundingClientRect();
+      const base = prev ?? (rect ? { left: rect.left, top: rect.top } : null);
+      if (!base) return prev;
+      const left = Math.min(window.innerWidth - 40, Math.max(8 - PANEL_WIDTH + 40, base.left + dx));
+      const top = Math.min(window.innerHeight - 40, Math.max(8, base.top + dy));
+      return { left, top };
+    });
+  }, []);
 
   const updatePos = useCallback(() => {
     const el = triggerRef.current;
@@ -35,6 +48,7 @@ export function GradientControl({ label, value, onChange }: GradientControlProps
   }, [value.type]);
 
   const open = () => {
+    setDragPos(null);
     updatePos();
     setIsOpen(true);
   };
@@ -97,14 +111,15 @@ export function GradientControl({ label, value, onChange }: GradientControlProps
               transition={{ type: 'spring', visualDuration: 0.15, bounce: 0 }}
               style={{
                 position: 'fixed',
-                left: pos.left,
                 width: PANEL_WIDTH,
-                ...(pos.above
-                  ? { bottom: window.innerHeight - pos.top, transformOrigin: 'bottom right' }
-                  : { top: pos.top, transformOrigin: 'top right' }),
+                ...(dragPos
+                  ? { left: dragPos.left, top: dragPos.top, transformOrigin: 'top left' }
+                  : pos.above
+                    ? { left: pos.left, bottom: window.innerHeight - pos.top, transformOrigin: 'bottom right' }
+                    : { left: pos.left, top: pos.top, transformOrigin: 'top right' }),
               }}
             >
-              <GradientPanel value={value} onChange={onChange} />
+              <GradientPanel value={value} onChange={onChange} onDrag={onPanelDrag} />
             </motion.div>
           )}
         </AnimatePresence>,
