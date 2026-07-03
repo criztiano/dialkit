@@ -3425,7 +3425,8 @@ var GradientPanel = (0, import_vue14.defineComponent)({
             onPointerdown: onGripDown,
             onPointermove: onGripMove,
             onPointerup: onGripUp,
-            onPointercancel: onGripUp
+            onPointercancel: onGripUp,
+            onLostpointercapture: onGripUp
           }, [
             (0, import_vue14.h)(
               "svg",
@@ -3555,9 +3556,13 @@ var GradientControl = (0, import_vue15.defineComponent)({
     const triggerRef = (0, import_vue15.ref)(null);
     const panelRef = (0, import_vue15.ref)(null);
     const onPanelDrag = (dx, dy) => {
-      const rect = panelRef.value?.getBoundingClientRect();
-      const base = dragPos.value ?? (rect ? { left: rect.left, top: rect.top } : null);
-      if (!base) return;
+      let base = dragPos.value;
+      if (!base) {
+        const p = pos.value;
+        const el = panelRef.value;
+        if (!p || !el) return;
+        base = { left: p.left, top: p.above ? p.top - el.offsetHeight : p.top };
+      }
       const left = Math.min(window.innerWidth - 40, Math.max(8 - PANEL_WIDTH + 40, base.left + dx));
       const top = Math.min(window.innerHeight - 40, Math.max(8, base.top + dy));
       dragPos.value = { left, top };

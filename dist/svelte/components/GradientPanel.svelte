@@ -233,6 +233,7 @@
       onpointermove={onGripMove}
       onpointerup={onGripUp}
       onpointercancel={onGripUp}
+      onlostpointercapture={onGripUp}
     >
       <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         {#each ICON_GRIP as c}

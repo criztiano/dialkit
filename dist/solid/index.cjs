@@ -3821,6 +3821,7 @@ function GradientPanel(props) {
   const advanced = () => showAdvanced() && props.value.type !== "linear";
   return (() => {
     var _el$ = _tmpl$38(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$9 = _el$2.nextSibling, _el$0 = _el$9.nextSibling;
+    _el$3.addEventListener("lostpointercapture", onGripUp);
     _el$3.addEventListener("pointercancel", onGripUp);
     _el$3.$$pointerup = onGripUp;
     _el$3.$$pointermove = onGripMove;
@@ -4055,12 +4056,15 @@ function GradientControl(props) {
   };
   const onPanelDrag = (dx, dy) => {
     setDragPos((prev) => {
-      const rect = panelRef?.getBoundingClientRect();
-      const base = prev ?? (rect ? {
-        left: rect.left,
-        top: rect.top
-      } : null);
-      if (!base) return prev;
+      let base = prev;
+      if (!base) {
+        const p = pos();
+        if (!p || !panelRef) return prev;
+        base = {
+          left: p.left,
+          top: p.above ? p.top - panelRef.offsetHeight : p.top
+        };
+      }
       const left = Math.min(window.innerWidth - 40, Math.max(8 - PANEL_WIDTH + 40, base.left + dx));
       const top = Math.min(window.innerHeight - 40, Math.max(8, base.top + dy));
       return {

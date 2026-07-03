@@ -3355,6 +3355,7 @@ function GradientPanel({ value, onChange, onDrag }) {
           onPointerMove: onGripMove,
           onPointerUp: onGripUp,
           onPointerCancel: onGripUp,
+          onLostPointerCapture: onGripUp,
           children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("svg", { viewBox: "0 0 24 24", fill: "currentColor", "aria-hidden": "true", children: ICON_GRIP.map((c, i) => /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("circle", { cx: c.cx, cy: c.cy, r: "1.5" }, i)) })
         }
       ),
@@ -3491,14 +3492,17 @@ function GradientControl({ label, value, onChange }) {
   const [dragPos, setDragPos] = (0, import_react16.useState)(null);
   const onPanelDrag = (0, import_react16.useCallback)((dx, dy) => {
     setDragPos((prev) => {
-      const rect = panelRef.current?.getBoundingClientRect();
-      const base = prev ?? (rect ? { left: rect.left, top: rect.top } : null);
-      if (!base) return prev;
+      let base = prev;
+      if (!base) {
+        const el = panelRef.current;
+        if (!pos || !el) return prev;
+        base = { left: pos.left, top: pos.above ? pos.top - el.offsetHeight : pos.top };
+      }
       const left = Math.min(window.innerWidth - 40, Math.max(8 - PANEL_WIDTH + 40, base.left + dx));
       const top = Math.min(window.innerHeight - 40, Math.max(8, base.top + dy));
       return { left, top };
     });
-  }, []);
+  }, [pos]);
   const updatePos = (0, import_react16.useCallback)(() => {
     const el = triggerRef.current;
     if (!el) return;
