@@ -20,9 +20,20 @@ export { LONG_PRESS_MS, PALETTE_DRAG_CANCEL_PX };
 // ── Types ───────────────────────────────────────────────────────────
 
 export type GradientType = 'linear' | 'radial' | 'conic';
+/** Radial extent — a round `circle` or a stretched `ellipse`. */
+export type RadialShape = 'circle' | 'ellipse';
 /** color is always #rrggbbaa; position is 0–1. */
 export type GradientStop = { color: string; position: number };
-export type GradientValue = { type: GradientType; angle: number; stops: GradientStop[] };
+export type GradientValue = {
+  type: GradientType;
+  angle: number;
+  stops: GradientStop[];
+  /** Radial/conic origin as 0–100 (%). Absent = centered (50). */
+  centerX?: number;
+  centerY?: number;
+  /** Radial extent. Absent = 'circle'. */
+  shape?: RadialShape;
+};
 
 // ── Constants ───────────────────────────────────────────────────────
 
@@ -42,6 +53,7 @@ export const DEFAULT_GRADIENT: GradientValue = {
 // ── Small helpers ───────────────────────────────────────────────────
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
+const clampPct = (n: number) => Math.min(100, Math.max(0, n));
 const wrapAngle = (a: number) => ((a % 360) + 360) % 360;
 const round = (n: number, p: number) => {
   const f = 10 ** p;
@@ -67,11 +79,15 @@ export function gradientToCss(value: GradientValue): string {
     .map((s) => `${s.color} ${round(clamp01(s.position) * 100, 2)}%`)
     .join(', ');
   const angle = round(wrapAngle(value.angle), 2);
+  const cx = round(clampPct(value.centerX ?? 50), 2);
+  const cy = round(clampPct(value.centerY ?? 50), 2);
   switch (value.type) {
-    case 'radial':
-      return `radial-gradient(circle at 50% 50%, ${stopStr})`;
+    case 'radial': {
+      const shape = value.shape === 'ellipse' ? 'ellipse' : 'circle';
+      return `radial-gradient(${shape} at ${cx}% ${cy}%, ${stopStr})`;
+    }
     case 'conic':
-      return `conic-gradient(from ${angle}deg at 50% 50%, ${stopStr})`;
+      return `conic-gradient(from ${angle}deg at ${cx}% ${cy}%, ${stopStr})`;
     case 'linear':
     default:
       return `linear-gradient(${angle}deg, ${stopStr})`;
@@ -133,6 +149,15 @@ export function normalizeGradient(input: unknown): GradientValue {
   const rawAngle = Number(obj.angle);
   const angle = Number.isFinite(rawAngle) ? wrapAngle(rawAngle) : DEFAULT_GRADIENT.angle;
 
+  // Optional radial/conic geometry — preserved only when valid, so plain
+  // values stay lean and the defaults live in gradientToCss.
+  const extras: Pick<GradientValue, 'centerX' | 'centerY' | 'shape'> = {};
+  const cx = Number(obj.centerX);
+  if (Number.isFinite(cx)) extras.centerX = clampPct(cx);
+  const cy = Number(obj.centerY);
+  if (Number.isFinite(cy)) extras.centerY = clampPct(cy);
+  if (obj.shape === 'circle' || obj.shape === 'ellipse') extras.shape = obj.shape;
+
   const stops: GradientStop[] = [];
   for (const raw of obj.stops) {
     if (!raw || typeof raw !== 'object') continue;
@@ -143,9 +168,9 @@ export function normalizeGradient(input: unknown): GradientValue {
     stops.push({ color: formatHex(rgba, true), position: clamp01(pos) });
   }
 
-  if (stops.length < MIN_STOPS) return { type, angle, stops: cloneDefaultStops() };
+  if (stops.length < MIN_STOPS) return { type, angle, stops: cloneDefaultStops(), ...extras };
   stops.sort((a, b) => a.position - b.position);
-  return { type, angle, stops };
+  return { type, angle, stops, ...extras };
 }
 
 // ── Immutable stop/gradient edits ───────────────────────────────────
@@ -188,4 +213,13 @@ export function setGradientType(value: GradientValue, type: GradientType): Gradi
 
 export function setGradientAngle(value: GradientValue, angle: number): GradientValue {
   return { ...value, angle: wrapAngle(angle) };
+}
+
+/** Set the radial/conic origin (each 0–100 %). */
+export function setGradientCenter(value: GradientValue, centerX: number, centerY: number): GradientValue {
+  return { ...value, centerX: clampPct(centerX), centerY: clampPct(centerY) };
+}
+
+export function setGradientShape(value: GradientValue, shape: RadialShape): GradientValue {
+  return { ...value, shape };
 }

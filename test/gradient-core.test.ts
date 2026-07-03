@@ -9,6 +9,8 @@ import {
   setStopColor,
   setGradientType,
   setGradientAngle,
+  setGradientCenter,
+  setGradientShape,
   DEFAULT_GRADIENT,
   MIN_STOPS,
   type GradientValue,
@@ -38,6 +40,18 @@ describe('gradientToCss', () => {
   it('renders conic from angle', () => {
     expect(gradientToCss(grad({ type: 'conic', angle: 120 }))).toBe(
       'conic-gradient(from 120deg at 50% 50%, #000000ff 0%, #ffffffff 100%)'
+    );
+  });
+
+  it('renders a radial ellipse with an off-center origin', () => {
+    expect(gradientToCss(grad({ type: 'radial', shape: 'ellipse', centerX: 30, centerY: 70 }))).toBe(
+      'radial-gradient(ellipse at 30% 70%, #000000ff 0%, #ffffffff 100%)'
+    );
+  });
+
+  it('renders a conic origin offset', () => {
+    expect(gradientToCss(grad({ type: 'conic', angle: 0, centerX: 25, centerY: 75 }))).toBe(
+      'conic-gradient(from 0deg at 25% 75%, #000000ff 0%, #ffffffff 100%)'
     );
   });
 
@@ -109,6 +123,23 @@ describe('normalizeGradient', () => {
     expect(out.type).toBe('conic');
     expect(out.angle).toBe(30);
     expect(out.stops).toEqual(DEFAULT_GRADIENT.stops);
+  });
+
+  it('preserves and clamps center/shape when present, omits when absent', () => {
+    const withGeo = normalizeGradient({ type: 'radial', angle: 0, stops: grad().stops, centerX: 150, centerY: -20, shape: 'ellipse' });
+    expect(withGeo.centerX).toBe(100);
+    expect(withGeo.centerY).toBe(0);
+    expect(withGeo.shape).toBe('ellipse');
+
+    const plain = normalizeGradient({ type: 'radial', angle: 0, stops: grad().stops });
+    expect(plain.centerX).toBeUndefined();
+    expect(plain.shape).toBeUndefined();
+  });
+
+  it('drops an invalid shape and non-finite center', () => {
+    const out = normalizeGradient({ type: 'radial', angle: 0, stops: grad().stops, centerX: NaN, shape: 'square' });
+    expect(out.centerX).toBeUndefined();
+    expect(out.shape).toBeUndefined();
   });
 });
 
@@ -215,5 +246,15 @@ describe('setStopColor / setGradientType / setGradientAngle', () => {
   it('wraps a set angle', () => {
     expect(setGradientAngle(grad(), 400).angle).toBe(40);
     expect(setGradientAngle(grad(), -10).angle).toBe(350);
+  });
+
+  it('sets and clamps the center', () => {
+    const out = setGradientCenter(grad(), 120, 40);
+    expect(out.centerX).toBe(100);
+    expect(out.centerY).toBe(40);
+  });
+
+  it('sets the radial shape', () => {
+    expect(setGradientShape(grad(), 'ellipse').shape).toBe('ellipse');
   });
 });

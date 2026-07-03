@@ -74,10 +74,12 @@ export {
   setStopColor,
   setGradientType,
   setGradientAngle,
+  setGradientCenter,
+  setGradientShape,
   DEFAULT_GRADIENT,
   MIN_STOPS,
 } from './gradient-core';
-export type { GradientValue, GradientStop, GradientType } from './gradient-core';
+export type { GradientValue, GradientStop, GradientType, RadialShape } from './gradient-core';
 export { GalleryControl } from './components/GalleryControl';
 export { FileControl } from './components/FileControl';
 export { SwatchControl } from './components/SwatchControl';
