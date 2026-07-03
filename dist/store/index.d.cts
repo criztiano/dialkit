@@ -15,6 +15,8 @@
  */
 
 type GradientType = 'linear' | 'radial' | 'conic';
+/** Radial extent — a round `circle` or a stretched `ellipse`. */
+type RadialShape = 'circle' | 'ellipse';
 /** color is always #rrggbbaa; position is 0–1. */
 type GradientStop = {
     color: string;
@@ -24,6 +26,11 @@ type GradientValue = {
     type: GradientType;
     angle: number;
     stops: GradientStop[];
+    /** Radial/conic origin as 0–100 (%). Absent = centered (50). */
+    centerX?: number;
+    centerY?: number;
+    /** Radial extent. Absent = 'circle'. */
+    shape?: RadialShape;
 };
 
 type SpringConfig = {

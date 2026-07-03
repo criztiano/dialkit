@@ -17,6 +17,8 @@ export { LONG_PRESS_MS, PALETTE_DRAG_CANCEL_PX } from './color-core.js';
  */
 
 type GradientType = 'linear' | 'radial' | 'conic';
+/** Radial extent — a round `circle` or a stretched `ellipse`. */
+type RadialShape = 'circle' | 'ellipse';
 /** color is always #rrggbbaa; position is 0–1. */
 type GradientStop = {
     color: string;
@@ -26,6 +28,11 @@ type GradientValue = {
     type: GradientType;
     angle: number;
     stops: GradientStop[];
+    /** Radial/conic origin as 0–100 (%). Absent = centered (50). */
+    centerX?: number;
+    centerY?: number;
+    /** Radial extent. Absent = 'circle'. */
+    shape?: RadialShape;
 };
 declare const MIN_STOPS = 2;
 /** Vertical travel off the strip that arms Photoshop-style stop removal. */
@@ -61,5 +68,8 @@ declare function removeStop(value: GradientValue, index: number): GradientValue;
 declare function setStopColor(value: GradientValue, index: number, hex: string): GradientValue;
 declare function setGradientType(value: GradientValue, type: GradientType): GradientValue;
 declare function setGradientAngle(value: GradientValue, angle: number): GradientValue;
+/** Set the radial/conic origin (each 0–100 %). */
+declare function setGradientCenter(value: GradientValue, centerX: number, centerY: number): GradientValue;
+declare function setGradientShape(value: GradientValue, shape: RadialShape): GradientValue;
 
-export { DEFAULT_GRADIENT, type GradientStop, type GradientType, type GradientValue, MIN_STOPS, STOP_DETACH_PX, addStop, colorAtPosition, gradientToCss, moveStop, normalizeGradient, removeStop, setGradientAngle, setGradientType, setStopColor };
+export { DEFAULT_GRADIENT, type GradientStop, type GradientType, type GradientValue, MIN_STOPS, type RadialShape, STOP_DETACH_PX, addStop, colorAtPosition, gradientToCss, moveStop, normalizeGradient, removeStop, setGradientAngle, setGradientCenter, setGradientShape, setGradientType, setStopColor };

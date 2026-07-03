@@ -18,6 +18,8 @@ import { ComputedRef, ObjectDirective, InjectionKey, Ref, PropType, h, VNode } f
  */
 
 type GradientType = 'linear' | 'radial' | 'conic';
+/** Radial extent — a round `circle` or a stretched `ellipse`. */
+type RadialShape = 'circle' | 'ellipse';
 /** color is always #rrggbbaa; position is 0–1. */
 type GradientStop = {
     color: string;
@@ -27,6 +29,11 @@ type GradientValue = {
     type: GradientType;
     angle: number;
     stops: GradientStop[];
+    /** Radial/conic origin as 0–100 (%). Absent = centered (50). */
+    centerX?: number;
+    centerY?: number;
+    /** Radial extent. Absent = 'circle'. */
+    shape?: RadialShape;
 };
 declare const MIN_STOPS = 2;
 declare const DEFAULT_GRADIENT: GradientValue;
@@ -1383,12 +1390,13 @@ declare const GradientPanel: vue.DefineComponent<vue.ExtractPropTypes<{
     };
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
-}>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, "change"[], "change", vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+}>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, ("drag" | "change")[], "drag" | "change", vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     value: {
         type: PropType<GradientValue>;
         required: true;
     };
 }>> & Readonly<{
+    onDrag?: ((...args: any[]) => any) | undefined;
     onChange?: ((...args: any[]) => any) | undefined;
 }>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 

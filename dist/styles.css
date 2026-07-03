@@ -2012,6 +2012,82 @@
   border-radius: 0;
 }
 
+/* Top toolbar: drag grip · type tabs · advanced toggle. */
+.dialkit-gradient-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dialkit-gradient-toolbar .dialkit-segmented {
+  flex: 1;
+  min-width: 0;
+}
+
+.dialkit-gradient-grip {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--dial-text-tertiary);
+  cursor: grab;
+  touch-action: none;
+  transition: color 0.15s;
+}
+
+.dialkit-gradient-grip:hover {
+  color: var(--dial-text-label);
+}
+
+.dialkit-gradient-grip:active {
+  cursor: grabbing;
+}
+
+.dialkit-gradient-grip svg {
+  width: 16px;
+  height: 16px;
+}
+
+.dialkit-gradient-advanced-toggle {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dial-text-tertiary);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.dialkit-gradient-advanced-toggle:hover {
+  color: var(--dial-text-label);
+  background: var(--dial-surface-hover);
+}
+
+.dialkit-gradient-advanced-toggle[data-active="true"] {
+  color: var(--dial-text-focus);
+  background: var(--dial-surface-active);
+}
+
+.dialkit-gradient-advanced-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
+.dialkit-gradient-advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .dialkit-gradient-strip {
   position: relative;
   height: 28px;
@@ -2041,8 +2117,9 @@
     conic-gradient(rgba(127, 127, 127, 0.35) 25%, transparent 0 50%, rgba(127, 127, 127, 0.35) 0 75%, transparent 0) 0 0 / 6px 6px;
 }
 
+/* Active handle: same white border, a blue selection ring. */
 .dialkit-gradient-stop[data-selected="true"] {
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 0 0 3px var(--dial-text-focus), 0 1px 4px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 0 0 3px #3b82f6, 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
 /* Long-press telegraph: the handle sinks while the hold timer runs. */

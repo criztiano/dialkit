@@ -239,6 +239,7 @@ var DEFAULT_GRADIENT = {
   ]
 };
 var clamp012 = (n) => Math.min(1, Math.max(0, n));
+var clampPct = (n) => Math.min(100, Math.max(0, n));
 var wrapAngle = (a) => (a % 360 + 360) % 360;
 var round2 = (n, p) => {
   const f = 10 ** p;
@@ -258,11 +259,15 @@ var normColor = (color) => {
 function gradientToCss(value) {
   const stopStr = sortedStops(value.stops).map((s) => `${s.color} ${round2(clamp012(s.position) * 100, 2)}%`).join(", ");
   const angle = round2(wrapAngle(value.angle), 2);
+  const cx = round2(clampPct(value.centerX ?? 50), 2);
+  const cy = round2(clampPct(value.centerY ?? 50), 2);
   switch (value.type) {
-    case "radial":
-      return `radial-gradient(circle at 50% 50%, ${stopStr})`;
+    case "radial": {
+      const shape = value.shape === "ellipse" ? "ellipse" : "circle";
+      return `radial-gradient(${shape} at ${cx}% ${cy}%, ${stopStr})`;
+    }
     case "conic":
-      return `conic-gradient(from ${angle}deg at 50% 50%, ${stopStr})`;
+      return `conic-gradient(from ${angle}deg at ${cx}% ${cy}%, ${stopStr})`;
     case "linear":
     default:
       return `linear-gradient(${angle}deg, ${stopStr})`;
@@ -303,6 +308,12 @@ function normalizeGradient(input) {
   const type = obj.type === "radial" || obj.type === "conic" ? obj.type : "linear";
   const rawAngle = Number(obj.angle);
   const angle = Number.isFinite(rawAngle) ? wrapAngle(rawAngle) : DEFAULT_GRADIENT.angle;
+  const extras = {};
+  const cx = Number(obj.centerX);
+  if (Number.isFinite(cx)) extras.centerX = clampPct(cx);
+  const cy = Number(obj.centerY);
+  if (Number.isFinite(cy)) extras.centerY = clampPct(cy);
+  if (obj.shape === "circle" || obj.shape === "ellipse") extras.shape = obj.shape;
   const stops = [];
   for (const raw of obj.stops) {
     if (!raw || typeof raw !== "object") continue;
@@ -312,9 +323,9 @@ function normalizeGradient(input) {
     if (!rgba || !Number.isFinite(pos)) continue;
     stops.push({ color: formatHex(rgba, true), position: clamp012(pos) });
   }
-  if (stops.length < MIN_STOPS) return { type, angle, stops: cloneDefaultStops() };
+  if (stops.length < MIN_STOPS) return { type, angle, stops: cloneDefaultStops(), ...extras };
   stops.sort((a, b) => a.position - b.position);
-  return { type, angle, stops };
+  return { type, angle, stops, ...extras };
 }
 function addStop(value, position) {
   const stop = { color: colorAtPosition(value, position), position: clamp012(position) };
@@ -344,6 +355,12 @@ function setGradientType(value, type) {
 }
 function setGradientAngle(value, angle) {
   return { ...value, angle: wrapAngle(angle) };
+}
+function setGradientCenter(value, centerX, centerY) {
+  return { ...value, centerX: clampPct(centerX), centerY: clampPct(centerY) };
+}
+function setGradientShape(value, shape) {
+  return { ...value, shape };
 }
 
 // src/store/DialStore.ts
@@ -1096,6 +1113,14 @@ import { AnimatePresence as AnimatePresence6, motion as motion6 } from "motion-v
 // src/icons.ts
 var ICON_CHEVRON = "M6 9.5L12 15.5L18 9.5";
 var ICON_CHECK = "M5 12.75L10 19L19 5";
+var ICON_GRIP = [
+  { cx: "9", cy: "6" },
+  { cx: "9", cy: "12" },
+  { cx: "9", cy: "18" },
+  { cx: "15", cy: "6" },
+  { cx: "15", cy: "12" },
+  { cx: "15", cy: "18" }
+];
 var ICON_CLIPBOARD = {
   board: "M8 6C8 4.34315 9.34315 3 11 3H13C14.6569 3 16 4.34315 16 6V7H8V6Z",
   sparkle: "M19.2405 16.1852L18.5436 14.3733C18.4571 14.1484 18.241 14 18 14C17.759 14 17.5429 14.1484 17.4564 14.3733L16.7595 16.1852C16.658 16.4493 16.4493 16.658 16.1852 16.7595L14.3733 17.4564C14.1484 17.5429 14 17.759 14 18C14 18.241 14.1484 18.4571 14.3733 18.5436L16.1852 19.2405C16.4493 19.342 16.658 19.5507 16.7595 19.8148L17.4564 21.6267C17.5429 21.8516 17.759 22 18 22C18.241 22 18.4571 21.8516 18.5436 21.6267L19.2405 19.8148C19.342 19.5507 19.5507 19.342 19.8148 19.2405L21.6267 18.5436C21.8516 18.4571 22 18.241 22 18C22 17.759 21.8516 17.5429 21.6267 17.4564L19.8148 16.7595C19.5507 16.658 19.342 16.4493 19.2405 16.1852Z",
@@ -3178,6 +3203,10 @@ var TYPE_OPTIONS = [
   { value: "radial", label: "Radial" },
   { value: "conic", label: "Conic" }
 ];
+var SHAPE_OPTIONS = [
+  { value: "circle", label: "Circle" },
+  { value: "ellipse", label: "Ellipse" }
+];
 function rampCss(stops) {
   return gradientToCss({ type: "linear", angle: 90, stops });
 }
@@ -3186,12 +3215,31 @@ var GradientPanel = defineComponent13({
   props: {
     value: { type: Object, required: true }
   },
-  emits: ["change"],
+  emits: ["change", "drag"],
   setup(props, { emit }) {
     const selectedIndex = ref11(0);
     const holdingIndex = ref11(-1);
     const detach = ref11(null);
+    const showAdvanced = ref11(false);
     const stripRef = ref11(null);
+    const gripRef = ref11(null);
+    const gripOrigin = ref11(null);
+    const onGripDown = (e) => {
+      e.preventDefault();
+      try {
+        gripRef.value?.setPointerCapture(e.pointerId);
+      } catch {
+      }
+      gripOrigin.value = { x: e.clientX, y: e.clientY };
+    };
+    const onGripMove = (e) => {
+      if (!gripOrigin.value || e.buttons === 0) return;
+      emit("drag", e.clientX - gripOrigin.value.x, e.clientY - gripOrigin.value.y);
+      gripOrigin.value = { x: e.clientX, y: e.clientY };
+    };
+    const onGripUp = () => {
+      gripOrigin.value = null;
+    };
     const drag = {
       mode: "idle",
       activeIndex: -1,
@@ -3307,12 +3355,55 @@ var GradientPanel = defineComponent13({
     return () => {
       const value = props.value;
       const previewStops = detach.value ? value.stops.filter((_, i) => i !== detach.value.index) : value.stops;
+      const advanced = showAdvanced.value && value.type !== "linear";
       return h13("div", { class: "dialkit-gradient-panel" }, [
-        h13(SegmentedControl, {
-          options: TYPE_OPTIONS,
-          value: value.type,
-          onChange: (t) => emit("change", setGradientType(value, t))
-        }),
+        h13("div", { class: "dialkit-gradient-toolbar" }, [
+          h13("button", {
+            ref: gripRef,
+            type: "button",
+            class: "dialkit-gradient-grip",
+            "aria-label": "Drag to move",
+            title: "Drag to move",
+            onPointerdown: onGripDown,
+            onPointermove: onGripMove,
+            onPointerup: onGripUp,
+            onPointercancel: onGripUp
+          }, [
+            h13(
+              "svg",
+              { viewBox: "0 0 24 24", fill: "currentColor", "aria-hidden": "true" },
+              ICON_GRIP.map((c) => h13("circle", { cx: c.cx, cy: c.cy, r: "1.5" }))
+            )
+          ]),
+          h13(SegmentedControl, {
+            options: TYPE_OPTIONS,
+            value: value.type,
+            onChange: (t) => emit("change", setGradientType(value, t))
+          }),
+          value.type !== "linear" ? h13("button", {
+            type: "button",
+            class: "dialkit-gradient-advanced-toggle",
+            "data-active": String(advanced),
+            "aria-label": "Advanced settings",
+            "aria-pressed": advanced,
+            title: "Advanced settings",
+            onClick: () => {
+              showAdvanced.value = !showAdvanced.value;
+            }
+          }, [
+            h13("svg", { viewBox: "0 0 16 16", fill: "none", "aria-hidden": "true" }, [
+              h13("path", { opacity: "0.5", d: ICON_PANEL.path, fill: "currentColor" }),
+              ...ICON_PANEL.circles.map((c) => h13("circle", {
+                cx: c.cx,
+                cy: c.cy,
+                r: c.r,
+                fill: "currentColor",
+                stroke: "currentColor",
+                "stroke-width": "1.25"
+              }))
+            ])
+          ]) : null
+        ]),
         value.type !== "radial" ? h13(Slider, {
           label: "Angle",
           value: value.angle,
@@ -3322,6 +3413,31 @@ var GradientPanel = defineComponent13({
           unit: "\xB0",
           onChange: (a) => emit("change", setGradientAngle(value, a))
         }) : null,
+        advanced ? h13("div", { class: "dialkit-gradient-advanced" }, [
+          h13(Slider, {
+            label: "Center X",
+            value: value.centerX ?? 50,
+            min: 0,
+            max: 100,
+            step: 1,
+            unit: "%",
+            onChange: (x) => emit("change", setGradientCenter(value, x, value.centerY ?? 50))
+          }),
+          h13(Slider, {
+            label: "Center Y",
+            value: value.centerY ?? 50,
+            min: 0,
+            max: 100,
+            step: 1,
+            unit: "%",
+            onChange: (y) => emit("change", setGradientCenter(value, value.centerX ?? 50, y))
+          }),
+          value.type === "radial" ? h13(SegmentedControl, {
+            options: SHAPE_OPTIONS,
+            value: value.shape ?? "circle",
+            onChange: (s) => emit("change", setGradientShape(value, s))
+          }) : null
+        ]) : null,
         h13("div", {
           ref: stripRef,
           class: "dialkit-gradient-strip",
@@ -3376,9 +3492,18 @@ var GradientControl = defineComponent14({
   setup(props, { emit }) {
     const isOpen = ref12(false);
     const pos = ref12(null);
+    const dragPos = ref12(null);
     const portalTarget = ref12(null);
     const triggerRef = ref12(null);
     const panelRef = ref12(null);
+    const onPanelDrag = (dx, dy) => {
+      const rect = panelRef.value?.getBoundingClientRect();
+      const base = dragPos.value ?? (rect ? { left: rect.left, top: rect.top } : null);
+      if (!base) return;
+      const left = Math.min(window.innerWidth - 40, Math.max(8 - PANEL_WIDTH + 40, base.left + dx));
+      const top = Math.min(window.innerHeight - 40, Math.max(8, base.top + dy));
+      dragPos.value = { left, top };
+    };
     const updatePos = () => {
       const el = triggerRef.value;
       if (!el) return;
@@ -3390,6 +3515,7 @@ var GradientControl = defineComponent14({
       pos.value = { top: above ? rect.top - 4 : rect.bottom + 4, left, above };
     };
     const openPanel = () => {
+      dragPos.value = null;
       updatePos();
       isOpen.value = true;
     };
@@ -3469,12 +3595,17 @@ var GradientControl = defineComponent14({
             transition: { type: "spring", visualDuration: 0.15, bounce: 0 },
             style: {
               position: "fixed",
-              left: `${pos.value.left}px`,
               width: `${PANEL_WIDTH}px`,
-              ...pos.value.above ? {
+              ...dragPos.value ? {
+                left: `${dragPos.value.left}px`,
+                top: `${dragPos.value.top}px`,
+                transformOrigin: "top left"
+              } : pos.value.above ? {
+                left: `${pos.value.left}px`,
                 bottom: `${window.innerHeight - pos.value.top}px`,
                 transformOrigin: "bottom right"
               } : {
+                left: `${pos.value.left}px`,
                 top: `${pos.value.top}px`,
                 transformOrigin: "top right"
               }
@@ -3482,7 +3613,8 @@ var GradientControl = defineComponent14({
           }, [
             h14(GradientPanel, {
               value: props.value,
-              onChange: (next) => emit("change", next)
+              onChange: (next) => emit("change", next),
+              onDrag: onPanelDrag
             })
           ])] : []
         })

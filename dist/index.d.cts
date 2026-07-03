@@ -80,6 +80,8 @@ declare function oklchToRgb(oklch: OKLCH): RGBA;
  */
 
 type GradientType = 'linear' | 'radial' | 'conic';
+/** Radial extent — a round `circle` or a stretched `ellipse`. */
+type RadialShape = 'circle' | 'ellipse';
 /** color is always #rrggbbaa; position is 0–1. */
 type GradientStop = {
     color: string;
@@ -89,6 +91,11 @@ type GradientValue = {
     type: GradientType;
     angle: number;
     stops: GradientStop[];
+    /** Radial/conic origin as 0–100 (%). Absent = centered (50). */
+    centerX?: number;
+    centerY?: number;
+    /** Radial extent. Absent = 'circle'. */
+    shape?: RadialShape;
 };
 declare const MIN_STOPS = 2;
 declare const DEFAULT_GRADIENT: GradientValue;
@@ -122,6 +129,9 @@ declare function removeStop(value: GradientValue, index: number): GradientValue;
 declare function setStopColor(value: GradientValue, index: number, hex: string): GradientValue;
 declare function setGradientType(value: GradientValue, type: GradientType): GradientValue;
 declare function setGradientAngle(value: GradientValue, angle: number): GradientValue;
+/** Set the radial/conic origin (each 0–100 %). */
+declare function setGradientCenter(value: GradientValue, centerX: number, centerY: number): GradientValue;
+declare function setGradientShape(value: GradientValue, shape: RadialShape): GradientValue;
 
 type SpringConfig = {
     type: 'spring';
@@ -815,8 +825,10 @@ declare function GradientControl({ label, value, onChange }: GradientControlProp
 interface GradientPanelProps {
     value: GradientValue;
     onChange: (value: GradientValue) => void;
+    /** Incremental pointer delta while the drag grip is held. */
+    onDrag?: (dx: number, dy: number) => void;
 }
-declare function GradientPanel({ value, onChange }: GradientPanelProps): react_jsx_runtime.JSX.Element;
+declare function GradientPanel({ value, onChange, onDrag }: GradientPanelProps): react_jsx_runtime.JSX.Element;
 
 interface GalleryControlProps {
     label: string;
@@ -880,4 +892,4 @@ interface ShortcutsMenuProps {
 }
 declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react_jsx_runtime.JSX.Element | null;
 
-export { type ActionConfig, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientType, type GradientValue, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, MIN_STOPS, Module, type OKLCH, type PanelConfig, type Preset, PresetManager, type RGBA, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, addDriver, addStop, buildSamplers, clampOklchToSrgb, colorAtPosition, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, formatHex, gradientToCss, hslToRgb, hsvToRgb, moveStop, normalizeGradient, normalizeHex, normalizeListItems, oklchToRgb, opacityPercent, parseHex, parseListItemSchema, readComposition, redistributeWeight, removeDriver, removeSegment, removeStop, rgbToHsl, rgbToHsv, rgbToOklch, setDriverCurvature, setDriverSteepness, setGradientAngle, setGradientType, setSegmentCurvature, setSegmentSteepness, setStopColor, splitSegment, triggerLevels, triggersCrossed, useDialKit };
+export { type ActionConfig, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientType, type GradientValue, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, MIN_STOPS, Module, type OKLCH, type PanelConfig, type Preset, PresetManager, type RGBA, type RadialShape, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, addDriver, addStop, buildSamplers, clampOklchToSrgb, colorAtPosition, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, formatHex, gradientToCss, hslToRgb, hsvToRgb, moveStop, normalizeGradient, normalizeHex, normalizeListItems, oklchToRgb, opacityPercent, parseHex, parseListItemSchema, readComposition, redistributeWeight, removeDriver, removeSegment, removeStop, rgbToHsl, rgbToHsv, rgbToOklch, setDriverCurvature, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientShape, setGradientType, setSegmentCurvature, setSegmentSteepness, setStopColor, splitSegment, triggerLevels, triggersCrossed, useDialKit };

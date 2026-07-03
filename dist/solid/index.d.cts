@@ -18,6 +18,8 @@ import { Accessor, JSX } from 'solid-js';
  */
 
 type GradientType = 'linear' | 'radial' | 'conic';
+/** Radial extent — a round `circle` or a stretched `ellipse`. */
+type RadialShape = 'circle' | 'ellipse';
 /** color is always #rrggbbaa; position is 0–1. */
 type GradientStop = {
     color: string;
@@ -27,6 +29,11 @@ type GradientValue = {
     type: GradientType;
     angle: number;
     stops: GradientStop[];
+    /** Radial/conic origin as 0–100 (%). Absent = centered (50). */
+    centerX?: number;
+    centerY?: number;
+    /** Radial extent. Absent = 'circle'. */
+    shape?: RadialShape;
 };
 declare const DEFAULT_GRADIENT: GradientValue;
 /** Ready CSS gradient string for any of the three types. #rrggbbaa is valid CSS. */
@@ -557,6 +564,8 @@ declare function GradientControl(props: GradientControlProps): solid_js.JSX.Elem
 interface GradientPanelProps {
     value: GradientValue;
     onChange: (value: GradientValue) => void;
+    /** Incremental pointer delta while the drag grip is held. */
+    onDrag?: (dx: number, dy: number) => void;
 }
 declare function GradientPanel(props: GradientPanelProps): solid_js.JSX.Element;
 

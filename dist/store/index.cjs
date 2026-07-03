@@ -62,6 +62,7 @@ var DEFAULT_GRADIENT = {
   ]
 };
 var clamp012 = (n) => Math.min(1, Math.max(0, n));
+var clampPct = (n) => Math.min(100, Math.max(0, n));
 var wrapAngle = (a) => (a % 360 + 360) % 360;
 var cloneDefaultStops = () => DEFAULT_GRADIENT.stops.map((s) => ({ ...s }));
 var cloneDefault = () => ({
@@ -76,6 +77,12 @@ function normalizeGradient(input) {
   const type = obj.type === "radial" || obj.type === "conic" ? obj.type : "linear";
   const rawAngle = Number(obj.angle);
   const angle = Number.isFinite(rawAngle) ? wrapAngle(rawAngle) : DEFAULT_GRADIENT.angle;
+  const extras = {};
+  const cx = Number(obj.centerX);
+  if (Number.isFinite(cx)) extras.centerX = clampPct(cx);
+  const cy = Number(obj.centerY);
+  if (Number.isFinite(cy)) extras.centerY = clampPct(cy);
+  if (obj.shape === "circle" || obj.shape === "ellipse") extras.shape = obj.shape;
   const stops = [];
   for (const raw of obj.stops) {
     if (!raw || typeof raw !== "object") continue;
@@ -85,9 +92,9 @@ function normalizeGradient(input) {
     if (!rgba || !Number.isFinite(pos)) continue;
     stops.push({ color: formatHex(rgba, true), position: clamp012(pos) });
   }
-  if (stops.length < MIN_STOPS) return { type, angle, stops: cloneDefaultStops() };
+  if (stops.length < MIN_STOPS) return { type, angle, stops: cloneDefaultStops(), ...extras };
   stops.sort((a, b) => a.position - b.position);
-  return { type, angle, stops };
+  return { type, angle, stops, ...extras };
 }
 
 // src/store/DialStore.ts

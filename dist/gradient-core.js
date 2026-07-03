@@ -36,6 +36,7 @@ var DEFAULT_GRADIENT = {
   ]
 };
 var clamp012 = (n) => Math.min(1, Math.max(0, n));
+var clampPct = (n) => Math.min(100, Math.max(0, n));
 var wrapAngle = (a) => (a % 360 + 360) % 360;
 var round = (n, p) => {
   const f = 10 ** p;
@@ -55,11 +56,15 @@ var normColor = (color) => {
 function gradientToCss(value) {
   const stopStr = sortedStops(value.stops).map((s) => `${s.color} ${round(clamp012(s.position) * 100, 2)}%`).join(", ");
   const angle = round(wrapAngle(value.angle), 2);
+  const cx = round(clampPct(value.centerX ?? 50), 2);
+  const cy = round(clampPct(value.centerY ?? 50), 2);
   switch (value.type) {
-    case "radial":
-      return `radial-gradient(circle at 50% 50%, ${stopStr})`;
+    case "radial": {
+      const shape = value.shape === "ellipse" ? "ellipse" : "circle";
+      return `radial-gradient(${shape} at ${cx}% ${cy}%, ${stopStr})`;
+    }
     case "conic":
-      return `conic-gradient(from ${angle}deg at 50% 50%, ${stopStr})`;
+      return `conic-gradient(from ${angle}deg at ${cx}% ${cy}%, ${stopStr})`;
     case "linear":
     default:
       return `linear-gradient(${angle}deg, ${stopStr})`;
@@ -100,6 +105,12 @@ function normalizeGradient(input) {
   const type = obj.type === "radial" || obj.type === "conic" ? obj.type : "linear";
   const rawAngle = Number(obj.angle);
   const angle = Number.isFinite(rawAngle) ? wrapAngle(rawAngle) : DEFAULT_GRADIENT.angle;
+  const extras = {};
+  const cx = Number(obj.centerX);
+  if (Number.isFinite(cx)) extras.centerX = clampPct(cx);
+  const cy = Number(obj.centerY);
+  if (Number.isFinite(cy)) extras.centerY = clampPct(cy);
+  if (obj.shape === "circle" || obj.shape === "ellipse") extras.shape = obj.shape;
   const stops = [];
   for (const raw of obj.stops) {
     if (!raw || typeof raw !== "object") continue;
@@ -109,9 +120,9 @@ function normalizeGradient(input) {
     if (!rgba || !Number.isFinite(pos)) continue;
     stops.push({ color: formatHex(rgba, true), position: clamp012(pos) });
   }
-  if (stops.length < MIN_STOPS) return { type, angle, stops: cloneDefaultStops() };
+  if (stops.length < MIN_STOPS) return { type, angle, stops: cloneDefaultStops(), ...extras };
   stops.sort((a, b) => a.position - b.position);
-  return { type, angle, stops };
+  return { type, angle, stops, ...extras };
 }
 function addStop(value, position) {
   const stop = { color: colorAtPosition(value, position), position: clamp012(position) };
@@ -142,6 +153,12 @@ function setGradientType(value, type) {
 function setGradientAngle(value, angle) {
   return { ...value, angle: wrapAngle(angle) };
 }
+function setGradientCenter(value, centerX, centerY) {
+  return { ...value, centerX: clampPct(centerX), centerY: clampPct(centerY) };
+}
+function setGradientShape(value, shape) {
+  return { ...value, shape };
+}
 export {
   DEFAULT_GRADIENT,
   LONG_PRESS_MS,
@@ -155,6 +172,8 @@ export {
   normalizeGradient,
   removeStop,
   setGradientAngle,
+  setGradientCenter,
+  setGradientShape,
   setGradientType,
   setStopColor
 };
