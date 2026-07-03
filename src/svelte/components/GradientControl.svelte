@@ -25,9 +25,14 @@
   let panelRef = $state<HTMLDivElement | undefined>(undefined);
 
   const onPanelDrag = (dx: number, dy: number) => {
-    const rect = panelRef?.getBoundingClientRect();
-    const base = dragPos ?? (rect ? { left: rect.left, top: rect.top } : null);
-    if (!base) return;
+    let base = dragPos;
+    if (!base) {
+      // Seed from the resting layout position, not a live getBoundingClientRect:
+      // the panel may still be mid-entrance-spring, and offsetHeight ignores the
+      // transform so the first drag doesn't lurch.
+      if (!pos || !panelRef) return;
+      base = { left: pos.left, top: pos.above ? pos.top - panelRef.offsetHeight : pos.top };
+    }
     const left = Math.min(window.innerWidth - 40, Math.max(8 - PANEL_WIDTH + 40, base.left + dx));
     const top = Math.min(window.innerHeight - 40, Math.max(8, base.top + dy));
     dragPos = { left, top };

@@ -184,11 +184,13 @@ hero: {
       { color: '#6366f1ff', position: 0 },                 // #rrggbbaa, position 0–1
       { color: '#ec4899ff', position: 1 },
     ],
+    centerX: 30, centerY: 70,                               // optional radial/conic origin, 0–100 (%)
+    shape: 'ellipse',                                       // optional radial extent: 'circle' | 'ellipse'
   },
 }
 ```
 
-The control shows a live gradient strip; clicking it opens the editor: a linear / radial / conic switcher, an angle, and a ramp of draggable color stops. Click an empty spot on the ramp to add a stop (seeded with the color under the cursor), drag a stop to reposition it (stops swap past each other live), and drag a stop off the strip or long-press it to remove one (minimum two). Selecting a stop opens the full color picker below it — stops always carry alpha.
+The control shows a live gradient strip; clicking it opens the editor: a linear / radial / conic switcher, an angle, and a ramp of draggable color stops. Click an empty spot on the ramp to add a stop (seeded with the color under the cursor), drag a stop to reposition it (stops swap past each other live), and drag a stop off the strip or long-press it to remove one (minimum two). Selecting a stop opens the full color picker below it — stops always carry alpha. Drag the panel by the grip in its top-left to reposition it; the settings toggle beside the tabs (radial/conic only) reveals the origin offset and, for radial, the circle/ellipse extent.
 
 Turn the value into CSS with the exported helper:
 
@@ -198,7 +200,7 @@ import { gradientToCss } from 'dialkit';
 <div style={{ background: gradientToCss(p.bg) }} />
 ```
 
-**Returns:** `GradientValue` — `{ type, angle, stops: { color, position }[] }`
+**Returns:** `GradientValue` — `{ type, angle, stops: { color, position }[], centerX?, centerY?, shape? }`
 
 ### Select
 

@@ -27,14 +27,20 @@ export function GradientControl({ label, value, onChange }: GradientControlProps
 
   const onPanelDrag = useCallback((dx: number, dy: number) => {
     setDragPos((prev) => {
-      const rect = panelRef.current?.getBoundingClientRect();
-      const base = prev ?? (rect ? { left: rect.left, top: rect.top } : null);
-      if (!base) return prev;
+      let base = prev;
+      if (!base) {
+        // Seed from the resting layout position, not a live getBoundingClientRect:
+        // the panel may still be mid-entrance-spring, and offsetHeight ignores the
+        // transform so the first drag doesn't lurch.
+        const el = panelRef.current;
+        if (!pos || !el) return prev;
+        base = { left: pos.left, top: pos.above ? pos.top - el.offsetHeight : pos.top };
+      }
       const left = Math.min(window.innerWidth - 40, Math.max(8 - PANEL_WIDTH + 40, base.left + dx));
       const top = Math.min(window.innerHeight - 40, Math.max(8, base.top + dy));
       return { left, top };
     });
-  }, []);
+  }, [pos]);
 
   const updatePos = useCallback(() => {
     const el = triggerRef.current;

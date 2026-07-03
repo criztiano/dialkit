@@ -231,6 +231,7 @@ export const GradientPanel = defineComponent({
             onPointermove: onGripMove,
             onPointerup: onGripUp,
             onPointercancel: onGripUp,
+            onLostpointercapture: onGripUp,
           }, [
             h('svg', { viewBox: '0 0 24 24', fill: 'currentColor', 'aria-hidden': 'true' },
               ICON_GRIP.map((c) => h('circle', { cx: c.cx, cy: c.cy, r: '1.5' }))),

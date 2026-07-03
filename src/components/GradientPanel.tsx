@@ -240,6 +240,7 @@ export function GradientPanel({ value, onChange, onDrag }: GradientPanelProps) {
           onPointerMove={onGripMove}
           onPointerUp={onGripUp}
           onPointerCancel={onGripUp}
+          onLostPointerCapture={onGripUp}
         >
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             {ICON_GRIP.map((c, i) => (

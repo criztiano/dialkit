@@ -233,6 +233,7 @@ export function GradientPanel(props: GradientPanelProps) {
           onPointerMove={onGripMove}
           onPointerUp={onGripUp}
           onPointerCancel={onGripUp}
+          onLostPointerCapture={onGripUp}
         >
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <For each={ICON_GRIP}>

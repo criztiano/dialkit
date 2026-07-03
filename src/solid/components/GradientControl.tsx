@@ -48,9 +48,15 @@ export function GradientControl(props: GradientControlProps) {
 
   const onPanelDrag = (dx: number, dy: number) => {
     setDragPos((prev) => {
-      const rect = panelRef?.getBoundingClientRect();
-      const base = prev ?? (rect ? { left: rect.left, top: rect.top } : null);
-      if (!base) return prev;
+      let base = prev;
+      if (!base) {
+        // Seed from the resting layout position, not a live getBoundingClientRect:
+        // the panel may still be mid-entrance-spring, and offsetHeight ignores the
+        // transform so the first drag doesn't lurch.
+        const p = pos();
+        if (!p || !panelRef) return prev;
+        base = { left: p.left, top: p.above ? p.top - panelRef.offsetHeight : p.top };
+      }
       const left = Math.min(window.innerWidth - 40, Math.max(8 - PANEL_WIDTH + 40, base.left + dx));
       const top = Math.min(window.innerHeight - 40, Math.max(8, base.top + dy));
       return { left, top };
