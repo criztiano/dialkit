@@ -20,6 +20,8 @@ export function GradientControl(props: GradientControlProps) {
   const [isOpen, setIsOpen] = createSignal(false);
   const [mounted, setMounted] = createSignal(false);
   const [pos, setPos] = createSignal<{ top: number; left: number; above: boolean } | null>(null);
+  // Manual position once the user drags the panel by its grip; overrides `pos`.
+  const [dragPos, setDragPos] = createSignal<{ left: number; top: number } | null>(null);
   const [portalTarget, setPortalTarget] = createSignal<HTMLElement | null>(null);
   let triggerRef!: HTMLButtonElement;
   let panelRef: HTMLDivElement | undefined;
@@ -44,9 +46,21 @@ export function GradientControl(props: GradientControlProps) {
     setPos({ top: above ? rect.top - 4 : rect.bottom + 4, left, above });
   };
 
+  const onPanelDrag = (dx: number, dy: number) => {
+    setDragPos((prev) => {
+      const rect = panelRef?.getBoundingClientRect();
+      const base = prev ?? (rect ? { left: rect.left, top: rect.top } : null);
+      if (!base) return prev;
+      const left = Math.min(window.innerWidth - 40, Math.max(8 - PANEL_WIDTH + 40, base.left + dx));
+      const top = Math.min(window.innerHeight - 40, Math.max(8, base.top + dy));
+      return { left, top };
+    });
+  };
+
   const openPopover = () => {
     closeAnim?.stop();
     closeAnim = null;
+    setDragPos(null);
     updatePos();
     if (panelRef) {
       // Interrupted a close: the node survives (mounted never flipped), so the
@@ -106,13 +120,15 @@ export function GradientControl(props: GradientControlProps) {
   const popoverStyle = () => {
     const p = pos();
     if (!p) return {};
+    const dp = dragPos();
     return {
       position: 'fixed' as const,
-      left: `${p.left}px`,
       width: `${PANEL_WIDTH}px`,
-      ...(p.above
-        ? { bottom: `${window.innerHeight - p.top}px`, 'transform-origin': 'bottom right' }
-        : { top: `${p.top}px`, 'transform-origin': 'top right' }),
+      ...(dp
+        ? { left: `${dp.left}px`, top: `${dp.top}px`, 'transform-origin': 'top left' }
+        : p.above
+          ? { left: `${p.left}px`, bottom: `${window.innerHeight - p.top}px`, 'transform-origin': 'bottom right' }
+          : { left: `${p.left}px`, top: `${p.top}px`, 'transform-origin': 'top right' }),
     };
   };
 
@@ -146,7 +162,7 @@ export function GradientControl(props: GradientControlProps) {
               class="dialkit-gradient-popover"
               style={popoverStyle()}
             >
-              <GradientPanel value={props.value} onChange={(v) => props.onChange(v)} />
+              <GradientPanel value={props.value} onChange={(v) => props.onChange(v)} onDrag={onPanelDrag} />
             </div>
           </Show>
         </Portal>

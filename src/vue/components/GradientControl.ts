@@ -19,10 +19,21 @@ export const GradientControl = defineComponent({
   setup(props, { emit }) {
     const isOpen = ref(false);
     const pos = ref<{ top: number; left: number; above: boolean } | null>(null);
+    // Manual position once the user drags the panel by its grip; overrides `pos`.
+    const dragPos = ref<{ left: number; top: number } | null>(null);
     const portalTarget = ref<HTMLElement | null>(null);
 
     const triggerRef = ref<HTMLElement | null>(null);
     const panelRef = ref<HTMLElement | null>(null);
+
+    const onPanelDrag = (dx: number, dy: number) => {
+      const rect = panelRef.value?.getBoundingClientRect();
+      const base = dragPos.value ?? (rect ? { left: rect.left, top: rect.top } : null);
+      if (!base) return;
+      const left = Math.min(window.innerWidth - 40, Math.max(8 - PANEL_WIDTH + 40, base.left + dx));
+      const top = Math.min(window.innerHeight - 40, Math.max(8, base.top + dy));
+      dragPos.value = { left, top };
+    };
 
     const updatePos = () => {
       const el = triggerRef.value;
@@ -36,6 +47,7 @@ export const GradientControl = defineComponent({
     };
 
     const openPanel = () => {
+      dragPos.value = null;
       updatePos();
       isOpen.value = true;
     };
@@ -132,22 +144,30 @@ export const GradientControl = defineComponent({
                 transition: { type: 'spring', visualDuration: 0.15, bounce: 0 },
                 style: {
                   position: 'fixed',
-                  left: `${pos.value.left}px`,
                   width: `${PANEL_WIDTH}px`,
-                  ...(pos.value.above
+                  ...(dragPos.value
                     ? {
-                      bottom: `${window.innerHeight - pos.value.top}px`,
-                      transformOrigin: 'bottom right',
+                      left: `${dragPos.value.left}px`,
+                      top: `${dragPos.value.top}px`,
+                      transformOrigin: 'top left',
                     }
-                    : {
-                      top: `${pos.value.top}px`,
-                      transformOrigin: 'top right',
-                    }),
+                    : pos.value.above
+                      ? {
+                        left: `${pos.value.left}px`,
+                        bottom: `${window.innerHeight - pos.value.top}px`,
+                        transformOrigin: 'bottom right',
+                      }
+                      : {
+                        left: `${pos.value.left}px`,
+                        top: `${pos.value.top}px`,
+                        transformOrigin: 'top right',
+                      }),
                 },
               }, [
                 h(GradientPanel, {
                   value: props.value,
                   onChange: (next: GradientValue) => emit('change', next),
+                  onDrag: onPanelDrag,
                 }),
               ])]
               : [],

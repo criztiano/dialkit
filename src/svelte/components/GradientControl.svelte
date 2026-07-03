@@ -18,9 +18,20 @@
 
   let isOpen = $state(false);
   let pos = $state<{ top: number; left: number; above: boolean } | null>(null);
+  // Manual position once the user drags the panel by its grip; overrides `pos`.
+  let dragPos = $state<{ left: number; top: number } | null>(null);
   let portalTarget = $state<HTMLElement | null>(null);
   let triggerRef: HTMLButtonElement | undefined;
   let panelRef = $state<HTMLDivElement | undefined>(undefined);
+
+  const onPanelDrag = (dx: number, dy: number) => {
+    const rect = panelRef?.getBoundingClientRect();
+    const base = dragPos ?? (rect ? { left: rect.left, top: rect.top } : null);
+    if (!base) return;
+    const left = Math.min(window.innerWidth - 40, Math.max(8 - PANEL_WIDTH + 40, base.left + dx));
+    const top = Math.min(window.innerHeight - 40, Math.max(8, base.top + dy));
+    dragPos = { left, top };
+  };
 
   const updatePos = () => {
     if (!triggerRef || typeof window === 'undefined') return;
@@ -33,12 +44,17 @@
   };
 
   const open = () => {
+    dragPos = null;
     updatePos();
     isOpen = true;
   };
 
   const popoverStyle = $derived.by(() => {
-    if (!pos || typeof window === 'undefined') return '';
+    if (typeof window === 'undefined') return '';
+    if (dragPos) {
+      return `position:fixed;left:${dragPos.left}px;width:${PANEL_WIDTH}px;top:${dragPos.top}px;transform-origin:top left;`;
+    }
+    if (!pos) return '';
     if (pos.above) {
       return `position:fixed;left:${pos.left}px;width:${PANEL_WIDTH}px;bottom:${window.innerHeight - pos.top}px;transform-origin:bottom right;`;
     }
@@ -105,7 +121,7 @@
           style={popoverStyle}
           transition:dropdownTransition={{ above: pos.above }}
         >
-          <GradientPanel {value} {onChange} />
+          <GradientPanel {value} {onChange} onDrag={onPanelDrag} />
         </div>
       {/if}
     </Portal>

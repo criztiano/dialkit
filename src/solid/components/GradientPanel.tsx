@@ -2,6 +2,7 @@ import { createSignal, For, Show, onCleanup } from 'solid-js';
 import { SegmentedControl } from './SegmentedControl';
 import { Slider } from './Slider';
 import { ColorPickerPanel } from './ColorPickerPanel';
+import { ICON_GRIP, ICON_PANEL } from '../../icons';
 import {
   gradientToCss,
   addStop,
@@ -10,6 +11,8 @@ import {
   setStopColor,
   setGradientType,
   setGradientAngle,
+  setGradientCenter,
+  setGradientShape,
   MIN_STOPS,
   STOP_DETACH_PX,
   LONG_PRESS_MS,
@@ -17,17 +20,25 @@ import {
   type GradientValue,
   type GradientType,
   type GradientStop,
+  type RadialShape,
 } from '../../gradient-core';
 
 interface GradientPanelProps {
   value: GradientValue;
   onChange: (value: GradientValue) => void;
+  /** Incremental pointer delta while the drag grip is held. */
+  onDrag?: (dx: number, dy: number) => void;
 }
 
 const TYPE_OPTIONS: { value: GradientType; label: string }[] = [
   { value: 'linear', label: 'Linear' },
   { value: 'radial', label: 'Radial' },
   { value: 'conic', label: 'Conic' },
+];
+
+const SHAPE_OPTIONS: { value: RadialShape; label: string }[] = [
+  { value: 'circle', label: 'Circle' },
+  { value: 'ellipse', label: 'Ellipse' },
 ];
 
 type DragMode = 'idle' | 'pending' | 'dragging' | 'detached';
@@ -41,7 +52,29 @@ export function GradientPanel(props: GradientPanelProps) {
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const [holdingIndex, setHoldingIndex] = createSignal(-1);
   const [detach, setDetach] = createSignal<{ index: number; y: number } | null>(null);
+  const [showAdvanced, setShowAdvanced] = createSignal(false);
   let stripRef!: HTMLDivElement;
+  let gripRef!: HTMLButtonElement;
+  // Grip drag: emit incremental deltas so the parent can reposition the popover.
+  let gripOrigin: { x: number; y: number } | null = null;
+
+  const onGripDown = (e: PointerEvent) => {
+    e.preventDefault();
+    try {
+      gripRef.setPointerCapture(e.pointerId);
+    } catch {
+      // Non-fatal — drag still works without capture.
+    }
+    gripOrigin = { x: e.clientX, y: e.clientY };
+  };
+  const onGripMove = (e: PointerEvent) => {
+    if (!gripOrigin || e.buttons === 0) return;
+    props.onDrag?.(e.clientX - gripOrigin.x, e.clientY - gripOrigin.y);
+    gripOrigin = { x: e.clientX, y: e.clientY };
+  };
+  const onGripUp = () => {
+    gripOrigin = null;
+  };
 
   // Per-gesture drag state. `working` threads the latest value through the
   // gesture so pointermove never reads a stale closure between emit + re-render.
@@ -185,13 +218,54 @@ export function GradientPanel(props: GradientPanelProps) {
     return d ? props.value.stops.filter((_, i) => i !== d.index) : props.value.stops;
   };
 
+  const advanced = () => showAdvanced() && props.value.type !== 'linear';
+
   return (
     <div class="dialkit-gradient-panel">
-      <SegmentedControl
-        options={TYPE_OPTIONS}
-        value={props.value.type}
-        onChange={(t) => props.onChange(setGradientType(props.value, t))}
-      />
+      <div class="dialkit-gradient-toolbar">
+        <button
+          ref={gripRef}
+          type="button"
+          class="dialkit-gradient-grip"
+          aria-label="Drag to move"
+          title="Drag to move"
+          onPointerDown={onGripDown}
+          onPointerMove={onGripMove}
+          onPointerUp={onGripUp}
+          onPointerCancel={onGripUp}
+        >
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <For each={ICON_GRIP}>
+              {(c) => <circle cx={c.cx} cy={c.cy} r="1.5" />}
+            </For>
+          </svg>
+        </button>
+
+        <SegmentedControl
+          options={TYPE_OPTIONS}
+          value={props.value.type}
+          onChange={(t) => props.onChange(setGradientType(props.value, t))}
+        />
+
+        <Show when={props.value.type !== 'linear'}>
+          <button
+            type="button"
+            class="dialkit-gradient-advanced-toggle"
+            data-active={String(advanced())}
+            aria-label="Advanced settings"
+            aria-pressed={advanced()}
+            title="Advanced settings"
+            onClick={() => setShowAdvanced((v) => !v)}
+          >
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path opacity="0.5" d={ICON_PANEL.path} fill="currentColor" />
+              <For each={ICON_PANEL.circles}>
+                {(c) => <circle cx={c.cx} cy={c.cy} r={c.r} fill="currentColor" stroke="currentColor" stroke-width="1.25" />}
+              </For>
+            </svg>
+          </button>
+        </Show>
+      </div>
 
       <Show when={props.value.type !== 'radial'}>
         <Slider
@@ -203,6 +277,36 @@ export function GradientPanel(props: GradientPanelProps) {
           unit="°"
           onChange={(a) => props.onChange(setGradientAngle(props.value, a))}
         />
+      </Show>
+
+      <Show when={advanced()}>
+        <div class="dialkit-gradient-advanced">
+          <Slider
+            label="Center X"
+            value={props.value.centerX ?? 50}
+            min={0}
+            max={100}
+            step={1}
+            unit="%"
+            onChange={(x) => props.onChange(setGradientCenter(props.value, x, props.value.centerY ?? 50))}
+          />
+          <Slider
+            label="Center Y"
+            value={props.value.centerY ?? 50}
+            min={0}
+            max={100}
+            step={1}
+            unit="%"
+            onChange={(y) => props.onChange(setGradientCenter(props.value, props.value.centerX ?? 50, y))}
+          />
+          <Show when={props.value.type === 'radial'}>
+            <SegmentedControl
+              options={SHAPE_OPTIONS}
+              value={props.value.shape ?? 'circle'}
+              onChange={(s) => props.onChange(setGradientShape(props.value, s))}
+            />
+          </Show>
+        </div>
       </Show>
 
       <div

@@ -2,6 +2,7 @@ import { computed, defineComponent, h, ref, onBeforeUnmount, type PropType } fro
 import { SegmentedControl } from './SegmentedControl';
 import { Slider } from './Slider';
 import { ColorPickerPanel } from './ColorPickerPanel';
+import { ICON_GRIP, ICON_PANEL } from '../../icons';
 import {
   gradientToCss,
   addStop,
@@ -10,18 +11,26 @@ import {
   setStopColor,
   setGradientType,
   setGradientAngle,
+  setGradientCenter,
+  setGradientShape,
   MIN_STOPS,
   STOP_DETACH_PX,
   LONG_PRESS_MS,
   PALETTE_DRAG_CANCEL_PX,
   type GradientValue,
   type GradientType,
+  type RadialShape,
 } from '../../gradient-core';
 
 const TYPE_OPTIONS: { value: GradientType; label: string }[] = [
   { value: 'linear', label: 'Linear' },
   { value: 'radial', label: 'Radial' },
   { value: 'conic', label: 'Conic' },
+];
+
+const SHAPE_OPTIONS: { value: RadialShape; label: string }[] = [
+  { value: 'circle', label: 'Circle' },
+  { value: 'ellipse', label: 'Ellipse' },
 ];
 
 type DragMode = 'idle' | 'pending' | 'dragging' | 'detached';
@@ -36,12 +45,34 @@ export const GradientPanel = defineComponent({
   props: {
     value: { type: Object as PropType<GradientValue>, required: true },
   },
-  emits: ['change'],
+  emits: ['change', 'drag'],
   setup(props, { emit }) {
     const selectedIndex = ref(0);
     const holdingIndex = ref(-1);
     const detach = ref<{ index: number; y: number } | null>(null);
+    const showAdvanced = ref(false);
     const stripRef = ref<HTMLDivElement | null>(null);
+    const gripRef = ref<HTMLButtonElement | null>(null);
+    // Grip drag: emit incremental deltas so the parent can reposition the popover.
+    const gripOrigin = ref<{ x: number; y: number } | null>(null);
+
+    const onGripDown = (e: PointerEvent) => {
+      e.preventDefault();
+      try {
+        gripRef.value?.setPointerCapture(e.pointerId);
+      } catch {
+        // Non-fatal — drag still works without capture.
+      }
+      gripOrigin.value = { x: e.clientX, y: e.clientY };
+    };
+    const onGripMove = (e: PointerEvent) => {
+      if (!gripOrigin.value || e.buttons === 0) return;
+      emit('drag', e.clientX - gripOrigin.value.x, e.clientY - gripOrigin.value.y);
+      gripOrigin.value = { x: e.clientX, y: e.clientY };
+    };
+    const onGripUp = () => {
+      gripOrigin.value = null;
+    };
 
     // Per-gesture drag state. `working` threads the latest value through the
     // gesture so pointermove never reads a stale value between emit + re-render.
@@ -186,12 +217,50 @@ export const GradientPanel = defineComponent({
         ? value.stops.filter((_, i) => i !== detach.value!.index)
         : value.stops;
 
+      const advanced = showAdvanced.value && value.type !== 'linear';
+
       return h('div', { class: 'dialkit-gradient-panel' }, [
-        h(SegmentedControl, {
-          options: TYPE_OPTIONS,
-          value: value.type,
-          onChange: (t: GradientType) => emit('change', setGradientType(value, t)),
-        }),
+        h('div', { class: 'dialkit-gradient-toolbar' }, [
+          h('button', {
+            ref: gripRef,
+            type: 'button',
+            class: 'dialkit-gradient-grip',
+            'aria-label': 'Drag to move',
+            title: 'Drag to move',
+            onPointerdown: onGripDown,
+            onPointermove: onGripMove,
+            onPointerup: onGripUp,
+            onPointercancel: onGripUp,
+          }, [
+            h('svg', { viewBox: '0 0 24 24', fill: 'currentColor', 'aria-hidden': 'true' },
+              ICON_GRIP.map((c) => h('circle', { cx: c.cx, cy: c.cy, r: '1.5' }))),
+          ]),
+
+          h(SegmentedControl, {
+            options: TYPE_OPTIONS,
+            value: value.type,
+            onChange: (t: GradientType) => emit('change', setGradientType(value, t)),
+          }),
+
+          value.type !== 'linear'
+            ? h('button', {
+              type: 'button',
+              class: 'dialkit-gradient-advanced-toggle',
+              'data-active': String(advanced),
+              'aria-label': 'Advanced settings',
+              'aria-pressed': advanced,
+              title: 'Advanced settings',
+              onClick: () => { showAdvanced.value = !showAdvanced.value; },
+            }, [
+              h('svg', { viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': 'true' }, [
+                h('path', { opacity: '0.5', d: ICON_PANEL.path, fill: 'currentColor' }),
+                ...ICON_PANEL.circles.map((c) => h('circle', {
+                  cx: c.cx, cy: c.cy, r: c.r, fill: 'currentColor', stroke: 'currentColor', 'stroke-width': '1.25',
+                })),
+              ]),
+            ])
+            : null,
+        ]),
 
         value.type !== 'radial'
           ? h(Slider, {
@@ -203,6 +272,36 @@ export const GradientPanel = defineComponent({
             unit: '°',
             onChange: (a: number) => emit('change', setGradientAngle(value, a)),
           })
+          : null,
+
+        advanced
+          ? h('div', { class: 'dialkit-gradient-advanced' }, [
+            h(Slider, {
+              label: 'Center X',
+              value: value.centerX ?? 50,
+              min: 0,
+              max: 100,
+              step: 1,
+              unit: '%',
+              onChange: (x: number) => emit('change', setGradientCenter(value, x, value.centerY ?? 50)),
+            }),
+            h(Slider, {
+              label: 'Center Y',
+              value: value.centerY ?? 50,
+              min: 0,
+              max: 100,
+              step: 1,
+              unit: '%',
+              onChange: (y: number) => emit('change', setGradientCenter(value, value.centerX ?? 50, y)),
+            }),
+            value.type === 'radial'
+              ? h(SegmentedControl, {
+                options: SHAPE_OPTIONS,
+                value: value.shape ?? 'circle',
+                onChange: (s: RadialShape) => emit('change', setGradientShape(value, s)),
+              })
+              : null,
+          ])
           : null,
 
         h('div', {
