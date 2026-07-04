@@ -4955,11 +4955,11 @@ function createWaveformEngine(canvas, get) {
       }
     })();
   };
-  const columnWidth = (pixelSize) => Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSize)));
+  const columnWidth2 = (pixelSize) => Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSize)));
   const windowState = { start: 0, win: 1 };
   let drag = null;
   const drawColumns = (p, color, pixelSize) => {
-    const colW = columnWidth(pixelSize);
+    const colW = columnWidth2(pixelSize);
     ctx.fillStyle = color;
     ctx.globalAlpha = 1;
     for (let x = 0; x < W; x += colW) {
@@ -5281,8 +5281,375 @@ function WaveformVisualization({
   ] });
 }
 
+// src/components/AnalyserVisualization.tsx
+import { useRef as useRef20, useEffect as useEffect15 } from "react";
+
+// src/analyser-core.ts
+function byteFreqToUnit(v) {
+  return v / 255;
+}
+function byteTimeToUnit(v) {
+  return (v - 128) / 128;
+}
+function binRange(point, points, bins, scale) {
+  if (bins <= 2) return { start: Math.max(0, bins - 1), end: Math.max(1, bins) };
+  const lo = 1;
+  const at = (t) => scale === "log" ? Math.pow(bins, t) * lo : lo + (bins - lo) * t;
+  let start = Math.floor(at(point / points));
+  start = Math.max(lo, Math.min(bins - 1, start));
+  const end = Math.max(start + 1, Math.min(bins, Math.floor(at((point + 1) / points))));
+  return { start, end };
+}
+function fillFrequencyTargets(data, out, scale) {
+  const points = out.length;
+  for (let i = 0; i < points; i++) {
+    const { start, end } = binRange(i, points, data.length, scale);
+    let mx = 0;
+    for (let b = start; b < end; b++) {
+      if (data[b] > mx) mx = data[b];
+    }
+    out[i] = byteFreqToUnit(mx);
+  }
+}
+function fillWaveformMinMax(data, cols, min, max) {
+  const step = data.length / cols;
+  for (let x = 0; x < cols; x++) {
+    const start = Math.floor(x * step);
+    const end = Math.max(start + 1, Math.min(data.length, Math.floor((x + 1) * step)));
+    let mn = 1;
+    let mx = -1;
+    for (let i = start; i < end; i++) {
+      const v = byteTimeToUnit(data[i]);
+      if (v < mn) mn = v;
+      if (v > mx) mx = v;
+    }
+    min[x] = mn;
+    max[x] = mx;
+  }
+}
+function resampleWaveform(data, out) {
+  const n = out.length;
+  if (!n) return;
+  if (!data.length) {
+    out.fill(0);
+    return;
+  }
+  if (n === 1 || data.length === 1) {
+    out.fill(byteTimeToUnit(data[0]));
+    return;
+  }
+  const step = (data.length - 1) / (n - 1);
+  for (let i = 0; i < n; i++) {
+    const x = i * step;
+    const j = Math.floor(x);
+    const a = byteTimeToUnit(data[j]);
+    const b = byteTimeToUnit(data[Math.min(data.length - 1, j + 1)]);
+    out[i] = a + (b - a) * (x - j);
+  }
+}
+var SPRING_MAX_STEP = 1 / 240;
+function stepSprings(pos, vel, targets, stiffness, damping, dt) {
+  let remaining = dt;
+  while (remaining > 0) {
+    const h = Math.min(remaining, SPRING_MAX_STEP);
+    remaining -= h;
+    for (let i = 0; i < pos.length; i++) {
+      const accel = -stiffness * (pos[i] - targets[i]) - damping * vel[i];
+      vel[i] += accel * h;
+      pos[i] += vel[i] * h;
+    }
+  }
+}
+var SPRING_DEFAULT_STIFFNESS = 120;
+var SPRING_DEFAULT_DAMPING = 14;
+function normalizeSpring(spring) {
+  if (!spring) return null;
+  const raw = spring === true ? {} : spring;
+  return {
+    stiffness: Math.min(1e3, Math.max(1, raw.stiffness ?? SPRING_DEFAULT_STIFFNESS)),
+    damping: Math.min(100, Math.max(1, raw.damping ?? SPRING_DEFAULT_DAMPING))
+  };
+}
+function columnWidth(dpr, pixelSize) {
+  return Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSize)));
+}
+function quantizeToGrid(v, colW) {
+  return Math.round(v / colW) * colW;
+}
+
+// src/analyser-engine.ts
+var SMOOTH_POINTS = 64;
+var AREA_FILL_ALPHA = 0.2;
+var MUTED_ALPHA = 0.35;
+var FREQ_AMP = 0.92;
+var WAVE_AMP = 0.42;
+var MAX_DT = 0.05;
+function smoothThrough2(ctx, pts) {
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    ctx.bezierCurveTo(
+      p1.x + (p2.x - p0.x) / 6,
+      p1.y + (p2.y - p0.y) / 6,
+      p2.x - (p3.x - p1.x) / 6,
+      p2.y - (p3.y - p1.y) / 6,
+      p2.x,
+      p2.y
+    );
+  }
+}
+function createAnalyserEngine(canvas, get) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return { destroy() {
+  } };
+  const readDpr = () => Math.min(Math.max(window.devicePixelRatio || 1, 1), 3);
+  let dpr = readDpr();
+  let W = 0;
+  let H = 0;
+  let cy = 0;
+  const syncSize = (width, height) => {
+    dpr = readDpr();
+    const nw = Math.round(width * dpr);
+    const nh = Math.round(height * dpr);
+    if (nw === W && nh === H) return;
+    W = canvas.width = nw;
+    H = canvas.height = nh;
+    cy = H / 2;
+  };
+  const columnWidth2 = (pixelSize) => columnWidth(dpr, pixelSize);
+  let bytes = new Uint8Array(0);
+  let targetsA = new Float32Array(0);
+  let targetsB = new Float32Array(0);
+  let posA = new Float32Array(0);
+  let posB = new Float32Array(0);
+  let velA = new Float32Array(0);
+  let velB = new Float32Array(0);
+  let springSeeded = false;
+  const syncPoints = (n) => {
+    if (targetsA.length === n) return;
+    targetsA = new Float32Array(n);
+    targetsB = new Float32Array(n);
+    posA = new Float32Array(n);
+    posB = new Float32Array(n);
+    velA = new Float32Array(n);
+    velB = new Float32Array(n);
+    springSeeded = false;
+  };
+  const drawGrid = (base, subs) => {
+    const n = Math.max(1, Math.round(subs));
+    ctx.strokeStyle = base;
+    ctx.globalAlpha = 0.1;
+    ctx.lineWidth = dpr;
+    ctx.beginPath();
+    for (let i = 1; i < n; i++) {
+      const x = Math.round(i / n * W) + 0.5;
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, H);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
+  const baselineY = (source) => source === "frequency" ? H - Math.round(dpr) : cy;
+  const drawBaseline = (base, source, alpha) => {
+    ctx.strokeStyle = base;
+    ctx.globalAlpha = 0.15 * alpha;
+    ctx.lineWidth = dpr;
+    ctx.beginPath();
+    const y = Math.round(baselineY(source)) + 0.5;
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
+  const drawSmooth = (values, toY, baseY, area, wave, fill, alpha) => {
+    const n = values.length;
+    if (n < 2) return;
+    const pts = new Array(n);
+    for (let k = 0; k < n; k++) pts[k] = { x: k / (n - 1) * W, y: toY(values[k]) };
+    if (area) {
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      smoothThrough2(ctx, pts);
+      ctx.lineTo(W, baseY);
+      ctx.lineTo(0, baseY);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.globalAlpha = AREA_FILL_ALPHA * alpha;
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    smoothThrough2(ctx, pts);
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = wave;
+    ctx.lineWidth = 1.6 * dpr;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
+  const drawColumns = (source, variant, pixelSize, wave, alpha) => {
+    const colW = columnWidth2(pixelSize);
+    ctx.fillStyle = wave;
+    ctx.globalAlpha = alpha;
+    const n = targetsA.length;
+    const src = springActive ? posA : targetsA;
+    const srcB = springActive ? posB : targetsB;
+    for (let k = 0; k < n; k++) {
+      const x = k * colW;
+      if (x >= W) break;
+      if (source === "frequency") {
+        const yTop = Math.max(0, Math.min(H - colW, quantizeToGrid(H - src[k] * (H * FREQ_AMP), colW)));
+        if (variant === "area") ctx.fillRect(x, yTop, colW, H - yTop);
+        else ctx.fillRect(x, yTop, colW, colW);
+      } else {
+        const yTop = Math.round(cy - src[k] * (H * WAVE_AMP));
+        const yBot = Math.round(cy - srcB[k] * (H * WAVE_AMP));
+        let h = Math.max(1, yBot - yTop);
+        let y = yTop;
+        if (variant === "line") {
+          h = Math.max(colW, h);
+          y = Math.round((yTop + yBot - h) / 2);
+        }
+        ctx.fillRect(x, Math.max(0, Math.min(H - 1, y)), colW, h);
+      }
+    }
+    ctx.globalAlpha = 1;
+  };
+  let springActive = false;
+  let prevNow = null;
+  let raf = 0;
+  const frame = (now) => {
+    raf = requestAnimationFrame(frame);
+    const rt = get();
+    syncSize(rt.width, rt.height);
+    const dt = prevNow == null ? 0 : Math.min((now - prevNow) / 1e3, MAX_DT);
+    prevNow = now;
+    const base = getComputedStyle(canvas).color || "rgb(255,255,255)";
+    const alpha = rt.muted ? MUTED_ALPHA : 1;
+    ctx.globalAlpha = 1;
+    ctx.clearRect(0, 0, W, H);
+    ctx.imageSmoothingEnabled = rt.mode === "smooth";
+    if (rt.grid) drawGrid(base, rt.gridSubdivisions);
+    drawBaseline(base, rt.source, alpha);
+    const an = rt.analyser;
+    if (!an) return;
+    const needed = rt.source === "frequency" ? an.frequencyBinCount : an.fftSize;
+    if (bytes.length !== needed) bytes = new Uint8Array(needed);
+    if (rt.source === "frequency") an.getByteFrequencyData(bytes);
+    else an.getByteTimeDomainData(bytes);
+    const pixelated = rt.mode === "pixelated";
+    const n = pixelated ? Math.max(2, Math.ceil(W / columnWidth2(rt.pixelSize))) : SMOOTH_POINTS;
+    syncPoints(n);
+    if (rt.source === "frequency") {
+      fillFrequencyTargets(bytes, targetsA, rt.scale);
+    } else if (pixelated) {
+      fillWaveformMinMax(bytes, n, targetsB, targetsA);
+    } else {
+      resampleWaveform(bytes, targetsA);
+    }
+    const spring = normalizeSpring(rt.spring);
+    springActive = !!spring;
+    if (spring) {
+      if (!springSeeded) {
+        posA.set(targetsA);
+        posB.set(targetsB);
+        velA.fill(0);
+        velB.fill(0);
+        springSeeded = true;
+      }
+      stepSprings(posA, velA, targetsA, spring.stiffness, spring.damping, dt);
+      if (rt.source === "waveform" && pixelated) {
+        stepSprings(posB, velB, targetsB, spring.stiffness, spring.damping, dt);
+      }
+    } else {
+      springSeeded = false;
+    }
+    const wave = rt.waveColor || base;
+    const fill = rt.fillColor || wave;
+    if (pixelated) {
+      drawColumns(rt.source, rt.variant, rt.pixelSize, wave, alpha);
+    } else {
+      const values = springActive ? posA : targetsA;
+      if (rt.source === "frequency") {
+        drawSmooth(values, (v) => H - v * (H * FREQ_AMP), baselineY("frequency"), rt.variant === "area", wave, fill, alpha);
+      } else {
+        drawSmooth(values, (v) => cy - v * (H * WAVE_AMP), cy, rt.variant === "area", wave, fill, alpha);
+      }
+    }
+  };
+  raf = requestAnimationFrame(frame);
+  return {
+    destroy() {
+      cancelAnimationFrame(raf);
+    }
+  };
+}
+
+// src/components/AnalyserVisualization.tsx
+import { jsx as jsx29, jsxs as jsxs24 } from "react/jsx-runtime";
+function AnalyserVisualization({
+  analyser = null,
+  source = "frequency",
+  variant = "area",
+  mode = "smooth",
+  pixelSize = 1,
+  scale = "log",
+  spring = false,
+  grid = false,
+  gridSubdivisions = 8,
+  waveColor,
+  fillColor,
+  muted = false,
+  onMuteChange,
+  soloed = false,
+  onSoloChange,
+  width = 256,
+  height = 140
+}) {
+  const canvasRef = useRef20(null);
+  const runtimeRef = useRef20(null);
+  runtimeRef.current = {
+    analyser,
+    source,
+    variant,
+    mode,
+    pixelSize,
+    scale,
+    spring,
+    grid,
+    gridSubdivisions,
+    waveColor,
+    fillColor,
+    muted,
+    width,
+    height
+  };
+  useEffect15(() => {
+    if (!canvasRef.current) return;
+    const engine = createAnalyserEngine(canvasRef.current, () => runtimeRef.current);
+    return () => engine.destroy();
+  }, []);
+  return /* @__PURE__ */ jsxs24("div", { className: "dialkit-analyser-viz-wrap", style: { width }, children: [
+    /* @__PURE__ */ jsx29("canvas", { ref: canvasRef, className: "dialkit-analyser-viz", style: { width, height } }),
+    (onMuteChange || onSoloChange) && /* @__PURE__ */ jsxs24("div", { className: "dialkit-analyser-actions", children: [
+      onMuteChange && /* @__PURE__ */ jsx29("button", { type: "button", "aria-label": "Mute", "aria-pressed": muted, onClick: () => onMuteChange(!muted), children: /* @__PURE__ */ jsxs24("svg", { viewBox: "0 0 16 16", fill: "none", children: [
+        /* @__PURE__ */ jsx29("path", { d: "M3 6 H5 L8.5 3 V13 L5 10 H3 Z", fill: "currentColor" }),
+        /* @__PURE__ */ jsx29("path", { d: "M10.5 6 L13.5 10 M13.5 6 L10.5 10", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" })
+      ] }) }),
+      onSoloChange && /* @__PURE__ */ jsx29("button", { type: "button", "aria-label": "Solo", "aria-pressed": soloed, onClick: () => onSoloChange(!soloed), children: /* @__PURE__ */ jsxs24("svg", { viewBox: "0 0 16 16", fill: "none", children: [
+        /* @__PURE__ */ jsx29("path", { d: "M3.4 12 V8.8 a4.6 4.6 0 0 1 9.2 0 V12", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }),
+        /* @__PURE__ */ jsx29("rect", { x: "2.6", y: "9.9", width: "1.8", height: "2.9", rx: "0.9", fill: "currentColor" }),
+        /* @__PURE__ */ jsx29("rect", { x: "11.6", y: "9.9", width: "1.8", height: "2.9", rx: "0.9", fill: "currentColor" })
+      ] }) })
+    ] })
+  ] });
+}
+
 // src/components/CurveComposer.tsx
-import { useRef as useRef20, useEffect as useEffect15, useMemo, useState as useState18 } from "react";
+import { useRef as useRef21, useEffect as useEffect16, useMemo, useState as useState18 } from "react";
 
 // src/curve-composer-core.ts
 var CURVE_CYCLE = ["linear", "easeIn", "easeOut", "easeInOut", "spring"];
@@ -5735,7 +6102,7 @@ function defaultComposition() {
 }
 
 // src/components/CurveComposer.tsx
-import { Fragment as Fragment6, jsx as jsx29, jsxs as jsxs24 } from "react/jsx-runtime";
+import { Fragment as Fragment6, jsx as jsx30, jsxs as jsxs25 } from "react/jsx-runtime";
 function CurveComposer({
   segments,
   driver = null,
@@ -5764,20 +6131,20 @@ function CurveComposer({
     [segments, driver, direction, gap]
   );
   const samplers = useMemo(() => buildSamplers(composition), [composition]);
-  const liveRef = useRef20({ composition, samplers, getPhase, phase, mode, triggerSteps });
+  const liveRef = useRef21({ composition, samplers, getPhase, phase, mode, triggerSteps });
   liveRef.current = { composition, samplers, getPhase, phase, mode, triggerSteps };
-  const onTriggerRef = useRef20(onTrigger);
+  const onTriggerRef = useRef21(onTrigger);
   onTriggerRef.current = onTrigger;
-  const svgRef = useRef20(null);
-  const seriesPlayheadRef = useRef20(null);
-  const seriesDotRef = useRef20(null);
-  const driverPlayheadRef = useRef20(null);
-  const prevTrigValue = useRef20(Number.NaN);
+  const svgRef = useRef21(null);
+  const seriesPlayheadRef = useRef21(null);
+  const seriesDotRef = useRef21(null);
+  const driverPlayheadRef = useRef21(null);
+  const prevTrigValue = useRef21(Number.NaN);
   const [drag, setDrag] = useState18(null);
   const [hover, setHover] = useState18(null);
-  const dragRef = useRef20(null);
+  const dragRef = useRef21(null);
   dragRef.current = drag;
-  useEffect15(() => {
+  useEffect16(() => {
     let raf = 0;
     prevTrigValue.current = Number.NaN;
     const tick = () => {
@@ -5929,17 +6296,17 @@ function CurveComposer({
     for (let i = 1; i < n; i++) {
       const gx = i / n * W;
       lines.push(
-        /* @__PURE__ */ jsx29("line", { x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h, className: "dialkit-cc-grid" }, `g-${rect.y}-${i}`)
+        /* @__PURE__ */ jsx30("line", { x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h, className: "dialkit-cc-grid" }, `g-${rect.y}-${i}`)
       );
     }
     return lines;
   };
-  const renderLaneBg = (rect, key) => /* @__PURE__ */ jsx29("rect", { className: "dialkit-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 }, key);
+  const renderLaneBg = (rect, key) => /* @__PURE__ */ jsx30("rect", { className: "dialkit-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 }, key);
   const diagonal = (rect, span, key) => {
     const d = diagonalLine(rect, span, W);
-    return /* @__PURE__ */ jsx29("line", { className: "dialkit-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 }, key);
+    return /* @__PURE__ */ jsx30("line", { className: "dialkit-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 }, key);
   };
-  return /* @__PURE__ */ jsx29("div", { className: "dialkit-cc-wrap", style: { width: W }, children: /* @__PURE__ */ jsxs24(
+  return /* @__PURE__ */ jsx30("div", { className: "dialkit-cc-wrap", style: { width: W }, children: /* @__PURE__ */ jsxs25(
     "svg",
     {
       ref: svgRef,
@@ -5959,7 +6326,7 @@ function CurveComposer({
         renderLaneGrid(mainRect),
         selectedIndex != null && selectedIndex >= 0 && selectedIndex < segments.length && (() => {
           const span = segmentSpan(segments, selectedIndex, gap);
-          return /* @__PURE__ */ jsx29(
+          return /* @__PURE__ */ jsx30(
             "rect",
             {
               className: "dialkit-cc-seg-selected",
@@ -5973,7 +6340,7 @@ function CurveComposer({
         })(),
         hover?.kind === "segment" && !drag && (() => {
           const span = segmentSpan(segments, hover.index, gap);
-          return /* @__PURE__ */ jsx29(
+          return /* @__PURE__ */ jsx30(
             "rect",
             {
               className: "dialkit-cc-seg-hover",
@@ -5987,13 +6354,13 @@ function CurveComposer({
         })(),
         segments.map((seg, i) => {
           const span = segmentSpan(segments, i, gap);
-          return /* @__PURE__ */ jsxs24("g", { children: [
+          return /* @__PURE__ */ jsxs25("g", { children: [
             diagonal(mainRect, span, `diag-${i}`),
-            /* @__PURE__ */ jsx29("path", { className: "dialkit-cc-curve", d: curvePath(seg, mainRect, span, W) }),
-            /* @__PURE__ */ jsx29("text", { className: "dialkit-cc-label", x: (span[0] + span[1]) * 0.5 * W, y: mainRect.y + 13, children: seg.type })
+            /* @__PURE__ */ jsx30("path", { className: "dialkit-cc-curve", d: curvePath(seg, mainRect, span, W) }),
+            /* @__PURE__ */ jsx30("text", { className: "dialkit-cc-label", x: (span[0] + span[1]) * 0.5 * W, y: mainRect.y + 13, children: seg.type })
           ] }, `seg-${i}`);
         }),
-        gap > 0 && timelineSlots(segments, gap).filter((slot) => slot.kind === "gap" && slot.b > slot.a).map((slot) => /* @__PURE__ */ jsx29(
+        gap > 0 && timelineSlots(segments, gap).filter((slot) => slot.kind === "gap" && slot.b > slot.a).map((slot) => /* @__PURE__ */ jsx30(
           "path",
           {
             className: "dialkit-cc-connector",
@@ -6001,7 +6368,7 @@ function CurveComposer({
           },
           `conn-${slot.index}`
         )),
-        interior.map((bx, i) => /* @__PURE__ */ jsx29(
+        interior.map((bx, i) => /* @__PURE__ */ jsx30(
           "line",
           {
             className: "dialkit-cc-boundary",
@@ -6015,19 +6382,19 @@ function CurveComposer({
           },
           `b-${i}`
         )),
-        /* @__PURE__ */ jsx29("line", { ref: seriesPlayheadRef, className: "dialkit-cc-playhead", x1: 0, y1: mainRect.y, x2: 0, y2: mainRect.y + mainRect.h, style: { stroke: playheadColor } }),
-        /* @__PURE__ */ jsx29("circle", { ref: seriesDotRef, className: "dialkit-cc-dot", cx: 0, cy: mapY(mainRect, 0), r: 3, style: { fill: playheadColor } }),
-        driverRect && /* @__PURE__ */ jsxs24(Fragment6, { children: [
+        /* @__PURE__ */ jsx30("line", { ref: seriesPlayheadRef, className: "dialkit-cc-playhead", x1: 0, y1: mainRect.y, x2: 0, y2: mainRect.y + mainRect.h, style: { stroke: playheadColor } }),
+        /* @__PURE__ */ jsx30("circle", { ref: seriesDotRef, className: "dialkit-cc-dot", cx: 0, cy: mapY(mainRect, 0), r: 3, style: { fill: playheadColor } }),
+        driverRect && /* @__PURE__ */ jsxs25(Fragment6, { children: [
           renderLaneBg(driverRect, "driver-bg"),
           renderLaneGrid(driverRect),
-          hover?.kind === "driver" && !drag && /* @__PURE__ */ jsx29("rect", { className: "dialkit-cc-seg-hover", x: 0, y: driverRect.y, width: W, height: driverRect.h, rx: 8 }),
+          hover?.kind === "driver" && !drag && /* @__PURE__ */ jsx30("rect", { className: "dialkit-cc-seg-hover", x: 0, y: driverRect.y, width: W, height: driverRect.h, rx: 8 }),
           diagonal(driverRect, [0, 1], "driver-diag"),
-          /* @__PURE__ */ jsx29("path", { className: "dialkit-cc-curve dialkit-cc-curve-driver", d: curvePath(driver, driverRect, [0, 1], W) }),
-          /* @__PURE__ */ jsxs24("text", { className: "dialkit-cc-label", x: W * 0.5, y: driverRect.y + 13, children: [
+          /* @__PURE__ */ jsx30("path", { className: "dialkit-cc-curve dialkit-cc-curve-driver", d: curvePath(driver, driverRect, [0, 1], W) }),
+          /* @__PURE__ */ jsxs25("text", { className: "dialkit-cc-label", x: W * 0.5, y: driverRect.y + 13, children: [
             "driver \xB7 ",
             driver.type
           ] }),
-          /* @__PURE__ */ jsx29("line", { ref: driverPlayheadRef, className: "dialkit-cc-playhead", x1: 0, y1: driverRect.y, x2: 0, y2: driverRect.y + driverRect.h, style: { stroke: playheadColor } })
+          /* @__PURE__ */ jsx30("line", { ref: driverPlayheadRef, className: "dialkit-cc-playhead", x1: 0, y1: driverRect.y, x2: 0, y2: driverRect.y + driverRect.h, style: { stroke: playheadColor } })
         ] })
       ]
     }
@@ -6035,10 +6402,10 @@ function CurveComposer({
 }
 
 // src/components/ShortcutsMenu.tsx
-import { useState as useState19, useRef as useRef21, useEffect as useEffect16, useCallback as useCallback12 } from "react";
+import { useState as useState19, useRef as useRef22, useEffect as useEffect17, useCallback as useCallback12 } from "react";
 import { createPortal as createPortal6 } from "react-dom";
 import { motion as motion10, AnimatePresence as AnimatePresence7 } from "motion/react";
-import { Fragment as Fragment7, jsx as jsx30, jsxs as jsxs25 } from "react/jsx-runtime";
+import { Fragment as Fragment7, jsx as jsx31, jsxs as jsxs26 } from "react/jsx-runtime";
 function formatShortcutKey(sc) {
   if (!sc.key) return "\u2014";
   const mod = sc.modifier === "alt" ? "\u2325" : sc.modifier === "shift" ? "\u21E7" : sc.modifier === "meta" ? "\u2318" : "";
@@ -6059,8 +6426,8 @@ function formatInteraction(sc) {
 }
 function ShortcutsMenu({ panelId }) {
   const [isOpen, setIsOpen] = useState19(false);
-  const triggerRef = useRef21(null);
-  const dropdownRef = useRef21(null);
+  const triggerRef = useRef22(null);
+  const dropdownRef = useRef22(null);
   const [pos, setPos] = useState19({ top: 0, right: 0 });
   const open = useCallback12(() => {
     const rect = triggerRef.current?.getBoundingClientRect();
@@ -6074,7 +6441,7 @@ function ShortcutsMenu({ panelId }) {
     if (isOpen) close();
     else open();
   }, [isOpen, open, close]);
-  useEffect16(() => {
+  useEffect17(() => {
     if (!isOpen) return;
     const handler = (e) => {
       const target = e.target;
@@ -6105,8 +6472,8 @@ function ShortcutsMenu({ panelId }) {
       label: findLabel(panel.controls)
     };
   });
-  return /* @__PURE__ */ jsxs25(Fragment7, { children: [
-    /* @__PURE__ */ jsx30(
+  return /* @__PURE__ */ jsxs26(Fragment7, { children: [
+    /* @__PURE__ */ jsx31(
       motion10.button,
       {
         ref: triggerRef,
@@ -6115,18 +6482,18 @@ function ShortcutsMenu({ panelId }) {
         title: "Keyboard shortcuts",
         whileTap: { scale: 0.9 },
         transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-        children: /* @__PURE__ */ jsxs25("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
-          /* @__PURE__ */ jsx30("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
-          /* @__PURE__ */ jsx30("path", { d: "M6 10H6.01" }),
-          /* @__PURE__ */ jsx30("path", { d: "M10 10H10.01" }),
-          /* @__PURE__ */ jsx30("path", { d: "M14 10H14.01" }),
-          /* @__PURE__ */ jsx30("path", { d: "M18 10H18.01" }),
-          /* @__PURE__ */ jsx30("path", { d: "M8 14H16" })
+        children: /* @__PURE__ */ jsxs26("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
+          /* @__PURE__ */ jsx31("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
+          /* @__PURE__ */ jsx31("path", { d: "M6 10H6.01" }),
+          /* @__PURE__ */ jsx31("path", { d: "M10 10H10.01" }),
+          /* @__PURE__ */ jsx31("path", { d: "M14 10H14.01" }),
+          /* @__PURE__ */ jsx31("path", { d: "M18 10H18.01" }),
+          /* @__PURE__ */ jsx31("path", { d: "M8 14H16" })
         ] })
       }
     ),
     createPortal6(
-      /* @__PURE__ */ jsx30(AnimatePresence7, { children: isOpen && /* @__PURE__ */ jsxs25(
+      /* @__PURE__ */ jsx31(AnimatePresence7, { children: isOpen && /* @__PURE__ */ jsxs26(
         PresenceMotionDiv,
         {
           divRef: dropdownRef,
@@ -6137,13 +6504,13 @@ function ShortcutsMenu({ panelId }) {
           exit: { opacity: 0, y: 4, scale: 0.97, pointerEvents: "none" },
           transition: { type: "spring", visualDuration: 0.15, bounce: 0 },
           children: [
-            /* @__PURE__ */ jsx30("div", { className: "dialkit-shortcuts-title", children: "Keyboard Shortcuts" }),
-            /* @__PURE__ */ jsx30("div", { className: "dialkit-shortcuts-list", children: rows.map((row) => /* @__PURE__ */ jsxs25("div", { className: "dialkit-shortcuts-row", children: [
-              /* @__PURE__ */ jsx30("span", { className: "dialkit-shortcuts-row-key", children: formatShortcutKey(row.shortcut) }),
-              /* @__PURE__ */ jsx30("span", { className: "dialkit-shortcuts-row-label", children: row.label }),
-              /* @__PURE__ */ jsx30("span", { className: "dialkit-shortcuts-row-mode", children: formatInteraction(row.shortcut) })
+            /* @__PURE__ */ jsx31("div", { className: "dialkit-shortcuts-title", children: "Keyboard Shortcuts" }),
+            /* @__PURE__ */ jsx31("div", { className: "dialkit-shortcuts-list", children: rows.map((row) => /* @__PURE__ */ jsxs26("div", { className: "dialkit-shortcuts-row", children: [
+              /* @__PURE__ */ jsx31("span", { className: "dialkit-shortcuts-row-key", children: formatShortcutKey(row.shortcut) }),
+              /* @__PURE__ */ jsx31("span", { className: "dialkit-shortcuts-row-label", children: row.label }),
+              /* @__PURE__ */ jsx31("span", { className: "dialkit-shortcuts-row-mode", children: formatInteraction(row.shortcut) })
             ] }, row.path)) }),
-            /* @__PURE__ */ jsx30("div", { className: "dialkit-shortcuts-hint", children: "See pill badges on controls for keys" })
+            /* @__PURE__ */ jsx31("div", { className: "dialkit-shortcuts-hint", children: "See pill badges on controls for keys" })
           ]
         }
       ) }),
@@ -6152,6 +6519,7 @@ function ShortcutsMenu({ panelId }) {
   ] });
 }
 export {
+  AnalyserVisualization,
   ButtonGroup,
   COLOR_FORMATS,
   CURVE_CYCLE,

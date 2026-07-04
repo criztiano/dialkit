@@ -20,6 +20,8 @@ export { TransitionControl } from './components/TransitionControl';
 export { EasingVisualization } from './components/EasingVisualization';
 export { WaveformVisualization } from './components/WaveformVisualization';
 export type { WaveformMode, WaveformLoop } from './components/WaveformVisualization';
+export { AnalyserVisualization } from './components/AnalyserVisualization';
+export type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, AnalyserSpring } from './components/AnalyserVisualization';
 export { CurveComposer } from './components/CurveComposer';
 export type { CurveType, CurveSegment, CurveDriver, CurveComposition, DriverDirection } from './components/CurveComposer';
 export {
