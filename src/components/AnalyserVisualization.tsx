@@ -110,19 +110,12 @@ export function AnalyserVisualization({
         <div className="dialkit-analyser-actions">
           {onMuteChange && (
             <button type="button" aria-label="Mute" aria-pressed={muted} onClick={() => onMuteChange(!muted)}>
-              <svg viewBox="0 0 16 16" fill="none">
-                <path d="M3 6 H5 L8.5 3 V13 L5 10 H3 Z" fill="currentColor" />
-                <path d="M10.5 6 L13.5 10 M13.5 6 L10.5 10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-              </svg>
+              M
             </button>
           )}
           {onSoloChange && (
             <button type="button" aria-label="Solo" aria-pressed={soloed} onClick={() => onSoloChange(!soloed)}>
-              <svg viewBox="0 0 16 16" fill="none">
-                <path d="M3.4 12 V8.8 a4.6 4.6 0 0 1 9.2 0 V12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                <rect x="2.6" y="9.9" width="1.8" height="2.9" rx="0.9" fill="currentColor" />
-                <rect x="11.6" y="9.9" width="1.8" height="2.9" rx="0.9" fill="currentColor" />
-              </svg>
+              S
             </button>
           )}
         </div>

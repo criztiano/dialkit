@@ -5583,6 +5583,31 @@ function createAnalyserEngine(canvas, get) {
     ctx.stroke();
     ctx.globalAlpha = 1;
   };
+  const drawBand = (top, bottom, wave, fill, alpha) => {
+    const n = top.length;
+    if (n < 2) return;
+    const px = (k) => k / (n - 1) * W;
+    const toY = (v) => cy - v * (H * WAVE_AMP);
+    const topPts = new Array(n);
+    for (let k = 0; k < n; k++) topPts[k] = { x: px(k), y: toY(top[k]) };
+    const botPts = new Array(n);
+    for (let k = 0; k < n; k++) botPts[k] = { x: px(n - 1 - k), y: toY(bottom[n - 1 - k]) };
+    ctx.beginPath();
+    ctx.moveTo(topPts[0].x, topPts[0].y);
+    smoothThrough2(ctx, topPts);
+    ctx.lineTo(botPts[0].x, botPts[0].y);
+    smoothThrough2(ctx, botPts);
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.globalAlpha = AREA_FILL_ALPHA * alpha;
+    ctx.fill();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = wave;
+    ctx.lineWidth = 1.6 * dpr;
+    ctx.lineJoin = "round";
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
   const drawSmooth = (values, toY, baseY, area, wave, fill, alpha) => {
     const n = values.length;
     if (n < 2) return;
@@ -5627,13 +5652,16 @@ function createAnalyserEngine(canvas, get) {
       } else {
         const yTop = Math.round(cy - src[k] * (H * WAVE_AMP));
         const yBot = Math.round(cy - srcB[k] * (H * WAVE_AMP));
-        let h = Math.max(1, yBot - yTop);
-        let y = yTop;
-        if (variant === "line") {
-          h = Math.max(colW, h);
-          y = Math.round((yTop + yBot - h) / 2);
+        if (variant === "area") {
+          ctx.fillRect(x, Math.max(0, Math.min(H - 1, yTop)), colW, Math.max(1, yBot - yTop));
+        } else {
+          const block = (yEdge) => {
+            const y = Math.max(0, Math.min(H - colW, quantizeToGrid(yEdge - colW / 2, colW)));
+            ctx.fillRect(x, y, colW, colW);
+          };
+          block(yTop);
+          block(yBot);
         }
-        ctx.fillRect(x, Math.max(0, Math.min(H - 1, y)), colW, h);
       }
     }
     ctx.globalAlpha = 1;
@@ -5663,9 +5691,10 @@ function createAnalyserEngine(canvas, get) {
     const pixelated = rt.mode === "pixelated";
     const n = pixelated ? Math.max(2, Math.ceil(W / columnWidth2(rt.pixelSize))) : SMOOTH_POINTS;
     syncPoints(n);
+    const twoSeries = rt.source === "waveform" && (pixelated || rt.variant === "area");
     if (rt.source === "frequency") {
       fillFrequencyTargets(bytes, targetsA, rt.scale);
-    } else if (pixelated) {
+    } else if (twoSeries) {
       fillWaveformMinMax(bytes, n, targetsB, targetsA);
     } else {
       resampleWaveform(bytes, targetsA);
@@ -5681,9 +5710,7 @@ function createAnalyserEngine(canvas, get) {
         springSeeded = true;
       }
       stepSprings(posA, velA, targetsA, spring.stiffness, spring.damping, dt);
-      if (rt.source === "waveform" && pixelated) {
-        stepSprings(posB, velB, targetsB, spring.stiffness, spring.damping, dt);
-      }
+      if (twoSeries) stepSprings(posB, velB, targetsB, spring.stiffness, spring.damping, dt);
     } else {
       springSeeded = false;
     }
@@ -5695,8 +5722,10 @@ function createAnalyserEngine(canvas, get) {
       const values = springActive ? posA : targetsA;
       if (rt.source === "frequency") {
         drawSmooth(values, (v) => H - v * (H * FREQ_AMP), baselineY("frequency"), rt.variant === "area", wave, fill, alpha);
+      } else if (rt.variant === "area") {
+        drawBand(values, springActive ? posB : targetsB, wave, fill, alpha);
       } else {
-        drawSmooth(values, (v) => cy - v * (H * WAVE_AMP), cy, rt.variant === "area", wave, fill, alpha);
+        drawSmooth(values, (v) => cy - v * (H * WAVE_AMP), cy, false, wave, fill, alpha);
       }
     }
   };
@@ -5755,15 +5784,8 @@ function AnalyserVisualization({
   return /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "dialkit-analyser-viz-wrap", style: { width }, children: [
     /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("canvas", { ref: canvasRef, className: "dialkit-analyser-viz", style: { width, height } }),
     (onMuteChange || onSoloChange) && /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "dialkit-analyser-actions", children: [
-      onMuteChange && /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("button", { type: "button", "aria-label": "Mute", "aria-pressed": muted, onClick: () => onMuteChange(!muted), children: /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("svg", { viewBox: "0 0 16 16", fill: "none", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("path", { d: "M3 6 H5 L8.5 3 V13 L5 10 H3 Z", fill: "currentColor" }),
-        /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("path", { d: "M10.5 6 L13.5 10 M13.5 6 L10.5 10", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" })
-      ] }) }),
-      onSoloChange && /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("button", { type: "button", "aria-label": "Solo", "aria-pressed": soloed, onClick: () => onSoloChange(!soloed), children: /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("svg", { viewBox: "0 0 16 16", fill: "none", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("path", { d: "M3.4 12 V8.8 a4.6 4.6 0 0 1 9.2 0 V12", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }),
-        /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("rect", { x: "2.6", y: "9.9", width: "1.8", height: "2.9", rx: "0.9", fill: "currentColor" }),
-        /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("rect", { x: "11.6", y: "9.9", width: "1.8", height: "2.9", rx: "0.9", fill: "currentColor" })
-      ] }) })
+      onMuteChange && /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("button", { type: "button", "aria-label": "Mute", "aria-pressed": muted, onClick: () => onMuteChange(!muted), children: "M" }),
+      onSoloChange && /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("button", { type: "button", "aria-label": "Solo", "aria-pressed": soloed, onClick: () => onSoloChange(!soloed), children: "S" })
     ] })
   ] });
 }

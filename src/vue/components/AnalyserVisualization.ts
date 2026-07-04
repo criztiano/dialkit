@@ -62,28 +62,6 @@ export const AnalyserVisualization = defineComponent({
 
     onBeforeUnmount(() => engine?.destroy());
 
-    const muteIcon = () =>
-      h('svg', { viewBox: '0 0 16 16', fill: 'none' }, [
-        h('path', { d: 'M3 6 H5 L8.5 3 V13 L5 10 H3 Z', fill: 'currentColor' }),
-        h('path', {
-          d: 'M10.5 6 L13.5 10 M13.5 6 L10.5 10',
-          stroke: 'currentColor',
-          'stroke-width': '1.6',
-          'stroke-linecap': 'round',
-        }),
-      ]);
-    const soloIcon = () =>
-      h('svg', { viewBox: '0 0 16 16', fill: 'none' }, [
-        h('path', {
-          d: 'M3.4 12 V8.8 a4.6 4.6 0 0 1 9.2 0 V12',
-          stroke: 'currentColor',
-          'stroke-width': '1.6',
-          'stroke-linecap': 'round',
-        }),
-        h('rect', { x: '2.6', y: '9.9', width: '1.8', height: '2.9', rx: '0.9', fill: 'currentColor' }),
-        h('rect', { x: '11.6', y: '9.9', width: '1.8', height: '2.9', rx: '0.9', fill: 'currentColor' }),
-      ]);
-
     return () => {
       const children = [
         h('canvas', {
@@ -104,7 +82,7 @@ export const AnalyserVisualization = defineComponent({
                 'aria-pressed': props.muted,
                 onClick: () => props.onMuteChange?.(!props.muted),
               },
-              [muteIcon()]
+              'M'
             )
           );
         }
@@ -118,7 +96,7 @@ export const AnalyserVisualization = defineComponent({
                 'aria-pressed': props.soloed,
                 onClick: () => props.onSoloChange?.(!props.soloed),
               },
-              [soloIcon()]
+              'S'
             )
           );
         }

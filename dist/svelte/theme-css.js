@@ -899,6 +899,10 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
   width: 22px;
   height: 22px;
   padding: 0;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
   border-radius: 6px;
   border: 1px solid var(--dial-border);
   background: var(--dial-surface-active);
@@ -923,12 +927,6 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
 .dialkit-analyser-actions button[aria-pressed='true'] {
   background: var(--dial-surface-hover);
   border-color: var(--dial-border-hover);
-}
-
-.dialkit-analyser-actions svg {
-  display: block;
-  width: 14px;
-  height: 14px;
 }
 
 /* Panel Wrapper (contains panel + toolbar) */

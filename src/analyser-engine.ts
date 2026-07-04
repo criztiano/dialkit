@@ -173,8 +173,38 @@ export function createAnalyserEngine(canvas: HTMLCanvasElement, get: () => Analy
     ctx.globalAlpha = 1;
   };
 
+  // Symmetric band between the signal's max (top) and min (bottom) envelopes —
+  // the oscilloscope's area look, and the waveform's bordered-fill recipe.
+  const drawBand = (top: Float32Array, bottom: Float32Array, wave: string, fill: string, alpha: number) => {
+    const n = top.length;
+    if (n < 2) return;
+    const px = (k: number) => (k / (n - 1)) * W;
+    const toY = (v: number) => cy - v * (H * WAVE_AMP);
+    const topPts: Pt[] = new Array(n);
+    for (let k = 0; k < n; k++) topPts[k] = { x: px(k), y: toY(top[k]) };
+    const botPts: Pt[] = new Array(n);
+    for (let k = 0; k < n; k++) botPts[k] = { x: px(n - 1 - k), y: toY(bottom[n - 1 - k]) };
+
+    ctx.beginPath();
+    ctx.moveTo(topPts[0].x, topPts[0].y);
+    smoothThrough(ctx, topPts);
+    ctx.lineTo(botPts[0].x, botPts[0].y);
+    smoothThrough(ctx, botPts);
+    ctx.closePath();
+
+    ctx.fillStyle = fill;
+    ctx.globalAlpha = AREA_FILL_ALPHA * alpha;
+    ctx.fill();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = wave;
+    ctx.lineWidth = 1.6 * dpr;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
+
   // Smooth trace through the display points: stroked line, optionally closed down
-  // to the baseline as a translucent area (the waveform's bordered-fill recipe).
+  // to the baseline as a translucent area (the spectrum's bordered-fill recipe).
   const drawSmooth = (
     values: Float32Array,
     toY: (v: number) => number,
@@ -215,8 +245,9 @@ export function createAnalyserEngine(canvas: HTMLCanvasElement, get: () => Analy
 
   // Chunky per-column blocks (the waveform's pixelated language). For a spectrum,
   // `area` anchors bars to the bottom while `line` floats one block-sized step per
-  // column, snapped to the block grid. For a waveform, columns span min→max;
-  // `line` keeps them at least one block tall so silence stays a visible trace.
+  // column, snapped to the block grid. For a waveform, `area` fills the min→max
+  // span while `line` traces its two edges as block steps (they merge into a
+  // single center trace at silence).
   const drawColumns = (
     source: AnalyserSource,
     variant: AnalyserVariant,
@@ -240,14 +271,16 @@ export function createAnalyserEngine(canvas: HTMLCanvasElement, get: () => Analy
       } else {
         const yTop = Math.round(cy - src[k] * (H * WAVE_AMP));
         const yBot = Math.round(cy - srcB[k] * (H * WAVE_AMP));
-        let h = Math.max(1, yBot - yTop);
-        let y = yTop;
-        if (variant === 'line') {
-          // keep the block at least one cell tall, centered on the span
-          h = Math.max(colW, h);
-          y = Math.round((yTop + yBot - h) / 2);
+        if (variant === 'area') {
+          ctx.fillRect(x, Math.max(0, Math.min(H - 1, yTop)), colW, Math.max(1, yBot - yTop));
+        } else {
+          const block = (yEdge: number) => {
+            const y = Math.max(0, Math.min(H - colW, quantizeToGrid(yEdge - colW / 2, colW)));
+            ctx.fillRect(x, y, colW, colW);
+          };
+          block(yTop);
+          block(yBot);
         }
-        ctx.fillRect(x, Math.max(0, Math.min(H - 1, y)), colW, h);
       }
     }
     ctx.globalAlpha = 1;
@@ -287,9 +320,12 @@ export function createAnalyserEngine(canvas: HTMLCanvasElement, get: () => Analy
     const pixelated = rt.mode === 'pixelated';
     const n = pixelated ? Math.max(2, Math.ceil(W / columnWidth(rt.pixelSize))) : SMOOTH_POINTS;
     syncPoints(n);
+    // The waveform's area (band) needs both envelopes; its smooth line is a single
+    // resampled trace. `b` carries the min series whenever both are in play.
+    const twoSeries = rt.source === 'waveform' && (pixelated || rt.variant === 'area');
     if (rt.source === 'frequency') {
       fillFrequencyTargets(bytes, targetsA, rt.scale);
-    } else if (pixelated) {
+    } else if (twoSeries) {
       fillWaveformMinMax(bytes, n, targetsB, targetsA); // A carries max, B min
     } else {
       resampleWaveform(bytes, targetsA);
@@ -307,9 +343,7 @@ export function createAnalyserEngine(canvas: HTMLCanvasElement, get: () => Analy
         springSeeded = true;
       }
       stepSprings(posA, velA, targetsA, spring.stiffness, spring.damping, dt);
-      if (rt.source === 'waveform' && pixelated) {
-        stepSprings(posB, velB, targetsB, spring.stiffness, spring.damping, dt);
-      }
+      if (twoSeries) stepSprings(posB, velB, targetsB, spring.stiffness, spring.damping, dt);
     } else {
       springSeeded = false;
     }
@@ -323,8 +357,10 @@ export function createAnalyserEngine(canvas: HTMLCanvasElement, get: () => Analy
       const values = springActive ? posA : targetsA;
       if (rt.source === 'frequency') {
         drawSmooth(values, (v) => H - v * (H * FREQ_AMP), baselineY('frequency'), rt.variant === 'area', wave, fill, alpha);
+      } else if (rt.variant === 'area') {
+        drawBand(values, springActive ? posB : targetsB, wave, fill, alpha);
       } else {
-        drawSmooth(values, (v) => cy - v * (H * WAVE_AMP), cy, rt.variant === 'area', wave, fill, alpha);
+        drawSmooth(values, (v) => cy - v * (H * WAVE_AMP), cy, false, wave, fill, alpha);
       }
     }
   };
