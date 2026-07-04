@@ -82,6 +82,7 @@ function buildRig(): Rig {
       window.clearInterval(interval);
       saws.forEach((o) => o.stop());
       lfo.stop();
+      // close() rejects if the context is already closed — nothing left to clean up.
       ctx.close().catch(() => {});
     },
   };
@@ -89,8 +90,10 @@ function buildRig(): Rig {
 
 export function AnalyserShowcase() {
   const [rig, setRig] = useState<Rig | null>(null);
+  // Mirrors the rig for gesture-time reads: togglePlay decides against the ref
+  // (not the render closure) so two rapid clicks can't build two rigs — an
+  // orphaned rig would keep sounding with no way to stop it.
   const rigRef = useRef<Rig | null>(null);
-  rigRef.current = rig;
 
   const [source, setSource] = useState<AnalyserSource>('frequency');
   const [variant, setVariant] = useState<AnalyserVariant>('area');
@@ -129,11 +132,14 @@ export function AnalyserShowcase() {
   }, [rig, smoothing]);
 
   const togglePlay = () => {
-    if (rig) {
-      rig.stop();
+    if (rigRef.current) {
+      rigRef.current.stop();
+      rigRef.current = null;
       setRig(null);
     } else {
-      setRig(buildRig());
+      const next = buildRig();
+      rigRef.current = next; // claim immediately — don't wait for the commit
+      setRig(next);
     }
   };
 

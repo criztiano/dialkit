@@ -247,7 +247,8 @@ function createAnalyserEngine(canvas, get) {
         const yTop = Math.round(cy - src[k] * (H * WAVE_AMP));
         const yBot = Math.round(cy - srcB[k] * (H * WAVE_AMP));
         if (variant === "area") {
-          ctx.fillRect(x, Math.max(0, Math.min(H - 1, yTop)), colW, Math.max(1, yBot - yTop));
+          const t = Math.max(0, Math.min(H - 1, yTop));
+          ctx.fillRect(x, t, colW, Math.max(1, yBot - t));
         } else {
           const block = (yEdge) => {
             const y = Math.max(0, Math.min(H - colW, quantizeToGrid(yEdge - colW / 2, colW)));
