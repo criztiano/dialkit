@@ -71,6 +71,7 @@ export default defineConfig([
       'color-core': 'src/color-core.ts',
       'color-palette-store': 'src/color-palette-store.ts',
       'gradient-core': 'src/gradient-core.ts',
+      'xy-pad-core': 'src/xy-pad-core.ts',
     },
     outDir: 'dist',
     format: ['esm'],
