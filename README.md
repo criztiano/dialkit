@@ -186,7 +186,7 @@ hero: {
     ],
     centerX: 30, centerY: 70,                               // optional radial/conic origin, 0–100 (%)
     scale: 120,                                             // optional radial size, 10–200 (% of box)
-    squash: 40,                                             // optional radial ovality, 0 = round … 100
+    squash: 40,                                             // optional radial ovality, -100 … 0 round … 100
     rotation: 30,                                           // optional tilt in degrees (squashed radial only)
   },
 }

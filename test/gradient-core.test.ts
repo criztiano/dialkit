@@ -62,6 +62,13 @@ describe('gradientToCss', () => {
     );
   });
 
+  it('grows the minor axis past the major for negative squash (taller than wide)', () => {
+    // squash -50 → ry = 100 * (1 - (-50)/100) = 150%.
+    expect(gradientToCss(grad({ type: 'radial', squash: -50 }))).toBe(
+      'radial-gradient(100% 150% at 50% 50%, #000000ff 0%, #ffffffff 100%)'
+    );
+  });
+
   it('floors the minor radius at full squash so the gradient never blanks out', () => {
     // squash 100 would give a 0% vertical radius (degenerate → blank); floored to 1%.
     expect(gradientToCss(grad({ type: 'radial', squash: 100 }))).toBe(
@@ -221,6 +228,9 @@ describe('normalizeGradient', () => {
     expect(withGeo.squash).toBe(100);
     expect(withGeo.rotation).toBe(40);
 
+    // Squash clamps symmetrically — negative is allowed down to -100.
+    expect(normalizeGradient({ type: 'radial', angle: 0, stops: grad().stops, squash: -250 }).squash).toBe(-100);
+
     const plain = normalizeGradient({ type: 'radial', angle: 0, stops: grad().stops });
     expect(plain.centerX).toBeUndefined();
     expect(plain.scale).toBeUndefined();
@@ -350,6 +360,7 @@ describe('setStopColor / setGradientType / setGradientAngle', () => {
     expect(setGradientScale(grad(), 5).scale).toBe(10);
     expect(setGradientScale(grad(), 300).scale).toBe(200);
     expect(setGradientSquash(grad(), 150).squash).toBe(100);
+    expect(setGradientSquash(grad(), -150).squash).toBe(-100);
     expect(setGradientRotation(grad(), 400).rotation).toBe(40);
   });
 });
