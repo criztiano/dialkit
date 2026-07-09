@@ -29,10 +29,11 @@ type GradientValue = {
     /** Radial/conic origin as 0–100 (%). Absent = centered (50). */
     centerX?: number;
     centerY?: number;
-    /** Radial extent as % of the box, 10–200. Absent = 100 (fills to a circle). */
+    /** Radial horizontal radius as % of the box, 10–200. Absent = 100. */
     scale?: number;
-    /** Radial ovality, -100–100. 0 = round; positive flattens the minor axis,
-     *  negative grows it past the major axis (taller than wide). Absent = 0. */
+    /** Radial vertical radius as % of the box, 1–200. Absent = matches `scale`
+     *  (round). Independent of `scale`, so &lt; scale is a wide ellipse and
+     *  &gt; scale is a tall one. */
     squash?: number;
     /** Radial ellipse tilt in degrees. Renders via the companion transform, since
      *  CSS radial gradients are axis-aligned. Absent = 0. */

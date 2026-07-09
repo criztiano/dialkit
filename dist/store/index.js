@@ -35,7 +35,7 @@ var DEFAULT_GRADIENT = {
 var clamp012 = (n) => Math.min(1, Math.max(0, n));
 var clampPct = (n) => Math.min(100, Math.max(0, n));
 var clampScale = (n) => Math.min(200, Math.max(10, n));
-var clampSquash = (n) => Math.min(100, Math.max(-100, n));
+var clampSquash = (n) => Math.min(200, Math.max(1, n));
 var wrapAngle = (a) => (a % 360 + 360) % 360;
 var cloneDefaultStops = () => DEFAULT_GRADIENT.stops.map((s) => ({ ...s }));
 var cloneDefault = () => ({

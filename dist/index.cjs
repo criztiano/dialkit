@@ -347,7 +347,7 @@ var DEFAULT_GRADIENT = {
 var clamp012 = (n) => Math.min(1, Math.max(0, n));
 var clampPct = (n) => Math.min(100, Math.max(0, n));
 var clampScale = (n) => Math.min(200, Math.max(10, n));
-var clampSquash = (n) => Math.min(100, Math.max(-100, n));
+var clampSquash = (n) => Math.min(200, Math.max(1, n));
 var wrapAngle = (a) => (a % 360 + 360) % 360;
 var round2 = (n, p) => {
   const f = 10 ** p;
@@ -372,14 +372,12 @@ function gradientToCss(value) {
   const cy = round2(clampPct(value.centerY ?? 50), 2);
   switch (value.type) {
     case "radial": {
-      const scale = value.scale ?? 100;
-      const squash = clampSquash(value.squash ?? 0);
-      if (scale === 100 && squash === 0) {
+      const rx = clampScale(value.scale ?? 100);
+      const ry = value.squash === void 0 ? rx : clampSquash(value.squash);
+      if (rx === 100 && ry === 100) {
         return `radial-gradient(circle at ${cx}% ${cy}%, ${stopStr})`;
       }
-      const rx = round2(clampScale(scale), 2);
-      const ry = round2(Math.max(1, clampScale(scale) * (1 - squash / 100)), 2);
-      return `radial-gradient(${rx}% ${ry}% at ${cx}% ${cy}%, ${stopStr})`;
+      return `radial-gradient(${round2(rx, 2)}% ${round2(ry, 2)}% at ${cx}% ${cy}%, ${stopStr})`;
     }
     case "conic":
       return `conic-gradient(from ${angle}deg at ${cx}% ${cy}%, ${stopStr})`;
@@ -392,8 +390,9 @@ function gradientToTransform(value) {
   const cx = round2(clampPct(value.centerX ?? 50), 2);
   const cy = round2(clampPct(value.centerY ?? 50), 2);
   const rotation = wrapAngle(value.rotation ?? 0);
-  const squashed = clampSquash(value.squash ?? 0) !== 0;
-  if (value.type !== "radial" || rotation === 0 || !squashed) {
+  const rx = clampScale(value.scale ?? 100);
+  const ry = value.squash === void 0 ? rx : clampSquash(value.squash);
+  if (value.type !== "radial" || rotation === 0 || rx === ry) {
     return { transform: "none", transformOrigin: "50% 50%" };
   }
   return { transform: `rotate(${round2(rotation, 2)}deg)`, transformOrigin: `${cx}% ${cy}%` };
@@ -412,10 +411,10 @@ function gradientFillBox(value, boxW, boxH) {
   }
   const cxPx = clampPct(value.centerX ?? 50) / 100 * boxW;
   const cyPx = clampPct(value.centerY ?? 50) / 100 * boxH;
-  const scale = clampScale(value.scale ?? 100) / 100;
-  const squash = clampSquash(value.squash ?? 0);
-  const rx = round2(scale * boxW, 2);
-  const ry = round2(Math.max(1, scale * (1 - squash / 100) * boxH), 2);
+  const scaleX = clampScale(value.scale ?? 100) / 100;
+  const scaleY = (value.squash === void 0 ? clampScale(value.scale ?? 100) : clampSquash(value.squash)) / 100;
+  const rx = round2(scaleX * boxW, 2);
+  const ry = round2(scaleY * boxH, 2);
   const side = round2(2 * Math.hypot(boxW, boxH), 2);
   const rotation = wrapAngle(value.rotation ?? 0);
   return {
@@ -3281,12 +3280,11 @@ function GradientTransformPad({ value, onChange }) {
   const cx = value.centerX ?? 50;
   const cy = value.centerY ?? 50;
   const scale = value.scale ?? 100;
-  const squash = value.squash ?? 0;
   const rotation = value.rotation ?? 0;
   const cxPx = cx / 100 * w;
   const cyPx = cy / 100 * h;
   const rxPx = scale / 100 * w;
-  const ryPx = Math.max(10, scale * (1 - squash / 100) / 100 * h);
+  const ryPx = Math.max(10, (value.squash ?? scale) / 100 * h);
   const theta = rotation * RAD;
   const pin = (x, y) => ({ x: clamp2(x, 5, w - 5), y: clamp2(y, 5, h - 5) });
   const major = pin(cxPx + Math.cos(theta) * rxPx, cyPx + Math.sin(theta) * rxPx);
@@ -3338,8 +3336,7 @@ function GradientTransformPad({ value, onChange }) {
       onChange(setGradientScale(setGradientRotation(value, deg), nextScale));
       return;
     }
-    const ryPct = dist / rect.height * 100;
-    const nextSquash = (1 - ryPct / scale) * 100;
+    const nextSquash = dist / rect.height * 100;
     onChange(setGradientRotation(setGradientSquash(value, nextSquash), deg - 90));
   };
   const onHandleUp = (e) => {
