@@ -304,6 +304,7 @@ var DEFAULT_GRADIENT = {
 var clamp012 = (n) => Math.min(1, Math.max(0, n));
 var clampPct = (n) => Math.min(100, Math.max(0, n));
 var clampScale = (n) => Math.min(200, Math.max(10, n));
+var clampSquash = (n) => Math.min(100, Math.max(-100, n));
 var wrapAngle = (a) => (a % 360 + 360) % 360;
 var round2 = (n, p) => {
   const f = 10 ** p;
@@ -329,7 +330,7 @@ function gradientToCss(value) {
   switch (value.type) {
     case "radial": {
       const scale = value.scale ?? 100;
-      const squash = clampPct(value.squash ?? 0);
+      const squash = clampSquash(value.squash ?? 0);
       if (scale === 100 && squash === 0) {
         return `radial-gradient(circle at ${cx}% ${cy}%, ${stopStr})`;
       }
@@ -359,7 +360,7 @@ function gradientFillBox(value, boxW, boxH) {
   const cxPx = clampPct(value.centerX ?? 50) / 100 * boxW;
   const cyPx = clampPct(value.centerY ?? 50) / 100 * boxH;
   const scale = clampScale(value.scale ?? 100) / 100;
-  const squash = clampPct(value.squash ?? 0);
+  const squash = clampSquash(value.squash ?? 0);
   const rx = round2(scale * boxW, 2);
   const ry = round2(Math.max(1, scale * (1 - squash / 100) * boxH), 2);
   const side = round2(2 * Math.hypot(boxW, boxH), 2);
@@ -417,7 +418,7 @@ function normalizeGradient(input) {
   const scale = Number(obj.scale);
   if (Number.isFinite(scale)) extras.scale = clampScale(scale);
   const squash = Number(obj.squash);
-  if (Number.isFinite(squash)) extras.squash = clampPct(squash);
+  if (Number.isFinite(squash)) extras.squash = clampSquash(squash);
   const rotation = Number(obj.rotation);
   if (Number.isFinite(rotation)) extras.rotation = wrapAngle(rotation);
   const stops = [];
@@ -469,7 +470,7 @@ function setGradientScale(value, scale) {
   return { ...value, scale: clampScale(scale) };
 }
 function setGradientSquash(value, squash) {
-  return { ...value, squash: clampPct(squash) };
+  return { ...value, squash: clampSquash(squash) };
 }
 function setGradientRotation(value, rotation) {
   return { ...value, rotation: wrapAngle(rotation) };
