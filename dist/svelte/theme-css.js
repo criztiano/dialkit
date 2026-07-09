@@ -911,7 +911,7 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .dialkit-analyser-actions button:hover:not(:disabled) {
@@ -924,9 +924,17 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
   cursor: default;
 }
 
-.dialkit-analyser-actions button[aria-pressed='true'] {
-  background: var(--dial-surface-hover);
-  border-color: var(--dial-border-hover);
+/* Engaged states are color-coded: rose for mute, amber for solo. */
+.dialkit-analyser-actions button[aria-label='Mute'][aria-pressed='true'] {
+  background: rgba(244, 63, 94, 0.22);
+  border-color: rgba(244, 63, 94, 0.55);
+  color: #fb7185;
+}
+
+.dialkit-analyser-actions button[aria-label='Solo'][aria-pressed='true'] {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: rgba(245, 158, 11, 0.55);
+  color: #fbbf24;
 }
 
 /* Panel Wrapper (contains panel + toolbar) */
