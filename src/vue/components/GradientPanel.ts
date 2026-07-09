@@ -1,9 +1,8 @@
 import { computed, defineComponent, h, ref, onBeforeUnmount, type PropType } from 'vue';
 import { SegmentedControl } from './SegmentedControl';
-import { Slider } from './Slider';
 import { ColorPickerPanel } from './ColorPickerPanel';
 import { GradientTransformPad } from './GradientTransformPad';
-import { ICON_GRIP, ICON_PANEL } from '../../icons';
+import { ICON_GRIP } from '../../icons';
 import {
   gradientToCss,
   addStop,
@@ -11,10 +10,6 @@ import {
   removeStop,
   setStopColor,
   setGradientType,
-  setGradientAngle,
-  setGradientScale,
-  setGradientSquash,
-  setGradientRotation,
   MIN_STOPS,
   STOP_DETACH_PX,
   LONG_PRESS_MS,
@@ -46,7 +41,6 @@ export const GradientPanel = defineComponent({
     const selectedIndex = ref(0);
     const holdingIndex = ref(-1);
     const detach = ref<{ index: number; y: number } | null>(null);
-    const showAdvanced = ref(false);
     const stripRef = ref<HTMLDivElement | null>(null);
     const gripRef = ref<HTMLButtonElement | null>(null);
     // Grip drag: emit incremental deltas so the parent can reposition the popover.
@@ -213,8 +207,6 @@ export const GradientPanel = defineComponent({
         ? value.stops.filter((_, i) => i !== detach.value!.index)
         : value.stops;
 
-      const advanced = showAdvanced.value && value.type !== 'linear';
-
       return h('div', { class: 'dialkit-gradient-panel' }, [
         h('div', { class: 'dialkit-gradient-toolbar' }, [
           h('button', {
@@ -238,80 +230,12 @@ export const GradientPanel = defineComponent({
             value: value.type,
             onChange: (t: GradientType) => emit('change', setGradientType(value, t)),
           }),
-
-          value.type !== 'linear'
-            ? h('button', {
-              type: 'button',
-              class: 'dialkit-gradient-advanced-toggle',
-              'data-active': String(advanced),
-              'aria-label': 'Advanced settings',
-              'aria-pressed': advanced,
-              title: 'Advanced settings',
-              onClick: () => { showAdvanced.value = !showAdvanced.value; },
-            }, [
-              h('svg', { viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': 'true' }, [
-                h('path', { opacity: '0.5', d: ICON_PANEL.path, fill: 'currentColor' }),
-                ...ICON_PANEL.circles.map((c) => h('circle', {
-                  cx: c.cx, cy: c.cy, r: c.r, fill: 'currentColor', stroke: 'currentColor', 'stroke-width': '1.25',
-                })),
-              ]),
-            ])
-            : null,
         ]),
 
-        value.type !== 'radial'
-          ? h(Slider, {
-            label: 'Angle',
-            value: value.angle,
-            min: 0,
-            max: 360,
-            step: 1,
-            unit: '°',
-            onChange: (a: number) => emit('change', setGradientAngle(value, a)),
-          })
-          : null,
-
-        advanced
-          ? h('div', { class: 'dialkit-gradient-advanced' }, [
-            h(GradientTransformPad, {
-              value,
-              onChange: (v: GradientValue) => emit('change', v),
-            }),
-            ...(value.type === 'radial'
-              ? [
-                h(Slider, {
-                  label: 'Size',
-                  value: value.scale ?? 100,
-                  min: 10,
-                  max: 200,
-                  step: 1,
-                  unit: '%',
-                  onChange: (s: number) => emit('change', setGradientScale(value, s)),
-                }),
-                h(Slider, {
-                  label: 'Squash',
-                  value: value.squash ?? 0,
-                  min: 0,
-                  max: 100,
-                  step: 1,
-                  unit: '%',
-                  onChange: (s: number) => emit('change', setGradientSquash(value, s)),
-                }),
-                (value.squash ?? 0) > 0
-                  ? h(Slider, {
-                    label: 'Rotation',
-                    value: value.rotation ?? 0,
-                    min: 0,
-                    max: 360,
-                    step: 1,
-                    unit: '°',
-                    onChange: (r: number) => emit('change', setGradientRotation(value, r)),
-                  })
-                  : null,
-              ]
-              : []),
-          ])
-          : null,
+        h(GradientTransformPad, {
+          value,
+          onChange: (v: GradientValue) => emit('change', v),
+        }),
 
         h('div', {
           ref: stripRef,

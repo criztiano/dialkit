@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { SegmentedControl } from './SegmentedControl';
-import { Slider } from './Slider';
 import { ColorPickerPanel } from './ColorPickerPanel';
 import { GradientTransformPad } from './GradientTransformPad';
-import { ICON_GRIP, ICON_PANEL } from '../icons';
+import { ICON_GRIP } from '../icons';
 import {
   gradientToCss,
   addStop,
@@ -11,10 +10,6 @@ import {
   removeStop,
   setStopColor,
   setGradientType,
-  setGradientAngle,
-  setGradientScale,
-  setGradientSquash,
-  setGradientRotation,
   MIN_STOPS,
   STOP_DETACH_PX,
   LONG_PRESS_MS,
@@ -47,7 +42,6 @@ export function GradientPanel({ value, onChange, onDrag }: GradientPanelProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [holdingIndex, setHoldingIndex] = useState(-1);
   const [detach, setDetach] = useState<{ index: number; y: number } | null>(null);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const stripRef = useRef<HTMLDivElement>(null);
   const gripRef = useRef<HTMLButtonElement>(null);
   // Grip drag: emit incremental deltas so the parent can reposition the popover.
@@ -221,8 +215,6 @@ export function GradientPanel({ value, onChange, onDrag }: GradientPanelProps) {
 
   const previewStops = detach ? value.stops.filter((_, i) => i !== detach.index) : value.stops;
 
-  const advanced = showAdvanced && value.type !== 'linear';
-
   return (
     <div className="dialkit-gradient-panel">
       <div className="dialkit-gradient-toolbar">
@@ -250,77 +242,9 @@ export function GradientPanel({ value, onChange, onDrag }: GradientPanelProps) {
           value={value.type}
           onChange={(t) => onChange(setGradientType(value, t))}
         />
-
-        {value.type !== 'linear' && (
-          <button
-            type="button"
-            className="dialkit-gradient-advanced-toggle"
-            data-active={String(advanced)}
-            aria-label="Advanced settings"
-            aria-pressed={advanced}
-            title="Advanced settings"
-            onClick={() => setShowAdvanced((v) => !v)}
-          >
-            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path opacity="0.5" d={ICON_PANEL.path} fill="currentColor" />
-              {ICON_PANEL.circles.map((c, i) => (
-                <circle key={i} cx={c.cx} cy={c.cy} r={c.r} fill="currentColor" stroke="currentColor" strokeWidth="1.25" />
-              ))}
-            </svg>
-          </button>
-        )}
       </div>
 
-      {value.type !== 'radial' && (
-        <Slider
-          label="Angle"
-          value={value.angle}
-          min={0}
-          max={360}
-          step={1}
-          unit="°"
-          onChange={(a) => onChange(setGradientAngle(value, a))}
-        />
-      )}
-
-      {advanced && (
-        <div className="dialkit-gradient-advanced">
-          <GradientTransformPad value={value} onChange={onChange} />
-          {value.type === 'radial' && (
-            <>
-              <Slider
-                label="Size"
-                value={value.scale ?? 100}
-                min={10}
-                max={200}
-                step={1}
-                unit="%"
-                onChange={(s) => onChange(setGradientScale(value, s))}
-              />
-              <Slider
-                label="Squash"
-                value={value.squash ?? 0}
-                min={0}
-                max={100}
-                step={1}
-                unit="%"
-                onChange={(s) => onChange(setGradientSquash(value, s))}
-              />
-              {(value.squash ?? 0) > 0 && (
-                <Slider
-                  label="Rotation"
-                  value={value.rotation ?? 0}
-                  min={0}
-                  max={360}
-                  step={1}
-                  unit="°"
-                  onChange={(r) => onChange(setGradientRotation(value, r))}
-                />
-              )}
-            </>
-          )}
-        </div>
-      )}
+      <GradientTransformPad value={value} onChange={onChange} />
 
       <div
         ref={stripRef}

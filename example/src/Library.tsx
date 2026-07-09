@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -21,7 +21,7 @@ import {
   DialStore,
   useDialKit,
   gradientToCss,
-  gradientToTransform,
+  gradientFillBox,
   DEFAULT_GRADIENT,
 } from 'dialkit';
 import type { SpringConfig, TransitionConfig, EasingConfig, GalleryItem, GradientValue } from 'dialkit';
@@ -282,7 +282,7 @@ export function Library() {
           <Card title="Stop editor" desc="Click an empty spot on the ramp to add a stop (seeded with the color under the cursor); drag stops to reposition (they swap past each other live); drag a stop off the strip or long-press it to remove. The selected stop opens the alpha-enabled color picker below. Emits a { type, angle, stops } object; gradientToCss turns it into a ready CSS string." code="bg: { type: 'gradient', default }">
             <div className="lib-gradient-demo">
               <div className="lib-gradient-swatch">
-                <div className="lib-gradient-fill" style={gradientFillStyle(gradientValue)} />
+                <GradientFill value={gradientValue} />
               </div>
               <GradientControl label="bg" value={gradientValue} onChange={setGradientValue} />
             </div>
@@ -367,7 +367,7 @@ export function Library() {
 
           <div className="lib-live">
             <div className="lib-preview-stage">
-              <div className="lib-gradient-fill" style={gradientFillStyle(p.backdrop)} />
+              <GradientFill value={p.backdrop} />
               <div style={previewStyle}>{p.label}</div>
             </div>
             <div className="lib-window">
@@ -384,15 +384,38 @@ export function Library() {
   );
 }
 
-function gradientFillStyle(v: GradientValue) {
-  const { transform, transformOrigin } = gradientToTransform(v);
-  const rotating = transform !== 'none';
-  // A rotated fill exposes the box corners; overscale so they stay covered.
-  return {
-    background: gradientToCss(v),
-    transform: rotating ? `scale(1.5) ${transform}` : undefined,
-    transformOrigin,
-  };
+// Measures its own box, then paints the gradient through gradientFillBox so a
+// rotated radial covers every corner instead of clipping to a spinning square.
+function GradientFill({ value }: { value: GradientValue }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => setSize({ w: el.clientWidth, h: el.clientHeight });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const box = gradientFillBox(value, size.w, size.h);
+  return (
+    <div ref={ref} className="lib-gradient-clip">
+      <div
+        className="lib-gradient-fill"
+        style={{
+          position: 'absolute',
+          background: box.background,
+          transform: box.transform,
+          transformOrigin: box.transformOrigin,
+          left: box.left,
+          top: box.top,
+          width: box.width,
+          height: box.height,
+        }}
+      />
+    </div>
+  );
 }
 
 function withAlpha(hex: string, alpha: number): string {
@@ -516,7 +539,7 @@ const CSS = `
 
 .lib-gradient-demo { display: flex; flex-direction: column; gap: 10px; }
 .lib-gradient-swatch { position: relative; overflow: hidden; width: 100%; height: 72px; border-radius: 10px; border: 1px solid var(--dial-border); }
-.lib-gradient-fill { position: absolute; inset: 0; z-index: 0; }
+.lib-gradient-clip { position: absolute; inset: 0; overflow: hidden; z-index: 0; }
 
 .lib-action-log { font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--dial-text-tertiary); padding-left: 2px; }
 .lib-action-log span { color: var(--dial-text-label); }

@@ -192,20 +192,23 @@ hero: {
 }
 ```
 
-The control shows a live gradient strip; clicking it opens the editor: a linear / radial / conic switcher, an angle, and a ramp of draggable color stops. Click an empty spot on the ramp to add a stop (seeded with the color under the cursor), drag a stop to reposition it (stops swap past each other live), and drag a stop off the strip or long-press it to remove one (minimum two). Selecting a stop opens the full color picker below it — stops always carry alpha. Drag the panel by the grip in its top-left to reposition it; the settings toggle beside the tabs (radial/conic only) reveals a transform pad — drag the center handle to move the origin, the axis handle to resize and rotate, and the perpendicular handle to squash into an oval — plus, for radial, sliders for size, squash, and (once squashed) rotation for precise values.
+The control shows a live gradient strip; clicking it opens the editor: a linear / radial / conic switcher, a Figma-style transform pad, and a ramp of draggable color stops. On the pad you edit the gradient directly — radial has a center handle (move the origin), an axis handle (resize + rotate), and a perpendicular handle (squash into an oval); conic has a center and a direction handle; linear has a direction handle. Click an empty spot on the ramp to add a stop (seeded with the color under the cursor), drag a stop to reposition it (stops swap past each other live), and drag a stop off the strip or long-press it to remove one (minimum two). Selecting a stop opens the full color picker below it — stops always carry alpha. Drag the panel by the grip in its top-left to reposition it.
 
 Turn the value into CSS with the exported helper:
 
 ```tsx
-import { gradientToCss, gradientToTransform } from 'dialkit';
+import { gradientToCss } from 'dialkit';
 
 <div style={{ background: gradientToCss(p.bg) }} />
 ```
 
-CSS radial gradients can't tilt on their own, so a squashed radial's `rotation` comes back separately. Apply it with `gradientToTransform` on the element (or a clipping layer, since a rotated box exposes its corners):
+A CSS radial gradient can't tilt its own axis, so a rotated/squashed radial needs a transform on a clipping layer — and a rotated box exposes its corners. `gradientFillBox(value, widthPx, heightPx)` returns a ready-to-spread style for a fill layer that covers the box with no clipped corners at any rotation (for linear/conic it just matches the box):
 
 ```tsx
-<div style={{ background: gradientToCss(p.bg), ...gradientToTransform(p.bg) }} />
+import { gradientFillBox } from 'dialkit';
+
+// parent: position: relative; overflow: hidden
+<div style={{ position: 'absolute', ...gradientFillBox(p.bg, width, height) }} />
 ```
 
 **Returns:** `GradientValue` — `{ type, angle, stops: { color, position }[], centerX?, centerY?, scale?, squash?, rotation? }`

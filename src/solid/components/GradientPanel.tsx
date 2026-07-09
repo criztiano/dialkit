@@ -1,9 +1,8 @@
 import { createSignal, For, Show, onCleanup } from 'solid-js';
 import { SegmentedControl } from './SegmentedControl';
-import { Slider } from './Slider';
 import { ColorPickerPanel } from './ColorPickerPanel';
 import { GradientTransformPad } from './GradientTransformPad';
-import { ICON_GRIP, ICON_PANEL } from '../../icons';
+import { ICON_GRIP } from '../../icons';
 import {
   gradientToCss,
   addStop,
@@ -11,10 +10,6 @@ import {
   removeStop,
   setStopColor,
   setGradientType,
-  setGradientAngle,
-  setGradientScale,
-  setGradientSquash,
-  setGradientRotation,
   MIN_STOPS,
   STOP_DETACH_PX,
   LONG_PRESS_MS,
@@ -48,7 +43,6 @@ export function GradientPanel(props: GradientPanelProps) {
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const [holdingIndex, setHoldingIndex] = createSignal(-1);
   const [detach, setDetach] = createSignal<{ index: number; y: number } | null>(null);
-  const [showAdvanced, setShowAdvanced] = createSignal(false);
   let stripRef!: HTMLDivElement;
   let gripRef!: HTMLButtonElement;
   // Grip drag: emit incremental deltas so the parent can reposition the popover.
@@ -214,8 +208,6 @@ export function GradientPanel(props: GradientPanelProps) {
     return d ? props.value.stops.filter((_, i) => i !== d.index) : props.value.stops;
   };
 
-  const advanced = () => showAdvanced() && props.value.type !== 'linear';
-
   return (
     <div class="dialkit-gradient-panel">
       <div class="dialkit-gradient-toolbar">
@@ -243,75 +235,9 @@ export function GradientPanel(props: GradientPanelProps) {
           value={props.value.type}
           onChange={(t) => props.onChange(setGradientType(props.value, t))}
         />
-
-        <Show when={props.value.type !== 'linear'}>
-          <button
-            type="button"
-            class="dialkit-gradient-advanced-toggle"
-            data-active={String(advanced())}
-            aria-label="Advanced settings"
-            aria-pressed={advanced()}
-            title="Advanced settings"
-            onClick={() => setShowAdvanced((v) => !v)}
-          >
-            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path opacity="0.5" d={ICON_PANEL.path} fill="currentColor" />
-              <For each={ICON_PANEL.circles}>
-                {(c) => <circle cx={c.cx} cy={c.cy} r={c.r} fill="currentColor" stroke="currentColor" stroke-width="1.25" />}
-              </For>
-            </svg>
-          </button>
-        </Show>
       </div>
 
-      <Show when={props.value.type !== 'radial'}>
-        <Slider
-          label="Angle"
-          value={props.value.angle}
-          min={0}
-          max={360}
-          step={1}
-          unit="°"
-          onChange={(a) => props.onChange(setGradientAngle(props.value, a))}
-        />
-      </Show>
-
-      <Show when={advanced()}>
-        <div class="dialkit-gradient-advanced">
-          <GradientTransformPad value={props.value} onChange={props.onChange} />
-          <Show when={props.value.type === 'radial'}>
-            <Slider
-              label="Size"
-              value={props.value.scale ?? 100}
-              min={10}
-              max={200}
-              step={1}
-              unit="%"
-              onChange={(s) => props.onChange(setGradientScale(props.value, s))}
-            />
-            <Slider
-              label="Squash"
-              value={props.value.squash ?? 0}
-              min={0}
-              max={100}
-              step={1}
-              unit="%"
-              onChange={(s) => props.onChange(setGradientSquash(props.value, s))}
-            />
-            <Show when={(props.value.squash ?? 0) > 0}>
-              <Slider
-                label="Rotation"
-                value={props.value.rotation ?? 0}
-                min={0}
-                max={360}
-                step={1}
-                unit="°"
-                onChange={(r) => props.onChange(setGradientRotation(props.value, r))}
-              />
-            </Show>
-          </Show>
-        </div>
-      </Show>
+      <GradientTransformPad value={props.value} onChange={props.onChange} />
 
       <div
         ref={stripRef}

@@ -74,6 +74,10 @@ const cloneDefault = (): GradientValue => ({
   stops: cloneDefaultStops(),
 });
 const sortedStops = (stops: GradientStop[]) => [...stops].sort((a, b) => a.position - b.position);
+const stopString = (stops: GradientStop[]) =>
+  sortedStops(stops)
+    .map((s) => `${s.color} ${round(clamp01(s.position) * 100, 2)}%`)
+    .join(', ');
 const normColor = (color: string): string => {
   const rgba = parseHex(color);
   return rgba ? formatHex(rgba, true) : '#000000ff';
@@ -83,9 +87,7 @@ const normColor = (color: string): string => {
 
 /** Ready CSS gradient string for any of the three types. #rrggbbaa is valid CSS. */
 export function gradientToCss(value: GradientValue): string {
-  const stopStr = sortedStops(value.stops)
-    .map((s) => `${s.color} ${round(clamp01(s.position) * 100, 2)}%`)
-    .join(', ');
+  const stopStr = stopString(value.stops);
   const angle = round(wrapAngle(value.angle), 2);
   const cx = round(clampPct(value.centerX ?? 50), 2);
   const cy = round(clampPct(value.centerY ?? 50), 2);
@@ -130,6 +132,65 @@ export function gradientToTransform(value: GradientValue): GradientTransform {
     return { transform: 'none', transformOrigin: '50% 50%' };
   }
   return { transform: `rotate(${round(rotation, 2)}deg)`, transformOrigin: `${cx}% ${cy}%` };
+}
+
+/**
+ * A positioned fill layer that paints a gradient covering a `boxW × boxH` area
+ * with no clipped corners — even a rotated radial. A CSS radial gradient's final
+ * color already extends to infinity, so the only thing that clips is the layer's
+ * own box: rotating a box the size of the pad pulls its corners inward and
+ * exposes the area behind it. So for radial we size the layer to an oversized
+ * square centered on the gradient origin and spin it around its own center
+ * (half-side ≥ the box diagonal → no rotation angle can uncover a corner), with
+ * the ellipse expressed in pixels so it matches the box exactly. Linear and
+ * conic gradients already fill their box, so the layer just matches it.
+ *
+ * Place a div with `overflow: hidden` around it and spread this onto an
+ * absolutely-positioned child (left/top/width/height are pixels):
+ *   `<div style={{ position:'absolute', ...gradientFillBox(v, w, h) }} />`
+ */
+export type GradientFillBox = {
+  background: string;
+  transform: string;
+  transformOrigin: string;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
+export function gradientFillBox(value: GradientValue, boxW: number, boxH: number): GradientFillBox {
+  // Before the box is measured (or for the self-covering types), the plain CSS
+  // string on a box-sized layer already covers everything.
+  if (value.type !== 'radial' || boxW <= 0 || boxH <= 0) {
+    return {
+      background: gradientToCss(value),
+      transform: 'none',
+      transformOrigin: '50% 50%',
+      left: 0,
+      top: 0,
+      width: boxW,
+      height: boxH,
+    };
+  }
+  const cxPx = (clampPct(value.centerX ?? 50) / 100) * boxW;
+  const cyPx = (clampPct(value.centerY ?? 50) / 100) * boxH;
+  const scale = clampScale(value.scale ?? 100) / 100;
+  const squash = clampPct(value.squash ?? 0);
+  const rx = round(scale * boxW, 2);
+  // Floor the minor radius so full squash renders a sliver, never a blank box.
+  const ry = round(Math.max(1, scale * (1 - squash / 100) * boxH), 2);
+  const side = round(2 * Math.hypot(boxW, boxH), 2);
+  const rotation = wrapAngle(value.rotation ?? 0);
+  return {
+    background: `radial-gradient(${rx}px ${ry}px at 50% 50%, ${stopString(value.stops)})`,
+    transform: rotation === 0 ? 'none' : `rotate(${round(rotation, 2)}deg)`,
+    transformOrigin: '50% 50%',
+    left: round(cxPx - side / 2, 2),
+    top: round(cyPx - side / 2, 2),
+    width: side,
+    height: side,
+  };
 }
 
 // ── Interpolation ───────────────────────────────────────────────────

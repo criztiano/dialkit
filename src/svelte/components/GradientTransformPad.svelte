@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
-    gradientToCss,
-    gradientToTransform,
+    gradientFillBox,
+    setGradientAngle,
     setGradientCenter,
     setGradientScale,
     setGradientSquash,
@@ -11,13 +11,14 @@
   } from '../../gradient-core';
 
   /**
-   * Figma-style on-canvas transform controls for a gradient: a live preview with
-   * a draggable center handle, a major-axis handle (distance = size, angle =
-   * rotation), and a minor-axis handle (distance = squash). Radial shows all
-   * three; conic only the center.
+   * Figma-style on-canvas transform controls for a gradient — a live preview with
+   * draggable handles that replace the numeric sliders. Radial: center (move),
+   * major-axis (size + rotation), and minor-axis (squash) handles. Conic: center
+   * plus a direction handle for the start angle. Linear: a single direction handle
+   * (no origin or size in CSS linear gradients).
    */
 
-  type HandleKind = 'center' | 'major' | 'minor';
+  type HandleKind = 'center' | 'major' | 'minor' | 'angle';
 
   let { value, onChange } = $props<{
     value: GradientValue;
@@ -25,7 +26,10 @@
   }>();
 
   const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+  const wrap360 = (deg: number) => ((deg % 360) + 360) % 360;
   const RAD = Math.PI / 180;
+  /** Screen vector (y-down) → CSS gradient angle (0 = up, clockwise). */
+  const vectorToAngle = (dx: number, dy: number) => wrap360(Math.atan2(dx, -dy) / RAD);
 
   let padRef = $state<HTMLDivElement | undefined>(undefined);
   // Keyed by pointerId so a second touch can't hijack or cancel a live drag.
@@ -46,6 +50,7 @@
   });
 
   const radial = $derived(value.type === 'radial');
+  const conic = $derived(value.type === 'conic');
   const cx = $derived(value.centerX ?? 50);
   const cy = $derived(value.centerY ?? 50);
   const scale = $derived(value.scale ?? 100);
@@ -66,10 +71,20 @@
   const pin = (x: number, y: number) => ({ x: clamp(x, 5, size.w - 5), y: clamp(y, 5, size.h - 5) });
   const major = $derived(pin(cxPx + Math.cos(theta) * rxPx, cyPx + Math.sin(theta) * rxPx));
   const minor = $derived(pin(cxPx - Math.sin(theta) * ryPx, cyPx + Math.cos(theta) * ryPx));
-  const lineLen = $derived(Math.hypot(major.x - cxPx, major.y - cyPx));
-  const lineAngle = $derived(Math.atan2(major.y - cyPx, major.x - cxPx) / RAD);
+  const majorLineLen = $derived(Math.hypot(major.x - cxPx, major.y - cyPx));
+  const majorLineAngle = $derived(Math.atan2(major.y - cyPx, major.x - cxPx) / RAD);
 
-  const fillTransform = $derived(gradientToTransform(value));
+  // Direction handle (linear + conic): a spoke from the origin at the angle.
+  // Linear gradients have no CSS origin, so their spoke pivots on the pad center.
+  const angleOx = $derived(conic ? cxPx : size.w / 2);
+  const angleOy = $derived(conic ? cyPx : size.h / 2);
+  const spokeR = $derived(Math.max(10, Math.min(size.w, size.h) / 2 - 8));
+  const aTheta = $derived(value.angle * RAD);
+  const angleHandle = $derived(pin(angleOx + Math.sin(aTheta) * spokeR, angleOy - Math.cos(aTheta) * spokeR));
+  const angleLineLen = $derived(Math.hypot(angleHandle.x - angleOx, angleHandle.y - angleOy));
+  const angleLineAngle = $derived(Math.atan2(angleHandle.y - angleOy, angleHandle.x - angleOx) / RAD);
+
+  const fill = $derived(gradientFillBox(value, size.w, size.h));
 
   const onHandleDown = (kind: HandleKind) => (e: PointerEvent) => {
     e.preventDefault();
@@ -100,6 +115,13 @@
       return;
     }
 
+    if (kind === 'angle') {
+      const ox = conic ? (cx / 100) * rect.width : rect.width / 2;
+      const oy = conic ? (cy / 100) * rect.height : rect.height / 2;
+      onChange(setGradientAngle(value, vectorToAngle(px - ox, py - oy)));
+      return;
+    }
+
     const dx = px - (cx / 100) * rect.width;
     const dy = py - (cy / 100) * rect.height;
     const dist = Math.hypot(dx, dy);
@@ -125,17 +147,21 @@
 <div bind:this={padRef} class="dialkit-gradient-pad dialkit-checker">
   <div
     class="dialkit-gradient-pad-fill"
-    style:background={gradientToCss(value)}
-    style:transform={fillTransform.transform}
-    style:transform-origin={fillTransform.transformOrigin}
+    style:background={fill.background}
+    style:transform={fill.transform}
+    style:transform-origin={fill.transformOrigin}
+    style:left="{fill.left}px"
+    style:top="{fill.top}px"
+    style:width="{fill.width}px"
+    style:height="{fill.height}px"
   ></div>
   {#if radial}
     <div
       class="dialkit-gradient-pad-line"
       style:left="{cxPx}px"
       style:top="{cyPx}px"
-      style:width="{lineLen}px"
-      style:transform="rotate({lineAngle}deg)"
+      style:width="{majorLineLen}px"
+      style:transform="rotate({majorLineAngle}deg)"
     ></div>
     <button
       type="button"
@@ -164,17 +190,41 @@
       onlostpointercapture={onHandleUp}
     ></button>
   {/if}
-  <button
-    type="button"
-    class="dialkit-gradient-pad-handle"
-    data-kind="center"
-    aria-label="Gradient center"
-    style:left="{clamp(cxPx, 5, size.w - 5)}px"
-    style:top="{clamp(cyPx, 5, size.h - 5)}px"
-    onpointerdown={onHandleDown('center')}
-    onpointermove={onHandleMove}
-    onpointerup={onHandleUp}
-    onpointercancel={onHandleUp}
-    onlostpointercapture={onHandleUp}
-  ></button>
+  {#if !radial}
+    <div
+      class="dialkit-gradient-pad-line"
+      style:left="{angleOx}px"
+      style:top="{angleOy}px"
+      style:width="{angleLineLen}px"
+      style:transform="rotate({angleLineAngle}deg)"
+    ></div>
+    <button
+      type="button"
+      class="dialkit-gradient-pad-handle"
+      data-kind="angle"
+      aria-label="Gradient angle"
+      style:left="{angleHandle.x}px"
+      style:top="{angleHandle.y}px"
+      onpointerdown={onHandleDown('angle')}
+      onpointermove={onHandleMove}
+      onpointerup={onHandleUp}
+      onpointercancel={onHandleUp}
+      onlostpointercapture={onHandleUp}
+    ></button>
+  {/if}
+  {#if radial || conic}
+    <button
+      type="button"
+      class="dialkit-gradient-pad-handle"
+      data-kind="center"
+      aria-label="Gradient center"
+      style:left="{clamp(cxPx, 5, size.w - 5)}px"
+      style:top="{clamp(cyPx, 5, size.h - 5)}px"
+      onpointerdown={onHandleDown('center')}
+      onpointermove={onHandleMove}
+      onpointerup={onHandleUp}
+      onpointercancel={onHandleUp}
+      onlostpointercapture={onHandleUp}
+    ></button>
+  {/if}
 </div>

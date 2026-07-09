@@ -1,7 +1,7 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import {
-  gradientToCss,
-  gradientToTransform,
+  gradientFillBox,
+  setGradientAngle,
   setGradientCenter,
   setGradientScale,
   setGradientSquash,
@@ -10,13 +10,14 @@ import {
 } from '../gradient-core';
 
 /**
- * Figma-style on-canvas transform controls for a gradient: a live preview with
- * a draggable center handle, a major-axis handle (distance = size, angle =
- * rotation), and a minor-axis handle (distance = squash). Radial shows all
- * three; conic only the center.
+ * Figma-style on-canvas transform controls for a gradient — a live preview with
+ * draggable handles that replace the numeric sliders. Radial: center (move),
+ * major-axis (size + rotation), and minor-axis (squash) handles. Conic: center
+ * plus a direction handle for the start angle. Linear: a single direction handle
+ * (no origin or size in CSS linear gradients).
  */
 
-type HandleKind = 'center' | 'major' | 'minor';
+type HandleKind = 'center' | 'major' | 'minor' | 'angle';
 
 interface GradientTransformPadProps {
   value: GradientValue;
@@ -24,7 +25,10 @@ interface GradientTransformPadProps {
 }
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+const wrap360 = (deg: number) => ((deg % 360) + 360) % 360;
 const RAD = Math.PI / 180;
+/** Screen vector (y-down) → CSS gradient angle (0 = up, clockwise). */
+const vectorToAngle = (dx: number, dy: number) => wrap360(Math.atan2(dx, -dy) / RAD);
 
 export function GradientTransformPad({ value, onChange }: GradientTransformPadProps) {
   const padRef = useRef<HTMLDivElement>(null);
@@ -44,14 +48,15 @@ export function GradientTransformPad({ value, onChange }: GradientTransformPadPr
     return () => ro.disconnect();
   }, []);
 
+  const { w, h } = size;
   const radial = value.type === 'radial';
+  const conic = value.type === 'conic';
   const cx = value.centerX ?? 50;
   const cy = value.centerY ?? 50;
   const scale = value.scale ?? 100;
   const squash = value.squash ?? 0;
   const rotation = value.rotation ?? 0;
 
-  const { w, h } = size;
   const cxPx = (cx / 100) * w;
   const cyPx = (cy / 100) * h;
   // CSS radial radii resolve against box dims: rx% of width, ry% of height.
@@ -60,18 +65,24 @@ export function GradientTransformPad({ value, onChange }: GradientTransformPadPr
   // center handle (which is on top and would make it unreachable).
   const ryPx = Math.max(10, ((scale * (1 - squash / 100)) / 100) * h);
   const theta = rotation * RAD;
-  const majorX = cxPx + Math.cos(theta) * rxPx;
-  const majorY = cyPx + Math.sin(theta) * rxPx;
-  const minorX = cxPx - Math.sin(theta) * ryPx;
-  const minorY = cyPx + Math.cos(theta) * ryPx;
 
-  // Large sizes put a handle outside the pad; pin it to the edge so it stays
+  // Large sizes push a handle off the pad; pin it to the edge so it stays
   // grabbable (drags recompute from the pointer, so pinning never jumps).
   const pin = (x: number, y: number) => ({ x: clamp(x, 5, w - 5), y: clamp(y, 5, h - 5) });
-  const major = pin(majorX, majorY);
-  const minor = pin(minorX, minorY);
-  const lineLen = Math.hypot(major.x - cxPx, major.y - cyPx);
-  const lineAngle = Math.atan2(major.y - cyPx, major.x - cxPx) / RAD;
+  const major = pin(cxPx + Math.cos(theta) * rxPx, cyPx + Math.sin(theta) * rxPx);
+  const minor = pin(cxPx - Math.sin(theta) * ryPx, cyPx + Math.cos(theta) * ryPx);
+  const majorLineLen = Math.hypot(major.x - cxPx, major.y - cyPx);
+  const majorLineAngle = Math.atan2(major.y - cyPx, major.x - cxPx) / RAD;
+
+  // Direction handle (linear + conic): a spoke from the origin at the angle.
+  // Linear gradients have no CSS origin, so their spoke pivots on the pad center.
+  const angleOx = conic ? cxPx : w / 2;
+  const angleOy = conic ? cyPx : h / 2;
+  const spokeR = Math.max(10, Math.min(w, h) / 2 - 8);
+  const aTheta = value.angle * RAD;
+  const angleHandle = pin(angleOx + Math.sin(aTheta) * spokeR, angleOy - Math.cos(aTheta) * spokeR);
+  const angleLineLen = Math.hypot(angleHandle.x - angleOx, angleHandle.y - angleOy);
+  const angleLineAngle = Math.atan2(angleHandle.y - angleOy, angleHandle.x - angleOx) / RAD;
 
   const onHandleDown = (kind: HandleKind) => (e: React.PointerEvent) => {
     e.preventDefault();
@@ -99,6 +110,13 @@ export function GradientTransformPad({ value, onChange }: GradientTransformPadPr
 
     if (kind === 'center') {
       onChange(setGradientCenter(value, (px / rect.width) * 100, (py / rect.height) * 100));
+      return;
+    }
+
+    if (kind === 'angle') {
+      const ox = conic ? (cx / 100) * rect.width : rect.width / 2;
+      const oy = conic ? (cy / 100) * rect.height : rect.height / 2;
+      onChange(setGradientAngle(value, vectorToAngle(px - ox, py - oy)));
       return;
     }
 
@@ -131,22 +149,27 @@ export function GradientTransformPad({ value, onChange }: GradientTransformPadPr
     onLostPointerCapture: onHandleUp,
   });
 
+  const fill = gradientFillBox(value, w, h);
+
   return (
     <div ref={padRef} className="dialkit-gradient-pad dialkit-checker">
       <div
         className="dialkit-gradient-pad-fill"
-        style={{ background: gradientToCss(value), ...gradientToTransform(value) }}
+        style={{
+          background: fill.background,
+          transform: fill.transform,
+          transformOrigin: fill.transformOrigin,
+          left: fill.left,
+          top: fill.top,
+          width: fill.width,
+          height: fill.height,
+        }}
       />
       {radial && (
         <>
           <div
             className="dialkit-gradient-pad-line"
-            style={{
-              left: cxPx,
-              top: cyPx,
-              width: lineLen,
-              transform: `rotate(${lineAngle}deg)`,
-            }}
+            style={{ left: cxPx, top: cyPx, width: majorLineLen, transform: `rotate(${majorLineAngle}deg)` }}
           />
           <button
             type="button"
@@ -166,14 +189,32 @@ export function GradientTransformPad({ value, onChange }: GradientTransformPadPr
           />
         </>
       )}
-      <button
-        type="button"
-        className="dialkit-gradient-pad-handle"
-        data-kind="center"
-        aria-label="Gradient center"
-        style={{ left: clamp(cxPx, 5, w - 5), top: clamp(cyPx, 5, h - 5) }}
-        {...handleProps('center')}
-      />
+      {!radial && (
+        <>
+          <div
+            className="dialkit-gradient-pad-line"
+            style={{ left: angleOx, top: angleOy, width: angleLineLen, transform: `rotate(${angleLineAngle}deg)` }}
+          />
+          <button
+            type="button"
+            className="dialkit-gradient-pad-handle"
+            data-kind="angle"
+            aria-label="Gradient angle"
+            style={{ left: angleHandle.x, top: angleHandle.y }}
+            {...handleProps('angle')}
+          />
+        </>
+      )}
+      {(radial || conic) && (
+        <button
+          type="button"
+          className="dialkit-gradient-pad-handle"
+          data-kind="center"
+          aria-label="Gradient center"
+          style={{ left: clamp(cxPx, 5, w - 5), top: clamp(cyPx, 5, h - 5) }}
+          {...handleProps('center')}
+        />
+      )}
     </div>
   );
 }

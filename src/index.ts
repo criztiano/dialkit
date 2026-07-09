@@ -67,6 +67,7 @@ export { GradientPanel } from './components/GradientPanel';
 export {
   gradientToCss,
   gradientToTransform,
+  gradientFillBox,
   normalizeGradient,
   colorAtPosition,
   addStop,

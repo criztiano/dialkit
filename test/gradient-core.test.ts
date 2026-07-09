@@ -14,6 +14,7 @@ import {
   setGradientSquash,
   setGradientRotation,
   gradientToTransform,
+  gradientFillBox,
   DEFAULT_GRADIENT,
   MIN_STOPS,
   type GradientValue,
@@ -87,6 +88,56 @@ describe('gradientToTransform', () => {
       transform: 'rotate(30deg)',
       transformOrigin: '20% 80%',
     });
+  });
+});
+
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+describe('gradientFillBox', () => {
+  it('matches the box exactly for linear and conic (no oversize, plain CSS)', () => {
+    expect(gradientFillBox(grad(), 200, 100)).toEqual({
+      background: gradientToCss(grad()),
+      transform: 'none',
+      transformOrigin: '50% 50%',
+      left: 0,
+      top: 0,
+      width: 200,
+      height: 100,
+    });
+    const conic = grad({ type: 'conic', angle: 30 });
+    expect(gradientFillBox(conic, 200, 100).width).toBe(200);
+    expect(gradientFillBox(conic, 200, 100).background).toBe(gradientToCss(conic));
+  });
+
+  it('centers an oversized square on the origin with pixel radii for radial', () => {
+    // 200x100 box, centered origin, scale 100, squash 50 → rx=200px, ry=50px.
+    // side = 2*hypot(200,100) = 447.21; left/top = origin − side/2.
+    const box = gradientFillBox(grad({ type: 'radial', squash: 50 }), 200, 100);
+    expect(box.background).toBe('radial-gradient(200px 50px at 50% 50%, #000000ff 0%, #ffffffff 100%)');
+    expect(box.width).toBe(447.21);
+    expect(box.height).toBe(447.21);
+    expect(box.left).toBe(r2(100 - 447.21 / 2));
+    expect(box.top).toBe(r2(50 - 447.21 / 2));
+    expect(box.transform).toBe('none');
+  });
+
+  it('rotates a squashed radial around the square center', () => {
+    const box = gradientFillBox(grad({ type: 'radial', squash: 40, rotation: 30 }), 120, 120);
+    expect(box.transform).toBe('rotate(30deg)');
+    expect(box.transformOrigin).toBe('50% 50%');
+  });
+
+  it('offsets the square when the origin is off-center', () => {
+    const box = gradientFillBox(grad({ type: 'radial', scale: 100, squash: 10, centerX: 25, centerY: 75 }), 200, 100);
+    // origin px = (50, 75); side = 2*hypot(200,100) = 447.21.
+    expect(box.left).toBe(r2(50 - box.width / 2));
+    expect(box.top).toBe(r2(75 - box.height / 2));
+  });
+
+  it('falls back to a box-sized plain fill before measurement', () => {
+    const box = gradientFillBox(grad({ type: 'radial', squash: 50 }), 0, 0);
+    expect(box.width).toBe(0);
+    expect(box.background).toBe(gradientToCss(grad({ type: 'radial', squash: 50 })));
   });
 
   it('sorts stops defensively and rounds percentages', () => {
