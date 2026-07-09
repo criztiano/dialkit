@@ -119,6 +119,31 @@ declare function gradientToCss(value: GradientValue): string;
  */
 declare function gradientToTransform(value: GradientValue): GradientTransform;
 /**
+ * A positioned fill layer that paints a gradient covering a `boxW × boxH` area
+ * with no clipped corners — even a rotated radial. A CSS radial gradient's final
+ * color already extends to infinity, so the only thing that clips is the layer's
+ * own box: rotating a box the size of the pad pulls its corners inward and
+ * exposes the area behind it. So for radial we size the layer to an oversized
+ * square centered on the gradient origin and spin it around its own center
+ * (half-side ≥ the box diagonal → no rotation angle can uncover a corner), with
+ * the ellipse expressed in pixels so it matches the box exactly. Linear and
+ * conic gradients already fill their box, so the layer just matches it.
+ *
+ * Place a div with `overflow: hidden` around it and spread this onto an
+ * absolutely-positioned child (left/top/width/height are pixels):
+ *   `<div style={{ position:'absolute', ...gradientFillBox(v, w, h) }} />`
+ */
+type GradientFillBox = {
+    background: string;
+    transform: string;
+    transformOrigin: string;
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+};
+declare function gradientFillBox(value: GradientValue, boxW: number, boxH: number): GradientFillBox;
+/**
  * The color the gradient shows at `position` (0–1), as #rrggbbaa. Interpolated
  * in sRGB with premultiplied alpha so a stop seeded here equals the pixel the
  * user clicked on the ramp (OKLab would visibly mismatch the strip).
@@ -914,4 +939,4 @@ interface ShortcutsMenuProps {
 }
 declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react_jsx_runtime.JSX.Element | null;
 
-export { type ActionConfig, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, MIN_STOPS, Module, type OKLCH, type PanelConfig, type Preset, PresetManager, type RGBA, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, addDriver, addStop, buildSamplers, clampOklchToSrgb, colorAtPosition, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, formatHex, gradientToCss, gradientToTransform, hslToRgb, hsvToRgb, moveStop, normalizeGradient, normalizeHex, normalizeListItems, oklchToRgb, opacityPercent, parseHex, parseListItemSchema, readComposition, redistributeWeight, removeDriver, removeSegment, removeStop, rgbToHsl, rgbToHsv, rgbToOklch, setDriverCurvature, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setSegmentCurvature, setSegmentSteepness, setStopColor, splitSegment, triggerLevels, triggersCrossed, useDialKit };
+export { type ActionConfig, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, MIN_STOPS, Module, type OKLCH, type PanelConfig, type Preset, PresetManager, type RGBA, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, addDriver, addStop, buildSamplers, clampOklchToSrgb, colorAtPosition, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, formatHex, gradientFillBox, gradientToCss, gradientToTransform, hslToRgb, hsvToRgb, moveStop, normalizeGradient, normalizeHex, normalizeListItems, oklchToRgb, opacityPercent, parseHex, parseListItemSchema, readComposition, redistributeWeight, removeDriver, removeSegment, removeStop, rgbToHsl, rgbToHsv, rgbToOklch, setDriverCurvature, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setSegmentCurvature, setSegmentSteepness, setStopColor, splitSegment, triggerLevels, triggersCrossed, useDialKit };

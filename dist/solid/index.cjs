@@ -300,12 +300,13 @@ var cloneDefault = () => ({
   stops: cloneDefaultStops()
 });
 var sortedStops = (stops) => [...stops].sort((a, b) => a.position - b.position);
+var stopString = (stops) => sortedStops(stops).map((s) => `${s.color} ${round2(clamp012(s.position) * 100, 2)}%`).join(", ");
 var normColor = (color) => {
   const rgba = parseHex(color);
   return rgba ? formatHex(rgba, true) : "#000000ff";
 };
 function gradientToCss(value) {
-  const stopStr = sortedStops(value.stops).map((s) => `${s.color} ${round2(clamp012(s.position) * 100, 2)}%`).join(", ");
+  const stopStr = stopString(value.stops);
   const angle = round2(wrapAngle(value.angle), 2);
   const cx = round2(clampPct(value.centerX ?? 50), 2);
   const cy = round2(clampPct(value.centerY ?? 50), 2);
@@ -327,15 +328,35 @@ function gradientToCss(value) {
       return `linear-gradient(${angle}deg, ${stopStr})`;
   }
 }
-function gradientToTransform(value) {
-  const cx = round2(clampPct(value.centerX ?? 50), 2);
-  const cy = round2(clampPct(value.centerY ?? 50), 2);
-  const rotation = wrapAngle(value.rotation ?? 0);
-  const squashed = clampPct(value.squash ?? 0) > 0;
-  if (value.type !== "radial" || rotation === 0 || !squashed) {
-    return { transform: "none", transformOrigin: "50% 50%" };
+function gradientFillBox(value, boxW, boxH) {
+  if (value.type !== "radial" || boxW <= 0 || boxH <= 0) {
+    return {
+      background: gradientToCss(value),
+      transform: "none",
+      transformOrigin: "50% 50%",
+      left: 0,
+      top: 0,
+      width: boxW,
+      height: boxH
+    };
   }
-  return { transform: `rotate(${round2(rotation, 2)}deg)`, transformOrigin: `${cx}% ${cy}%` };
+  const cxPx = clampPct(value.centerX ?? 50) / 100 * boxW;
+  const cyPx = clampPct(value.centerY ?? 50) / 100 * boxH;
+  const scale = clampScale(value.scale ?? 100) / 100;
+  const squash = clampPct(value.squash ?? 0);
+  const rx = round2(scale * boxW, 2);
+  const ry = round2(Math.max(1, scale * (1 - squash / 100) * boxH), 2);
+  const side = round2(2 * Math.hypot(boxW, boxH), 2);
+  const rotation = wrapAngle(value.rotation ?? 0);
+  return {
+    background: `radial-gradient(${rx}px ${ry}px at 50% 50%, ${stopString(value.stops)})`,
+    transform: rotation === 0 ? "none" : `rotate(${round2(rotation, 2)}deg)`,
+    transformOrigin: "50% 50%",
+    left: round2(cxPx - side / 2, 2),
+    top: round2(cyPx - side / 2, 2),
+    width: side,
+    height: side
+  };
 }
 function lerpPremult(a, b, t) {
   const pa = a.a + (b.a - a.a) * t;
@@ -3651,7 +3672,6 @@ var import_web107 = require("solid-js/web");
 var import_motion5 = require("motion");
 
 // src/solid/components/GradientPanel.tsx
-var import_web88 = require("solid-js/web");
 var import_web89 = require("solid-js/web");
 var import_web90 = require("solid-js/web");
 var import_web91 = require("solid-js/web");
@@ -3671,13 +3691,18 @@ var import_web84 = require("solid-js/web");
 var import_web85 = require("solid-js/web");
 var import_web86 = require("solid-js/web");
 var import_web87 = require("solid-js/web");
+var import_web88 = require("solid-js/web");
 var import_solid_js12 = require("solid-js");
 var _tmpl$19 = /* @__PURE__ */ (0, import_web80.template)(`<div class=dialkit-gradient-pad-line>`);
 var _tmpl$29 = /* @__PURE__ */ (0, import_web80.template)(`<button type=button class=dialkit-gradient-pad-handle data-kind=major aria-label="Gradient size and rotation">`);
 var _tmpl$38 = /* @__PURE__ */ (0, import_web80.template)(`<button type=button class=dialkit-gradient-pad-handle data-kind=minor aria-label="Gradient squash">`);
-var _tmpl$45 = /* @__PURE__ */ (0, import_web80.template)(`<div class="dialkit-gradient-pad dialkit-checker"><div class=dialkit-gradient-pad-fill></div><button type=button class=dialkit-gradient-pad-handle data-kind=center aria-label="Gradient center">`);
+var _tmpl$45 = /* @__PURE__ */ (0, import_web80.template)(`<button type=button class=dialkit-gradient-pad-handle data-kind=angle aria-label="Gradient angle">`);
+var _tmpl$54 = /* @__PURE__ */ (0, import_web80.template)(`<button type=button class=dialkit-gradient-pad-handle data-kind=center aria-label="Gradient center">`);
+var _tmpl$64 = /* @__PURE__ */ (0, import_web80.template)(`<div class="dialkit-gradient-pad dialkit-checker"><div class=dialkit-gradient-pad-fill>`);
 var clamp2 = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+var wrap360 = (deg) => (deg % 360 + 360) % 360;
 var RAD = Math.PI / 180;
+var vectorToAngle = (dx, dy) => wrap360(Math.atan2(dx, -dy) / RAD);
 function GradientTransformPad(props) {
   let padRef;
   let drag = null;
@@ -3696,6 +3721,7 @@ function GradientTransformPad(props) {
     (0, import_solid_js12.onCleanup)(() => ro.disconnect());
   });
   const radial = () => props.value.type === "radial";
+  const conic = () => props.value.type === "conic";
   const cx = () => props.value.centerX ?? 50;
   const cy = () => props.value.centerY ?? 50;
   const scale = () => props.value.scale ?? 100;
@@ -3712,8 +3738,15 @@ function GradientTransformPad(props) {
   });
   const major = () => pin(cxPx() + Math.cos(theta()) * rxPx(), cyPx() + Math.sin(theta()) * rxPx());
   const minor = () => pin(cxPx() - Math.sin(theta()) * ryPx(), cyPx() + Math.cos(theta()) * ryPx());
-  const lineLen = () => Math.hypot(major().x - cxPx(), major().y - cyPx());
-  const lineAngle = () => Math.atan2(major().y - cyPx(), major().x - cxPx()) / RAD;
+  const majorLineLen = () => Math.hypot(major().x - cxPx(), major().y - cyPx());
+  const majorLineAngle = () => Math.atan2(major().y - cyPx(), major().x - cxPx()) / RAD;
+  const angleOx = () => conic() ? cxPx() : size().w / 2;
+  const angleOy = () => conic() ? cyPx() : size().h / 2;
+  const spokeR = () => Math.max(10, Math.min(size().w, size().h) / 2 - 8);
+  const aTheta = () => props.value.angle * RAD;
+  const angleHandle = () => pin(angleOx() + Math.sin(aTheta()) * spokeR(), angleOy() - Math.cos(aTheta()) * spokeR());
+  const angleLineLen = () => Math.hypot(angleHandle().x - angleOx(), angleHandle().y - angleOy());
+  const angleLineAngle = () => Math.atan2(angleHandle().y - angleOy(), angleHandle().x - angleOx()) / RAD;
   const onHandleDown = (kind) => (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -3740,6 +3773,12 @@ function GradientTransformPad(props) {
       props.onChange(setGradientCenter(props.value, px / rect.width * 100, py / rect.height * 100));
       return;
     }
+    if (kind === "angle") {
+      const ox = conic() ? cx() / 100 * rect.width : rect.width / 2;
+      const oy = conic() ? cy() / 100 * rect.height : rect.height / 2;
+      props.onChange(setGradientAngle(props.value, vectorToAngle(px - ox, py - oy)));
+      return;
+    }
     const dx = px - cx() / 100 * rect.width;
     const dy = py - cy() / 100 * rect.height;
     const dist = Math.hypot(dx, dy);
@@ -3756,23 +3795,24 @@ function GradientTransformPad(props) {
   const onHandleUp = (e) => {
     if (drag?.pointerId === e.pointerId) drag = null;
   };
+  const fill = () => gradientFillBox(props.value, size().w, size().h);
   return (() => {
-    var _el$ = _tmpl$45(), _el$2 = _el$.firstChild, _el$6 = _el$2.nextSibling;
+    var _el$ = _tmpl$64(), _el$2 = _el$.firstChild;
     var _ref$ = padRef;
-    typeof _ref$ === "function" ? (0, import_web87.use)(_ref$, _el$) : padRef = _el$;
-    (0, import_web82.insert)(_el$, (0, import_web83.createComponent)(import_solid_js12.Show, {
+    typeof _ref$ === "function" ? (0, import_web88.use)(_ref$, _el$) : padRef = _el$;
+    (0, import_web82.insert)(_el$, (0, import_web84.createComponent)(import_solid_js12.Show, {
       get when() {
         return radial();
       },
       get children() {
         return [(() => {
           var _el$3 = _tmpl$19();
-          (0, import_web86.effect)((_p$) => {
-            var _v$ = `${cxPx()}px`, _v$2 = `${cyPx()}px`, _v$3 = `${lineLen()}px`, _v$4 = `rotate(${lineAngle()}deg)`;
-            _v$ !== _p$.e && (0, import_web85.setStyleProperty)(_el$3, "left", _p$.e = _v$);
-            _v$2 !== _p$.t && (0, import_web85.setStyleProperty)(_el$3, "top", _p$.t = _v$2);
-            _v$3 !== _p$.a && (0, import_web85.setStyleProperty)(_el$3, "width", _p$.a = _v$3);
-            _v$4 !== _p$.o && (0, import_web85.setStyleProperty)(_el$3, "transform", _p$.o = _v$4);
+          (0, import_web87.effect)((_p$) => {
+            var _v$ = `${cxPx()}px`, _v$2 = `${cyPx()}px`, _v$3 = `${majorLineLen()}px`, _v$4 = `rotate(${majorLineAngle()}deg)`;
+            _v$ !== _p$.e && (0, import_web86.setStyleProperty)(_el$3, "left", _p$.e = _v$);
+            _v$2 !== _p$.t && (0, import_web86.setStyleProperty)(_el$3, "top", _p$.t = _v$2);
+            _v$3 !== _p$.a && (0, import_web86.setStyleProperty)(_el$3, "width", _p$.a = _v$3);
+            _v$4 !== _p$.o && (0, import_web86.setStyleProperty)(_el$3, "transform", _p$.o = _v$4);
             return _p$;
           }, {
             e: void 0,
@@ -3787,11 +3827,11 @@ function GradientTransformPad(props) {
           _el$4.addEventListener("pointercancel", onHandleUp);
           _el$4.$$pointerup = onHandleUp;
           _el$4.$$pointermove = onHandleMove;
-          (0, import_web84.addEventListener)(_el$4, "pointerdown", onHandleDown("major"), true);
-          (0, import_web86.effect)((_p$) => {
+          (0, import_web85.addEventListener)(_el$4, "pointerdown", onHandleDown("major"), true);
+          (0, import_web87.effect)((_p$) => {
             var _v$5 = `${major().x}px`, _v$6 = `${major().y}px`;
-            _v$5 !== _p$.e && (0, import_web85.setStyleProperty)(_el$4, "left", _p$.e = _v$5);
-            _v$6 !== _p$.t && (0, import_web85.setStyleProperty)(_el$4, "top", _p$.t = _v$6);
+            _v$5 !== _p$.e && (0, import_web86.setStyleProperty)(_el$4, "left", _p$.e = _v$5);
+            _v$6 !== _p$.t && (0, import_web86.setStyleProperty)(_el$4, "top", _p$.t = _v$6);
             return _p$;
           }, {
             e: void 0,
@@ -3804,11 +3844,11 @@ function GradientTransformPad(props) {
           _el$5.addEventListener("pointercancel", onHandleUp);
           _el$5.$$pointerup = onHandleUp;
           _el$5.$$pointermove = onHandleMove;
-          (0, import_web84.addEventListener)(_el$5, "pointerdown", onHandleDown("minor"), true);
-          (0, import_web86.effect)((_p$) => {
+          (0, import_web85.addEventListener)(_el$5, "pointerdown", onHandleDown("minor"), true);
+          (0, import_web87.effect)((_p$) => {
             var _v$7 = `${minor().x}px`, _v$8 = `${minor().y}px`;
-            _v$7 !== _p$.e && (0, import_web85.setStyleProperty)(_el$5, "left", _p$.e = _v$7);
-            _v$8 !== _p$.t && (0, import_web85.setStyleProperty)(_el$5, "top", _p$.t = _v$8);
+            _v$7 !== _p$.e && (0, import_web86.setStyleProperty)(_el$5, "left", _p$.e = _v$7);
+            _v$8 !== _p$.t && (0, import_web86.setStyleProperty)(_el$5, "top", _p$.t = _v$8);
             return _p$;
           }, {
             e: void 0,
@@ -3817,26 +3857,89 @@ function GradientTransformPad(props) {
           return _el$5;
         })()];
       }
-    }), _el$6);
-    _el$6.addEventListener("lostpointercapture", onHandleUp);
-    _el$6.addEventListener("pointercancel", onHandleUp);
-    _el$6.$$pointerup = onHandleUp;
-    _el$6.$$pointermove = onHandleMove;
-    (0, import_web84.addEventListener)(_el$6, "pointerdown", onHandleDown("center"), true);
-    (0, import_web86.effect)((_p$) => {
-      var _v$9 = gradientToCss(props.value), _v$0 = gradientToTransform(props.value).transform, _v$1 = gradientToTransform(props.value).transformOrigin, _v$10 = `${clamp2(cxPx(), 5, size().w - 5)}px`, _v$11 = `${clamp2(cyPx(), 5, size().h - 5)}px`;
-      _v$9 !== _p$.e && (0, import_web85.setStyleProperty)(_el$2, "background", _p$.e = _v$9);
-      _v$0 !== _p$.t && (0, import_web85.setStyleProperty)(_el$2, "transform", _p$.t = _v$0);
-      _v$1 !== _p$.a && (0, import_web85.setStyleProperty)(_el$2, "transform-origin", _p$.a = _v$1);
-      _v$10 !== _p$.o && (0, import_web85.setStyleProperty)(_el$6, "left", _p$.o = _v$10);
-      _v$11 !== _p$.i && (0, import_web85.setStyleProperty)(_el$6, "top", _p$.i = _v$11);
+    }), null);
+    (0, import_web82.insert)(_el$, (0, import_web84.createComponent)(import_solid_js12.Show, {
+      get when() {
+        return !radial();
+      },
+      get children() {
+        return [(() => {
+          var _el$6 = _tmpl$19();
+          (0, import_web87.effect)((_p$) => {
+            var _v$9 = `${angleOx()}px`, _v$0 = `${angleOy()}px`, _v$1 = `${angleLineLen()}px`, _v$10 = `rotate(${angleLineAngle()}deg)`;
+            _v$9 !== _p$.e && (0, import_web86.setStyleProperty)(_el$6, "left", _p$.e = _v$9);
+            _v$0 !== _p$.t && (0, import_web86.setStyleProperty)(_el$6, "top", _p$.t = _v$0);
+            _v$1 !== _p$.a && (0, import_web86.setStyleProperty)(_el$6, "width", _p$.a = _v$1);
+            _v$10 !== _p$.o && (0, import_web86.setStyleProperty)(_el$6, "transform", _p$.o = _v$10);
+            return _p$;
+          }, {
+            e: void 0,
+            t: void 0,
+            a: void 0,
+            o: void 0
+          });
+          return _el$6;
+        })(), (() => {
+          var _el$7 = _tmpl$45();
+          _el$7.addEventListener("lostpointercapture", onHandleUp);
+          _el$7.addEventListener("pointercancel", onHandleUp);
+          _el$7.$$pointerup = onHandleUp;
+          _el$7.$$pointermove = onHandleMove;
+          (0, import_web85.addEventListener)(_el$7, "pointerdown", onHandleDown("angle"), true);
+          (0, import_web87.effect)((_p$) => {
+            var _v$11 = `${angleHandle().x}px`, _v$12 = `${angleHandle().y}px`;
+            _v$11 !== _p$.e && (0, import_web86.setStyleProperty)(_el$7, "left", _p$.e = _v$11);
+            _v$12 !== _p$.t && (0, import_web86.setStyleProperty)(_el$7, "top", _p$.t = _v$12);
+            return _p$;
+          }, {
+            e: void 0,
+            t: void 0
+          });
+          return _el$7;
+        })()];
+      }
+    }), null);
+    (0, import_web82.insert)(_el$, (0, import_web84.createComponent)(import_solid_js12.Show, {
+      get when() {
+        return radial() || conic();
+      },
+      get children() {
+        var _el$8 = _tmpl$54();
+        _el$8.addEventListener("lostpointercapture", onHandleUp);
+        _el$8.addEventListener("pointercancel", onHandleUp);
+        _el$8.$$pointerup = onHandleUp;
+        _el$8.$$pointermove = onHandleMove;
+        (0, import_web85.addEventListener)(_el$8, "pointerdown", onHandleDown("center"), true);
+        (0, import_web87.effect)((_p$) => {
+          var _v$13 = `${clamp2(cxPx(), 5, size().w - 5)}px`, _v$14 = `${clamp2(cyPx(), 5, size().h - 5)}px`;
+          _v$13 !== _p$.e && (0, import_web86.setStyleProperty)(_el$8, "left", _p$.e = _v$13);
+          _v$14 !== _p$.t && (0, import_web86.setStyleProperty)(_el$8, "top", _p$.t = _v$14);
+          return _p$;
+        }, {
+          e: void 0,
+          t: void 0
+        });
+        return _el$8;
+      }
+    }), null);
+    (0, import_web87.effect)((_p$) => {
+      var _v$15 = fill().background, _v$16 = fill().transform, _v$17 = fill().transformOrigin, _v$18 = `${fill().left}px`, _v$19 = `${fill().top}px`, _v$20 = `${fill().width}px`, _v$21 = `${fill().height}px`;
+      _v$15 !== _p$.e && (0, import_web86.setStyleProperty)(_el$2, "background", _p$.e = _v$15);
+      _v$16 !== _p$.t && (0, import_web86.setStyleProperty)(_el$2, "transform", _p$.t = _v$16);
+      _v$17 !== _p$.a && (0, import_web86.setStyleProperty)(_el$2, "transform-origin", _p$.a = _v$17);
+      _v$18 !== _p$.o && (0, import_web86.setStyleProperty)(_el$2, "left", _p$.o = _v$18);
+      _v$19 !== _p$.i && (0, import_web86.setStyleProperty)(_el$2, "top", _p$.i = _v$19);
+      _v$20 !== _p$.n && (0, import_web86.setStyleProperty)(_el$2, "width", _p$.n = _v$20);
+      _v$21 !== _p$.s && (0, import_web86.setStyleProperty)(_el$2, "height", _p$.s = _v$21);
       return _p$;
     }, {
       e: void 0,
       t: void 0,
       a: void 0,
       o: void 0,
-      i: void 0
+      i: void 0,
+      n: void 0,
+      s: void 0
     });
     return _el$;
   })();
@@ -3844,12 +3947,9 @@ function GradientTransformPad(props) {
 (0, import_web81.delegateEvents)(["pointerdown", "pointermove", "pointerup"]);
 
 // src/solid/components/GradientPanel.tsx
-var _tmpl$20 = /* @__PURE__ */ (0, import_web88.template)(`<button type=button class=dialkit-gradient-advanced-toggle aria-label="Advanced settings"title="Advanced settings"><svg viewBox="0 0 16 16"fill=none aria-hidden=true><path opacity=0.5 fill=currentColor>`);
-var _tmpl$210 = /* @__PURE__ */ (0, import_web88.template)(`<div class=dialkit-gradient-advanced>`);
-var _tmpl$39 = /* @__PURE__ */ (0, import_web88.template)(`<div class=dialkit-gradient-panel><div class=dialkit-gradient-toolbar><button type=button class=dialkit-gradient-grip aria-label="Drag to move"title="Drag to move"><svg viewBox="0 0 24 24"fill=currentColor aria-hidden=true></svg></button></div><div class=dialkit-gradient-strip></div><span class=dialkit-gradient-divider aria-hidden=true>`);
-var _tmpl$46 = /* @__PURE__ */ (0, import_web88.template)(`<svg><circle r=1.5></svg>`, false, true, false);
-var _tmpl$54 = /* @__PURE__ */ (0, import_web88.template)(`<svg><circle fill=currentColor stroke=currentColor stroke-width=1.25></svg>`, false, true, false);
-var _tmpl$64 = /* @__PURE__ */ (0, import_web88.template)(`<button type=button class=dialkit-gradient-stop>`);
+var _tmpl$20 = /* @__PURE__ */ (0, import_web89.template)(`<div class=dialkit-gradient-panel><div class=dialkit-gradient-toolbar><button type=button class=dialkit-gradient-grip aria-label="Drag to move"title="Drag to move"><svg viewBox="0 0 24 24"fill=currentColor aria-hidden=true></svg></button></div><div class=dialkit-gradient-strip></div><span class=dialkit-gradient-divider aria-hidden=true>`);
+var _tmpl$210 = /* @__PURE__ */ (0, import_web89.template)(`<svg><circle r=1.5></svg>`, false, true, false);
+var _tmpl$39 = /* @__PURE__ */ (0, import_web89.template)(`<button type=button class=dialkit-gradient-stop>`);
 var TYPE_OPTIONS = [{
   value: "linear",
   label: "Linear"
@@ -3871,7 +3971,6 @@ function GradientPanel(props) {
   const [selectedIndex, setSelectedIndex] = (0, import_solid_js13.createSignal)(0);
   const [holdingIndex, setHoldingIndex] = (0, import_solid_js13.createSignal)(-1);
   const [detach, setDetach] = (0, import_solid_js13.createSignal)(null);
-  const [showAdvanced, setShowAdvanced] = (0, import_solid_js13.createSignal)(false);
   let stripRef;
   let gripRef;
   let gripOrigin = null;
@@ -4022,9 +4121,8 @@ function GradientPanel(props) {
     const d = detach();
     return d ? props.value.stops.filter((_, i) => i !== d.index) : props.value.stops;
   };
-  const advanced = () => showAdvanced() && props.value.type !== "linear";
   return (() => {
-    var _el$ = _tmpl$39(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$9 = _el$2.nextSibling, _el$0 = _el$9.nextSibling;
+    var _el$ = _tmpl$20(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.firstChild, _el$5 = _el$2.nextSibling, _el$6 = _el$5.nextSibling;
     _el$3.addEventListener("lostpointercapture", onGripUp);
     _el$3.addEventListener("pointercancel", onGripUp);
     _el$3.$$pointerup = onGripUp;
@@ -4035,17 +4133,17 @@ function GradientPanel(props) {
     (0, import_web94.insert)(_el$4, (0, import_web95.createComponent)(import_solid_js13.For, {
       each: ICON_GRIP,
       children: (c) => (() => {
-        var _el$1 = _tmpl$46();
+        var _el$7 = _tmpl$210();
         (0, import_web93.effect)((_p$) => {
-          var _v$4 = c.cx, _v$5 = c.cy;
-          _v$4 !== _p$.e && (0, import_web92.setAttribute)(_el$1, "cx", _p$.e = _v$4);
-          _v$5 !== _p$.t && (0, import_web92.setAttribute)(_el$1, "cy", _p$.t = _v$5);
+          var _v$ = c.cx, _v$2 = c.cy;
+          _v$ !== _p$.e && (0, import_web91.setAttribute)(_el$7, "cx", _p$.e = _v$);
+          _v$2 !== _p$.t && (0, import_web91.setAttribute)(_el$7, "cy", _p$.t = _v$2);
           return _p$;
         }, {
           e: void 0,
           t: void 0
         });
-        return _el$1;
+        return _el$7;
       })()
     }));
     (0, import_web94.insert)(_el$2, (0, import_web95.createComponent)(SegmentedControl, {
@@ -4055,152 +4153,39 @@ function GradientPanel(props) {
       },
       onChange: (t) => props.onChange(setGradientType(props.value, t))
     }), null);
-    (0, import_web94.insert)(_el$2, (0, import_web95.createComponent)(import_solid_js13.Show, {
-      get when() {
-        return props.value.type !== "linear";
+    (0, import_web94.insert)(_el$, (0, import_web95.createComponent)(GradientTransformPad, {
+      get value() {
+        return props.value;
       },
-      get children() {
-        var _el$5 = _tmpl$20(), _el$6 = _el$5.firstChild, _el$7 = _el$6.firstChild;
-        _el$5.$$click = () => setShowAdvanced((v) => !v);
-        (0, import_web94.insert)(_el$6, (0, import_web95.createComponent)(import_solid_js13.For, {
-          get each() {
-            return ICON_PANEL.circles;
-          },
-          children: (c) => (() => {
-            var _el$10 = _tmpl$54();
-            (0, import_web93.effect)((_p$) => {
-              var _v$6 = c.cx, _v$7 = c.cy, _v$8 = c.r;
-              _v$6 !== _p$.e && (0, import_web92.setAttribute)(_el$10, "cx", _p$.e = _v$6);
-              _v$7 !== _p$.t && (0, import_web92.setAttribute)(_el$10, "cy", _p$.t = _v$7);
-              _v$8 !== _p$.a && (0, import_web92.setAttribute)(_el$10, "r", _p$.a = _v$8);
-              return _p$;
-            }, {
-              e: void 0,
-              t: void 0,
-              a: void 0
-            });
-            return _el$10;
-          })()
-        }), null);
-        (0, import_web93.effect)((_p$) => {
-          var _v$ = String(advanced()), _v$2 = advanced(), _v$3 = ICON_PANEL.path;
-          _v$ !== _p$.e && (0, import_web92.setAttribute)(_el$5, "data-active", _p$.e = _v$);
-          _v$2 !== _p$.t && (0, import_web92.setAttribute)(_el$5, "aria-pressed", _p$.t = _v$2);
-          _v$3 !== _p$.a && (0, import_web92.setAttribute)(_el$7, "d", _p$.a = _v$3);
-          return _p$;
-        }, {
-          e: void 0,
-          t: void 0,
-          a: void 0
-        });
-        return _el$5;
+      get onChange() {
+        return props.onChange;
       }
-    }), null);
-    (0, import_web94.insert)(_el$, (0, import_web95.createComponent)(import_solid_js13.Show, {
-      get when() {
-        return props.value.type !== "radial";
-      },
-      get children() {
-        return (0, import_web95.createComponent)(Slider, {
-          label: "Angle",
-          get value() {
-            return props.value.angle;
-          },
-          min: 0,
-          max: 360,
-          step: 1,
-          unit: "\xB0",
-          onChange: (a) => props.onChange(setGradientAngle(props.value, a))
-        });
-      }
-    }), _el$9);
-    (0, import_web94.insert)(_el$, (0, import_web95.createComponent)(import_solid_js13.Show, {
-      get when() {
-        return advanced();
-      },
-      get children() {
-        var _el$8 = _tmpl$210();
-        (0, import_web94.insert)(_el$8, (0, import_web95.createComponent)(GradientTransformPad, {
-          get value() {
-            return props.value;
-          },
-          get onChange() {
-            return props.onChange;
-          }
-        }), null);
-        (0, import_web94.insert)(_el$8, (0, import_web95.createComponent)(import_solid_js13.Show, {
-          get when() {
-            return props.value.type === "radial";
-          },
-          get children() {
-            return [(0, import_web95.createComponent)(Slider, {
-              label: "Size",
-              get value() {
-                return props.value.scale ?? 100;
-              },
-              min: 10,
-              max: 200,
-              step: 1,
-              unit: "%",
-              onChange: (s) => props.onChange(setGradientScale(props.value, s))
-            }), (0, import_web95.createComponent)(Slider, {
-              label: "Squash",
-              get value() {
-                return props.value.squash ?? 0;
-              },
-              min: 0,
-              max: 100,
-              step: 1,
-              unit: "%",
-              onChange: (s) => props.onChange(setGradientSquash(props.value, s))
-            }), (0, import_web95.createComponent)(import_solid_js13.Show, {
-              get when() {
-                return (props.value.squash ?? 0) > 0;
-              },
-              get children() {
-                return (0, import_web95.createComponent)(Slider, {
-                  label: "Rotation",
-                  get value() {
-                    return props.value.rotation ?? 0;
-                  },
-                  min: 0,
-                  max: 360,
-                  step: 1,
-                  unit: "\xB0",
-                  onChange: (r) => props.onChange(setGradientRotation(props.value, r))
-                });
-              }
-            })];
-          }
-        }), null);
-        return _el$8;
-      }
-    }), _el$9);
-    _el$9.addEventListener("pointercancel", onPointerUp);
-    _el$9.$$pointerup = onPointerUp;
-    _el$9.$$pointermove = onPointerMove;
-    _el$9.$$pointerdown = onPointerDown;
+    }), _el$5);
+    _el$5.addEventListener("pointercancel", onPointerUp);
+    _el$5.$$pointerup = onPointerUp;
+    _el$5.$$pointermove = onPointerMove;
+    _el$5.$$pointerdown = onPointerDown;
     var _ref$2 = stripRef;
-    typeof _ref$2 === "function" ? (0, import_web96.use)(_ref$2, _el$9) : stripRef = _el$9;
-    (0, import_web94.insert)(_el$9, (0, import_web95.createComponent)(import_solid_js13.For, {
+    typeof _ref$2 === "function" ? (0, import_web96.use)(_ref$2, _el$5) : stripRef = _el$5;
+    (0, import_web94.insert)(_el$5, (0, import_web95.createComponent)(import_solid_js13.For, {
       get each() {
         return props.value.stops;
       },
       children: (stop, i) => {
         const detaching = () => detach()?.index === i();
         return (() => {
-          var _el$11 = _tmpl$64();
+          var _el$8 = _tmpl$39();
           (0, import_web93.effect)((_p$) => {
-            var _v$9 = i(), _v$0 = String(i() === safeIndex()), _v$1 = String(i() === holdingIndex()), _v$10 = String(detaching()), _v$11 = `${stop.position * 100}%`, _v$12 = i() === safeIndex() ? 99 : i() + 1, _v$13 = stop.color, _v$14 = detaching() ? `${detach().y}px` : "0px", _v$15 = `Gradient stop ${i() + 1}`;
-            _v$9 !== _p$.e && (0, import_web92.setAttribute)(_el$11, "data-index", _p$.e = _v$9);
-            _v$0 !== _p$.t && (0, import_web92.setAttribute)(_el$11, "data-selected", _p$.t = _v$0);
-            _v$1 !== _p$.a && (0, import_web92.setAttribute)(_el$11, "data-holding", _p$.a = _v$1);
-            _v$10 !== _p$.o && (0, import_web92.setAttribute)(_el$11, "data-detaching", _p$.o = _v$10);
-            _v$11 !== _p$.i && (0, import_web90.setStyleProperty)(_el$11, "left", _p$.i = _v$11);
-            _v$12 !== _p$.n && (0, import_web90.setStyleProperty)(_el$11, "z-index", _p$.n = _v$12);
-            _v$13 !== _p$.s && (0, import_web90.setStyleProperty)(_el$11, "--swatch-color", _p$.s = _v$13);
-            _v$14 !== _p$.h && (0, import_web90.setStyleProperty)(_el$11, "--detach-y", _p$.h = _v$14);
-            _v$15 !== _p$.r && (0, import_web92.setAttribute)(_el$11, "aria-label", _p$.r = _v$15);
+            var _v$3 = i(), _v$4 = String(i() === safeIndex()), _v$5 = String(i() === holdingIndex()), _v$6 = String(detaching()), _v$7 = `${stop.position * 100}%`, _v$8 = i() === safeIndex() ? 99 : i() + 1, _v$9 = stop.color, _v$0 = detaching() ? `${detach().y}px` : "0px", _v$1 = `Gradient stop ${i() + 1}`;
+            _v$3 !== _p$.e && (0, import_web91.setAttribute)(_el$8, "data-index", _p$.e = _v$3);
+            _v$4 !== _p$.t && (0, import_web91.setAttribute)(_el$8, "data-selected", _p$.t = _v$4);
+            _v$5 !== _p$.a && (0, import_web91.setAttribute)(_el$8, "data-holding", _p$.a = _v$5);
+            _v$6 !== _p$.o && (0, import_web91.setAttribute)(_el$8, "data-detaching", _p$.o = _v$6);
+            _v$7 !== _p$.i && (0, import_web92.setStyleProperty)(_el$8, "left", _p$.i = _v$7);
+            _v$8 !== _p$.n && (0, import_web92.setStyleProperty)(_el$8, "z-index", _p$.n = _v$8);
+            _v$9 !== _p$.s && (0, import_web92.setStyleProperty)(_el$8, "--swatch-color", _p$.s = _v$9);
+            _v$0 !== _p$.h && (0, import_web92.setStyleProperty)(_el$8, "--detach-y", _p$.h = _v$0);
+            _v$1 !== _p$.r && (0, import_web91.setAttribute)(_el$8, "aria-label", _p$.r = _v$1);
             return _p$;
           }, {
             e: void 0,
@@ -4213,7 +4198,7 @@ function GradientPanel(props) {
             h: void 0,
             r: void 0
           });
-          return _el$11;
+          return _el$8;
         })();
       }
     }));
@@ -4234,11 +4219,11 @@ function GradientPanel(props) {
         });
       }
     }), null);
-    (0, import_web93.effect)((_$p) => (0, import_web90.setStyleProperty)(_el$9, "--gradient-ramp", rampCss(previewStops())));
+    (0, import_web93.effect)((_$p) => (0, import_web92.setStyleProperty)(_el$5, "--gradient-ramp", rampCss(previewStops())));
     return _el$;
   })();
 }
-(0, import_web89.delegateEvents)(["pointerdown", "pointermove", "pointerup", "click"]);
+(0, import_web90.delegateEvents)(["pointerdown", "pointermove", "pointerup"]);
 
 // src/solid/components/GradientControl.tsx
 var _tmpl$21 = /* @__PURE__ */ (0, import_web97.template)(`<div class=dialkit-gradient-popover>`);
@@ -4690,7 +4675,7 @@ function PresetManager(props) {
 var _tmpl$31 = /* @__PURE__ */ (0, import_web118.template)(`<button class=dialkit-button>`);
 var _tmpl$213 = /* @__PURE__ */ (0, import_web118.template)(`<button class=dialkit-toolbar-add title="Add preset"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path></path><path></path><path></path><path></path><path>`);
 var _tmpl$311 = /* @__PURE__ */ (0, import_web118.template)(`<button class=dialkit-toolbar-copy title="Copy parameters"><span class=dialkit-toolbar-copy-icon-wrap><span class=dialkit-toolbar-copy-icon style=opacity:1;transform:scale(1);filter:blur(0px)><svg viewBox="0 0 24 24"fill=none width=16 height=16><path stroke=currentColor stroke-width=2 stroke-linejoin=round></path><path fill=currentColor></path><path stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round></path></svg></span><span class=dialkit-toolbar-copy-icon style=opacity:0;transform:scale(0.5);filter:blur(4px)><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round width=16 height=16><path></path></svg></span></span>Copy`);
-var _tmpl$47 = /* @__PURE__ */ (0, import_web118.template)(`<div class=dialkit-panel-wrapper>`);
+var _tmpl$46 = /* @__PURE__ */ (0, import_web118.template)(`<div class=dialkit-panel-wrapper>`);
 function Panel(props) {
   const [copied, setCopied] = (0, import_solid_js16.createSignal)(false);
   const [isPanelOpen, setIsPanelOpen] = (0, import_solid_js16.createSignal)(props.defaultOpen ?? true);
@@ -5015,7 +5000,7 @@ Apply these values as the new defaults in the createDialKit call.`;
     return _el$9;
   })()];
   return (() => {
-    var _el$17 = _tmpl$47();
+    var _el$17 = _tmpl$46();
     (0, import_web123.insert)(_el$17, (0, import_web124.createComponent)(Folder, {
       get title() {
         return props.panel.name;
@@ -5154,11 +5139,11 @@ var import_web141 = require("solid-js/web");
 var import_web142 = require("solid-js/web");
 var import_web143 = require("solid-js/web");
 var import_solid_js18 = require("solid-js");
-var _tmpl$48 = /* @__PURE__ */ (0, import_web139.template)(`<div class=dialkit-button-group>`);
+var _tmpl$47 = /* @__PURE__ */ (0, import_web139.template)(`<div class=dialkit-button-group>`);
 var _tmpl$214 = /* @__PURE__ */ (0, import_web139.template)(`<button class=dialkit-button>`);
 function ButtonGroup(props) {
   return (() => {
-    var _el$ = _tmpl$48();
+    var _el$ = _tmpl$47();
     (0, import_web142.insert)(_el$, (0, import_web143.createComponent)(import_solid_js18.For, {
       get each() {
         return props.buttons;
@@ -5576,7 +5561,7 @@ function createWaveformEngine(canvas, get) {
 }
 
 // src/solid/components/WaveformVisualization.tsx
-var _tmpl$49 = /* @__PURE__ */ (0, import_web144.template)(`<button type=button aria-label="Zoom out"><svg viewBox="0 0 16 16"fill=none><path d="M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
+var _tmpl$48 = /* @__PURE__ */ (0, import_web144.template)(`<button type=button aria-label="Zoom out"><svg viewBox="0 0 16 16"fill=none><path d="M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
 var _tmpl$215 = /* @__PURE__ */ (0, import_web144.template)(`<div class=dialkit-waveform-zoom><button type=button aria-label="Zoom in"><svg viewBox="0 0 16 16"fill=none><path d="M8 3.5v9M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
 var _tmpl$312 = /* @__PURE__ */ (0, import_web144.template)(`<div class=dialkit-waveform-viz-wrap><canvas class=dialkit-waveform-viz>`);
 function WaveformVisualization(props) {
@@ -5636,7 +5621,7 @@ function WaveformVisualization(props) {
             return zoom() > 1;
           },
           get children() {
-            var _el$4 = _tmpl$49();
+            var _el$4 = _tmpl$48();
             _el$4.$$click = () => setZoom((z) => Math.max(1, z / 2));
             return _el$4;
           }
@@ -5979,7 +5964,7 @@ function triggersCrossed(prevValue, curValue, steps) {
 }
 
 // src/solid/components/CurveComposer.tsx
-var _tmpl$50 = /* @__PURE__ */ (0, import_web151.template)(`<div class=dialkit-cc-wrap><svg class=dialkit-cc><rect class=dialkit-cc-lane rx=8></rect><line class=dialkit-cc-playhead x1=0 x2=0></line><circle class=dialkit-cc-dot cx=0 r=3>`);
+var _tmpl$49 = /* @__PURE__ */ (0, import_web151.template)(`<div class=dialkit-cc-wrap><svg class=dialkit-cc><rect class=dialkit-cc-lane rx=8></rect><line class=dialkit-cc-playhead x1=0 x2=0></line><circle class=dialkit-cc-dot cx=0 r=3>`);
 var _tmpl$216 = /* @__PURE__ */ (0, import_web151.template)(`<svg><line class=dialkit-cc-grid></svg>`, false, true, false);
 var _tmpl$313 = /* @__PURE__ */ (0, import_web151.template)(`<svg><rect class=dialkit-cc-seg-hover rx=8></svg>`, false, true, false);
 var _tmpl$410 = /* @__PURE__ */ (0, import_web151.template)(`<svg><g><line class=dialkit-cc-diagonal></line><path class=dialkit-cc-curve></path><text class=dialkit-cc-label></svg>`, false, true, false);
@@ -6207,7 +6192,7 @@ function CurveComposer(props) {
     return lines;
   };
   return (() => {
-    var _el$ = _tmpl$50(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.nextSibling;
+    var _el$ = _tmpl$49(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.nextSibling;
     _el$2.$$dblclick = onDoubleClick;
     _el$2.addEventListener("pointerleave", () => !drag && setHover(null));
     _el$2.addEventListener("pointercancel", onPointerCancel);

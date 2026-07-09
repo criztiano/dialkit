@@ -50,12 +50,13 @@ var cloneDefault = () => ({
   stops: cloneDefaultStops()
 });
 var sortedStops = (stops) => [...stops].sort((a, b) => a.position - b.position);
+var stopString = (stops) => sortedStops(stops).map((s) => `${s.color} ${round(clamp012(s.position) * 100, 2)}%`).join(", ");
 var normColor = (color) => {
   const rgba = parseHex(color);
   return rgba ? formatHex(rgba, true) : "#000000ff";
 };
 function gradientToCss(value) {
-  const stopStr = sortedStops(value.stops).map((s) => `${s.color} ${round(clamp012(s.position) * 100, 2)}%`).join(", ");
+  const stopStr = stopString(value.stops);
   const angle = round(wrapAngle(value.angle), 2);
   const cx = round(clampPct(value.centerX ?? 50), 2);
   const cy = round(clampPct(value.centerY ?? 50), 2);
@@ -86,6 +87,36 @@ function gradientToTransform(value) {
     return { transform: "none", transformOrigin: "50% 50%" };
   }
   return { transform: `rotate(${round(rotation, 2)}deg)`, transformOrigin: `${cx}% ${cy}%` };
+}
+function gradientFillBox(value, boxW, boxH) {
+  if (value.type !== "radial" || boxW <= 0 || boxH <= 0) {
+    return {
+      background: gradientToCss(value),
+      transform: "none",
+      transformOrigin: "50% 50%",
+      left: 0,
+      top: 0,
+      width: boxW,
+      height: boxH
+    };
+  }
+  const cxPx = clampPct(value.centerX ?? 50) / 100 * boxW;
+  const cyPx = clampPct(value.centerY ?? 50) / 100 * boxH;
+  const scale = clampScale(value.scale ?? 100) / 100;
+  const squash = clampPct(value.squash ?? 0);
+  const rx = round(scale * boxW, 2);
+  const ry = round(Math.max(1, scale * (1 - squash / 100) * boxH), 2);
+  const side = round(2 * Math.hypot(boxW, boxH), 2);
+  const rotation = wrapAngle(value.rotation ?? 0);
+  return {
+    background: `radial-gradient(${rx}px ${ry}px at 50% 50%, ${stopString(value.stops)})`,
+    transform: rotation === 0 ? "none" : `rotate(${round(rotation, 2)}deg)`,
+    transformOrigin: "50% 50%",
+    left: round(cxPx - side / 2, 2),
+    top: round(cyPx - side / 2, 2),
+    width: side,
+    height: side
+  };
 }
 function lerpPremult(a, b, t) {
   const pa = a.a + (b.a - a.a) * t;
@@ -195,6 +226,7 @@ export {
   STOP_DETACH_PX,
   addStop,
   colorAtPosition,
+  gradientFillBox,
   gradientToCss,
   gradientToTransform,
   moveStop,

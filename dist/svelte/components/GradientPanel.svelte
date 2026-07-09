@@ -1,10 +1,9 @@
 <script lang="ts">
   import { untrack, onDestroy } from 'svelte';
   import SegmentedControl from './SegmentedControl.svelte';
-  import Slider from './Slider.svelte';
   import ColorPickerPanel from './ColorPickerPanel.svelte';
   import GradientTransformPad from './GradientTransformPad.svelte';
-  import { ICON_GRIP, ICON_PANEL } from '../../icons';
+  import { ICON_GRIP } from '../../icons';
   import {
     gradientToCss,
     addStop,
@@ -12,10 +11,6 @@
     removeStop,
     setStopColor,
     setGradientType,
-    setGradientAngle,
-    setGradientScale,
-    setGradientSquash,
-    setGradientRotation,
     MIN_STOPS,
     STOP_DETACH_PX,
     LONG_PRESS_MS,
@@ -47,7 +42,6 @@
   let selectedIndex = $state(0);
   let holdingIndex = $state(-1);
   let detach = $state<{ index: number; y: number } | null>(null);
-  let showAdvanced = $state(false);
   let stripRef = $state<HTMLDivElement | undefined>(undefined);
   let gripRef = $state<HTMLButtonElement | undefined>(undefined);
   // Grip drag: emit incremental deltas so the parent can reposition the popover.
@@ -213,8 +207,6 @@
   const previewStops = $derived(
     detach ? value.stops.filter((_: GradientValue['stops'][number], i: number) => i !== detach!.index) : value.stops
   );
-
-  const advanced = $derived(showAdvanced && value.type !== 'linear');
 </script>
 
 <div class="dialkit-gradient-panel">
@@ -243,75 +235,9 @@
       value={value.type}
       onChange={(t: string) => onChange(setGradientType(value, t as GradientType))}
     />
-
-    {#if value.type !== 'linear'}
-      <button
-        type="button"
-        class="dialkit-gradient-advanced-toggle"
-        data-active={String(advanced)}
-        aria-label="Advanced settings"
-        aria-pressed={advanced}
-        title="Advanced settings"
-        onclick={() => (showAdvanced = !showAdvanced)}
-      >
-        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path opacity="0.5" d={ICON_PANEL.path} fill="currentColor" />
-          {#each ICON_PANEL.circles as c}
-            <circle cx={c.cx} cy={c.cy} r={c.r} fill="currentColor" stroke="currentColor" stroke-width="1.25" />
-          {/each}
-        </svg>
-      </button>
-    {/if}
   </div>
 
-  {#if value.type !== 'radial'}
-    <Slider
-      label="Angle"
-      value={value.angle}
-      min={0}
-      max={360}
-      step={1}
-      unit="°"
-      onChange={(a: number) => onChange(setGradientAngle(value, a))}
-    />
-  {/if}
-
-  {#if advanced}
-    <div class="dialkit-gradient-advanced">
-      <GradientTransformPad {value} {onChange} />
-      {#if value.type === 'radial'}
-        <Slider
-          label="Size"
-          value={value.scale ?? 100}
-          min={10}
-          max={200}
-          step={1}
-          unit="%"
-          onChange={(s: number) => onChange(setGradientScale(value, s))}
-        />
-        <Slider
-          label="Squash"
-          value={value.squash ?? 0}
-          min={0}
-          max={100}
-          step={1}
-          unit="%"
-          onChange={(s: number) => onChange(setGradientSquash(value, s))}
-        />
-        {#if (value.squash ?? 0) > 0}
-          <Slider
-            label="Rotation"
-            value={value.rotation ?? 0}
-            min={0}
-            max={360}
-            step={1}
-            unit="°"
-            onChange={(r: number) => onChange(setGradientRotation(value, r))}
-          />
-        {/if}
-      {/if}
-    </div>
-  {/if}
+  <GradientTransformPad {value} {onChange} />
 
   <div
     bind:this={stripRef}

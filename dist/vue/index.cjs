@@ -316,12 +316,13 @@ var cloneDefault = () => ({
   stops: cloneDefaultStops()
 });
 var sortedStops = (stops) => [...stops].sort((a, b) => a.position - b.position);
+var stopString = (stops) => sortedStops(stops).map((s) => `${s.color} ${round2(clamp012(s.position) * 100, 2)}%`).join(", ");
 var normColor = (color) => {
   const rgba = parseHex(color);
   return rgba ? formatHex(rgba, true) : "#000000ff";
 };
 function gradientToCss(value) {
-  const stopStr = sortedStops(value.stops).map((s) => `${s.color} ${round2(clamp012(s.position) * 100, 2)}%`).join(", ");
+  const stopStr = stopString(value.stops);
   const angle = round2(wrapAngle(value.angle), 2);
   const cx = round2(clampPct(value.centerX ?? 50), 2);
   const cy = round2(clampPct(value.centerY ?? 50), 2);
@@ -343,15 +344,35 @@ function gradientToCss(value) {
       return `linear-gradient(${angle}deg, ${stopStr})`;
   }
 }
-function gradientToTransform(value) {
-  const cx = round2(clampPct(value.centerX ?? 50), 2);
-  const cy = round2(clampPct(value.centerY ?? 50), 2);
-  const rotation = wrapAngle(value.rotation ?? 0);
-  const squashed = clampPct(value.squash ?? 0) > 0;
-  if (value.type !== "radial" || rotation === 0 || !squashed) {
-    return { transform: "none", transformOrigin: "50% 50%" };
+function gradientFillBox(value, boxW, boxH) {
+  if (value.type !== "radial" || boxW <= 0 || boxH <= 0) {
+    return {
+      background: gradientToCss(value),
+      transform: "none",
+      transformOrigin: "50% 50%",
+      left: 0,
+      top: 0,
+      width: boxW,
+      height: boxH
+    };
   }
-  return { transform: `rotate(${round2(rotation, 2)}deg)`, transformOrigin: `${cx}% ${cy}%` };
+  const cxPx = clampPct(value.centerX ?? 50) / 100 * boxW;
+  const cyPx = clampPct(value.centerY ?? 50) / 100 * boxH;
+  const scale = clampScale(value.scale ?? 100) / 100;
+  const squash = clampPct(value.squash ?? 0);
+  const rx = round2(scale * boxW, 2);
+  const ry = round2(Math.max(1, scale * (1 - squash / 100) * boxH), 2);
+  const side = round2(2 * Math.hypot(boxW, boxH), 2);
+  const rotation = wrapAngle(value.rotation ?? 0);
+  return {
+    background: `radial-gradient(${rx}px ${ry}px at 50% 50%, ${stopString(value.stops)})`,
+    transform: rotation === 0 ? "none" : `rotate(${round2(rotation, 2)}deg)`,
+    transformOrigin: "50% 50%",
+    left: round2(cxPx - side / 2, 2),
+    top: round2(cyPx - side / 2, 2),
+    width: side,
+    height: side
+  };
 }
 function lerpPremult(a, b, t) {
   const pa = a.a + (b.a - a.a) * t;
@@ -3288,7 +3309,9 @@ var import_vue15 = require("vue");
 // src/vue/components/GradientTransformPad.ts
 var import_vue14 = require("vue");
 var clamp2 = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+var wrap360 = (deg) => (deg % 360 + 360) % 360;
 var RAD = Math.PI / 180;
+var vectorToAngle = (dx, dy) => wrap360(Math.atan2(dx, -dy) / RAD);
 var GradientTransformPad = (0, import_vue14.defineComponent)({
   name: "DialKitGradientTransformPad",
   props: {
@@ -3336,6 +3359,13 @@ var GradientTransformPad = (0, import_vue14.defineComponent)({
       }
       const cx = props.value.centerX ?? 50;
       const cy = props.value.centerY ?? 50;
+      if (kind === "angle") {
+        const isConic = props.value.type === "conic";
+        const ox = isConic ? cx / 100 * rect.width : rect.width / 2;
+        const oy = isConic ? cy / 100 * rect.height : rect.height / 2;
+        emit("change", setGradientAngle(props.value, vectorToAngle(px - ox, py - oy)));
+        return;
+      }
       const dx = px - cx / 100 * rect.width;
       const dy = py - cy / 100 * rect.height;
       const dist = Math.hypot(dx, dy);
@@ -3362,6 +3392,7 @@ var GradientTransformPad = (0, import_vue14.defineComponent)({
     return () => {
       const value = props.value;
       const radial = value.type === "radial";
+      const conic = value.type === "conic";
       const cx = value.centerX ?? 50;
       const cy = value.centerY ?? 50;
       const scale = value.scale ?? 100;
@@ -3380,16 +3411,27 @@ var GradientTransformPad = (0, import_vue14.defineComponent)({
       const pin = (x, y) => ({ x: clamp2(x, 5, w - 5), y: clamp2(y, 5, hh - 5) });
       const major = pin(majorX, majorY);
       const minor = pin(minorX, minorY);
-      const lineLen = Math.hypot(major.x - cxPx, major.y - cyPx);
-      const lineAngle = Math.atan2(major.y - cyPx, major.x - cxPx) / RAD;
-      const transform = gradientToTransform(value);
+      const majorLineLen = Math.hypot(major.x - cxPx, major.y - cyPx);
+      const majorLineAngle = Math.atan2(major.y - cyPx, major.x - cxPx) / RAD;
+      const angleOx = conic ? cxPx : w / 2;
+      const angleOy = conic ? cyPx : hh / 2;
+      const spokeR = Math.max(10, Math.min(w, hh) / 2 - 8);
+      const aTheta = value.angle * RAD;
+      const angleHandle = pin(angleOx + Math.sin(aTheta) * spokeR, angleOy - Math.cos(aTheta) * spokeR);
+      const angleLineLen = Math.hypot(angleHandle.x - angleOx, angleHandle.y - angleOy);
+      const angleLineAngle = Math.atan2(angleHandle.y - angleOy, angleHandle.x - angleOx) / RAD;
+      const fill = gradientFillBox(value, w, hh);
       return (0, import_vue14.h)("div", { ref: padRef, class: "dialkit-gradient-pad dialkit-checker" }, [
         (0, import_vue14.h)("div", {
           class: "dialkit-gradient-pad-fill",
           style: {
-            background: gradientToCss(value),
-            transform: transform.transform,
-            transformOrigin: transform.transformOrigin
+            background: fill.background,
+            transform: fill.transform,
+            transformOrigin: fill.transformOrigin,
+            left: `${fill.left}px`,
+            top: `${fill.top}px`,
+            width: `${fill.width}px`,
+            height: `${fill.height}px`
           }
         }),
         ...radial ? [
@@ -3398,8 +3440,8 @@ var GradientTransformPad = (0, import_vue14.defineComponent)({
             style: {
               left: `${cxPx}px`,
               top: `${cyPx}px`,
-              width: `${lineLen}px`,
-              transform: `rotate(${lineAngle}deg)`
+              width: `${majorLineLen}px`,
+              transform: `rotate(${majorLineAngle}deg)`
             }
           }),
           (0, import_vue14.h)("button", {
@@ -3418,15 +3460,35 @@ var GradientTransformPad = (0, import_vue14.defineComponent)({
             style: { left: `${minor.x}px`, top: `${minor.y}px` },
             ...handleProps("minor")
           })
-        ] : [],
-        (0, import_vue14.h)("button", {
-          type: "button",
-          class: "dialkit-gradient-pad-handle",
-          "data-kind": "center",
-          "aria-label": "Gradient center",
-          style: { left: `${clamp2(cxPx, 5, w - 5)}px`, top: `${clamp2(cyPx, 5, hh - 5)}px` },
-          ...handleProps("center")
-        })
+        ] : [
+          (0, import_vue14.h)("div", {
+            class: "dialkit-gradient-pad-line",
+            style: {
+              left: `${angleOx}px`,
+              top: `${angleOy}px`,
+              width: `${angleLineLen}px`,
+              transform: `rotate(${angleLineAngle}deg)`
+            }
+          }),
+          (0, import_vue14.h)("button", {
+            type: "button",
+            class: "dialkit-gradient-pad-handle",
+            "data-kind": "angle",
+            "aria-label": "Gradient angle",
+            style: { left: `${angleHandle.x}px`, top: `${angleHandle.y}px` },
+            ...handleProps("angle")
+          })
+        ],
+        ...radial || conic ? [
+          (0, import_vue14.h)("button", {
+            type: "button",
+            class: "dialkit-gradient-pad-handle",
+            "data-kind": "center",
+            "aria-label": "Gradient center",
+            style: { left: `${clamp2(cxPx, 5, w - 5)}px`, top: `${clamp2(cyPx, 5, hh - 5)}px` },
+            ...handleProps("center")
+          })
+        ] : []
       ]);
     };
   }
@@ -3451,7 +3513,6 @@ var GradientPanel = (0, import_vue15.defineComponent)({
     const selectedIndex = (0, import_vue15.ref)(0);
     const holdingIndex = (0, import_vue15.ref)(-1);
     const detach = (0, import_vue15.ref)(null);
-    const showAdvanced = (0, import_vue15.ref)(false);
     const stripRef = (0, import_vue15.ref)(null);
     const gripRef = (0, import_vue15.ref)(null);
     const gripOrigin = (0, import_vue15.ref)(null);
@@ -3586,7 +3647,6 @@ var GradientPanel = (0, import_vue15.defineComponent)({
     return () => {
       const value = props.value;
       const previewStops = detach.value ? value.stops.filter((_, i) => i !== detach.value.index) : value.stops;
-      const advanced = showAdvanced.value && value.type !== "linear";
       return (0, import_vue15.h)("div", { class: "dialkit-gradient-panel" }, [
         (0, import_vue15.h)("div", { class: "dialkit-gradient-toolbar" }, [
           (0, import_vue15.h)("button", {
@@ -3611,75 +3671,12 @@ var GradientPanel = (0, import_vue15.defineComponent)({
             options: TYPE_OPTIONS,
             value: value.type,
             onChange: (t) => emit("change", setGradientType(value, t))
-          }),
-          value.type !== "linear" ? (0, import_vue15.h)("button", {
-            type: "button",
-            class: "dialkit-gradient-advanced-toggle",
-            "data-active": String(advanced),
-            "aria-label": "Advanced settings",
-            "aria-pressed": advanced,
-            title: "Advanced settings",
-            onClick: () => {
-              showAdvanced.value = !showAdvanced.value;
-            }
-          }, [
-            (0, import_vue15.h)("svg", { viewBox: "0 0 16 16", fill: "none", "aria-hidden": "true" }, [
-              (0, import_vue15.h)("path", { opacity: "0.5", d: ICON_PANEL.path, fill: "currentColor" }),
-              ...ICON_PANEL.circles.map((c) => (0, import_vue15.h)("circle", {
-                cx: c.cx,
-                cy: c.cy,
-                r: c.r,
-                fill: "currentColor",
-                stroke: "currentColor",
-                "stroke-width": "1.25"
-              }))
-            ])
-          ]) : null
+          })
         ]),
-        value.type !== "radial" ? (0, import_vue15.h)(Slider, {
-          label: "Angle",
-          value: value.angle,
-          min: 0,
-          max: 360,
-          step: 1,
-          unit: "\xB0",
-          onChange: (a) => emit("change", setGradientAngle(value, a))
-        }) : null,
-        advanced ? (0, import_vue15.h)("div", { class: "dialkit-gradient-advanced" }, [
-          (0, import_vue15.h)(GradientTransformPad, {
-            value,
-            onChange: (v) => emit("change", v)
-          }),
-          ...value.type === "radial" ? [
-            (0, import_vue15.h)(Slider, {
-              label: "Size",
-              value: value.scale ?? 100,
-              min: 10,
-              max: 200,
-              step: 1,
-              unit: "%",
-              onChange: (s) => emit("change", setGradientScale(value, s))
-            }),
-            (0, import_vue15.h)(Slider, {
-              label: "Squash",
-              value: value.squash ?? 0,
-              min: 0,
-              max: 100,
-              step: 1,
-              unit: "%",
-              onChange: (s) => emit("change", setGradientSquash(value, s))
-            }),
-            (value.squash ?? 0) > 0 ? (0, import_vue15.h)(Slider, {
-              label: "Rotation",
-              value: value.rotation ?? 0,
-              min: 0,
-              max: 360,
-              step: 1,
-              unit: "\xB0",
-              onChange: (r) => emit("change", setGradientRotation(value, r))
-            }) : null
-          ] : []
-        ]) : null,
+        (0, import_vue15.h)(GradientTransformPad, {
+          value,
+          onChange: (v) => emit("change", v)
+        }),
         (0, import_vue15.h)("div", {
           ref: stripRef,
           class: "dialkit-gradient-strip",

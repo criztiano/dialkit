@@ -58,6 +58,31 @@ declare function gradientToCss(value: GradientValue): string;
  */
 declare function gradientToTransform(value: GradientValue): GradientTransform;
 /**
+ * A positioned fill layer that paints a gradient covering a `boxW × boxH` area
+ * with no clipped corners — even a rotated radial. A CSS radial gradient's final
+ * color already extends to infinity, so the only thing that clips is the layer's
+ * own box: rotating a box the size of the pad pulls its corners inward and
+ * exposes the area behind it. So for radial we size the layer to an oversized
+ * square centered on the gradient origin and spin it around its own center
+ * (half-side ≥ the box diagonal → no rotation angle can uncover a corner), with
+ * the ellipse expressed in pixels so it matches the box exactly. Linear and
+ * conic gradients already fill their box, so the layer just matches it.
+ *
+ * Place a div with `overflow: hidden` around it and spread this onto an
+ * absolutely-positioned child (left/top/width/height are pixels):
+ *   `<div style={{ position:'absolute', ...gradientFillBox(v, w, h) }} />`
+ */
+type GradientFillBox = {
+    background: string;
+    transform: string;
+    transformOrigin: string;
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+};
+declare function gradientFillBox(value: GradientValue, boxW: number, boxH: number): GradientFillBox;
+/**
  * The color the gradient shows at `position` (0–1), as #rrggbbaa. Interpolated
  * in sRGB with premultiplied alpha so a stop seeded here equals the pixel the
  * user clicked on the ramp (OKLab would visibly mismatch the strip).
@@ -94,4 +119,4 @@ declare function setGradientSquash(value: GradientValue, squash: number): Gradie
 /** Set the radial ellipse tilt (degrees). Renders via gradientToTransform. */
 declare function setGradientRotation(value: GradientValue, rotation: number): GradientValue;
 
-export { DEFAULT_GRADIENT, type GradientStop, type GradientTransform, type GradientType, type GradientValue, MIN_STOPS, STOP_DETACH_PX, addStop, colorAtPosition, gradientToCss, gradientToTransform, moveStop, normalizeGradient, removeStop, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setStopColor };
+export { DEFAULT_GRADIENT, type GradientFillBox, type GradientStop, type GradientTransform, type GradientType, type GradientValue, MIN_STOPS, STOP_DETACH_PX, addStop, colorAtPosition, gradientFillBox, gradientToCss, gradientToTransform, moveStop, normalizeGradient, removeStop, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setStopColor };

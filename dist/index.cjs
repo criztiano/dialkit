@@ -64,6 +64,7 @@ __export(index_exports, {
   defaultListItemParams: () => defaultListItemParams,
   displayHex: () => displayHex,
   formatHex: () => formatHex,
+  gradientFillBox: () => gradientFillBox,
   gradientToCss: () => gradientToCss,
   gradientToTransform: () => gradientToTransform,
   hslToRgb: () => hslToRgb,
@@ -358,12 +359,13 @@ var cloneDefault = () => ({
   stops: cloneDefaultStops()
 });
 var sortedStops = (stops) => [...stops].sort((a, b) => a.position - b.position);
+var stopString = (stops) => sortedStops(stops).map((s) => `${s.color} ${round2(clamp012(s.position) * 100, 2)}%`).join(", ");
 var normColor = (color) => {
   const rgba = parseHex(color);
   return rgba ? formatHex(rgba, true) : "#000000ff";
 };
 function gradientToCss(value) {
-  const stopStr = sortedStops(value.stops).map((s) => `${s.color} ${round2(clamp012(s.position) * 100, 2)}%`).join(", ");
+  const stopStr = stopString(value.stops);
   const angle = round2(wrapAngle(value.angle), 2);
   const cx = round2(clampPct(value.centerX ?? 50), 2);
   const cy = round2(clampPct(value.centerY ?? 50), 2);
@@ -394,6 +396,36 @@ function gradientToTransform(value) {
     return { transform: "none", transformOrigin: "50% 50%" };
   }
   return { transform: `rotate(${round2(rotation, 2)}deg)`, transformOrigin: `${cx}% ${cy}%` };
+}
+function gradientFillBox(value, boxW, boxH) {
+  if (value.type !== "radial" || boxW <= 0 || boxH <= 0) {
+    return {
+      background: gradientToCss(value),
+      transform: "none",
+      transformOrigin: "50% 50%",
+      left: 0,
+      top: 0,
+      width: boxW,
+      height: boxH
+    };
+  }
+  const cxPx = clampPct(value.centerX ?? 50) / 100 * boxW;
+  const cyPx = clampPct(value.centerY ?? 50) / 100 * boxH;
+  const scale = clampScale(value.scale ?? 100) / 100;
+  const squash = clampPct(value.squash ?? 0);
+  const rx = round2(scale * boxW, 2);
+  const ry = round2(Math.max(1, scale * (1 - squash / 100) * boxH), 2);
+  const side = round2(2 * Math.hypot(boxW, boxH), 2);
+  const rotation = wrapAngle(value.rotation ?? 0);
+  return {
+    background: `radial-gradient(${rx}px ${ry}px at 50% 50%, ${stopString(value.stops)})`,
+    transform: rotation === 0 ? "none" : `rotate(${round2(rotation, 2)}deg)`,
+    transformOrigin: "50% 50%",
+    left: round2(cxPx - side / 2, 2),
+    top: round2(cyPx - side / 2, 2),
+    width: side,
+    height: side
+  };
 }
 function lerpPremult(a, b, t) {
   const pa = a.a + (b.a - a.a) * t;
@@ -3226,7 +3258,9 @@ var import_react16 = require("react");
 var import_react15 = require("react");
 var import_jsx_runtime14 = require("react/jsx-runtime");
 var clamp2 = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+var wrap360 = (deg) => (deg % 360 + 360) % 360;
 var RAD = Math.PI / 180;
+var vectorToAngle = (dx, dy) => wrap360(Math.atan2(dx, -dy) / RAD);
 function GradientTransformPad({ value, onChange }) {
   const padRef = (0, import_react15.useRef)(null);
   const drag = (0, import_react15.useRef)(null);
@@ -3240,27 +3274,31 @@ function GradientTransformPad({ value, onChange }) {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+  const { w, h } = size;
   const radial = value.type === "radial";
+  const conic = value.type === "conic";
   const cx = value.centerX ?? 50;
   const cy = value.centerY ?? 50;
   const scale = value.scale ?? 100;
   const squash = value.squash ?? 0;
   const rotation = value.rotation ?? 0;
-  const { w, h } = size;
   const cxPx = cx / 100 * w;
   const cyPx = cy / 100 * h;
   const rxPx = scale / 100 * w;
   const ryPx = Math.max(10, scale * (1 - squash / 100) / 100 * h);
   const theta = rotation * RAD;
-  const majorX = cxPx + Math.cos(theta) * rxPx;
-  const majorY = cyPx + Math.sin(theta) * rxPx;
-  const minorX = cxPx - Math.sin(theta) * ryPx;
-  const minorY = cyPx + Math.cos(theta) * ryPx;
   const pin = (x, y) => ({ x: clamp2(x, 5, w - 5), y: clamp2(y, 5, h - 5) });
-  const major = pin(majorX, majorY);
-  const minor = pin(minorX, minorY);
-  const lineLen = Math.hypot(major.x - cxPx, major.y - cyPx);
-  const lineAngle = Math.atan2(major.y - cyPx, major.x - cxPx) / RAD;
+  const major = pin(cxPx + Math.cos(theta) * rxPx, cyPx + Math.sin(theta) * rxPx);
+  const minor = pin(cxPx - Math.sin(theta) * ryPx, cyPx + Math.cos(theta) * ryPx);
+  const majorLineLen = Math.hypot(major.x - cxPx, major.y - cyPx);
+  const majorLineAngle = Math.atan2(major.y - cyPx, major.x - cxPx) / RAD;
+  const angleOx = conic ? cxPx : w / 2;
+  const angleOy = conic ? cyPx : h / 2;
+  const spokeR = Math.max(10, Math.min(w, h) / 2 - 8);
+  const aTheta = value.angle * RAD;
+  const angleHandle = pin(angleOx + Math.sin(aTheta) * spokeR, angleOy - Math.cos(aTheta) * spokeR);
+  const angleLineLen = Math.hypot(angleHandle.x - angleOx, angleHandle.y - angleOy);
+  const angleLineAngle = Math.atan2(angleHandle.y - angleOy, angleHandle.x - angleOx) / RAD;
   const onHandleDown = (kind) => (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -3282,6 +3320,12 @@ function GradientTransformPad({ value, onChange }) {
     const py = e.clientY - rect.top;
     if (kind === "center") {
       onChange(setGradientCenter(value, px / rect.width * 100, py / rect.height * 100));
+      return;
+    }
+    if (kind === "angle") {
+      const ox = conic ? cx / 100 * rect.width : rect.width / 2;
+      const oy = conic ? cy / 100 * rect.height : rect.height / 2;
+      onChange(setGradientAngle(value, vectorToAngle(px - ox, py - oy)));
       return;
     }
     const dx = px - cx / 100 * rect.width;
@@ -3307,12 +3351,21 @@ function GradientTransformPad({ value, onChange }) {
     onPointerCancel: onHandleUp,
     onLostPointerCapture: onHandleUp
   });
+  const fill = gradientFillBox(value, w, h);
   return /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { ref: padRef, className: "dialkit-gradient-pad dialkit-checker", children: [
     /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
       "div",
       {
         className: "dialkit-gradient-pad-fill",
-        style: { background: gradientToCss(value), ...gradientToTransform(value) }
+        style: {
+          background: fill.background,
+          transform: fill.transform,
+          transformOrigin: fill.transformOrigin,
+          left: fill.left,
+          top: fill.top,
+          width: fill.width,
+          height: fill.height
+        }
       }
     ),
     radial && /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(import_jsx_runtime14.Fragment, { children: [
@@ -3320,12 +3373,7 @@ function GradientTransformPad({ value, onChange }) {
         "div",
         {
           className: "dialkit-gradient-pad-line",
-          style: {
-            left: cxPx,
-            top: cyPx,
-            width: lineLen,
-            transform: `rotate(${lineAngle}deg)`
-          }
+          style: { left: cxPx, top: cyPx, width: majorLineLen, transform: `rotate(${majorLineAngle}deg)` }
         }
       ),
       /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
@@ -3351,7 +3399,27 @@ function GradientTransformPad({ value, onChange }) {
         }
       )
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+    !radial && /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(import_jsx_runtime14.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+        "div",
+        {
+          className: "dialkit-gradient-pad-line",
+          style: { left: angleOx, top: angleOy, width: angleLineLen, transform: `rotate(${angleLineAngle}deg)` }
+        }
+      ),
+      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+        "button",
+        {
+          type: "button",
+          className: "dialkit-gradient-pad-handle",
+          "data-kind": "angle",
+          "aria-label": "Gradient angle",
+          style: { left: angleHandle.x, top: angleHandle.y },
+          ...handleProps("angle")
+        }
+      )
+    ] }),
+    (radial || conic) && /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
       "button",
       {
         type: "button",
@@ -3379,7 +3447,6 @@ function GradientPanel({ value, onChange, onDrag }) {
   const [selectedIndex, setSelectedIndex] = (0, import_react16.useState)(0);
   const [holdingIndex, setHoldingIndex] = (0, import_react16.useState)(-1);
   const [detach, setDetach] = (0, import_react16.useState)(null);
-  const [showAdvanced, setShowAdvanced] = (0, import_react16.useState)(false);
   const stripRef = (0, import_react16.useRef)(null);
   const gripRef = (0, import_react16.useRef)(null);
   const gripOrigin = (0, import_react16.useRef)(null);
@@ -3512,7 +3579,6 @@ function GradientPanel({ value, onChange, onDrag }) {
     resetDrag();
   };
   const previewStops = detach ? value.stops.filter((_, i) => i !== detach.index) : value.stops;
-  const advanced = showAdvanced && value.type !== "linear";
   return /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "dialkit-gradient-panel", children: [
     /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "dialkit-gradient-toolbar", children: [
       /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
@@ -3538,77 +3604,9 @@ function GradientPanel({ value, onChange, onDrag }) {
           value: value.type,
           onChange: (t) => onChange(setGradientType(value, t))
         }
-      ),
-      value.type !== "linear" && /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
-        "button",
-        {
-          type: "button",
-          className: "dialkit-gradient-advanced-toggle",
-          "data-active": String(advanced),
-          "aria-label": "Advanced settings",
-          "aria-pressed": advanced,
-          title: "Advanced settings",
-          onClick: () => setShowAdvanced((v) => !v),
-          children: /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("svg", { viewBox: "0 0 16 16", fill: "none", "aria-hidden": "true", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("path", { opacity: "0.5", d: ICON_PANEL.path, fill: "currentColor" }),
-            ICON_PANEL.circles.map((c, i) => /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("circle", { cx: c.cx, cy: c.cy, r: c.r, fill: "currentColor", stroke: "currentColor", strokeWidth: "1.25" }, i))
-          ] })
-        }
       )
     ] }),
-    value.type !== "radial" && /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
-      Slider,
-      {
-        label: "Angle",
-        value: value.angle,
-        min: 0,
-        max: 360,
-        step: 1,
-        unit: "\xB0",
-        onChange: (a) => onChange(setGradientAngle(value, a))
-      }
-    ),
-    advanced && /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "dialkit-gradient-advanced", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(GradientTransformPad, { value, onChange }),
-      value.type === "radial" && /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)(import_jsx_runtime15.Fragment, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
-          Slider,
-          {
-            label: "Size",
-            value: value.scale ?? 100,
-            min: 10,
-            max: 200,
-            step: 1,
-            unit: "%",
-            onChange: (s) => onChange(setGradientScale(value, s))
-          }
-        ),
-        /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
-          Slider,
-          {
-            label: "Squash",
-            value: value.squash ?? 0,
-            min: 0,
-            max: 100,
-            step: 1,
-            unit: "%",
-            onChange: (s) => onChange(setGradientSquash(value, s))
-          }
-        ),
-        (value.squash ?? 0) > 0 && /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
-          Slider,
-          {
-            label: "Rotation",
-            value: value.rotation ?? 0,
-            min: 0,
-            max: 360,
-            step: 1,
-            unit: "\xB0",
-            onChange: (r) => onChange(setGradientRotation(value, r))
-          }
-        )
-      ] })
-    ] }),
+    /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(GradientTransformPad, { value, onChange }),
     /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
       "div",
       {
@@ -6076,6 +6074,7 @@ function ShortcutsMenu({ panelId }) {
   defaultListItemParams,
   displayHex,
   formatHex,
+  gradientFillBox,
   gradientToCss,
   gradientToTransform,
   hslToRgb,
