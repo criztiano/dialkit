@@ -62,16 +62,17 @@ describe('gradientToCss', () => {
     );
   });
 
-  it('grows the minor axis past the major for negative squash (taller than wide)', () => {
-    // squash -50 → ry = 100 * (1 - (-50)/100) = 150%.
-    expect(gradientToCss(grad({ type: 'radial', squash: -50 }))).toBe(
+  it('treats squash as an independent vertical radius (tall or wide, either way)', () => {
+    // squash > scale → taller than wide.
+    expect(gradientToCss(grad({ type: 'radial', squash: 150 }))).toBe(
       'radial-gradient(100% 150% at 50% 50%, #000000ff 0%, #ffffffff 100%)'
     );
-  });
-
-  it('floors the minor radius at full squash so the gradient never blanks out', () => {
-    // squash 100 would give a 0% vertical radius (degenerate → blank); floored to 1%.
-    expect(gradientToCss(grad({ type: 'radial', squash: 100 }))).toBe(
+    // squash === scale → round again (explicit, since scale isn't 100 here).
+    expect(gradientToCss(grad({ type: 'radial', scale: 60, squash: 60 }))).toBe(
+      'radial-gradient(60% 60% at 50% 50%, #000000ff 0%, #ffffffff 100%)'
+    );
+    // A 1% sliver is the flattest it goes (clamped, never 0 → never blank).
+    expect(gradientToCss(grad({ type: 'radial', squash: 0 }))).toBe(
       'radial-gradient(100% 1% at 50% 50%, #000000ff 0%, #ffffffff 100%)'
     );
   });
@@ -225,11 +226,12 @@ describe('normalizeGradient', () => {
     expect(withGeo.centerX).toBe(100);
     expect(withGeo.centerY).toBe(0);
     expect(withGeo.scale).toBe(200);
-    expect(withGeo.squash).toBe(100);
+    expect(withGeo.squash).toBe(120);
     expect(withGeo.rotation).toBe(40);
 
-    // Squash clamps symmetrically — negative is allowed down to -100.
-    expect(normalizeGradient({ type: 'radial', angle: 0, stops: grad().stops, squash: -250 }).squash).toBe(-100);
+    // Squash (vertical radius) clamps to [1, 200], independent of scale.
+    expect(normalizeGradient({ type: 'radial', angle: 0, stops: grad().stops, squash: 300 }).squash).toBe(200);
+    expect(normalizeGradient({ type: 'radial', angle: 0, stops: grad().stops, squash: 0 }).squash).toBe(1);
 
     const plain = normalizeGradient({ type: 'radial', angle: 0, stops: grad().stops });
     expect(plain.centerX).toBeUndefined();
@@ -359,8 +361,9 @@ describe('setStopColor / setGradientType / setGradientAngle', () => {
   it('sets and clamps scale, squash, and rotation', () => {
     expect(setGradientScale(grad(), 5).scale).toBe(10);
     expect(setGradientScale(grad(), 300).scale).toBe(200);
-    expect(setGradientSquash(grad(), 150).squash).toBe(100);
-    expect(setGradientSquash(grad(), -150).squash).toBe(-100);
+    expect(setGradientSquash(grad(), 150).squash).toBe(150);
+    expect(setGradientSquash(grad(), 300).squash).toBe(200);
+    expect(setGradientSquash(grad(), -10).squash).toBe(1);
     expect(setGradientRotation(grad(), 400).rotation).toBe(40);
   });
 });

@@ -54,16 +54,16 @@ export function GradientTransformPad({ value, onChange }: GradientTransformPadPr
   const cx = value.centerX ?? 50;
   const cy = value.centerY ?? 50;
   const scale = value.scale ?? 100;
-  const squash = value.squash ?? 0;
   const rotation = value.rotation ?? 0;
 
   const cxPx = (cx / 100) * w;
   const cyPx = (cy / 100) * h;
   // CSS radial radii resolve against box dims: rx% of width, ry% of height.
+  // The vertical radius is independent — absent squash means it matches scale.
   const rxPx = (scale / 100) * w;
-  // Floor the minor offset so full squash can't park this handle under the
+  // Floor the minor offset so a tiny radius can't park this handle under the
   // center handle (which is on top and would make it unreachable).
-  const ryPx = Math.max(10, ((scale * (1 - squash / 100)) / 100) * h);
+  const ryPx = Math.max(10, ((value.squash ?? scale) / 100) * h);
   const theta = rotation * RAD;
 
   // Large sizes push a handle off the pad; pin it to the edge so it stays
@@ -131,9 +131,9 @@ export function GradientTransformPad({ value, onChange }: GradientTransformPadPr
       return;
     }
 
-    // Minor handle: distance sets the ovality, angle keeps it under the pointer.
-    const ryPct = (dist / rect.height) * 100;
-    const nextSquash = (1 - ryPct / scale) * 100;
+    // Minor handle: distance sets the vertical radius directly (independent of
+    // the horizontal one), angle keeps the axis under the pointer.
+    const nextSquash = (dist / rect.height) * 100;
     onChange(setGradientRotation(setGradientSquash(value, nextSquash), deg - 90));
   };
 

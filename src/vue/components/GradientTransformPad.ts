@@ -104,8 +104,7 @@ export const GradientTransformPad = defineComponent({
       }
 
       // Minor handle: distance sets the ovality, angle keeps it under the pointer.
-      const ryPct = (dist / rect.height) * 100;
-      const nextSquash = (1 - ryPct / (props.value.scale ?? 100)) * 100;
+      const nextSquash = (dist / rect.height) * 100;
       emit('change', setGradientRotation(setGradientSquash(props.value, nextSquash), deg - 90));
     };
 
@@ -128,17 +127,17 @@ export const GradientTransformPad = defineComponent({
       const cx = value.centerX ?? 50;
       const cy = value.centerY ?? 50;
       const scale = value.scale ?? 100;
-      const squash = value.squash ?? 0;
       const rotation = value.rotation ?? 0;
 
       const { w, h: hh } = size.value;
       const cxPx = (cx / 100) * w;
       const cyPx = (cy / 100) * hh;
       // CSS radial radii resolve against box dims: rx% of width, ry% of height.
+      // The vertical radius is independent — absent squash means it matches scale.
       const rxPx = (scale / 100) * w;
-      // Floor the minor offset so full squash can't park this handle under the
+      // Floor the minor offset so a tiny radius can't park this handle under the
       // center handle (which is on top and would make it unreachable).
-      const ryPx = Math.max(10, ((scale * (1 - squash / 100)) / 100) * hh);
+      const ryPx = Math.max(10, ((value.squash ?? scale) / 100) * hh);
       const theta = rotation * RAD;
       const majorX = cxPx + Math.cos(theta) * rxPx;
       const majorY = cyPx + Math.sin(theta) * rxPx;
