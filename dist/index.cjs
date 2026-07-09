@@ -21,6 +21,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/index.ts
 var index_exports = {};
 __export(index_exports, {
+  AnalyserVisualization: () => AnalyserVisualization,
   ButtonGroup: () => ButtonGroup,
   COLOR_FORMATS: () => COLOR_FORMATS,
   CURVE_CYCLE: () => CURVE_CYCLE,
@@ -42,6 +43,7 @@ __export(index_exports, {
   MIN_STOPS: () => MIN_STOPS,
   Module: () => Module,
   PresetManager: () => PresetManager,
+  RangeSlider: () => RangeSlider,
   SegmentedControl: () => SegmentedControl,
   SelectControl: () => SelectControl,
   ShortcutsMenu: () => ShortcutsMenu,
@@ -53,39 +55,63 @@ __export(index_exports, {
   Toggle: () => Toggle,
   TransitionControl: () => TransitionControl,
   WaveformVisualization: () => WaveformVisualization,
+  XYControl: () => XYControl,
+  XYPad: () => XYPad,
+  XY_DEFAULT_STEP: () => XY_DEFAULT_STEP,
+  XY_DETENT_PX: () => XY_DETENT_PX,
   addDriver: () => addDriver,
   addStop: () => addStop,
+  applyDetentAxis: () => applyDetentAxis,
   buildSamplers: () => buildSamplers,
+  centerValue: () => centerValue,
+  clamp: () => clamp3,
   clampOklchToSrgb: () => clampOklchToSrgb,
+  clampRange: () => clampRange,
   colorAtPosition: () => colorAtPosition,
   cycleDriverType: () => cycleDriverType,
   cycleSegmentType: () => cycleSegmentType,
   defaultComposition: () => defaultComposition,
   defaultListItemParams: () => defaultListItemParams,
   displayHex: () => displayHex,
+  flipDriver: () => flipDriver,
+  flipSegment: () => flipSegment,
   formatHex: () => formatHex,
   gradientFillBox: () => gradientFillBox,
   gradientToCss: () => gradientToCss,
   gradientToTransform: () => gradientToTransform,
+  handleLeftStyles: () => handleLeftStyles,
   hslToRgb: () => hslToRgb,
   hsvToRgb: () => hsvToRgb,
+  invertY: () => invertY,
+  isOutsideSpan: () => isOutsideSpan,
   moveStop: () => moveStop,
+  nearestHandle: () => nearestHandle,
+  normToValue: () => normToValue,
   normalizeGradient: () => normalizeGradient,
   normalizeHex: () => normalizeHex,
   normalizeListItems: () => normalizeListItems,
+  normalizeValue: () => normalizeValue,
+  nudge: () => nudge,
   oklchToRgb: () => oklchToRgb,
   opacityPercent: () => opacityPercent,
+  orderRange: () => orderRange,
   parseHex: () => parseHex,
   parseListItemSchema: () => parseListItemSchema,
+  percentToValue: () => percentToValue,
+  pickDragTarget: () => pickDragTarget,
+  pointFromValue: () => pointFromValue,
   readComposition: () => readComposition,
   redistributeWeight: () => redistributeWeight,
   removeDriver: () => removeDriver,
   removeSegment: () => removeSegment,
   removeStop: () => removeStop,
+  resolveAxis: () => resolveAxis,
   rgbToHsl: () => rgbToHsl,
   rgbToHsv: () => rgbToHsv,
   rgbToOklch: () => rgbToOklch,
+  setDriverAnticipate: () => setDriverAnticipate,
   setDriverCurvature: () => setDriverCurvature,
+  setDriverOvershoot: () => setDriverOvershoot,
   setDriverSteepness: () => setDriverSteepness,
   setGradientAngle: () => setGradientAngle,
   setGradientCenter: () => setGradientCenter,
@@ -93,13 +119,22 @@ __export(index_exports, {
   setGradientScale: () => setGradientScale,
   setGradientSquash: () => setGradientSquash,
   setGradientType: () => setGradientType,
+  setHigh: () => setHigh,
+  setLow: () => setLow,
+  setSegmentAnticipate: () => setSegmentAnticipate,
   setSegmentCurvature: () => setSegmentCurvature,
+  setSegmentOvershoot: () => setSegmentOvershoot,
   setSegmentSteepness: () => setSegmentSteepness,
   setStopColor: () => setStopColor,
+  shiftSpan: () => shiftSpan,
+  snapToStep: () => snapToStep,
   splitSegment: () => splitSegment,
   triggerLevels: () => triggerLevels,
   triggersCrossed: () => triggersCrossed,
-  useDialKit: () => useDialKit
+  useDialKit: () => useDialKit,
+  valueFromPoint: () => valueFromPoint,
+  valueToNorm: () => valueToNorm,
+  valueToPercent: () => valueToPercent
 });
 module.exports = __toCommonJS(index_exports);
 
@@ -528,6 +563,149 @@ function setGradientRotation(value, rotation) {
   return { ...value, rotation: wrapAngle(rotation) };
 }
 
+// src/xy-pad-core.ts
+var XY_DETENT_PX = 6;
+var XY_DEFAULT_STEP = 0.01;
+function decimalsForStep(step) {
+  const s = step.toString();
+  const dot = s.indexOf(".");
+  return dot === -1 ? 0 : s.length - dot - 1;
+}
+function roundToStep(val, step) {
+  return parseFloat(val.toFixed(decimalsForStep(step)));
+}
+function resolveAxis(axis) {
+  const min = axis?.min ?? 0;
+  const max = axis?.max ?? 1;
+  const step = axis?.step ?? XY_DEFAULT_STEP;
+  const bipolar = axis?.bipolar ?? false;
+  const origin = axis?.origin ?? (bipolar ? (min + max) / 2 : min);
+  return { min, max, step, origin, bipolar };
+}
+function clamp2(v, min, max) {
+  return Math.min(max, Math.max(min, v));
+}
+function snapToStep(v, step, min) {
+  if (step <= 0) return v;
+  const snapped = min + Math.round((v - min) / step) * step;
+  return roundToStep(snapped, step);
+}
+function valueToNorm(v, axis) {
+  if (axis.max === axis.min) return 0;
+  return clamp2((v - axis.min) / (axis.max - axis.min), 0, 1);
+}
+function normToValue(n, axis) {
+  const t = clamp2(n, 0, 1);
+  return axis.min + t * (axis.max - axis.min);
+}
+function invertY(n) {
+  return 1 - n;
+}
+function valueFromPoint(point, xAxis, yAxis, snap = false) {
+  let x = clamp2(normToValue(point.x, xAxis), xAxis.min, xAxis.max);
+  let y = clamp2(normToValue(invertY(point.y), yAxis), yAxis.min, yAxis.max);
+  if (snap) {
+    x = snapToStep(x, xAxis.step, xAxis.min);
+    y = snapToStep(y, yAxis.step, yAxis.min);
+  }
+  return { x, y };
+}
+function pointFromValue(value, xAxis, yAxis) {
+  return {
+    x: valueToNorm(value.x, xAxis),
+    y: invertY(valueToNorm(value.y, yAxis))
+  };
+}
+function applyDetentAxis(value, axis, pxFromOrigin) {
+  if (axis.bipolar && pxFromOrigin <= XY_DETENT_PX) return axis.origin;
+  return value;
+}
+function effectiveStep(axis, mode) {
+  const range = axis.max - axis.min;
+  if (mode === "fine") return range * 0.01;
+  if (mode === "coarse") return range * 0.1;
+  return axis.step;
+}
+function nudge(value, axis, direction, xAxis, yAxis, mode = "normal") {
+  const spec = axis === "x" ? xAxis : yAxis;
+  const step = effectiveStep(spec, mode);
+  const next = roundToStep(clamp2(value[axis] + direction * step, spec.min, spec.max), step);
+  return axis === "x" ? { x: next, y: value.y } : { x: value.x, y: next };
+}
+function centerValue(xAxis, yAxis) {
+  return { x: xAxis.origin, y: yAxis.origin };
+}
+function coerceComponent(v, axis) {
+  return typeof v === "number" && Number.isFinite(v) ? v : axis.origin;
+}
+function normalizeValue(value, xAxis, yAxis, snap = false) {
+  const resolve = (raw, axis) => {
+    let v = clamp2(coerceComponent(raw, axis), axis.min, axis.max);
+    if (snap) v = snapToStep(v, axis.step, axis.min);
+    return v + 0;
+  };
+  return {
+    x: resolve(value?.x, xAxis),
+    y: resolve(value?.y, yAxis)
+  };
+}
+
+// src/range-slider-core.ts
+function clamp3(v, lo, hi) {
+  return Math.min(hi, Math.max(lo, v));
+}
+function valueToPercent(v, min, max) {
+  if (max === min) return 0;
+  return (v - min) / (max - min) * 100;
+}
+function percentToValue(pct01, min, max) {
+  return min + clamp3(pct01, 0, 1) * (max - min);
+}
+function orderRange(v) {
+  return v.min <= v.max ? v : { min: v.max, max: v.min };
+}
+function clampRange(v, min, max) {
+  return orderRange({ min: clamp3(v.min, min, max), max: clamp3(v.max, min, max) });
+}
+function setLow(nextLow, current, min) {
+  return { min: clamp3(nextLow, min, current.max), max: current.max };
+}
+function setHigh(nextHigh, current, max) {
+  return { min: current.min, max: clamp3(nextHigh, current.min, max) };
+}
+function shiftSpan(deltaValue, current, min, max) {
+  const width = current.max - current.min;
+  const desiredMin = clamp3(current.min + deltaValue, min, max - width);
+  return { min: desiredMin, max: desiredMin + width };
+}
+function nearestHandle(atValue, current) {
+  const dMin = Math.abs(atValue - current.min);
+  const dMax = Math.abs(atValue - current.max);
+  if (dMin < dMax) return "min";
+  if (dMax < dMin) return "max";
+  return atValue < current.min ? "min" : "max";
+}
+function pickDragTarget(atValue, current, hitValue) {
+  const nearLow = Math.abs(atValue - current.min) <= hitValue;
+  const nearHigh = Math.abs(atValue - current.max) <= hitValue;
+  if (nearLow && nearHigh) return nearestHandle(atValue, current);
+  if (nearLow) return "min";
+  if (nearHigh) return "max";
+  if (atValue > current.min && atValue < current.max) return "span";
+  return nearestHandle(atValue, current);
+}
+function isOutsideSpan(atValue, current) {
+  return atValue <= current.min || atValue >= current.max;
+}
+function handleLeftStyles(lowPercent, highPercent) {
+  const gap = `(${highPercent}% - ${lowPercent}%)`;
+  const ramp = `clamp(0px, calc(30px - ${gap}), 12px)`;
+  return {
+    low: `max(2px, min(calc(100% - 5px), calc(${lowPercent}% + 6px - ${ramp})))`,
+    high: `min(calc(100% - 5px), max(2px, calc(${highPercent}% - 9px + ${ramp})))`
+  };
+}
+
 // src/store/DialStore.ts
 var EMPTY_VALUES = Object.freeze({});
 var DialStoreClass = class {
@@ -805,7 +983,7 @@ var DialStoreClass = class {
         const hasPhysics = value.stiffness !== void 0 || value.damping !== void 0 || value.mass !== void 0;
         const hasTime = value.visualDuration !== void 0 || value.bounce !== void 0;
         values[`${path}.__mode`] = hasPhysics && !hasTime ? "advanced" : "simple";
-      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isTextConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isListConfig(value)) {
+      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isListConfig(value)) {
         this.initTransitionModes(value, path, values);
       }
     }
@@ -843,8 +1021,20 @@ var DialStoreClass = class {
         controls.push({ type: "color", path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {
         controls.push({ type: "gradient", path, label });
+      } else if (this.isXYConfig(value)) {
+        controls.push({ type: "xy", path, label, xAxis: value.x, yAxis: value.y, grid: value.grid, density: value.density, snap: value.snap, returnToCenter: value.returnToCenter, showValues: value.showValues });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: "text", path, label, placeholder: value.placeholder });
+      } else if (this.isRangeConfig(value)) {
+        controls.push({
+          type: "range",
+          path,
+          label,
+          min: value.min,
+          max: value.max,
+          step: value.step ?? this.inferStep(value.min, value.max),
+          rangeDefault: value.default ?? { min: value.min, max: value.max }
+        });
       } else if (this.isGalleryConfig(value)) {
         controls.push({ type: "gallery", path, label, items: value.items, columns: value.columns });
       } else if (this.isFileConfig(value)) {
@@ -897,8 +1087,14 @@ var DialStoreClass = class {
         values[path] = value.default ?? "#000000";
       } else if (this.isGradientConfig(value)) {
         values[path] = normalizeGradient(value.default ?? DEFAULT_GRADIENT);
+      } else if (this.isXYConfig(value)) {
+        const xAxis = resolveAxis(value.x);
+        const yAxis = resolveAxis(value.y);
+        values[path] = normalizeValue(value.default, xAxis, yAxis, value.snap ?? false);
       } else if (this.isTextConfig(value)) {
         values[path] = value.default ?? "";
+      } else if (this.isRangeConfig(value)) {
+        values[path] = value.default ?? { min: value.min, max: value.max };
       } else if (this.isGalleryConfig(value)) {
         values[path] = value.default ?? value.items[0]?.id ?? "";
       } else if (this.isFileConfig(value)) {
@@ -932,6 +1128,19 @@ var DialStoreClass = class {
   }
   isGradientConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "gradient";
+  }
+  // Explicit { type: 'xy' } only — a bare { x, y } object would collide with the
+  // "nested object → folder" fallback, so the shorthand is deliberately unsupported.
+  isXYConfig(value) {
+    return typeof value === "object" && value !== null && "type" in value && value.type === "xy";
+  }
+  isRangeConfig(value) {
+    return typeof value === "object" && value !== null && "type" in value && value.type === "range";
+  }
+  // A stored range VALUE ({min,max} numbers), as opposed to a range config.
+  // Used to preserve the leaf value by identity across a panel update.
+  isRangeValue(value) {
+    return typeof value === "object" && value !== null && typeof value.min === "number" && typeof value.max === "number";
   }
   isTextConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "text";
@@ -1036,11 +1245,31 @@ var DialStoreClass = class {
         }
         return normalizeGradient(existingValue);
       }
+      case "xy": {
+        if (typeof existingValue !== "object" || existingValue === null || Array.isArray(existingValue)) {
+          return defaultValue;
+        }
+        const candidate = existingValue;
+        if (typeof candidate.x !== "number" || typeof candidate.y !== "number") {
+          return defaultValue;
+        }
+        const xAxis = resolveAxis(control.xAxis);
+        const yAxis = resolveAxis(control.yAxis);
+        return normalizeValue(candidate, xAxis, yAxis, false);
+      }
       case "text":
       case "file":
         return typeof existingValue === "string" ? existingValue : defaultValue;
       case "list":
         return Array.isArray(existingValue) ? existingValue : defaultValue;
+      case "range": {
+        if (!this.isRangeValue(existingValue)) {
+          return defaultValue;
+        }
+        const lo = control.min ?? Number.NEGATIVE_INFINITY;
+        const hi = control.max ?? Number.POSITIVE_INFINITY;
+        return clampRange(existingValue, lo, hi);
+      }
       case "gallery": {
         if (typeof existingValue !== "string") {
           return defaultValue;
@@ -1282,25 +1511,25 @@ function getFirstOptionValue(options) {
 }
 
 // src/components/DialRoot.tsx
-var import_react28 = require("react");
+var import_react32 = require("react");
 var import_react_dom6 = require("react-dom");
 
 // src/components/Panel.tsx
-var import_react26 = require("react");
-var import_react27 = require("motion/react");
+var import_react30 = require("react");
+var import_react31 = require("motion/react");
 
 // src/components/ShortcutListener.tsx
 var import_react2 = require("react");
 
 // src/shortcut-utils.ts
-function decimalsForStep(step) {
+function decimalsForStep2(step) {
   const s = step.toString();
   const dot = s.indexOf(".");
   return dot === -1 ? 0 : s.length - dot - 1;
 }
 function roundValue(val, step) {
   const raw = Math.round(val / step) * step;
-  return parseFloat(raw.toFixed(decimalsForStep(step)));
+  return parseFloat(raw.toFixed(decimalsForStep2(step)));
 }
 function getEffectiveStep(control, shortcut) {
   const min = control.min ?? 0;
@@ -1309,12 +1538,12 @@ function getEffectiveStep(control, shortcut) {
   const mode = shortcut.mode ?? "normal";
   return mode === "fine" ? range * 0.01 : mode === "coarse" ? range * 0.1 : control.step ?? 1;
 }
-function applySliderDelta(panelId, path, control, effectiveStep, direction) {
+function applySliderDelta(panelId, path, control, effectiveStep2, direction) {
   const currentValue = DialStore.getValue(panelId, path);
   const min = control.min ?? 0;
   const max = control.max ?? 1;
-  const newValue = Math.max(min, Math.min(max, currentValue + direction * effectiveStep));
-  DialStore.updateValue(panelId, path, roundValue(newValue, effectiveStep));
+  const newValue = Math.max(min, Math.min(max, currentValue + direction * effectiveStep2));
+  DialStore.updateValue(panelId, path, roundValue(newValue, effectiveStep2));
 }
 function snapToDecile(rawValue, min, max) {
   const normalized = (rawValue - min) / (max - min);
@@ -1413,8 +1642,8 @@ function ShortcutListener({ children }) {
           if (target2 && target2.control.type === "slider") {
             e.preventDefault();
             const direction = key === "arrowright" || key === "arrowup" ? 1 : -1;
-            const effectiveStep = getEffectiveStep(target2.control, target2.shortcut);
-            applySliderDelta(target2.panelId, target2.path, target2.control, effectiveStep, direction);
+            const effectiveStep2 = getEffectiveStep(target2.control, target2.shortcut);
+            applySliderDelta(target2.panelId, target2.path, target2.control, effectiveStep2, direction);
             return;
           }
         }
@@ -1470,9 +1699,9 @@ function ShortcutListener({ children }) {
           const interaction = control.shortcut?.interaction ?? "scroll";
           if (interaction !== "scroll" || control.type !== "slider") continue;
           e.preventDefault();
-          const effectiveStep = getEffectiveStep(control, control.shortcut);
+          const effectiveStep2 = getEffectiveStep(control, control.shortcut);
           const direction = e.deltaY > 0 ? -1 : 1;
-          applySliderDelta(panelId, path, control, effectiveStep, direction);
+          applySliderDelta(panelId, path, control, effectiveStep2, direction);
           return;
         }
       }
@@ -1480,9 +1709,9 @@ function ShortcutListener({ children }) {
       for (const { panelId, path, control, shortcut } of scrollOnlyTargets) {
         if (control.type !== "slider") continue;
         e.preventDefault();
-        const effectiveStep = getEffectiveStep(control, shortcut);
+        const effectiveStep2 = getEffectiveStep(control, shortcut);
         const direction = e.deltaY > 0 ? -1 : 1;
-        applySliderDelta(panelId, path, control, effectiveStep, direction);
+        applySliderDelta(panelId, path, control, effectiveStep2, direction);
         return;
       }
     };
@@ -1511,11 +1740,11 @@ function ShortcutListener({ children }) {
           const deltaX = e.clientX - lastMouseXRef.current;
           lastMouseXRef.current = e.clientX;
           dragAccumulatorRef.current += deltaX;
-          const effectiveStep = getEffectiveStep(target.control, target.shortcut);
+          const effectiveStep2 = getEffectiveStep(target.control, target.shortcut);
           const steps = Math.trunc(dragAccumulatorRef.current / DRAG_SENSITIVITY);
           if (steps !== 0) {
             dragAccumulatorRef.current -= steps * DRAG_SENSITIVITY;
-            applySliderDelta(target.panelId, target.path, target.control, effectiveStep, steps);
+            applySliderDelta(target.panelId, target.path, target.control, effectiveStep2, steps);
           }
         }
         return;
@@ -1529,11 +1758,11 @@ function ShortcutListener({ children }) {
         const deltaX = e.clientX - lastMouseXRef.current;
         lastMouseXRef.current = e.clientX;
         dragAccumulatorRef.current += deltaX;
-        const effectiveStep = getEffectiveStep(moveTarget.control, moveTarget.shortcut);
+        const effectiveStep2 = getEffectiveStep(moveTarget.control, moveTarget.shortcut);
         const steps = Math.trunc(dragAccumulatorRef.current / DRAG_SENSITIVITY);
         if (steps !== 0) {
           dragAccumulatorRef.current -= steps * DRAG_SENSITIVITY;
-          applySliderDelta(moveTarget.panelId, moveTarget.path, moveTarget.control, effectiveStep, steps);
+          applySliderDelta(moveTarget.panelId, moveTarget.path, moveTarget.control, effectiveStep2, steps);
         }
       }
     };
@@ -1969,7 +2198,7 @@ function Slider({
       e.stopPropagation();
       e.preventDefault();
       setShowInput(true);
-      setInputValue(value.toFixed(decimalsForStep(step)));
+      setInputValue(value.toFixed(decimalsForStep2(step)));
     }
   };
   const handleInputKeyDown = (e) => {
@@ -1983,7 +2212,7 @@ function Slider({
   const handleInputBlur = () => {
     handleInputSubmit();
   };
-  const displayValue = formatValue ? formatValue(value) : value.toFixed(decimalsForStep(step));
+  const displayValue = formatValue ? formatValue(value) : value.toFixed(decimalsForStep2(step));
   const HANDLE_BUFFER = 8;
   const LABEL_CSS_LEFT = 10;
   const VALUE_CSS_RIGHT = 10;
@@ -2110,18 +2339,335 @@ function Slider({
   ) });
 }
 
-// src/components/SegmentedControl.tsx
+// src/components/RangeSlider.tsx
 var import_react7 = require("react");
+var import_react8 = require("motion/react");
 var import_jsx_runtime4 = require("react/jsx-runtime");
+var CLICK_THRESHOLD2 = 3;
+var HANDLE_HIT_PX = 12;
+function RangeSlider({
+  label,
+  value: rawValue,
+  onChange,
+  min = 0,
+  max = 1,
+  step = 0.01,
+  defaultValue
+}) {
+  const wrapperRef = (0, import_react7.useRef)(null);
+  const trackRef = (0, import_react7.useRef)(null);
+  const inputRef = (0, import_react7.useRef)(null);
+  const [isInteracting, setIsInteracting] = (0, import_react7.useState)(false);
+  const [isDragging, setIsDragging] = (0, import_react7.useState)(false);
+  const [isHovered, setIsHovered] = (0, import_react7.useState)(false);
+  const [editing, setEditing] = (0, import_react7.useState)(null);
+  const [inputValue, setInputValue] = (0, import_react7.useState)("");
+  const pointerDownPos = (0, import_react7.useRef)(null);
+  const isClickRef = (0, import_react7.useRef)(true);
+  const dragTargetRef = (0, import_react7.useRef)(null);
+  const clickMovesRef = (0, import_react7.useRef)(false);
+  const dragStartValueRef = (0, import_react7.useRef)(rawValue);
+  const dragStartValueAtRef = (0, import_react7.useRef)(0);
+  const lowAnimRef = (0, import_react7.useRef)(null);
+  const highAnimRef = (0, import_react7.useRef)(null);
+  const stopAnims = (0, import_react7.useCallback)(() => {
+    lowAnimRef.current?.stop();
+    highAnimRef.current?.stop();
+    lowAnimRef.current = null;
+    highAnimRef.current = null;
+  }, []);
+  const wrapperRectRef = (0, import_react7.useRef)(null);
+  const scaleRef = (0, import_react7.useRef)(1);
+  const value = isInteracting ? rawValue : clampRange(rawValue, min, max);
+  const span = max - min;
+  const lowPercent = span === 0 ? 0 : (value.min - min) / span * 100;
+  const highPercent = span === 0 ? 0 : (value.max - min) / span * 100;
+  const isActive = isInteracting || isHovered;
+  const lowMotion = (0, import_react8.useMotionValue)(lowPercent);
+  const highMotion = (0, import_react8.useMotionValue)(highPercent);
+  const fillLeft = (0, import_react8.useTransform)(lowMotion, (pct) => `${pct}%`);
+  const fillWidth = (0, import_react8.useTransform)(
+    [lowMotion, highMotion],
+    ([lo, hi]) => `${Math.max(0, hi - lo)}%`
+  );
+  const lowHandleLeft = (0, import_react8.useTransform)([lowMotion, highMotion], ([lo, hi]) => handleLeftStyles(lo, hi).low);
+  const highHandleLeft = (0, import_react8.useTransform)([lowMotion, highMotion], ([lo, hi]) => handleLeftStyles(lo, hi).high);
+  (0, import_react7.useEffect)(() => {
+    if (!isInteracting && !lowAnimRef.current && !highAnimRef.current) {
+      lowMotion.jump(lowPercent);
+      highMotion.jump(highPercent);
+    }
+  }, [lowPercent, highPercent, isInteracting, lowMotion, highMotion]);
+  const positionToValue = (0, import_react7.useCallback)(
+    (clientX) => {
+      const rect = wrapperRectRef.current;
+      if (!rect) return value.min;
+      const screenX = clientX - rect.left;
+      const sceneX = screenX / scaleRef.current;
+      const nativeWidth = wrapperRef.current ? wrapperRef.current.offsetWidth : rect.width;
+      const percent = Math.max(0, Math.min(1, sceneX / nativeWidth));
+      const rawValue2 = min + percent * (max - min);
+      return Math.max(min, Math.min(max, rawValue2));
+    },
+    [min, max, value.min]
+  );
+  const percentFromValue = (0, import_react7.useCallback)(
+    (v) => span === 0 ? 0 : (v - min) / span * 100,
+    [min, span]
+  );
+  const syncMotion = (0, import_react7.useCallback)(
+    (next) => {
+      lowMotion.jump(percentFromValue(next.min));
+      highMotion.jump(percentFromValue(next.max));
+    },
+    [lowMotion, highMotion, percentFromValue]
+  );
+  const handlePointerDown = (0, import_react7.useCallback)(
+    (e) => {
+      if (editing) return;
+      e.preventDefault();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      pointerDownPos.current = { x: e.clientX, y: e.clientY };
+      isClickRef.current = true;
+      setIsInteracting(true);
+      if (wrapperRef.current) {
+        wrapperRectRef.current = wrapperRef.current.getBoundingClientRect();
+        const nativeWidth = wrapperRef.current.offsetWidth;
+        scaleRef.current = wrapperRectRef.current.width / nativeWidth;
+      }
+      const atValue = positionToValue(e.clientX);
+      const trackW = wrapperRef.current?.offsetWidth ?? 1;
+      const hitV = HANDLE_HIT_PX / trackW * (max - min);
+      const target = pickDragTarget(atValue, value, hitV);
+      dragTargetRef.current = target;
+      clickMovesRef.current = target !== "span" && isOutsideSpan(atValue, value);
+      dragStartValueRef.current = value;
+      dragStartValueAtRef.current = atValue;
+    },
+    [editing, positionToValue, value, min, max]
+  );
+  const handlePointerMove = (0, import_react7.useCallback)(
+    (e) => {
+      if (!isInteracting || !pointerDownPos.current) return;
+      const dx = e.clientX - pointerDownPos.current.x;
+      const dy = e.clientY - pointerDownPos.current.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (isClickRef.current && distance > CLICK_THRESHOLD2) {
+        isClickRef.current = false;
+        setIsDragging(true);
+      }
+      if (isClickRef.current) return;
+      const raw = roundValue(positionToValue(e.clientX), step);
+      const target = dragTargetRef.current;
+      let next;
+      if (target === "span") {
+        const delta = raw - roundValue(dragStartValueAtRef.current, step);
+        next = shiftSpan(delta, dragStartValueRef.current, min, max);
+      } else if (target === "min") {
+        next = setLow(raw, value, min);
+      } else {
+        next = setHigh(raw, value, max);
+      }
+      stopAnims();
+      syncMotion(next);
+      onChange(next);
+    },
+    [isInteracting, positionToValue, step, min, max, value, syncMotion, onChange, stopAnims]
+  );
+  const handlePointerUp = (0, import_react7.useCallback)(
+    (e) => {
+      if (!isInteracting) return;
+      if (isClickRef.current && clickMovesRef.current) {
+        const raw = roundValue(positionToValue(e.clientX), step);
+        const which = dragTargetRef.current ?? nearestHandle(raw, value);
+        const next = which === "min" ? setLow(raw, value, min) : setHigh(raw, value, max);
+        const motion12 = which === "min" ? lowMotion : highMotion;
+        const targetPct = percentFromValue(which === "min" ? next.min : next.max);
+        stopAnims();
+        const anim = (0, import_react8.animate)(motion12, targetPct, {
+          type: "spring",
+          stiffness: 300,
+          damping: 25,
+          mass: 0.8,
+          onComplete: () => {
+            if (which === "min") lowAnimRef.current = null;
+            else highAnimRef.current = null;
+          }
+        });
+        if (which === "min") lowAnimRef.current = anim;
+        else highAnimRef.current = anim;
+        onChange(next);
+      }
+      setIsInteracting(false);
+      setIsDragging(false);
+      pointerDownPos.current = null;
+      dragTargetRef.current = null;
+    },
+    [isInteracting, positionToValue, step, value, min, max, lowMotion, highMotion, percentFromValue, onChange, stopAnims]
+  );
+  const handlePointerCancel = (0, import_react7.useCallback)(() => {
+    if (!isInteracting) return;
+    setIsInteracting(false);
+    setIsDragging(false);
+    pointerDownPos.current = null;
+    dragTargetRef.current = null;
+  }, [isInteracting]);
+  const handleDoubleClick = (0, import_react7.useCallback)(() => {
+    if (editing !== null) return;
+    const d = clampRange(defaultValue ?? { min, max }, min, max);
+    stopAnims();
+    lowAnimRef.current = (0, import_react8.animate)(lowMotion, percentFromValue(d.min), {
+      type: "spring",
+      stiffness: 300,
+      damping: 25,
+      mass: 0.8,
+      onComplete: () => {
+        lowAnimRef.current = null;
+      }
+    });
+    highAnimRef.current = (0, import_react8.animate)(highMotion, percentFromValue(d.max), {
+      type: "spring",
+      stiffness: 300,
+      damping: 25,
+      mass: 0.8,
+      onComplete: () => {
+        highAnimRef.current = null;
+      }
+    });
+    onChange(d);
+  }, [editing, defaultValue, min, max, lowMotion, highMotion, percentFromValue, onChange, stopAnims]);
+  (0, import_react7.useEffect)(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+  const decimals = decimalsForStep2(step);
+  const openEditor = (0, import_react7.useCallback)(
+    (which) => {
+      setEditing(which);
+      setInputValue((which === "min" ? value.min : value.max).toFixed(decimals));
+    },
+    [value.min, value.max, decimals]
+  );
+  const commitEditor = (0, import_react7.useCallback)(() => {
+    if (!editing) return;
+    const parsed = parseFloat(inputValue);
+    if (!isNaN(parsed)) {
+      const rounded = roundValue(parsed, step);
+      const next = editing === "min" ? setLow(rounded, value, min) : setHigh(rounded, value, max);
+      onChange(next);
+    }
+    setEditing(null);
+  }, [editing, inputValue, step, value, min, max, onChange]);
+  const handleInputKeyDown = (e) => {
+    if (e.key === "Enter") {
+      commitEditor();
+    } else if (e.key === "Escape") {
+      setEditing(null);
+    }
+  };
+  const lowText = value.min.toFixed(decimals);
+  const highText = value.max.toFixed(decimals);
+  const restOpacity = 0.35;
+  const lowOpacity = !isActive ? restOpacity : isDragging && dragTargetRef.current === "min" ? 0.95 : 0.7;
+  const highOpacity = !isActive ? restOpacity : isDragging && dragTargetRef.current === "max" ? 0.95 : 0.7;
+  return /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { ref: wrapperRef, className: "dialkit-range-slider-wrapper", children: /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
+    import_react8.motion.div,
+    {
+      ref: trackRef,
+      className: `dialkit-range-slider ${isActive ? "dialkit-range-slider-active" : ""}`,
+      onPointerDown: handlePointerDown,
+      onPointerMove: handlePointerMove,
+      onPointerUp: handlePointerUp,
+      onPointerCancel: handlePointerCancel,
+      onDoubleClick: handleDoubleClick,
+      onMouseEnter: () => setIsHovered(true),
+      onMouseLeave: () => setIsHovered(false),
+      children: [
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+          import_react8.motion.div,
+          {
+            className: "dialkit-range-slider-fill",
+            style: { left: fillLeft, width: fillWidth }
+          }
+        ),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+          import_react8.motion.div,
+          {
+            className: "dialkit-range-slider-handle",
+            style: { left: lowHandleLeft, y: "-50%" },
+            animate: { opacity: lowOpacity },
+            transition: { opacity: { duration: 0.15 } }
+          }
+        ),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+          import_react8.motion.div,
+          {
+            className: "dialkit-range-slider-handle",
+            style: { left: highHandleLeft, y: "-50%" },
+            animate: { opacity: highOpacity },
+            transition: { opacity: { duration: 0.15 } }
+          }
+        ),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "dialkit-range-slider-label", children: label }),
+        editing !== null ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+          "input",
+          {
+            ref: inputRef,
+            type: "text",
+            className: "dialkit-range-slider-input",
+            value: inputValue,
+            onChange: (e) => setInputValue(e.target.value),
+            onKeyDown: handleInputKeyDown,
+            onBlur: commitEditor,
+            onClick: (e) => e.stopPropagation(),
+            onPointerDown: (e) => e.stopPropagation()
+          }
+        ) : /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("span", { className: "dialkit-range-slider-value", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+            "span",
+            {
+              className: "dialkit-range-slider-bound",
+              onClick: (e) => {
+                e.stopPropagation();
+                openEditor("min");
+              },
+              onPointerDown: (e) => e.stopPropagation(),
+              children: lowText
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "dialkit-range-slider-dash", children: "\u2013" }),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+            "span",
+            {
+              className: "dialkit-range-slider-bound",
+              onClick: (e) => {
+                e.stopPropagation();
+                openEditor("max");
+              },
+              onPointerDown: (e) => e.stopPropagation(),
+              children: highText
+            }
+          )
+        ] })
+      ]
+    }
+  ) });
+}
+
+// src/components/SegmentedControl.tsx
+var import_react9 = require("react");
+var import_jsx_runtime5 = require("react/jsx-runtime");
 function SegmentedControl({
   options,
   value,
   onChange
 }) {
-  const containerRef = (0, import_react7.useRef)(null);
-  const hasAnimated = (0, import_react7.useRef)(false);
-  const [pillStyle, setPillStyle] = (0, import_react7.useState)(null);
-  const measure = (0, import_react7.useCallback)(() => {
+  const containerRef = (0, import_react9.useRef)(null);
+  const hasAnimated = (0, import_react9.useRef)(false);
+  const [pillStyle, setPillStyle] = (0, import_react9.useState)(null);
+  const measure = (0, import_react9.useCallback)(() => {
     const container = containerRef.current;
     if (!container) return;
     const activeButton = container.querySelector('[data-active="true"]');
@@ -2131,13 +2677,13 @@ function SegmentedControl({
       width: activeButton.offsetWidth
     });
   }, []);
-  (0, import_react7.useLayoutEffect)(() => {
+  (0, import_react9.useLayoutEffect)(() => {
     measure();
   }, [value, options.length, measure]);
   const shouldAnimate = hasAnimated.current;
   hasAnimated.current = true;
-  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "dialkit-segmented", ref: containerRef, children: [
-    pillStyle && /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "dialkit-segmented", ref: containerRef, children: [
+    pillStyle && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
       "div",
       {
         className: "dialkit-segmented-pill",
@@ -2150,7 +2696,7 @@ function SegmentedControl({
     ),
     options.map((option) => {
       const isActive = value === option.value;
-      return /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
         "button",
         {
           onClick: () => onChange(option.value),
@@ -2165,14 +2711,14 @@ function SegmentedControl({
 }
 
 // src/components/Toggle.tsx
-var import_jsx_runtime5 = require("react/jsx-runtime");
+var import_jsx_runtime6 = require("react/jsx-runtime");
 function Toggle({ label, checked, onChange, shortcut, shortcutActive }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "dialkit-labeled-control", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("span", { className: "dialkit-labeled-control-label", children: [
+  return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "dialkit-labeled-control", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("span", { className: "dialkit-labeled-control-label", children: [
       label,
-      shortcut && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: `dialkit-shortcut-pill${shortcutActive ? " dialkit-shortcut-pill-active" : ""}`, children: formatToggleShortcut(shortcut) })
+      shortcut && /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: `dialkit-shortcut-pill${shortcutActive ? " dialkit-shortcut-pill-active" : ""}`, children: formatToggleShortcut(shortcut) })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
       SegmentedControl,
       {
         options: [
@@ -2187,7 +2733,7 @@ function Toggle({ label, checked, onChange, shortcut, shortcutActive }) {
 }
 
 // src/components/SpringVisualization.tsx
-var import_jsx_runtime6 = require("react/jsx-runtime");
+var import_jsx_runtime7 = require("react/jsx-runtime");
 function generateSpringCurve(stiffness, damping, mass, duration) {
   const points = [];
   const steps = 100;
@@ -2242,13 +2788,13 @@ function SpringVisualization({ spring, isSimpleMode }) {
     const x = width / 4 * i;
     const y = height / 4 * i;
     gridLines.push(
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("line", { x1: x, y1: 0, x2: x, y2: height, stroke: "rgba(255, 255, 255, 0.08)", strokeWidth: "1" }, `v-${i}`),
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("line", { x1: 0, y1: y, x2: width, y2: y, stroke: "rgba(255, 255, 255, 0.08)", strokeWidth: "1" }, `h-${i}`)
+      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("line", { x1: x, y1: 0, x2: x, y2: height, stroke: "rgba(255, 255, 255, 0.08)", strokeWidth: "1" }, `v-${i}`),
+      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("line", { x1: 0, y1: y, x2: width, y2: y, stroke: "rgba(255, 255, 255, 0.08)", strokeWidth: "1" }, `h-${i}`)
     );
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("svg", { viewBox: `0 0 ${width} ${height}`, className: "dialkit-spring-viz", children: [
+  return /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("svg", { viewBox: `0 0 ${width} ${height}`, className: "dialkit-spring-viz", children: [
     gridLines,
-    /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
       "line",
       {
         x1: 0,
@@ -2260,7 +2806,7 @@ function SpringVisualization({ spring, isSimpleMode }) {
         strokeDasharray: "4,4"
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
       "path",
       {
         d: pathData,
@@ -2275,16 +2821,16 @@ function SpringVisualization({ spring, isSimpleMode }) {
 }
 
 // src/components/SpringControl.tsx
-var import_react8 = require("react");
-var import_jsx_runtime7 = require("react/jsx-runtime");
+var import_react10 = require("react");
+var import_jsx_runtime8 = require("react/jsx-runtime");
 function SpringControl({ panelId, path, label, spring, onChange }) {
-  const mode = (0, import_react8.useSyncExternalStore)(
+  const mode = (0, import_react10.useSyncExternalStore)(
     (cb) => DialStore.subscribe(panelId, cb),
     () => DialStore.getSpringMode(panelId, path),
     () => DialStore.getSpringMode(panelId, path)
   );
   const isSimpleMode = mode === "simple";
-  const cache2 = (0, import_react8.useRef)({
+  const cache2 = (0, import_react10.useRef)({
     simple: spring.visualDuration !== void 0 ? spring : { type: "spring", visualDuration: 0.3, bounce: 0.2 },
     advanced: spring.stiffness !== void 0 ? spring : { type: "spring", stiffness: 200, damping: 25, mass: 1 }
   });
@@ -2310,11 +2856,11 @@ function SpringControl({ panelId, path, label, spring, onChange }) {
       onChange({ ...rest, [key]: value });
     }
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(Folder, { title: label, defaultOpen: true, children: /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(SpringVisualization, { spring, isSimpleMode }),
-    /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { className: "dialkit-labeled-control", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("span", { className: "dialkit-labeled-control-label", children: "Type" }),
-      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Folder, { title: label, defaultOpen: true, children: /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(SpringVisualization, { spring, isSimpleMode }),
+    /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "dialkit-labeled-control", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "dialkit-labeled-control-label", children: "Type" }),
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
         SegmentedControl,
         {
           options: [
@@ -2326,8 +2872,8 @@ function SpringControl({ panelId, path, label, spring, onChange }) {
         }
       )
     ] }),
-    isSimpleMode ? /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)(import_jsx_runtime7.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
+    isSimpleMode ? /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(import_jsx_runtime8.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
         Slider,
         {
           label: "Duration",
@@ -2339,7 +2885,7 @@ function SpringControl({ panelId, path, label, spring, onChange }) {
           unit: "s"
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
         Slider,
         {
           label: "Bounce",
@@ -2350,8 +2896,8 @@ function SpringControl({ panelId, path, label, spring, onChange }) {
           step: 0.05
         }
       )
-    ] }) : /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)(import_jsx_runtime7.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
+    ] }) : /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(import_jsx_runtime8.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
         Slider,
         {
           label: "Stiffness",
@@ -2362,7 +2908,7 @@ function SpringControl({ panelId, path, label, spring, onChange }) {
           step: 10
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
         Slider,
         {
           label: "Damping",
@@ -2373,7 +2919,7 @@ function SpringControl({ panelId, path, label, spring, onChange }) {
           step: 1
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
         Slider,
         {
           label: "Mass",
@@ -2389,7 +2935,7 @@ function SpringControl({ panelId, path, label, spring, onChange }) {
 }
 
 // src/components/EasingVisualization.tsx
-var import_jsx_runtime8 = require("react/jsx-runtime");
+var import_jsx_runtime9 = require("react/jsx-runtime");
 function EasingVisualization({ easing }) {
   const ease = easing.ease;
   const s = 200;
@@ -2405,14 +2951,14 @@ function EasingVisualization({ easing }) {
   const p1 = toSvg(ease[0], ease[1]);
   const p2 = toSvg(ease[2], ease[3]);
   const curvePath2 = `M ${start.x} ${start.y} C ${p1.x} ${p1.y}, ${p2.x} ${p2.y}, ${end.x} ${end.y}`;
-  return /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(
     "svg",
     {
       viewBox: `0 0 ${s} ${s}`,
       preserveAspectRatio: "xMidYMid slice",
       className: "dialkit-spring-viz dialkit-easing-viz",
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
           "line",
           {
             x1: start.x,
@@ -2424,24 +2970,24 @@ function EasingVisualization({ easing }) {
             strokeDasharray: "4,4"
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("path", { d: curvePath2, fill: "none", stroke: "rgba(255, 255, 255, 0.6)", strokeWidth: "2", strokeLinecap: "round" })
+        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("path", { d: curvePath2, fill: "none", stroke: "rgba(255, 255, 255, 0.6)", strokeWidth: "2", strokeLinecap: "round" })
       ]
     }
   );
 }
 
 // src/components/TransitionControl.tsx
-var import_react9 = require("react");
-var import_jsx_runtime9 = require("react/jsx-runtime");
+var import_react11 = require("react");
+var import_jsx_runtime10 = require("react/jsx-runtime");
 function TransitionControl({ panelId, path, label, value, onChange }) {
-  const mode = (0, import_react9.useSyncExternalStore)(
+  const mode = (0, import_react11.useSyncExternalStore)(
     (cb) => DialStore.subscribe(panelId, cb),
     () => DialStore.getTransitionMode(panelId, path),
     () => DialStore.getTransitionMode(panelId, path)
   );
   const isEasing = mode === "easing";
   const isSimpleSpring = mode === "simple";
-  const cache2 = (0, import_react9.useRef)({
+  const cache2 = (0, import_react11.useRef)({
     easing: value.type === "easing" ? value : { type: "easing", duration: 0.3, ease: [1, -0.4, 0.5, 1] },
     simple: value.type === "spring" && value.visualDuration !== void 0 ? value : { type: "spring", visualDuration: 0.3, bounce: 0.2 },
     advanced: value.type === "spring" && value.stiffness !== void 0 ? value : { type: "spring", stiffness: 200, damping: 25, mass: 1 }
@@ -2479,11 +3025,11 @@ function TransitionControl({ panelId, path, label, value, onChange }) {
     newEase[index] = val;
     onChange({ ...easing, ease: newEase });
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Folder, { title: label, defaultOpen: true, children: /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: [
-    isEasing ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(EasingVisualization, { easing }) : /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(SpringVisualization, { spring, isSimpleMode: isSimpleSpring }),
-    /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "dialkit-labeled-control", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "dialkit-labeled-control-label", children: "Type" }),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Folder, { title: label, defaultOpen: true, children: /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: [
+    isEasing ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(EasingVisualization, { easing }) : /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(SpringVisualization, { spring, isSimpleMode: isSimpleSpring }),
+    /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "dialkit-labeled-control", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "dialkit-labeled-control-label", children: "Type" }),
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
         SegmentedControl,
         {
           options: [
@@ -2496,20 +3042,20 @@ function TransitionControl({ panelId, path, label, value, onChange }) {
         }
       )
     ] }),
-    isEasing ? /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(import_jsx_runtime9.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Slider, { label: "x1", value: easing.ease[0], onChange: (v) => updateEase(0, v), min: 0, max: 1, step: 0.01 }),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Slider, { label: "y1", value: easing.ease[1], onChange: (v) => updateEase(1, v), min: -1, max: 2, step: 0.01 }),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Slider, { label: "x2", value: easing.ease[2], onChange: (v) => updateEase(2, v), min: 0, max: 1, step: 0.01 }),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Slider, { label: "y2", value: easing.ease[3], onChange: (v) => updateEase(3, v), min: -1, max: 2, step: 0.01 }),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Slider, { label: "Duration", value: easing.duration, onChange: (v) => onChange({ ...easing, duration: v }), min: 0.1, max: 2, step: 0.05, unit: "s" }),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(EaseTextInput, { ease: easing.ease, onChange: (newEase) => onChange({ ...easing, ease: newEase }) })
-    ] }) : isSimpleSpring ? /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(import_jsx_runtime9.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Slider, { label: "Duration", value: spring.visualDuration ?? 0.3, onChange: (v) => handleSpringUpdate("visualDuration", v), min: 0.1, max: 1, step: 0.05, unit: "s" }),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Slider, { label: "Bounce", value: spring.bounce ?? 0.2, onChange: (v) => handleSpringUpdate("bounce", v), min: 0, max: 1, step: 0.05 })
-    ] }) : /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(import_jsx_runtime9.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Slider, { label: "Stiffness", value: spring.stiffness ?? 400, onChange: (v) => handleSpringUpdate("stiffness", v), min: 1, max: 1e3, step: 10 }),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Slider, { label: "Damping", value: spring.damping ?? 17, onChange: (v) => handleSpringUpdate("damping", v), min: 1, max: 100, step: 1 }),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Slider, { label: "Mass", value: spring.mass ?? 1, onChange: (v) => handleSpringUpdate("mass", v), min: 0.1, max: 10, step: 0.1 })
+    isEasing ? /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(import_jsx_runtime10.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Slider, { label: "x1", value: easing.ease[0], onChange: (v) => updateEase(0, v), min: 0, max: 1, step: 0.01 }),
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Slider, { label: "y1", value: easing.ease[1], onChange: (v) => updateEase(1, v), min: -1, max: 2, step: 0.01 }),
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Slider, { label: "x2", value: easing.ease[2], onChange: (v) => updateEase(2, v), min: 0, max: 1, step: 0.01 }),
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Slider, { label: "y2", value: easing.ease[3], onChange: (v) => updateEase(3, v), min: -1, max: 2, step: 0.01 }),
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Slider, { label: "Duration", value: easing.duration, onChange: (v) => onChange({ ...easing, duration: v }), min: 0.1, max: 2, step: 0.05, unit: "s" }),
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(EaseTextInput, { ease: easing.ease, onChange: (newEase) => onChange({ ...easing, ease: newEase }) })
+    ] }) : isSimpleSpring ? /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(import_jsx_runtime10.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Slider, { label: "Duration", value: spring.visualDuration ?? 0.3, onChange: (v) => handleSpringUpdate("visualDuration", v), min: 0.1, max: 1, step: 0.05, unit: "s" }),
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Slider, { label: "Bounce", value: spring.bounce ?? 0.2, onChange: (v) => handleSpringUpdate("bounce", v), min: 0, max: 1, step: 0.05 })
+    ] }) : /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(import_jsx_runtime10.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Slider, { label: "Stiffness", value: spring.stiffness ?? 400, onChange: (v) => handleSpringUpdate("stiffness", v), min: 1, max: 1e3, step: 10 }),
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Slider, { label: "Damping", value: spring.damping ?? 17, onChange: (v) => handleSpringUpdate("damping", v), min: 1, max: 100, step: 1 }),
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Slider, { label: "Mass", value: spring.mass ?? 1, onChange: (v) => handleSpringUpdate("mass", v), min: 0.1, max: 10, step: 0.1 })
     ] })
   ] }) });
 }
@@ -2524,8 +3070,8 @@ function parseEase(str) {
   return null;
 }
 function EaseTextInput({ ease, onChange }) {
-  const [editing, setEditing] = (0, import_react9.useState)(false);
-  const [draft, setDraft] = (0, import_react9.useState)("");
+  const [editing, setEditing] = (0, import_react11.useState)(false);
+  const [draft, setDraft] = (0, import_react11.useState)("");
   const handleFocus = () => {
     setDraft(formatEase(ease));
     setEditing(true);
@@ -2540,9 +3086,9 @@ function EaseTextInput({ ease, onChange }) {
       e.target.blur();
     }
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "dialkit-labeled-control", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "dialkit-labeled-control-label", children: "Ease" }),
-    /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "dialkit-labeled-control", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "dialkit-labeled-control-label", children: "Ease" }),
+    /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
       "input",
       {
         type: "text",
@@ -2559,11 +3105,11 @@ function EaseTextInput({ ease, onChange }) {
 }
 
 // src/components/TextControl.tsx
-var import_jsx_runtime10 = require("react/jsx-runtime");
+var import_jsx_runtime11 = require("react/jsx-runtime");
 function TextControl({ label, value, onChange, placeholder }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "dialkit-text-control", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("label", { className: "dialkit-text-label", children: label }),
-    /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "dialkit-text-control", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("label", { className: "dialkit-text-label", children: label }),
+    /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
       "input",
       {
         type: "text",
@@ -2577,10 +3123,19 @@ function TextControl({ label, value, onChange, placeholder }) {
 }
 
 // src/components/SelectControl.tsx
-var import_react10 = require("react");
+var import_react13 = require("react");
 var import_react_dom = require("react-dom");
-var import_react11 = require("motion/react");
-var import_jsx_runtime11 = require("react/jsx-runtime");
+var import_react14 = require("motion/react");
+
+// src/components/PresenceMotionDiv.tsx
+var import_react12 = require("motion/react");
+var import_jsx_runtime12 = require("react/jsx-runtime");
+function PresenceMotionDiv({ divRef, ...props }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(import_react12.motion.div, { ref: divRef, ...props });
+}
+
+// src/components/SelectControl.tsx
+var import_jsx_runtime13 = require("react/jsx-runtime");
 function toTitleCase(s) {
   return s.replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -2590,14 +3145,14 @@ function normalizeOptions(options) {
   );
 }
 function SelectControl({ label, value, options, onChange }) {
-  const [isOpen, setIsOpen] = (0, import_react10.useState)(false);
-  const triggerRef = (0, import_react10.useRef)(null);
-  const dropdownRef = (0, import_react10.useRef)(null);
-  const [portalTarget, setPortalTarget] = (0, import_react10.useState)(null);
-  const [pos, setPos] = (0, import_react10.useState)(null);
+  const [isOpen, setIsOpen] = (0, import_react13.useState)(false);
+  const triggerRef = (0, import_react13.useRef)(null);
+  const dropdownRef = (0, import_react13.useRef)(null);
+  const [portalTarget, setPortalTarget] = (0, import_react13.useState)(null);
+  const [pos, setPos] = (0, import_react13.useState)(null);
   const normalized = normalizeOptions(options);
   const selectedOption = normalized.find((o) => o.value === value);
-  const updatePos = (0, import_react10.useCallback)(() => {
+  const updatePos = (0, import_react13.useCallback)(() => {
     const el = triggerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -2611,15 +3166,15 @@ function SelectControl({ label, value, options, onChange }) {
       above
     });
   }, [normalized.length]);
-  (0, import_react10.useEffect)(() => {
+  (0, import_react13.useEffect)(() => {
     const root = triggerRef.current?.closest(".dialkit-root");
     setPortalTarget(root ?? document.body);
   }, []);
-  (0, import_react10.useEffect)(() => {
+  (0, import_react13.useEffect)(() => {
     if (!isOpen) return;
     updatePos();
   }, [isOpen, updatePos]);
-  (0, import_react10.useEffect)(() => {
+  (0, import_react13.useEffect)(() => {
     if (!isOpen) return;
     const handleClick = (e) => {
       const target = e.target;
@@ -2630,8 +3185,8 @@ function SelectControl({ label, value, options, onChange }) {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [isOpen]);
-  return /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "dialkit-select-row", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "dialkit-select-row", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(
       "button",
       {
         ref: triggerRef,
@@ -2639,11 +3194,11 @@ function SelectControl({ label, value, options, onChange }) {
         onClick: () => setIsOpen(!isOpen),
         "data-open": String(isOpen),
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "dialkit-select-label", children: label }),
-          /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "dialkit-select-right", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "dialkit-select-value", children: selectedOption?.label ?? value }),
-            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
-              import_react11.motion.svg,
+          /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "dialkit-select-label", children: label }),
+          /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "dialkit-select-right", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "dialkit-select-value", children: selectedOption?.label ?? value }),
+            /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+              import_react14.motion.svg,
               {
                 className: "dialkit-select-chevron",
                 viewBox: "0 0 24 24",
@@ -2654,7 +3209,7 @@ function SelectControl({ label, value, options, onChange }) {
                 strokeLinejoin: "round",
                 animate: { rotate: isOpen ? 180 : 0 },
                 transition: { type: "spring", visualDuration: 0.2, bounce: 0.15 },
-                children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("path", { d: ICON_CHEVRON })
+                children: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("path", { d: ICON_CHEVRON })
               }
             )
           ] })
@@ -2662,10 +3217,10 @@ function SelectControl({ label, value, options, onChange }) {
       }
     ),
     portalTarget && (0, import_react_dom.createPortal)(
-      /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(import_react11.AnimatePresence, { children: isOpen && pos && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
-        import_react11.motion.div,
+      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(import_react14.AnimatePresence, { children: isOpen && pos && /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+        PresenceMotionDiv,
         {
-          ref: dropdownRef,
+          divRef: dropdownRef,
           className: "dialkit-select-dropdown",
           initial: { opacity: 0, y: pos.above ? 8 : -8, scale: 0.95 },
           animate: { opacity: 1, y: 0, scale: 1 },
@@ -2677,7 +3232,7 @@ function SelectControl({ label, value, options, onChange }) {
             width: pos.width,
             ...pos.above ? { bottom: window.innerHeight - pos.top, transformOrigin: "bottom" } : { top: pos.top, transformOrigin: "top" }
           },
-          children: normalized.map((option) => /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+          children: normalized.map((option) => /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
             "button",
             {
               className: "dialkit-select-option",
@@ -2698,12 +3253,12 @@ function SelectControl({ label, value, options, onChange }) {
 }
 
 // src/components/ColorControl.tsx
-var import_react13 = require("react");
+var import_react16 = require("react");
 var import_react_dom2 = require("react-dom");
-var import_react14 = require("motion/react");
+var import_react17 = require("motion/react");
 
 // src/components/ColorPickerPanel.tsx
-var import_react12 = require("react");
+var import_react15 = require("react");
 
 // src/color-palette-store.ts
 var cache = null;
@@ -2756,7 +3311,7 @@ function subscribePalette(cb) {
 }
 
 // src/components/ColorPickerPanel.tsx
-var import_jsx_runtime12 = require("react/jsx-runtime");
+var import_jsx_runtime14 = require("react/jsx-runtime");
 var FORMAT_OPTIONS = [
   { value: "hex", label: "HEX" },
   { value: "rgb", label: "RGB" },
@@ -2766,9 +3321,9 @@ var FORMAT_OPTIONS = [
 var stickyFormat = "hex";
 var BLACK = { h: 0, s: 0, v: 0, a: 1 };
 function useAreaDrag(onPoint) {
-  const ref = (0, import_react12.useRef)(null);
-  const draggingRef = (0, import_react12.useRef)(false);
-  const readPoint = (0, import_react12.useCallback)(
+  const ref = (0, import_react15.useRef)(null);
+  const draggingRef = (0, import_react15.useRef)(false);
+  const readPoint = (0, import_react15.useCallback)(
     (e) => {
       const el = ref.current;
       if (!el) return;
@@ -2798,14 +3353,14 @@ function useAreaDrag(onPoint) {
   return { ref, onPointerDown, onPointerMove, onPointerUp: endDrag, onPointerCancel: endDrag };
 }
 function ChannelField({ spec, value, onCommit }) {
-  const [draft, setDraft] = (0, import_react12.useState)(null);
+  const [draft, setDraft] = (0, import_react15.useState)(null);
   const display = draft ?? String(value);
   const commit = () => {
     if (draft !== null) onCommit(Number(draft));
     setDraft(null);
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("label", { className: "dialkit-color-field", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("label", { className: "dialkit-color-field", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
       "input",
       {
         type: "text",
@@ -2829,11 +3384,11 @@ function ChannelField({ spec, value, onCommit }) {
         }
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "dialkit-color-field-label", children: spec.label })
+    /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "dialkit-color-field-label", children: spec.label })
   ] });
 }
 function HexField({ value, alpha, onCommit }) {
-  const [draft, setDraft] = (0, import_react12.useState)(null);
+  const [draft, setDraft] = (0, import_react15.useState)(null);
   const commit = () => {
     if (draft !== null) {
       const normalized = normalizeHex(draft, alpha);
@@ -2841,8 +3396,8 @@ function HexField({ value, alpha, onCommit }) {
     }
     setDraft(null);
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("label", { className: "dialkit-color-field dialkit-color-field-hex", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("label", { className: "dialkit-color-field dialkit-color-field-hex", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
       "input",
       {
         type: "text",
@@ -2866,7 +3421,7 @@ function HexField({ value, alpha, onCommit }) {
         }
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "dialkit-color-field-label", children: "HEX" })
+    /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "dialkit-color-field-label", children: "HEX" })
   ] });
 }
 function PaletteSlot({
@@ -2875,18 +3430,18 @@ function PaletteSlot({
   onApply,
   onClear
 }) {
-  const [holding, setHolding] = (0, import_react12.useState)(false);
-  const timerRef = (0, import_react12.useRef)(null);
-  const originRef = (0, import_react12.useRef)(null);
-  const firedRef = (0, import_react12.useRef)(false);
+  const [holding, setHolding] = (0, import_react15.useState)(false);
+  const timerRef = (0, import_react15.useRef)(null);
+  const originRef = (0, import_react15.useRef)(null);
+  const firedRef = (0, import_react15.useRef)(false);
   const cancelHold = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = null;
     originRef.current = null;
     setHolding(false);
   };
-  (0, import_react12.useEffect)(() => () => cancelHold(), []);
-  return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+  (0, import_react15.useEffect)(() => () => cancelHold(), []);
+  return /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
     "button",
     {
       className: "dialkit-color-palette-slot",
@@ -2928,24 +3483,24 @@ function PaletteSlot({
   );
 }
 function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
-  const [hsva, setHsva] = (0, import_react12.useState)(() => {
+  const [hsva, setHsva] = (0, import_react15.useState)(() => {
     const rgba2 = parseHex(value);
     return rgba2 ? rgbToHsv(rgba2) : BLACK;
   });
-  const [format, setFormat] = (0, import_react12.useState)(stickyFormat);
-  const [slots, setSlots] = (0, import_react12.useState)(() => palette ? loadPalette() : emptyPalette());
-  const lastEmittedRef = (0, import_react12.useRef)(value);
-  (0, import_react12.useEffect)(() => {
+  const [format, setFormat] = (0, import_react15.useState)(stickyFormat);
+  const [slots, setSlots] = (0, import_react15.useState)(() => palette ? loadPalette() : emptyPalette());
+  const lastEmittedRef = (0, import_react15.useRef)(value);
+  (0, import_react15.useEffect)(() => {
     if (value === lastEmittedRef.current) return;
     lastEmittedRef.current = value;
     const rgba2 = parseHex(value);
     if (rgba2) setHsva(rgbToHsv(rgba2));
   }, [value]);
-  (0, import_react12.useEffect)(() => {
+  (0, import_react15.useEffect)(() => {
     if (!palette) return;
     return subscribePalette(setSlots);
   }, [palette]);
-  const emit = (0, import_react12.useCallback)(
+  const emit = (0, import_react15.useCallback)(
     (next) => {
       setHsva(next);
       const hex = formatHex(hsvToRgb(next), alpha);
@@ -2954,7 +3509,7 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
     },
     [alpha, onChange]
   );
-  const applyHex = (0, import_react12.useCallback)(
+  const applyHex = (0, import_react15.useCallback)(
     (hex) => {
       const rgba2 = parseHex(hex);
       if (!rgba2) return;
@@ -2965,16 +3520,16 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
     },
     [alpha, onChange]
   );
-  const hsvaRef = (0, import_react12.useRef)(hsva);
+  const hsvaRef = (0, import_react15.useRef)(hsva);
   hsvaRef.current = hsva;
   const svDrag = useAreaDrag(
-    (0, import_react12.useCallback)((x, y) => emit({ ...hsvaRef.current, s: x, v: 1 - y }), [emit])
+    (0, import_react15.useCallback)((x, y) => emit({ ...hsvaRef.current, s: x, v: 1 - y }), [emit])
   );
   const hueDrag = useAreaDrag(
-    (0, import_react12.useCallback)((x) => emit({ ...hsvaRef.current, h: Math.min(x * 360, 359.999) }), [emit])
+    (0, import_react15.useCallback)((x) => emit({ ...hsvaRef.current, h: Math.min(x * 360, 359.999) }), [emit])
   );
   const alphaDrag = useAreaDrag(
-    (0, import_react12.useCallback)((x) => emit({ ...hsvaRef.current, a: x }), [emit])
+    (0, import_react15.useCallback)((x) => emit({ ...hsvaRef.current, a: x }), [emit])
   );
   const rgba = hsvToRgb(hsva);
   const opaqueHex = formatHex(rgba, false);
@@ -2990,8 +3545,8 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
     if (nextHsva.v === 0) nextHsva.s = hsva.s;
     emit(nextHsva);
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "dialkit-color-picker", style: { "--picker-hue": hsva.h }, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { className: "dialkit-color-picker", style: { "--picker-hue": hsva.h }, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
       "div",
       {
         className: "dialkit-color-sv",
@@ -3000,7 +3555,7 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
         onPointerMove: svDrag.onPointerMove,
         onPointerUp: svDrag.onPointerUp,
         onPointerCancel: svDrag.onPointerCancel,
-        children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
           "div",
           {
             className: "dialkit-color-sv-thumb",
@@ -3009,7 +3564,7 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
         )
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
       "div",
       {
         className: "dialkit-color-slider dialkit-color-hue",
@@ -3018,7 +3573,7 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
         onPointerMove: hueDrag.onPointerMove,
         onPointerUp: hueDrag.onPointerUp,
         onPointerCancel: hueDrag.onPointerCancel,
-        children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
           "div",
           {
             className: "dialkit-color-slider-thumb",
@@ -3027,7 +3582,7 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
         )
       }
     ),
-    alpha && /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(
+    alpha && /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(
       "div",
       {
         className: "dialkit-color-slider dialkit-color-alpha dialkit-checker",
@@ -3037,14 +3592,14 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
         onPointerUp: alphaDrag.onPointerUp,
         onPointerCancel: alphaDrag.onPointerCancel,
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
             "div",
             {
               className: "dialkit-color-alpha-gradient",
               style: { background: `linear-gradient(to right, transparent, ${opaqueHex})` }
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
             "div",
             {
               className: "dialkit-color-slider-thumb",
@@ -3054,7 +3609,7 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
         ]
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
       SegmentedControl,
       {
         options: FORMAT_OPTIONS,
@@ -3065,9 +3620,9 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
         }
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "dialkit-color-fields", "data-format": format, children: format === "hex" ? /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(import_jsx_runtime12.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(HexField, { value: currentHex, alpha, onCommit: applyHex }),
-      alpha && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dialkit-color-fields", "data-format": format, children: format === "hex" ? /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(import_jsx_runtime14.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(HexField, { value: currentHex, alpha, onCommit: applyHex }),
+      alpha && /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
         ChannelField,
         {
           spec: { key: "a", label: "A", min: 0, max: 100, step: 1, precision: 0 },
@@ -3075,8 +3630,8 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
           onCommit: (n) => emit({ ...hsva, a: Math.min(1, Math.max(0, n / 100)) })
         }
       )
-    ] }) : channelSpecs.map((spec, i) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(ChannelField, { spec, value: channelValues[i], onCommit: (n) => commitChannel(i, n) }, `${format}-${spec.key}`)) }),
-    palette && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "dialkit-color-palette", children: Array.from({ length: PALETTE_SIZE }, (_, i) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+    ] }) : channelSpecs.map((spec, i) => /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(ChannelField, { spec, value: channelValues[i], onCommit: (n) => commitChannel(i, n) }, `${format}-${spec.key}`)) }),
+    palette && /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dialkit-color-palette", children: Array.from({ length: PALETTE_SIZE }, (_, i) => /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
       PaletteSlot,
       {
         color: slots[i] ?? null,
@@ -3093,33 +3648,33 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
 }
 
 // src/components/ColorControl.tsx
-var import_jsx_runtime13 = require("react/jsx-runtime");
+var import_jsx_runtime15 = require("react/jsx-runtime");
 var PICKER_WIDTH = 240;
 var PICKER_BASE_HEIGHT = 270;
 var PICKER_ALPHA_HEIGHT = 22;
 var PICKER_PALETTE_HEIGHT = 30;
 function ColorControl({ label, value, onChange, alpha = false, palette = false }) {
-  const [isEditing, setIsEditing] = (0, import_react13.useState)(false);
-  const [editValue, setEditValue] = (0, import_react13.useState)(() => bareHex(value));
-  const [isOpen, setIsOpen] = (0, import_react13.useState)(false);
-  const swatchRef = (0, import_react13.useRef)(null);
-  const pickerRef = (0, import_react13.useRef)(null);
-  const [portalTarget, setPortalTarget] = (0, import_react13.useState)(null);
-  const [pos, setPos] = (0, import_react13.useState)(null);
-  const hexInputRef = (0, import_react13.useRef)(null);
+  const [isEditing, setIsEditing] = (0, import_react16.useState)(false);
+  const [editValue, setEditValue] = (0, import_react16.useState)(() => bareHex(value));
+  const [isOpen, setIsOpen] = (0, import_react16.useState)(false);
+  const swatchRef = (0, import_react16.useRef)(null);
+  const pickerRef = (0, import_react16.useRef)(null);
+  const [portalTarget, setPortalTarget] = (0, import_react16.useState)(null);
+  const [pos, setPos] = (0, import_react16.useState)(null);
+  const hexInputRef = (0, import_react16.useRef)(null);
   const rgba = parseHex(value);
-  (0, import_react13.useEffect)(() => {
+  (0, import_react16.useEffect)(() => {
     if (!isEditing) {
       setEditValue(bareHex(value));
     }
   }, [value, isEditing]);
-  (0, import_react13.useEffect)(() => {
+  (0, import_react16.useEffect)(() => {
     if (isEditing) {
       hexInputRef.current?.focus();
       hexInputRef.current?.select();
     }
   }, [isEditing]);
-  const updatePos = (0, import_react13.useCallback)(() => {
+  const updatePos = (0, import_react16.useCallback)(() => {
     const el = swatchRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -3133,11 +3688,11 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
     updatePos();
     setIsOpen(true);
   };
-  (0, import_react13.useEffect)(() => {
+  (0, import_react16.useEffect)(() => {
     const root = swatchRef.current?.closest(".dialkit-root");
     setPortalTarget(root ?? document.body);
   }, []);
-  (0, import_react13.useEffect)(() => {
+  (0, import_react16.useEffect)(() => {
     if (!isOpen) return;
     updatePos();
     const onViewport = () => updatePos();
@@ -3181,12 +3736,12 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
       setEditValue(bareHex(value));
     }
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "dialkit-color-control", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "dialkit-color-label", children: label }),
-    /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "dialkit-color-inputs", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { className: "dialkit-color-hex-wrap", onClick: () => setIsEditing(true), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "dialkit-color-hash", "aria-hidden": "true", children: "#" }),
-        isEditing ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "dialkit-color-control", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dialkit-color-label", children: label }),
+    /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "dialkit-color-inputs", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("span", { className: "dialkit-color-hex-wrap", onClick: () => setIsEditing(true), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dialkit-color-hash", "aria-hidden": "true", children: "#" }),
+        isEditing ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
           "input",
           {
             ref: hexInputRef,
@@ -3198,17 +3753,17 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
             onBlur: handleTextSubmit,
             onKeyDown: handleKeyDown
           }
-        ) : /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "dialkit-color-hex", "aria-label": `Hex color for ${label}`, children: bareHex(value) })
+        ) : /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dialkit-color-hex", "aria-label": `Hex color for ${label}`, children: bareHex(value) })
       ] }),
-      alpha && rgba && /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(import_jsx_runtime13.Fragment, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "dialkit-color-divider", "aria-hidden": "true" }),
-        /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { className: "dialkit-color-opacity", children: [
+      alpha && rgba && /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)(import_jsx_runtime15.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dialkit-color-divider", "aria-hidden": "true" }),
+        /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("span", { className: "dialkit-color-opacity", children: [
           opacityPercent(rgba),
           " ",
-          /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "dialkit-color-opacity-unit", children: "%" })
+          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dialkit-color-opacity-unit", children: "%" })
         ] })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
         "button",
         {
           ref: swatchRef,
@@ -3223,8 +3778,8 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
       )
     ] }),
     portalTarget && (0, import_react_dom2.createPortal)(
-      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(import_react14.AnimatePresence, { children: isOpen && pos && /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
-        import_react14.motion.div,
+      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(import_react17.AnimatePresence, { children: isOpen && pos && /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+        import_react17.motion.div,
         {
           ref: pickerRef,
           className: "dialkit-color-picker-popover",
@@ -3238,7 +3793,7 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
             width: PICKER_WIDTH,
             ...pos.above ? { bottom: window.innerHeight - pos.top, transformOrigin: "bottom right" } : { top: pos.top, transformOrigin: "top right" }
           },
-          children: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(ColorPickerPanel, { value, onChange, alpha, palette })
+          children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(ColorPickerPanel, { value, onChange, alpha, palette })
         }
       ) }),
       portalTarget
@@ -3247,25 +3802,25 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
 }
 
 // src/components/GradientControl.tsx
-var import_react17 = require("react");
+var import_react20 = require("react");
 var import_react_dom3 = require("react-dom");
-var import_react18 = require("motion/react");
+var import_react21 = require("motion/react");
 
 // src/components/GradientPanel.tsx
-var import_react16 = require("react");
+var import_react19 = require("react");
 
 // src/components/GradientTransformPad.tsx
-var import_react15 = require("react");
-var import_jsx_runtime14 = require("react/jsx-runtime");
-var clamp2 = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+var import_react18 = require("react");
+var import_jsx_runtime16 = require("react/jsx-runtime");
+var clamp4 = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 var wrap360 = (deg) => (deg % 360 + 360) % 360;
 var RAD = Math.PI / 180;
 var vectorToAngle = (dx, dy) => wrap360(Math.atan2(dx, -dy) / RAD);
 function GradientTransformPad({ value, onChange }) {
-  const padRef = (0, import_react15.useRef)(null);
-  const drag = (0, import_react15.useRef)(null);
-  const [size, setSize] = (0, import_react15.useState)({ w: 0, h: 0 });
-  (0, import_react15.useLayoutEffect)(() => {
+  const padRef = (0, import_react18.useRef)(null);
+  const drag = (0, import_react18.useRef)(null);
+  const [size, setSize] = (0, import_react18.useState)({ w: 0, h: 0 });
+  (0, import_react18.useLayoutEffect)(() => {
     const el = padRef.current;
     if (!el) return;
     const measure = () => setSize({ w: el.clientWidth, h: el.clientHeight });
@@ -3286,7 +3841,7 @@ function GradientTransformPad({ value, onChange }) {
   const rxPx = scale / 100 * w;
   const ryPx = Math.max(10, (value.squash ?? scale) / 100 * h);
   const theta = rotation * RAD;
-  const pin = (x, y) => ({ x: clamp2(x, 5, w - 5), y: clamp2(y, 5, h - 5) });
+  const pin = (x, y) => ({ x: clamp4(x, 5, w - 5), y: clamp4(y, 5, h - 5) });
   const major = pin(cxPx + Math.cos(theta) * rxPx, cyPx + Math.sin(theta) * rxPx);
   const minor = pin(cxPx - Math.sin(theta) * ryPx, cyPx + Math.cos(theta) * ryPx);
   const majorLineLen = Math.hypot(major.x - cxPx, major.y - cyPx);
@@ -3350,8 +3905,8 @@ function GradientTransformPad({ value, onChange }) {
     onLostPointerCapture: onHandleUp
   });
   const fill = gradientFillBox(value, w, h);
-  return /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { ref: padRef, className: "dialkit-gradient-pad dialkit-checker", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { ref: padRef, className: "dialkit-gradient-pad dialkit-checker", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
       "div",
       {
         className: "dialkit-gradient-pad-fill",
@@ -3366,15 +3921,15 @@ function GradientTransformPad({ value, onChange }) {
         }
       }
     ),
-    radial && /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(import_jsx_runtime14.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+    radial && /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(import_jsx_runtime16.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
         "div",
         {
           className: "dialkit-gradient-pad-line",
           style: { left: cxPx, top: cyPx, width: majorLineLen, transform: `rotate(${majorLineAngle}deg)` }
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
         "button",
         {
           type: "button",
@@ -3385,7 +3940,7 @@ function GradientTransformPad({ value, onChange }) {
           ...handleProps("major")
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
         "button",
         {
           type: "button",
@@ -3397,15 +3952,15 @@ function GradientTransformPad({ value, onChange }) {
         }
       )
     ] }),
-    !radial && /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(import_jsx_runtime14.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+    !radial && /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(import_jsx_runtime16.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
         "div",
         {
           className: "dialkit-gradient-pad-line",
           style: { left: angleOx, top: angleOy, width: angleLineLen, transform: `rotate(${angleLineAngle}deg)` }
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
         "button",
         {
           type: "button",
@@ -3417,14 +3972,14 @@ function GradientTransformPad({ value, onChange }) {
         }
       )
     ] }),
-    (radial || conic) && /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+    (radial || conic) && /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
       "button",
       {
         type: "button",
         className: "dialkit-gradient-pad-handle",
         "data-kind": "center",
         "aria-label": "Gradient center",
-        style: { left: clamp2(cxPx, 5, w - 5), top: clamp2(cyPx, 5, h - 5) },
+        style: { left: clamp4(cxPx, 5, w - 5), top: clamp4(cyPx, 5, h - 5) },
         ...handleProps("center")
       }
     )
@@ -3432,7 +3987,7 @@ function GradientTransformPad({ value, onChange }) {
 }
 
 // src/components/GradientPanel.tsx
-var import_jsx_runtime15 = require("react/jsx-runtime");
+var import_jsx_runtime17 = require("react/jsx-runtime");
 var TYPE_OPTIONS = [
   { value: "linear", label: "Linear" },
   { value: "radial", label: "Radial" },
@@ -3442,12 +3997,12 @@ function rampCss(stops) {
   return gradientToCss({ type: "linear", angle: 90, stops });
 }
 function GradientPanel({ value, onChange, onDrag }) {
-  const [selectedIndex, setSelectedIndex] = (0, import_react16.useState)(0);
-  const [holdingIndex, setHoldingIndex] = (0, import_react16.useState)(-1);
-  const [detach, setDetach] = (0, import_react16.useState)(null);
-  const stripRef = (0, import_react16.useRef)(null);
-  const gripRef = (0, import_react16.useRef)(null);
-  const gripOrigin = (0, import_react16.useRef)(null);
+  const [selectedIndex, setSelectedIndex] = (0, import_react19.useState)(0);
+  const [holdingIndex, setHoldingIndex] = (0, import_react19.useState)(-1);
+  const [detach, setDetach] = (0, import_react19.useState)(null);
+  const stripRef = (0, import_react19.useRef)(null);
+  const gripRef = (0, import_react19.useRef)(null);
+  const gripOrigin = (0, import_react19.useRef)(null);
   const onGripDown = (e) => {
     e.preventDefault();
     try {
@@ -3464,10 +4019,10 @@ function GradientPanel({ value, onChange, onDrag }) {
   const onGripUp = () => {
     gripOrigin.current = null;
   };
-  const drag = (0, import_react16.useRef)({ mode: "idle", activeIndex: -1, originX: 0, originY: 0, timer: null, working: value });
-  const valueRef = (0, import_react16.useRef)(value);
+  const drag = (0, import_react19.useRef)({ mode: "idle", activeIndex: -1, originX: 0, originY: 0, timer: null, working: value });
+  const valueRef = (0, import_react19.useRef)(value);
   valueRef.current = value;
-  (0, import_react16.useEffect)(() => () => {
+  (0, import_react19.useEffect)(() => () => {
     if (drag.current.timer) clearTimeout(drag.current.timer);
   }, []);
   const safeIndex = Math.min(selectedIndex, value.stops.length - 1);
@@ -3577,9 +4132,9 @@ function GradientPanel({ value, onChange, onDrag }) {
     resetDrag();
   };
   const previewStops = detach ? value.stops.filter((_, i) => i !== detach.index) : value.stops;
-  return /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "dialkit-gradient-panel", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "dialkit-gradient-toolbar", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "dialkit-gradient-panel", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "dialkit-gradient-toolbar", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
         "button",
         {
           ref: gripRef,
@@ -3592,10 +4147,10 @@ function GradientPanel({ value, onChange, onDrag }) {
           onPointerUp: onGripUp,
           onPointerCancel: onGripUp,
           onLostPointerCapture: onGripUp,
-          children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("svg", { viewBox: "0 0 24 24", fill: "currentColor", "aria-hidden": "true", children: ICON_GRIP.map((c, i) => /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("circle", { cx: c.cx, cy: c.cy, r: "1.5" }, i)) })
+          children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("svg", { viewBox: "0 0 24 24", fill: "currentColor", "aria-hidden": "true", children: ICON_GRIP.map((c, i) => /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("circle", { cx: c.cx, cy: c.cy, r: "1.5" }, i)) })
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
         SegmentedControl,
         {
           options: TYPE_OPTIONS,
@@ -3604,8 +4159,8 @@ function GradientPanel({ value, onChange, onDrag }) {
         }
       )
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(GradientTransformPad, { value, onChange }),
-    /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(GradientTransformPad, { value, onChange }),
+    /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
       "div",
       {
         ref: stripRef,
@@ -3617,7 +4172,7 @@ function GradientPanel({ value, onChange, onDrag }) {
         onPointerCancel: onPointerUp,
         children: value.stops.map((stop, i) => {
           const detaching = detach?.index === i;
-          return /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+          return /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
             "button",
             {
               type: "button",
@@ -3639,8 +4194,8 @@ function GradientPanel({ value, onChange, onDrag }) {
         })
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dialkit-gradient-divider", "aria-hidden": "true" }),
-    /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "dialkit-gradient-divider", "aria-hidden": "true" }),
+    /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
       ColorPickerPanel,
       {
         value: value.stops[safeIndex].color,
@@ -3654,18 +4209,18 @@ function GradientPanel({ value, onChange, onDrag }) {
 }
 
 // src/components/GradientControl.tsx
-var import_jsx_runtime16 = require("react/jsx-runtime");
+var import_jsx_runtime18 = require("react/jsx-runtime");
 var PANEL_WIDTH = 240;
 var PANEL_HEIGHT_ANGLED = 470;
 var PANEL_HEIGHT_RADIAL = 430;
 function GradientControl({ label, value, onChange }) {
-  const [isOpen, setIsOpen] = (0, import_react17.useState)(false);
-  const triggerRef = (0, import_react17.useRef)(null);
-  const panelRef = (0, import_react17.useRef)(null);
-  const [portalTarget, setPortalTarget] = (0, import_react17.useState)(null);
-  const [pos, setPos] = (0, import_react17.useState)(null);
-  const [dragPos, setDragPos] = (0, import_react17.useState)(null);
-  const onPanelDrag = (0, import_react17.useCallback)((dx, dy) => {
+  const [isOpen, setIsOpen] = (0, import_react20.useState)(false);
+  const triggerRef = (0, import_react20.useRef)(null);
+  const panelRef = (0, import_react20.useRef)(null);
+  const [portalTarget, setPortalTarget] = (0, import_react20.useState)(null);
+  const [pos, setPos] = (0, import_react20.useState)(null);
+  const [dragPos, setDragPos] = (0, import_react20.useState)(null);
+  const onPanelDrag = (0, import_react20.useCallback)((dx, dy) => {
     setDragPos((prev) => {
       let base = prev;
       if (!base) {
@@ -3678,7 +4233,7 @@ function GradientControl({ label, value, onChange }) {
       return { left, top };
     });
   }, [pos]);
-  const updatePos = (0, import_react17.useCallback)(() => {
+  const updatePos = (0, import_react20.useCallback)(() => {
     const el = triggerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -3693,11 +4248,11 @@ function GradientControl({ label, value, onChange }) {
     updatePos();
     setIsOpen(true);
   };
-  (0, import_react17.useEffect)(() => {
+  (0, import_react20.useEffect)(() => {
     const root = triggerRef.current?.closest(".dialkit-root");
     setPortalTarget(root ?? document.body);
   }, []);
-  (0, import_react17.useEffect)(() => {
+  (0, import_react20.useEffect)(() => {
     if (!isOpen) return;
     updatePos();
     const onViewport = () => updatePos();
@@ -3723,9 +4278,9 @@ function GradientControl({ label, value, onChange }) {
       window.removeEventListener("scroll", onViewport, true);
     };
   }, [isOpen, updatePos]);
-  return /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "dialkit-gradient-control", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: "dialkit-gradient-label", children: label }),
-    /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "dialkit-gradient-control", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "dialkit-gradient-label", children: label }),
+    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
       "button",
       {
         ref: triggerRef,
@@ -3739,8 +4294,8 @@ function GradientControl({ label, value, onChange }) {
       }
     ),
     portalTarget && (0, import_react_dom3.createPortal)(
-      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(import_react18.AnimatePresence, { children: isOpen && pos && /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
-        import_react18.motion.div,
+      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(import_react21.AnimatePresence, { children: isOpen && pos && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        import_react21.motion.div,
         {
           ref: panelRef,
           className: "dialkit-gradient-popover",
@@ -3753,7 +4308,7 @@ function GradientControl({ label, value, onChange }) {
             width: PANEL_WIDTH,
             ...dragPos ? { left: dragPos.left, top: dragPos.top, transformOrigin: "top left" } : pos.above ? { left: pos.left, bottom: window.innerHeight - pos.top, transformOrigin: "bottom right" } : { left: pos.left, top: pos.top, transformOrigin: "top right" }
           },
-          children: /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(GradientPanel, { value, onChange, onDrag: onPanelDrag })
+          children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(GradientPanel, { value, onChange, onDrag: onPanelDrag })
         }
       ) }),
       portalTarget
@@ -3761,18 +4316,274 @@ function GradientControl({ label, value, onChange }) {
   ] });
 }
 
+// src/components/XYPad.tsx
+var import_react22 = require("react");
+var import_jsx_runtime19 = require("react/jsx-runtime");
+var DEFAULT_GRID_X = 5;
+var DEFAULT_GRID_Y = 5;
+var FINE_DRAG = 0.15;
+function decimalsForStep3(step) {
+  const s = step.toString();
+  const dot = s.indexOf(".");
+  return dot === -1 ? 0 : s.length - dot - 1;
+}
+function formatComponent(v, axis) {
+  return (v + 0).toFixed(decimalsForStep3(axis.step));
+}
+function XYPad({
+  label,
+  value,
+  onChange,
+  x,
+  y,
+  size = 160,
+  grid,
+  density = 1,
+  snap = false,
+  returnToCenter = false,
+  showValues = false,
+  disabled = false,
+  formatValue,
+  shortcut,
+  shortcutActive
+}) {
+  const xAxis = resolveAxis(x);
+  const yAxis = resolveAxis(y);
+  const areaRef = (0, import_react22.useRef)(null);
+  const draggingRef = (0, import_react22.useRef)(false);
+  const [active, setActive] = (0, import_react22.useState)(false);
+  const [dragging, setDragging] = (0, import_react22.useState)(false);
+  const valueRef = (0, import_react22.useRef)(value);
+  valueRef.current = value;
+  const pointToValue = (0, import_react22.useCallback)(
+    (clientX, clientY, fine) => {
+      const el = areaRef.current;
+      if (!el) return valueRef.current;
+      const rect = el.getBoundingClientRect();
+      let px = (clientX - rect.left) / rect.width;
+      let py = (clientY - rect.top) / rect.height;
+      if (fine) {
+        const cur = pointFromValue(valueRef.current, xAxis, yAxis);
+        px = cur.x + (px - cur.x) * FINE_DRAG;
+        py = cur.y + (py - cur.y) * FINE_DRAG;
+      }
+      px = Math.min(1, Math.max(0, px));
+      py = Math.min(1, Math.max(0, py));
+      const next = valueFromPoint({ x: px, y: py }, xAxis, yAxis, snap);
+      const originPoint = pointFromValue({ x: xAxis.origin, y: yAxis.origin }, xAxis, yAxis);
+      const dxPx = Math.abs(px - originPoint.x) * rect.width;
+      const dyPx = Math.abs(py - originPoint.y) * rect.height;
+      return {
+        x: applyDetentAxis(next.x, xAxis, dxPx),
+        y: applyDetentAxis(next.y, yAxis, dyPx)
+      };
+    },
+    [xAxis, yAxis, snap]
+  );
+  const emit = (0, import_react22.useCallback)(
+    (next) => {
+      valueRef.current = next;
+      onChange(next);
+    },
+    [onChange]
+  );
+  const handlePointerDown = (e) => {
+    if (disabled) return;
+    if (e.button !== 0 || !e.isPrimary) return;
+    if (e.altKey) return;
+    e.preventDefault();
+    try {
+      areaRef.current?.setPointerCapture(e.pointerId);
+    } catch {
+    }
+    areaRef.current?.focus();
+    draggingRef.current = true;
+    setActive(true);
+    setDragging(true);
+    emit(pointToValue(e.clientX, e.clientY, e.shiftKey));
+  };
+  const handlePointerMove = (e) => {
+    if (!draggingRef.current) return;
+    if (e.buttons === 0) {
+      finishDrag(e);
+      return;
+    }
+    emit(pointToValue(e.clientX, e.clientY, e.shiftKey));
+  };
+  const finishDrag = (e) => {
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    setDragging(false);
+    try {
+      areaRef.current?.releasePointerCapture(e.pointerId);
+    } catch {
+    }
+    const el = areaRef.current;
+    const stillActive = (el?.matches(":hover") ?? false) || el === (el?.ownerDocument ?? document).activeElement;
+    if (!stillActive) setActive(false);
+    if (returnToCenter) emit(normalizeValue(centerValue(xAxis, yAxis), xAxis, yAxis, snap));
+  };
+  const handleKeyDown = (e) => {
+    if (disabled) return;
+    const mode = e.shiftKey ? "coarse" : e.altKey ? "fine" : "normal";
+    const cur = valueRef.current;
+    const ctrl = e.ctrlKey || e.metaKey;
+    let next = null;
+    switch (e.key) {
+      case "ArrowUp":
+        next = nudge(cur, "y", 1, xAxis, yAxis, mode);
+        break;
+      case "ArrowDown":
+        next = nudge(cur, "y", -1, xAxis, yAxis, mode);
+        break;
+      case "ArrowRight":
+        next = nudge(cur, "x", 1, xAxis, yAxis, mode);
+        break;
+      case "ArrowLeft":
+        next = nudge(cur, "x", -1, xAxis, yAxis, mode);
+        break;
+      case "PageUp":
+        next = nudge(cur, "y", 1, xAxis, yAxis, "coarse");
+        break;
+      case "PageDown":
+        next = nudge(cur, "y", -1, xAxis, yAxis, "coarse");
+        break;
+      case "Home":
+        next = ctrl ? { x: xAxis.min, y: yAxis.min } : { x: xAxis.min, y: cur.y };
+        break;
+      case "End":
+        next = ctrl ? { x: xAxis.max, y: yAxis.max } : { x: xAxis.max, y: cur.y };
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    emit(next);
+  };
+  const reset = () => {
+    if (disabled) return;
+    emit(normalizeValue(centerValue(xAxis, yAxis), xAxis, yAxis, snap));
+  };
+  const xLabel = x?.label ?? "X";
+  const yLabel = y?.label ?? "Y";
+  const xText = `${xLabel} ${formatComponent(value.x, xAxis)}`;
+  const yText = `${yLabel} ${formatComponent(value.y, yAxis)}`;
+  const xVisual = showValues ? xText : xLabel;
+  const yVisual = showValues ? yText : yLabel;
+  const readout = formatValue ? formatValue(value) : `${xText}  ${yText}`;
+  const dens = typeof density === "number" && density > 0 ? density : 1;
+  let baseX, baseY;
+  if (grid === false) {
+    baseX = 0;
+    baseY = 0;
+  } else if (typeof grid === "number") {
+    baseX = grid;
+    baseY = grid;
+  } else {
+    baseX = DEFAULT_GRID_X;
+    baseY = DEFAULT_GRID_Y;
+  }
+  const gridX = baseX > 0 ? Math.round(baseX * dens) : 0;
+  const gridY = baseY > 0 ? Math.round(baseY * dens) : 0;
+  const showGrid = gridX > 0 && gridY > 0;
+  const point = pointFromValue(value, xAxis, yAxis);
+  const leftPct = `${point.x * 100}%`;
+  const topPct = `${point.y * 100}%`;
+  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "dialkit-xy", "data-active": String(active), "data-disabled": String(disabled), children: [
+    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "dialkit-xy-header", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "dialkit-xy-label", children: [
+      label,
+      shortcut && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: `dialkit-shortcut-pill${shortcutActive ? " dialkit-shortcut-pill-active" : ""}`, children: formatSliderShortcut(shortcut) })
+    ] }) }),
+    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
+      "div",
+      {
+        ref: areaRef,
+        className: "dialkit-xy-area",
+        style: { height: size },
+        role: "application",
+        "aria-roledescription": "2D pad",
+        "aria-label": label,
+        "aria-valuetext": readout,
+        "aria-valuemin": xAxis.min,
+        "aria-valuemax": xAxis.max,
+        "aria-valuenow": value.x,
+        "aria-disabled": disabled || void 0,
+        tabIndex: disabled ? -1 : 0,
+        "data-active": String(active),
+        "data-dragging": String(dragging),
+        "data-disabled": String(disabled),
+        onPointerDown: handlePointerDown,
+        onPointerMove: handlePointerMove,
+        onPointerUp: finishDrag,
+        onPointerCancel: finishDrag,
+        onDoubleClick: reset,
+        onClick: (e) => {
+          if (e.altKey) reset();
+        },
+        onKeyDown: handleKeyDown,
+        onFocus: () => setActive(true),
+        onBlur: () => setActive(false),
+        onPointerEnter: () => setActive(true),
+        onPointerLeave: () => {
+          if (!draggingRef.current) setActive(false);
+        },
+        children: [
+          showGrid && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+            "div",
+            {
+              className: "dialkit-xy-grid",
+              "aria-hidden": "true",
+              style: {
+                "--dial-xy-grid-step-x": `${100 / gridX}%`,
+                "--dial-xy-grid-step-y": `${100 / gridY}%`
+              }
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "dialkit-xy-axis dialkit-xy-axis-x", "aria-hidden": "true", children: xVisual }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "dialkit-xy-axis dialkit-xy-axis-y", "aria-hidden": "true", children: yVisual }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "dialkit-xy-guide dialkit-xy-guide-v", "aria-hidden": "true", style: { left: leftPct } }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "dialkit-xy-guide dialkit-xy-guide-h", "aria-hidden": "true", style: { top: topPct } }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "dialkit-xy-thumb", "aria-hidden": "true", style: { left: leftPct, top: topPct } })
+        ]
+      }
+    )
+  ] });
+}
+
+// src/components/XYControl.tsx
+var import_jsx_runtime20 = require("react/jsx-runtime");
+function XYControl({ label, value, onChange, x, y, grid, density, snap, returnToCenter, showValues, shortcut, shortcutActive }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+    XYPad,
+    {
+      label,
+      value,
+      onChange,
+      x,
+      y,
+      grid,
+      density,
+      snap,
+      returnToCenter,
+      showValues,
+      shortcut,
+      shortcutActive
+    }
+  );
+}
+
 // src/components/GalleryControl.tsx
-var import_react19 = require("react");
-var import_jsx_runtime17 = require("react/jsx-runtime");
+var import_react23 = require("react");
+var import_jsx_runtime21 = require("react/jsx-runtime");
 function itemContent(item, skeleton) {
   if (item.render) return item.render();
   if (!item.src) return null;
-  return skeleton ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(GalleryImage, { item }) : /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("img", { src: item.src, alt: "", draggable: false });
+  return skeleton ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(GalleryImage, { item }) : /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("img", { src: item.src, alt: "", draggable: false });
 }
 function GalleryImage({ item }) {
-  const [loaded, setLoaded] = (0, import_react19.useState)(false);
-  const imgRef = (0, import_react19.useRef)(null);
-  (0, import_react19.useEffect)(() => {
+  const [loaded, setLoaded] = (0, import_react23.useState)(false);
+  const imgRef = (0, import_react23.useRef)(null);
+  (0, import_react23.useEffect)(() => {
     const img = imgRef.current;
     if (!img) return;
     if (img.complete && img.naturalWidth > 0) {
@@ -3787,15 +4598,15 @@ function GalleryImage({ item }) {
       img.removeEventListener("error", done);
     };
   }, []);
-  return /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
     "span",
     {
       className: "dialkit-gallery-media",
       "data-fixed": item.aspect ? "true" : "false",
       style: item.aspect ? { aspectRatio: String(item.aspect) } : void 0,
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "dialkit-gallery-skeleton", "data-done": String(loaded), "aria-hidden": "true" }),
-        /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "dialkit-gallery-skeleton", "data-done": String(loaded), "aria-hidden": "true" }),
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
           "img",
           {
             ref: imgRef,
@@ -3813,11 +4624,11 @@ function GalleryImage({ item }) {
   );
 }
 function GalleryControl({ label, value, items, onChange, columns = 2 }) {
-  const [isOpen, setIsOpen] = (0, import_react19.useState)(false);
+  const [isOpen, setIsOpen] = (0, import_react23.useState)(false);
   const selected = items.find((it) => it.id === value) ?? items[0];
   const preview = selected ? itemContent(selected, false) : null;
-  return /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "dialkit-gallery", "data-open": String(isOpen), children: [
-    /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "dialkit-gallery", "data-open": String(isOpen), children: [
+    /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
       "button",
       {
         type: "button",
@@ -3825,10 +4636,10 @@ function GalleryControl({ label, value, items, onChange, columns = 2 }) {
         "aria-expanded": isOpen,
         onClick: () => setIsOpen((o) => !o),
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "dialkit-gallery-label", children: label }),
-          /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("span", { className: "dialkit-gallery-right", children: [
-            preview && /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "dialkit-gallery-preview", "aria-hidden": "true", children: preview }),
-            /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "dialkit-gallery-label", children: label }),
+          /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("span", { className: "dialkit-gallery-right", children: [
+            preview && /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "dialkit-gallery-preview", "aria-hidden": "true", children: preview }),
+            /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
               "svg",
               {
                 className: "dialkit-gallery-chevron",
@@ -3838,16 +4649,16 @@ function GalleryControl({ label, value, items, onChange, columns = 2 }) {
                 strokeWidth: "2.5",
                 strokeLinecap: "round",
                 strokeLinejoin: "round",
-                children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("path", { d: ICON_CHEVRON })
+                children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("path", { d: ICON_CHEVRON })
               }
             )
           ] })
         ]
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { className: "dialkit-gallery-reveal", "aria-hidden": !isOpen, children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { className: "dialkit-gallery-reveal-inner", children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { className: "dialkit-gallery-box", children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { className: "dialkit-gallery-masonry", style: { columnCount: columns }, children: items.map((item) => {
+    /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "dialkit-gallery-reveal", "aria-hidden": !isOpen, children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "dialkit-gallery-reveal-inner", children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "dialkit-gallery-box", children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "dialkit-gallery-masonry", style: { columnCount: columns }, children: items.map((item) => {
       const isSelected = item.id === value;
-      return /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)(
+      return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
         "button",
         {
           type: "button",
@@ -3859,7 +4670,7 @@ function GalleryControl({ label, value, items, onChange, columns = 2 }) {
           onClick: () => onChange(item.id),
           children: [
             itemContent(item, true),
-            /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "dialkit-gallery-check", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "3", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("path", { d: ICON_CHECK }) }) })
+            /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "dialkit-gallery-check", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "3", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("path", { d: ICON_CHECK }) }) })
           ]
         },
         item.id
@@ -3869,10 +4680,10 @@ function GalleryControl({ label, value, items, onChange, columns = 2 }) {
 }
 
 // src/components/FileControl.tsx
-var import_react20 = require("react");
-var import_jsx_runtime18 = require("react/jsx-runtime");
+var import_react24 = require("react");
+var import_jsx_runtime22 = require("react/jsx-runtime");
 function FileControl({ label, value, accept, multiple = false, onChange, onPick }) {
-  const inputRef = (0, import_react20.useRef)(null);
+  const inputRef = (0, import_react24.useRef)(null);
   const handleChange = (e) => {
     const files = e.currentTarget.files;
     if (!files || files.length === 0) return;
@@ -3884,11 +4695,11 @@ function FileControl({ label, value, accept, multiple = false, onChange, onPick 
     if (inputRef.current) inputRef.current.value = "";
     onChange("");
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "dialkit-file-row", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("button", { type: "button", className: "dialkit-file-trigger", onClick: () => inputRef.current?.click(), children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "dialkit-file-label", children: label }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "dialkit-file-right", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "dialkit-file-row", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("button", { type: "button", className: "dialkit-file-trigger", onClick: () => inputRef.current?.click(), children: [
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "dialkit-file-label", children: label }),
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("span", { className: "dialkit-file-right", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
           "svg",
           {
             className: "dialkit-file-icon",
@@ -3899,14 +4710,14 @@ function FileControl({ label, value, accept, multiple = false, onChange, onPick 
             strokeLinecap: "round",
             strokeLinejoin: "round",
             "aria-hidden": "true",
-            children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("path", { d: ICON_FILE })
+            children: /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("path", { d: ICON_FILE })
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "dialkit-file-name", "data-empty": String(!value), children: value || "Choose file\u2026" })
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "dialkit-file-name", "data-empty": String(!value), children: value || "Choose file\u2026" })
       ] })
     ] }),
-    value && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("button", { type: "button", className: "dialkit-file-clear", onClick: clear, "aria-label": "Clear file", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("path", { d: ICON_CLOSE }) }) }),
-    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    value && /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", className: "dialkit-file-clear", onClick: clear, "aria-label": "Clear file", children: /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", children: /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("path", { d: ICON_CLOSE }) }) }),
+    /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
       "input",
       {
         ref: inputRef,
@@ -3921,23 +4732,23 @@ function FileControl({ label, value, accept, multiple = false, onChange, onPick 
 }
 
 // src/components/SwatchControl.tsx
-var import_react21 = require("react");
+var import_react25 = require("react");
 var import_react_dom4 = require("react-dom");
-var import_react22 = require("motion/react");
-var import_jsx_runtime19 = require("react/jsx-runtime");
+var import_react26 = require("motion/react");
+var import_jsx_runtime23 = require("react/jsx-runtime");
 function Preview({ colors }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "dialkit-swatch-preview", "aria-hidden": "true", children: colors.map((c, i) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "dialkit-swatch-chip", style: { background: c } }, i)) });
+  return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "dialkit-swatch-preview", "aria-hidden": "true", children: colors.map((c, i) => /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "dialkit-swatch-chip", style: { background: c } }, i)) });
 }
 function SwatchControl({ label, value, options, onChange }) {
-  const [isOpen, setIsOpen] = (0, import_react21.useState)(false);
-  const [highlight, setHighlight] = (0, import_react21.useState)(-1);
-  const triggerRef = (0, import_react21.useRef)(null);
-  const dropdownRef = (0, import_react21.useRef)(null);
-  const [portalTarget, setPortalTarget] = (0, import_react21.useState)(null);
-  const [pos, setPos] = (0, import_react21.useState)(null);
+  const [isOpen, setIsOpen] = (0, import_react25.useState)(false);
+  const [highlight, setHighlight] = (0, import_react25.useState)(-1);
+  const triggerRef = (0, import_react25.useRef)(null);
+  const dropdownRef = (0, import_react25.useRef)(null);
+  const [portalTarget, setPortalTarget] = (0, import_react25.useState)(null);
+  const [pos, setPos] = (0, import_react25.useState)(null);
   const selectedOption = options.find((o) => o.value === value);
   const selectedIndex = options.findIndex((o) => o.value === value);
-  const updatePos = (0, import_react21.useCallback)(() => {
+  const updatePos = (0, import_react25.useCallback)(() => {
     const el = triggerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -3977,11 +4788,11 @@ function SwatchControl({ label, value, options, onChange }) {
       if (highlight >= 0 && highlight < options.length) select(options[highlight].value);
     }
   };
-  (0, import_react21.useEffect)(() => {
+  (0, import_react25.useEffect)(() => {
     const root = triggerRef.current?.closest(".dialkit-root");
     setPortalTarget(root ?? document.body);
   }, []);
-  (0, import_react21.useEffect)(() => {
+  (0, import_react25.useEffect)(() => {
     if (!isOpen) return;
     updatePos();
     const onViewport = () => updatePos();
@@ -3999,8 +4810,8 @@ function SwatchControl({ label, value, options, onChange }) {
       window.removeEventListener("scroll", onViewport, true);
     };
   }, [isOpen, updatePos]);
-  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "dialkit-select-row", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "dialkit-select-row", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(
       "button",
       {
         ref: triggerRef,
@@ -4009,12 +4820,12 @@ function SwatchControl({ label, value, options, onChange }) {
         onKeyDown,
         "data-open": String(isOpen),
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "dialkit-select-label", children: label }),
-          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "dialkit-select-right", children: [
-            selectedOption && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Preview, { colors: selectedOption.colors }),
-            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "dialkit-select-value", children: selectedOption?.label ?? value }),
-            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
-              import_react22.motion.svg,
+          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "dialkit-select-label", children: label }),
+          /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "dialkit-select-right", children: [
+            selectedOption && /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Preview, { colors: selectedOption.colors }),
+            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "dialkit-select-value", children: selectedOption?.label ?? value }),
+            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+              import_react26.motion.svg,
               {
                 className: "dialkit-select-chevron",
                 viewBox: "0 0 24 24",
@@ -4025,7 +4836,7 @@ function SwatchControl({ label, value, options, onChange }) {
                 strokeLinejoin: "round",
                 animate: { rotate: isOpen ? 180 : 0 },
                 transition: { type: "spring", visualDuration: 0.2, bounce: 0.15 },
-                children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("path", { d: ICON_CHEVRON })
+                children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("path", { d: ICON_CHEVRON })
               }
             )
           ] })
@@ -4033,10 +4844,10 @@ function SwatchControl({ label, value, options, onChange }) {
       }
     ),
     portalTarget && (0, import_react_dom4.createPortal)(
-      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(import_react22.AnimatePresence, { children: isOpen && pos && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
-        import_react22.motion.div,
+      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(import_react26.AnimatePresence, { children: isOpen && pos && /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+        PresenceMotionDiv,
         {
-          ref: dropdownRef,
+          divRef: dropdownRef,
           className: "dialkit-select-dropdown",
           initial: { opacity: 0, y: pos.above ? 8 : -8, scale: 0.95 },
           animate: { opacity: 1, y: 0, scale: 1 },
@@ -4048,7 +4859,7 @@ function SwatchControl({ label, value, options, onChange }) {
             width: pos.width,
             ...pos.above ? { bottom: window.innerHeight - pos.top, transformOrigin: "bottom" } : { top: pos.top, transformOrigin: "top" }
           },
-          children: options.map((option, i) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
+          children: options.map((option, i) => /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(
             "button",
             {
               className: "dialkit-select-option dialkit-swatch-option",
@@ -4057,8 +4868,8 @@ function SwatchControl({ label, value, options, onChange }) {
               onClick: () => select(option.value),
               onMouseEnter: () => setHighlight(i),
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Preview, { colors: option.colors }),
-                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "dialkit-swatch-option-label", children: option.label })
+                /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Preview, { colors: option.colors }),
+                /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "dialkit-swatch-option-label", children: option.label })
               ]
             },
             option.value
@@ -4071,12 +4882,12 @@ function SwatchControl({ label, value, options, onChange }) {
 }
 
 // src/components/ChipsControl.tsx
-var import_jsx_runtime20 = require("react/jsx-runtime");
+var import_jsx_runtime24 = require("react/jsx-runtime");
 function ChipsControl({ label, value, options, onChange, onRemove }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { className: "dialkit-chips", children: [
-    label && /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "dialkit-chips-label", children: label }),
-    /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { className: "dialkit-chips-grid", role: "listbox", "aria-label": label, children: options.map((option) => /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { className: "dialkit-chip", "data-active": String(option.value === value), children: [
-      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "dialkit-chips", children: [
+    label && /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "dialkit-chips-label", children: label }),
+    /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { className: "dialkit-chips-grid", role: "listbox", "aria-label": label, children: options.map((option) => /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "dialkit-chip", "data-active": String(option.value === value), children: [
+      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
         "button",
         {
           type: "button",
@@ -4087,14 +4898,14 @@ function ChipsControl({ label, value, options, onChange, onRemove }) {
           children: option.label
         }
       ),
-      option.removable && /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+      option.removable && /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
         "button",
         {
           type: "button",
           className: "dialkit-chip-remove",
           "aria-label": `Remove ${option.label}`,
           onClick: () => onRemove(option.value),
-          children: /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", children: /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("path", { d: ICON_CLOSE }) })
+          children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("path", { d: ICON_CLOSE }) })
         }
       )
     ] }, option.value)) })
@@ -4102,36 +4913,36 @@ function ChipsControl({ label, value, options, onChange, onRemove }) {
 }
 
 // src/components/ListControl.tsx
-var import_react23 = require("react");
-var import_jsx_runtime21 = require("react/jsx-runtime");
+var import_react27 = require("react");
+var import_jsx_runtime25 = require("react/jsx-runtime");
 function FieldControl({ field, value, onChange }) {
   switch (field.kind) {
     case "slider":
-      return /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Slider, { label: field.label, value, min: field.min, max: field.max, step: field.step, onChange });
+      return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Slider, { label: field.label, value, min: field.min, max: field.max, step: field.step, onChange });
     case "toggle":
-      return /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Toggle, { label: field.label, checked: value, onChange });
+      return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Toggle, { label: field.label, checked: value, onChange });
     case "select":
-      return /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(SelectControl, { label: field.label, value, options: field.options ?? [], onChange });
+      return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(SelectControl, { label: field.label, value, options: field.options ?? [], onChange });
     case "color":
-      return /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(ColorControl, { label: field.label, value, onChange });
+      return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(ColorControl, { label: field.label, value, onChange });
     case "text":
-      return /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(TextControl, { label: field.label, value, onChange, placeholder: field.placeholder });
+      return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(TextControl, { label: field.label, value, onChange, placeholder: field.placeholder });
     default:
       return null;
   }
 }
 function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, onEvent }) {
-  const idCounter = (0, import_react23.useRef)(0);
+  const idCounter = (0, import_react27.useRef)(0);
   const mkId = () => `li-${idCounter.current++}`;
-  const [ids, setIds] = (0, import_react23.useState)(() => value.map(mkId));
-  const [picking, setPicking] = (0, import_react23.useState)(false);
-  const armedRef = (0, import_react23.useRef)(null);
-  const [dragIndex, setDragIndex] = (0, import_react23.useState)(null);
-  const [over, setOver] = (0, import_react23.useState)(null);
+  const [ids, setIds] = (0, import_react27.useState)(() => value.map(mkId));
+  const [picking, setPicking] = (0, import_react27.useState)(false);
+  const armedRef = (0, import_react27.useRef)(null);
+  const [dragIndex, setDragIndex] = (0, import_react27.useState)(null);
+  const [over, setOver] = (0, import_react27.useState)(null);
   if (ids.length !== value.length) {
     setIds((cur) => value.map((_, i) => cur[i] ?? mkId()));
   }
-  (0, import_react23.useEffect)(() => {
+  (0, import_react27.useEffect)(() => {
     const disarm = () => {
       armedRef.current = null;
     };
@@ -4182,14 +4993,14 @@ function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, on
     setDragIndex(null);
     setOver(null);
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(Folder, { title: label, defaultOpen: true, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "dialkit-list-items", onDragOver: (e) => e.preventDefault(), onDrop, children: [
+  return /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(Folder, { title: label, defaultOpen: true, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "dialkit-list-items", onDragOver: (e) => e.preventDefault(), onDrop, children: [
       value.map((item, index) => {
         const type = itemTypes[item.type];
         if (!type) return null;
         const fields = parseListItemSchema(type.schema);
         const overState = over?.index === index ? over.after ? "after" : "before" : void 0;
-        return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
+        return /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(
           "div",
           {
             className: "dialkit-list-item",
@@ -4218,10 +5029,10 @@ function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, on
               setOver(null);
             },
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "dialkit-list-item-head", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "dialkit-list-item-title", children: type.label }),
-                /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "dialkit-list-item-actions", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "dialkit-list-item-head", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "dialkit-list-item-title", children: type.label }),
+                /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "dialkit-list-item-actions", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
                     "button",
                     {
                       type: "button",
@@ -4230,22 +5041,22 @@ function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, on
                       onMouseDown: () => {
                         armedRef.current = index;
                       },
-                      children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("svg", { viewBox: "0 0 24 24", fill: "currentColor", "aria-hidden": "true", children: ICON_GRIP.map((c, i) => /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("circle", { cx: c.cx, cy: c.cy, r: "1.5" }, i)) })
+                      children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("svg", { viewBox: "0 0 24 24", fill: "currentColor", "aria-hidden": "true", children: ICON_GRIP.map((c, i) => /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("circle", { cx: c.cx, cy: c.cy, r: "1.5" }, i)) })
                     }
                   ),
-                  /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
                     "button",
                     {
                       type: "button",
                       className: "dialkit-list-icon-btn dialkit-list-remove",
                       onClick: () => removeItem(index),
                       "aria-label": `Remove ${type.label}`,
-                      children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round", strokeLinejoin: "round", children: ICON_TRASH.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("path", { d }, i)) })
+                      children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round", strokeLinejoin: "round", children: ICON_TRASH.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("path", { d }, i)) })
                     }
                   )
                 ] })
               ] }),
-              fields.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "dialkit-list-item-fields", children: fields.map((field) => /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+              fields.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { className: "dialkit-list-item-fields", children: fields.map((field) => /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
                 FieldControl,
                 {
                   field,
@@ -4259,14 +5070,14 @@ function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, on
           ids[index]
         );
       }),
-      value.length === 0 && !picking && /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "dialkit-list-empty", children: "No items yet" })
+      value.length === 0 && !picking && /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { className: "dialkit-list-empty", children: "No items yet" })
     ] }),
-    !atCapacity && /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "dialkit-list-add", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("button", { type: "button", className: "dialkit-list-add-btn", "data-open": String(picking), onClick: handleAdd, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("path", { d: ICON_PLUS }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { children: addLabel ?? "Add" })
+    !atCapacity && /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "dialkit-list-add", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("button", { type: "button", className: "dialkit-list-add-btn", "data-open": String(picking), onClick: handleAdd, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("path", { d: ICON_PLUS }) }),
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { children: addLabel ?? "Add" })
       ] }),
-      typeEntries.length > 1 && /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "dialkit-list-picker", "data-open": String(picking), children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "dialkit-list-picker-inner", children: typeEntries.map(([key, type]) => /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+      typeEntries.length > 1 && /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { className: "dialkit-list-picker", "data-open": String(picking), children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { className: "dialkit-list-picker-inner", children: typeEntries.map(([key, type]) => /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
         "button",
         {
           type: "button",
@@ -4284,18 +5095,18 @@ function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, on
 }
 
 // src/components/PresetManager.tsx
-var import_react24 = require("react");
+var import_react28 = require("react");
 var import_react_dom5 = require("react-dom");
-var import_react25 = require("motion/react");
-var import_jsx_runtime22 = require("react/jsx-runtime");
+var import_react29 = require("motion/react");
+var import_jsx_runtime26 = require("react/jsx-runtime");
 function PresetManager({ panelId, presets, activePresetId, onAdd }) {
-  const [isOpen, setIsOpen] = (0, import_react24.useState)(false);
-  const triggerRef = (0, import_react24.useRef)(null);
-  const dropdownRef = (0, import_react24.useRef)(null);
-  const [pos, setPos] = (0, import_react24.useState)({ top: 0, left: 0, width: 0 });
+  const [isOpen, setIsOpen] = (0, import_react28.useState)(false);
+  const triggerRef = (0, import_react28.useRef)(null);
+  const dropdownRef = (0, import_react28.useRef)(null);
+  const [pos, setPos] = (0, import_react28.useState)({ top: 0, left: 0, width: 0 });
   const hasPresets = presets.length > 0;
   const activePreset = presets.find((p) => p.id === activePresetId);
-  const open = (0, import_react24.useCallback)(() => {
+  const open = (0, import_react28.useCallback)(() => {
     if (!hasPresets) return;
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
@@ -4303,12 +5114,12 @@ function PresetManager({ panelId, presets, activePresetId, onAdd }) {
     }
     setIsOpen(true);
   }, [hasPresets]);
-  const close = (0, import_react24.useCallback)(() => setIsOpen(false), []);
-  const toggle = (0, import_react24.useCallback)(() => {
+  const close = (0, import_react28.useCallback)(() => setIsOpen(false), []);
+  const toggle = (0, import_react28.useCallback)(() => {
     if (isOpen) close();
     else open();
   }, [isOpen, open, close]);
-  (0, import_react24.useEffect)(() => {
+  (0, import_react28.useEffect)(() => {
     if (!isOpen) return;
     const handler = (e) => {
       const target = e.target;
@@ -4330,8 +5141,8 @@ function PresetManager({ panelId, presets, activePresetId, onAdd }) {
     e.stopPropagation();
     DialStore.deletePreset(panelId, presetId);
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "dialkit-preset-manager", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)("div", { className: "dialkit-preset-manager", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)(
       "button",
       {
         ref: triggerRef,
@@ -4341,9 +5152,9 @@ function PresetManager({ panelId, presets, activePresetId, onAdd }) {
         "data-has-preset": String(!!activePreset),
         "data-disabled": String(!hasPresets),
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "dialkit-preset-label", children: activePreset ? activePreset.name : "Version 1" }),
-          /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
-            import_react25.motion.svg,
+          /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { className: "dialkit-preset-label", children: activePreset ? activePreset.name : "Version 1" }),
+          /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
+            import_react29.motion.svg,
             {
               className: "dialkit-select-chevron",
               viewBox: "0 0 24 24",
@@ -4354,17 +5165,17 @@ function PresetManager({ panelId, presets, activePresetId, onAdd }) {
               strokeLinejoin: "round",
               animate: { rotate: isOpen ? 180 : 0, opacity: hasPresets ? 0.6 : 0.25 },
               transition: { type: "spring", visualDuration: 0.2, bounce: 0.15 },
-              children: /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("path", { d: ICON_CHEVRON })
+              children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("path", { d: ICON_CHEVRON })
             }
           )
         ]
       }
     ),
     (0, import_react_dom5.createPortal)(
-      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(import_react25.AnimatePresence, { children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(
-        import_react25.motion.div,
+      /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(import_react29.AnimatePresence, { children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)(
+        PresenceMotionDiv,
         {
-          ref: dropdownRef,
+          divRef: dropdownRef,
           className: "dialkit-root dialkit-preset-dropdown",
           style: { position: "fixed", top: pos.top, left: pos.left, minWidth: pos.width },
           initial: { opacity: 0, y: 4, scale: 0.97 },
@@ -4372,30 +5183,30 @@ function PresetManager({ panelId, presets, activePresetId, onAdd }) {
           exit: { opacity: 0, y: 4, scale: 0.97, pointerEvents: "none" },
           transition: { type: "spring", visualDuration: 0.15, bounce: 0 },
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
               "div",
               {
                 className: "dialkit-preset-item",
                 "data-active": String(!activePresetId),
                 onClick: () => handleSelect(null),
-                children: /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "dialkit-preset-name", children: "Version 1" })
+                children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { className: "dialkit-preset-name", children: "Version 1" })
               }
             ),
-            presets.map((preset) => /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(
+            presets.map((preset) => /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)(
               "div",
               {
                 className: "dialkit-preset-item",
                 "data-active": String(preset.id === activePresetId),
                 onClick: () => handleSelect(preset.id),
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "dialkit-preset-name", children: preset.name }),
-                  /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { className: "dialkit-preset-name", children: preset.name }),
+                  /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
                     "button",
                     {
                       className: "dialkit-preset-delete",
                       onClick: (e) => handleDelete(e, preset.id),
                       title: "Delete preset",
-                      children: /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: ICON_TRASH.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("path", { d }, i)) })
+                      children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: ICON_TRASH.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("path", { d }, i)) })
                     }
                   )
                 ]
@@ -4411,13 +5222,13 @@ function PresetManager({ panelId, presets, activePresetId, onAdd }) {
 }
 
 // src/components/Panel.tsx
-var import_jsx_runtime23 = require("react/jsx-runtime");
+var import_jsx_runtime27 = require("react/jsx-runtime");
 function Panel({ panel, defaultOpen = true, inline = false }) {
-  const [copied, setCopied] = (0, import_react26.useState)(false);
-  const [isPanelOpen, setIsPanelOpen] = (0, import_react26.useState)(defaultOpen);
-  const shortcutCtx = (0, import_react26.useContext)(ShortcutContext);
+  const [copied, setCopied] = (0, import_react30.useState)(false);
+  const [isPanelOpen, setIsPanelOpen] = (0, import_react30.useState)(defaultOpen);
+  const shortcutCtx = (0, import_react30.useContext)(ShortcutContext);
   const hasShortcuts = Object.keys(panel.shortcuts).length > 0;
-  const values = (0, import_react26.useSyncExternalStore)(
+  const values = (0, import_react30.useSyncExternalStore)(
     (cb) => DialStore.subscribe(panel.id, cb),
     () => DialStore.getValues(panel.id),
     () => DialStore.getValues(panel.id)
@@ -4445,7 +5256,7 @@ Apply these values as the new defaults in the useDialKit call.`;
     const value = values[control.path];
     switch (control.type) {
       case "slider":
-        return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
           Slider,
           {
             label: control.label,
@@ -4459,8 +5270,22 @@ Apply these values as the new defaults in the useDialKit call.`;
           },
           control.path
         );
+      case "range":
+        return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
+          RangeSlider,
+          {
+            label: control.label,
+            value,
+            min: control.min ?? 0,
+            max: control.max ?? 1,
+            step: control.step,
+            defaultValue: control.rangeDefault,
+            onChange: (v) => DialStore.updateValue(panel.id, control.path, v)
+          },
+          control.path
+        );
       case "toggle":
-        return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
           Toggle,
           {
             label: control.label,
@@ -4472,7 +5297,7 @@ Apply these values as the new defaults in the useDialKit call.`;
           control.path
         );
       case "spring":
-        return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
           SpringControl,
           {
             panelId: panel.id,
@@ -4484,7 +5309,7 @@ Apply these values as the new defaults in the useDialKit call.`;
           control.path
         );
       case "transition":
-        return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
           TransitionControl,
           {
             panelId: panel.id,
@@ -4496,9 +5321,9 @@ Apply these values as the new defaults in the useDialKit call.`;
           control.path
         );
       case "folder":
-        return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Folder, { title: control.label, defaultOpen: control.defaultOpen ?? true, children: control.children?.map(renderControl) }, control.path);
+        return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Folder, { title: control.label, defaultOpen: control.defaultOpen ?? true, children: control.children?.map(renderControl) }, control.path);
       case "text":
-        return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
           TextControl,
           {
             label: control.label,
@@ -4509,7 +5334,7 @@ Apply these values as the new defaults in the useDialKit call.`;
           control.path
         );
       case "select":
-        return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
           SelectControl,
           {
             label: control.label,
@@ -4520,7 +5345,7 @@ Apply these values as the new defaults in the useDialKit call.`;
           control.path
         );
       case "color":
-        return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
           ColorControl,
           {
             label: control.label,
@@ -4532,7 +5357,7 @@ Apply these values as the new defaults in the useDialKit call.`;
           control.path
         );
       case "gradient":
-        return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
           GradientControl,
           {
             label: control.label,
@@ -4541,8 +5366,27 @@ Apply these values as the new defaults in the useDialKit call.`;
           },
           control.path
         );
+      case "xy":
+        return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
+          XYControl,
+          {
+            label: control.label,
+            value,
+            x: control.xAxis,
+            y: control.yAxis,
+            grid: control.grid,
+            density: control.density,
+            snap: control.snap,
+            returnToCenter: control.returnToCenter,
+            showValues: control.showValues,
+            shortcut: control.shortcut,
+            shortcutActive: shortcutCtx.activePanelId === panel.id && shortcutCtx.activePath === control.path,
+            onChange: (v) => DialStore.updateValue(panel.id, control.path, v)
+          },
+          control.path
+        );
       case "gallery":
-        return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
           GalleryControl,
           {
             label: control.label,
@@ -4554,7 +5398,7 @@ Apply these values as the new defaults in the useDialKit call.`;
           control.path
         );
       case "file":
-        return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
           FileControl,
           {
             label: control.label,
@@ -4567,7 +5411,7 @@ Apply these values as the new defaults in the useDialKit call.`;
           control.path
         );
       case "swatch":
-        return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
           SwatchControl,
           {
             label: control.label,
@@ -4578,7 +5422,7 @@ Apply these values as the new defaults in the useDialKit call.`;
           control.path
         );
       case "chips":
-        return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
           ChipsControl,
           {
             label: control.label,
@@ -4590,7 +5434,7 @@ Apply these values as the new defaults in the useDialKit call.`;
           control.path
         );
       case "list":
-        return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
           ListControl,
           {
             label: control.label,
@@ -4604,7 +5448,7 @@ Apply these values as the new defaults in the useDialKit call.`;
           control.path
         );
       case "action":
-        return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
           "button",
           {
             className: "dialkit-button",
@@ -4620,25 +5464,25 @@ Apply these values as the new defaults in the useDialKit call.`;
   const renderControl = (control) => {
     const node = renderControlNode(control);
     if (control.type === "folder") return node;
-    return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("div", { className: "dialkit-control-tip", title: control.path, children: node }, control.path);
+    return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("div", { className: "dialkit-control-tip", title: control.path, children: node }, control.path);
   };
   const renderControls = () => {
     return panel.controls.map(renderControl);
   };
   const iconTransition = { type: "spring", visualDuration: 0.4, bounce: 0.1 };
-  const toolbar = /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(import_jsx_runtime23.Fragment, { children: [
-    /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
-      import_react27.motion.button,
+  const toolbar = /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)(import_jsx_runtime27.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
+      import_react31.motion.button,
       {
         className: "dialkit-toolbar-add",
         onClick: handleAddPreset,
         title: "Add preset",
         whileTap: { scale: 0.9 },
         transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-        children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: ICON_ADD_PRESET.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("path", { d }, i)) })
+        children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: ICON_ADD_PRESET.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("path", { d }, i)) })
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
       PresetManager,
       {
         panelId: panel.id,
@@ -4647,16 +5491,16 @@ Apply these values as the new defaults in the useDialKit call.`;
         onAdd: handleAddPreset
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
-      import_react27.motion.button,
+    /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
+      import_react31.motion.button,
       {
         className: "dialkit-toolbar-add",
         onClick: handleCopy,
         title: "Copy parameters",
         whileTap: { scale: 0.9 },
         transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-        children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(import_react27.AnimatePresence, { initial: false, mode: "wait", children: copied ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
-          import_react27.motion.svg,
+        children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(import_react31.AnimatePresence, { initial: false, mode: "wait", children: copied ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
+          import_react31.motion.svg,
           {
             viewBox: "0 0 24 24",
             fill: "none",
@@ -4669,11 +5513,11 @@ Apply these values as the new defaults in the useDialKit call.`;
             animate: { scale: 1, opacity: 1 },
             exit: { scale: 0.8, opacity: 0 },
             transition: { duration: 0.08 },
-            children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("path", { d: ICON_CHECK })
+            children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("path", { d: ICON_CHECK })
           },
           "check"
-        ) : /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(
-          import_react27.motion.svg,
+        ) : /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)(
+          import_react31.motion.svg,
           {
             viewBox: "0 0 24 24",
             fill: "none",
@@ -4683,9 +5527,9 @@ Apply these values as the new defaults in the useDialKit call.`;
             exit: { scale: 0.8, opacity: 0 },
             transition: { duration: 0.08 },
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("path", { d: ICON_CLIPBOARD.board, stroke: "currentColor", strokeWidth: "2", strokeLinejoin: "round" }),
-              /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("path", { d: ICON_CLIPBOARD.sparkle, fill: "currentColor" }),
-              /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("path", { d: ICON_CLIPBOARD.body, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" })
+              /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("path", { d: ICON_CLIPBOARD.board, stroke: "currentColor", strokeWidth: "2", strokeLinejoin: "round" }),
+              /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("path", { d: ICON_CLIPBOARD.sparkle, fill: "currentColor" }),
+              /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("path", { d: ICON_CLIPBOARD.body, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" })
             ]
           },
           "clipboard"
@@ -4693,26 +5537,26 @@ Apply these values as the new defaults in the useDialKit call.`;
       }
     )
   ] });
-  return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("div", { className: "dialkit-panel-wrapper", children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Folder, { title: panel.name, defaultOpen, isRoot: true, inline, onOpenChange: setIsPanelOpen, toolbar, children: renderControls() }) });
+  return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("div", { className: "dialkit-panel-wrapper", children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Folder, { title: panel.name, defaultOpen, isRoot: true, inline, onOpenChange: setIsPanelOpen, toolbar, children: renderControls() }) });
 }
 
 // src/components/DialRoot.tsx
-var import_jsx_runtime24 = require("react/jsx-runtime");
+var import_jsx_runtime28 = require("react/jsx-runtime");
 var import_meta = {};
 var isDevDefault = typeof process !== "undefined" && process?.env?.NODE_ENV ? process.env.NODE_ENV !== "production" : typeof import_meta !== "undefined" && import_meta.env?.MODE ? import_meta.env.MODE !== "production" : true;
 function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover", theme = "system", productionEnabled = isDevDefault }) {
   if (!productionEnabled) return null;
-  const [panels, setPanels] = (0, import_react28.useState)([]);
-  const [mounted, setMounted] = (0, import_react28.useState)(false);
+  const [panels, setPanels] = (0, import_react32.useState)([]);
+  const [mounted, setMounted] = (0, import_react32.useState)(false);
   const inline = mode === "inline";
-  const panelRef = (0, import_react28.useRef)(null);
-  const [dragOffset, setDragOffset] = (0, import_react28.useState)(null);
-  const [activePosition, setActivePosition] = (0, import_react28.useState)(position);
-  const lastDragOffset = (0, import_react28.useRef)(null);
-  const draggingRef = (0, import_react28.useRef)(false);
-  const dragStartRef = (0, import_react28.useRef)(null);
-  const didDragRef = (0, import_react28.useRef)(false);
-  (0, import_react28.useEffect)(() => {
+  const panelRef = (0, import_react32.useRef)(null);
+  const [dragOffset, setDragOffset] = (0, import_react32.useState)(null);
+  const [activePosition, setActivePosition] = (0, import_react32.useState)(position);
+  const lastDragOffset = (0, import_react32.useRef)(null);
+  const draggingRef = (0, import_react32.useRef)(false);
+  const dragStartRef = (0, import_react32.useRef)(null);
+  const didDragRef = (0, import_react32.useRef)(false);
+  (0, import_react32.useEffect)(() => {
     setMounted(true);
     setPanels(DialStore.getPanels());
     const unsubscribe = DialStore.subscribeGlobal(() => {
@@ -4720,7 +5564,7 @@ function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover"
     });
     return unsubscribe;
   }, []);
-  (0, import_react28.useEffect)(() => {
+  (0, import_react32.useEffect)(() => {
     if (!panelRef.current || inline) return;
     const observer = new MutationObserver(() => {
       const inner = panelRef.current?.querySelector(".dialkit-panel-inner");
@@ -4743,7 +5587,7 @@ function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover"
     observer.observe(panelRef.current, { subtree: true, attributes: true, attributeFilter: ["data-collapsed"] });
     return () => observer.disconnect();
   }, [inline, dragOffset, position]);
-  const handlePointerDown = (0, import_react28.useCallback)((e) => {
+  const handlePointerDown = (0, import_react32.useCallback)((e) => {
     const inner = panelRef.current?.querySelector(".dialkit-panel-inner");
     if (!inner || inner.getAttribute("data-collapsed") !== "true") return;
     const rect = panelRef.current.getBoundingClientRect();
@@ -4757,7 +5601,7 @@ function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover"
     draggingRef.current = true;
     e.target.setPointerCapture(e.pointerId);
   }, []);
-  const handlePointerMove = (0, import_react28.useCallback)((e) => {
+  const handlePointerMove = (0, import_react32.useCallback)((e) => {
     if (!draggingRef.current || !dragStartRef.current) return;
     const dx = e.clientX - dragStartRef.current.pointerX;
     const dy = e.clientY - dragStartRef.current.pointerY;
@@ -4768,7 +5612,7 @@ function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover"
       y: dragStartRef.current.elY + dy
     });
   }, []);
-  const handlePointerUp = (0, import_react28.useCallback)((e) => {
+  const handlePointerUp = (0, import_react32.useCallback)((e) => {
     if (!draggingRef.current) return;
     draggingRef.current = false;
     dragStartRef.current = null;
@@ -4795,7 +5639,7 @@ function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover"
     right: "auto",
     bottom: "auto"
   } : void 0;
-  const content = /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(ShortcutListener, { children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { className: "dialkit-root", "data-mode": mode, "data-theme": theme, children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+  const content = /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(ShortcutListener, { children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("div", { className: "dialkit-root", "data-mode": mode, "data-theme": theme, children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
     "div",
     {
       ref: panelRef,
@@ -4806,7 +5650,7 @@ function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover"
       onPointerDown: !inline ? handlePointerDown : void 0,
       onPointerMove: !inline ? handlePointerMove : void 0,
       onPointerUp: !inline ? handlePointerUp : void 0,
-      children: panels.map((panel) => /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Panel, { panel, defaultOpen: inline || defaultOpen, inline }, panel.id))
+      children: panels.map((panel) => /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Panel, { panel, defaultOpen: inline || defaultOpen, inline }, panel.id))
     }
   ) }) });
   if (inline) {
@@ -4816,16 +5660,16 @@ function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover"
 }
 
 // src/components/Module.tsx
-var import_jsx_runtime25 = require("react/jsx-runtime");
+var import_jsx_runtime29 = require("react/jsx-runtime");
 var ENABLE_OPTIONS = [
   { value: "off", label: "Off" },
   { value: "on", label: "On" }
 ];
 function Module({ title, enabled, onEnabledChange, children }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "dialkit-module", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "dialkit-module-header", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "dialkit-module-title", children: title }),
-      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { className: "dialkit-module-switch", children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "dialkit-module", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "dialkit-module-header", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "dialkit-module-title", children: title }),
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("div", { className: "dialkit-module-switch", children: /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
         SegmentedControl,
         {
           options: ENABLE_OPTIONS,
@@ -4834,14 +5678,14 @@ function Module({ title, enabled, onEnabledChange, children }) {
         }
       ) })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { className: "dialkit-module-collapse", "data-open": enabled, children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { className: "dialkit-module-collapse-clip", children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { className: "dialkit-module-inner", children }) }) })
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("div", { className: "dialkit-module-collapse", "data-open": enabled, children: /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("div", { className: "dialkit-module-collapse-clip", children: /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("div", { className: "dialkit-module-inner", children }) }) })
   ] });
 }
 
 // src/components/ButtonGroup.tsx
-var import_jsx_runtime26 = require("react/jsx-runtime");
+var import_jsx_runtime30 = require("react/jsx-runtime");
 function ButtonGroup({ buttons }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("div", { className: "dialkit-button-group", children: buttons.map((button, index) => /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { className: "dialkit-button-group", children: buttons.map((button, index) => /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
     "button",
     {
       className: "dialkit-button",
@@ -4853,7 +5697,7 @@ function ButtonGroup({ buttons }) {
 }
 
 // src/components/WaveformVisualization.tsx
-var import_react29 = require("react");
+var import_react33 = require("react");
 
 // src/waveform-dsp.ts
 function mixToMono(buffer) {
@@ -4988,11 +5832,11 @@ function createWaveformEngine(canvas, get) {
       }
     })();
   };
-  const columnWidth = (pixelSize) => Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSize)));
+  const columnWidth2 = (pixelSize) => Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSize)));
   const windowState = { start: 0, win: 1 };
   let drag = null;
   const drawColumns = (p, color, pixelSize) => {
-    const colW = columnWidth(pixelSize);
+    const colW = columnWidth2(pixelSize);
     ctx.fillStyle = color;
     ctx.globalAlpha = 1;
     for (let x = 0; x < W; x += colW) {
@@ -5246,7 +6090,7 @@ function createWaveformEngine(canvas, get) {
 }
 
 // src/components/WaveformVisualization.tsx
-var import_jsx_runtime27 = require("react/jsx-runtime");
+var import_jsx_runtime31 = require("react/jsx-runtime");
 function WaveformVisualization({
   buffer = null,
   progress = 0,
@@ -5266,9 +6110,9 @@ function WaveformVisualization({
   width = 256,
   height = 140
 }) {
-  const canvasRef = (0, import_react29.useRef)(null);
-  const [zoom, setZoom] = (0, import_react29.useState)(1);
-  const runtimeRef = (0, import_react29.useRef)(null);
+  const canvasRef = (0, import_react33.useRef)(null);
+  const [zoom, setZoom] = (0, import_react33.useState)(1);
+  const runtimeRef = (0, import_react33.useRef)(null);
   runtimeRef.current = {
     buffer,
     progress,
@@ -5289,33 +6133,423 @@ function WaveformVisualization({
     onSeek,
     onLoopChange
   };
-  (0, import_react29.useEffect)(() => {
+  (0, import_react33.useEffect)(() => {
     if (!canvasRef.current) return;
     const engine = createWaveformEngine(canvasRef.current, () => runtimeRef.current);
     return () => engine.destroy();
   }, []);
   const atMaxZoom = zoom >= WAVEFORM_MAX_ZOOM;
   const framingLoop = autoZoomOnLoop && !!loop;
-  return /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "dialkit-waveform-viz-wrap", style: { width }, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("canvas", { ref: canvasRef, className: "dialkit-waveform-viz", style: { width, height } }),
-    !framingLoop && /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "dialkit-waveform-zoom", children: [
-      zoom > 1 && /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("button", { type: "button", "aria-label": "Zoom out", onClick: () => setZoom((z) => Math.max(1, z / 2)), children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("path", { d: "M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "dialkit-waveform-viz-wrap", style: { width }, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("canvas", { ref: canvasRef, className: "dialkit-waveform-viz", style: { width, height } }),
+    !framingLoop && /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "dialkit-waveform-zoom", children: [
+      zoom > 1 && /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("button", { type: "button", "aria-label": "Zoom out", onClick: () => setZoom((z) => Math.max(1, z / 2)), children: /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("path", { d: "M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
         "button",
         {
           type: "button",
           "aria-label": "Zoom in",
           disabled: atMaxZoom,
           onClick: () => setZoom((z) => Math.min(WAVEFORM_MAX_ZOOM, z * 2)),
-          children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) })
+          children: /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) })
         }
       )
     ] })
   ] });
 }
 
+// src/components/AnalyserVisualization.tsx
+var import_react34 = require("react");
+
+// src/analyser-core.ts
+function byteFreqToUnit(v) {
+  return v / 255;
+}
+function byteTimeToUnit(v) {
+  return (v - 128) / 128;
+}
+function binRange(point, points, bins, scale) {
+  if (bins <= 2) return { start: Math.max(0, bins - 1), end: Math.max(1, bins) };
+  const lo = 1;
+  const at = (t) => scale === "log" ? Math.pow(bins, t) * lo : lo + (bins - lo) * t;
+  let start = Math.floor(at(point / points));
+  start = Math.max(lo, Math.min(bins - 1, start));
+  const end = Math.max(start + 1, Math.min(bins, Math.floor(at((point + 1) / points))));
+  return { start, end };
+}
+function fillFrequencyTargets(data, out, scale) {
+  const points = out.length;
+  for (let i = 0; i < points; i++) {
+    const { start, end } = binRange(i, points, data.length, scale);
+    let mx = 0;
+    for (let b = start; b < end; b++) {
+      if (data[b] > mx) mx = data[b];
+    }
+    out[i] = byteFreqToUnit(mx);
+  }
+}
+function fillWaveformMinMax(data, cols, min, max) {
+  const step = data.length / cols;
+  for (let x = 0; x < cols; x++) {
+    const start = Math.floor(x * step);
+    const end = Math.max(start + 1, Math.min(data.length, Math.floor((x + 1) * step)));
+    let mn = 1;
+    let mx = -1;
+    for (let i = start; i < end; i++) {
+      const v = byteTimeToUnit(data[i]);
+      if (v < mn) mn = v;
+      if (v > mx) mx = v;
+    }
+    min[x] = mn;
+    max[x] = mx;
+  }
+}
+function resampleWaveform(data, out) {
+  const n = out.length;
+  if (!n) return;
+  if (!data.length) {
+    out.fill(0);
+    return;
+  }
+  if (n === 1 || data.length === 1) {
+    out.fill(byteTimeToUnit(data[0]));
+    return;
+  }
+  const step = (data.length - 1) / (n - 1);
+  for (let i = 0; i < n; i++) {
+    const x = i * step;
+    const j = Math.floor(x);
+    const a = byteTimeToUnit(data[j]);
+    const b = byteTimeToUnit(data[Math.min(data.length - 1, j + 1)]);
+    out[i] = a + (b - a) * (x - j);
+  }
+}
+var SPRING_MAX_STEP = 1 / 240;
+function stepSprings(pos, vel, targets, stiffness, damping, dt) {
+  let remaining = dt;
+  while (remaining > 0) {
+    const h = Math.min(remaining, SPRING_MAX_STEP);
+    remaining -= h;
+    for (let i = 0; i < pos.length; i++) {
+      const accel = -stiffness * (pos[i] - targets[i]) - damping * vel[i];
+      vel[i] += accel * h;
+      pos[i] += vel[i] * h;
+    }
+  }
+}
+var SPRING_DEFAULT_STIFFNESS = 120;
+var SPRING_DEFAULT_DAMPING = 14;
+function normalizeSpring(spring) {
+  if (!spring) return null;
+  const raw = spring === true ? {} : spring;
+  return {
+    stiffness: Math.min(1e3, Math.max(1, raw.stiffness ?? SPRING_DEFAULT_STIFFNESS)),
+    damping: Math.min(100, Math.max(1, raw.damping ?? SPRING_DEFAULT_DAMPING))
+  };
+}
+function columnWidth(dpr, pixelSize) {
+  return Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSize)));
+}
+function quantizeToGrid(v, colW) {
+  return Math.round(v / colW) * colW;
+}
+
+// src/analyser-engine.ts
+var SMOOTH_POINTS = 64;
+var AREA_FILL_ALPHA = 0.2;
+var MUTED_ALPHA = 0.35;
+var FREQ_AMP = 0.92;
+var WAVE_AMP = 0.42;
+var MAX_DT = 0.05;
+function smoothThrough2(ctx, pts) {
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    ctx.bezierCurveTo(
+      p1.x + (p2.x - p0.x) / 6,
+      p1.y + (p2.y - p0.y) / 6,
+      p2.x - (p3.x - p1.x) / 6,
+      p2.y - (p3.y - p1.y) / 6,
+      p2.x,
+      p2.y
+    );
+  }
+}
+function createAnalyserEngine(canvas, get) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return { destroy() {
+  } };
+  const readDpr = () => Math.min(Math.max(window.devicePixelRatio || 1, 1), 3);
+  let dpr = readDpr();
+  let W = 0;
+  let H = 0;
+  let cy = 0;
+  const syncSize = (width, height) => {
+    dpr = readDpr();
+    const nw = Math.round(width * dpr);
+    const nh = Math.round(height * dpr);
+    if (nw === W && nh === H) return;
+    W = canvas.width = nw;
+    H = canvas.height = nh;
+    cy = H / 2;
+  };
+  const columnWidth2 = (pixelSize) => columnWidth(dpr, pixelSize);
+  let bytes = new Uint8Array(0);
+  let targetsA = new Float32Array(0);
+  let targetsB = new Float32Array(0);
+  let posA = new Float32Array(0);
+  let posB = new Float32Array(0);
+  let velA = new Float32Array(0);
+  let velB = new Float32Array(0);
+  let springSeeded = false;
+  const syncPoints = (n) => {
+    if (targetsA.length === n) return;
+    targetsA = new Float32Array(n);
+    targetsB = new Float32Array(n);
+    posA = new Float32Array(n);
+    posB = new Float32Array(n);
+    velA = new Float32Array(n);
+    velB = new Float32Array(n);
+    springSeeded = false;
+  };
+  const drawGrid = (base, subs) => {
+    const n = Math.max(1, Math.round(subs));
+    ctx.strokeStyle = base;
+    ctx.globalAlpha = 0.1;
+    ctx.lineWidth = dpr;
+    ctx.beginPath();
+    for (let i = 1; i < n; i++) {
+      const x = Math.round(i / n * W) + 0.5;
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, H);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
+  const baselineY = (source) => source === "frequency" ? H - Math.round(dpr) : cy;
+  const drawBaseline = (base, source, alpha) => {
+    ctx.strokeStyle = base;
+    ctx.globalAlpha = 0.15 * alpha;
+    ctx.lineWidth = dpr;
+    ctx.beginPath();
+    const y = Math.round(baselineY(source)) + 0.5;
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
+  const drawBand = (top, bottom, wave, fill, alpha) => {
+    const n = top.length;
+    if (n < 2) return;
+    const px = (k) => k / (n - 1) * W;
+    const toY = (v) => cy - v * (H * WAVE_AMP);
+    const topPts = new Array(n);
+    for (let k = 0; k < n; k++) topPts[k] = { x: px(k), y: toY(top[k]) };
+    const botPts = new Array(n);
+    for (let k = 0; k < n; k++) botPts[k] = { x: px(n - 1 - k), y: toY(bottom[n - 1 - k]) };
+    ctx.beginPath();
+    ctx.moveTo(topPts[0].x, topPts[0].y);
+    smoothThrough2(ctx, topPts);
+    ctx.lineTo(botPts[0].x, botPts[0].y);
+    smoothThrough2(ctx, botPts);
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.globalAlpha = AREA_FILL_ALPHA * alpha;
+    ctx.fill();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = wave;
+    ctx.lineWidth = 1.6 * dpr;
+    ctx.lineJoin = "round";
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
+  const drawSmooth = (values, toY, baseY, area, wave, fill, alpha) => {
+    const n = values.length;
+    if (n < 2) return;
+    const pts = new Array(n);
+    for (let k = 0; k < n; k++) pts[k] = { x: k / (n - 1) * W, y: toY(values[k]) };
+    if (area) {
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      smoothThrough2(ctx, pts);
+      ctx.lineTo(W, baseY);
+      ctx.lineTo(0, baseY);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.globalAlpha = AREA_FILL_ALPHA * alpha;
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    smoothThrough2(ctx, pts);
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = wave;
+    ctx.lineWidth = 1.6 * dpr;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
+  const drawColumns = (source, variant, pixelSize, wave, alpha) => {
+    const colW = columnWidth2(pixelSize);
+    ctx.fillStyle = wave;
+    ctx.globalAlpha = alpha;
+    const n = targetsA.length;
+    const src = springActive ? posA : targetsA;
+    const srcB = springActive ? posB : targetsB;
+    for (let k = 0; k < n; k++) {
+      const x = k * colW;
+      if (x >= W) break;
+      if (source === "frequency") {
+        const yTop = Math.max(0, Math.min(H - colW, quantizeToGrid(H - src[k] * (H * FREQ_AMP), colW)));
+        if (variant === "area") ctx.fillRect(x, yTop, colW, H - yTop);
+        else ctx.fillRect(x, yTop, colW, colW);
+      } else {
+        const yTop = Math.round(cy - src[k] * (H * WAVE_AMP));
+        const yBot = Math.round(cy - srcB[k] * (H * WAVE_AMP));
+        if (variant === "area") {
+          const t = Math.max(0, Math.min(H - 1, yTop));
+          ctx.fillRect(x, t, colW, Math.max(1, yBot - t));
+        } else {
+          const block = (yEdge) => {
+            const y = Math.max(0, Math.min(H - colW, quantizeToGrid(yEdge - colW / 2, colW)));
+            ctx.fillRect(x, y, colW, colW);
+          };
+          block(yTop);
+          block(yBot);
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+  };
+  let springActive = false;
+  let prevNow = null;
+  let raf = 0;
+  const frame = (now) => {
+    raf = requestAnimationFrame(frame);
+    const rt = get();
+    syncSize(rt.width, rt.height);
+    const dt = prevNow == null ? 0 : Math.min((now - prevNow) / 1e3, MAX_DT);
+    prevNow = now;
+    const base = getComputedStyle(canvas).color || "rgb(255,255,255)";
+    const alpha = rt.muted ? MUTED_ALPHA : 1;
+    ctx.globalAlpha = 1;
+    ctx.clearRect(0, 0, W, H);
+    ctx.imageSmoothingEnabled = rt.mode === "smooth";
+    if (rt.grid) drawGrid(base, rt.gridSubdivisions);
+    drawBaseline(base, rt.source, alpha);
+    const an = rt.analyser;
+    if (!an) return;
+    const needed = rt.source === "frequency" ? an.frequencyBinCount : an.fftSize;
+    if (bytes.length !== needed) bytes = new Uint8Array(needed);
+    if (rt.source === "frequency") an.getByteFrequencyData(bytes);
+    else an.getByteTimeDomainData(bytes);
+    const pixelated = rt.mode === "pixelated";
+    const n = pixelated ? Math.max(2, Math.ceil(W / columnWidth2(rt.pixelSize))) : SMOOTH_POINTS;
+    syncPoints(n);
+    const twoSeries = rt.source === "waveform" && (pixelated || rt.variant === "area");
+    if (rt.source === "frequency") {
+      fillFrequencyTargets(bytes, targetsA, rt.scale);
+    } else if (twoSeries) {
+      fillWaveformMinMax(bytes, n, targetsB, targetsA);
+    } else {
+      resampleWaveform(bytes, targetsA);
+    }
+    const spring = normalizeSpring(rt.spring);
+    springActive = !!spring;
+    if (spring) {
+      if (!springSeeded) {
+        posA.set(targetsA);
+        posB.set(targetsB);
+        velA.fill(0);
+        velB.fill(0);
+        springSeeded = true;
+      }
+      stepSprings(posA, velA, targetsA, spring.stiffness, spring.damping, dt);
+      if (twoSeries) stepSprings(posB, velB, targetsB, spring.stiffness, spring.damping, dt);
+    } else {
+      springSeeded = false;
+    }
+    const wave = rt.waveColor || base;
+    const fill = rt.fillColor || wave;
+    if (pixelated) {
+      drawColumns(rt.source, rt.variant, rt.pixelSize, wave, alpha);
+    } else {
+      const values = springActive ? posA : targetsA;
+      if (rt.source === "frequency") {
+        drawSmooth(values, (v) => H - v * (H * FREQ_AMP), baselineY("frequency"), rt.variant === "area", wave, fill, alpha);
+      } else if (rt.variant === "area") {
+        drawBand(values, springActive ? posB : targetsB, wave, fill, alpha);
+      } else {
+        drawSmooth(values, (v) => cy - v * (H * WAVE_AMP), cy, false, wave, fill, alpha);
+      }
+    }
+  };
+  raf = requestAnimationFrame(frame);
+  return {
+    destroy() {
+      cancelAnimationFrame(raf);
+    }
+  };
+}
+
+// src/components/AnalyserVisualization.tsx
+var import_jsx_runtime32 = require("react/jsx-runtime");
+function AnalyserVisualization({
+  analyser = null,
+  source = "frequency",
+  variant = "area",
+  mode = "smooth",
+  pixelSize = 1,
+  scale = "log",
+  spring = false,
+  grid = false,
+  gridSubdivisions = 8,
+  waveColor,
+  fillColor,
+  muted = false,
+  onMuteChange,
+  soloed = false,
+  onSoloChange,
+  width = 256,
+  height = 140
+}) {
+  const canvasRef = (0, import_react34.useRef)(null);
+  const runtimeRef = (0, import_react34.useRef)(null);
+  runtimeRef.current = {
+    analyser,
+    source,
+    variant,
+    mode,
+    pixelSize,
+    scale,
+    spring,
+    grid,
+    gridSubdivisions,
+    waveColor,
+    fillColor,
+    muted,
+    width,
+    height
+  };
+  (0, import_react34.useEffect)(() => {
+    if (!canvasRef.current) return;
+    const engine = createAnalyserEngine(canvasRef.current, () => runtimeRef.current);
+    return () => engine.destroy();
+  }, []);
+  return /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "dialkit-analyser-viz-wrap", style: { width }, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("canvas", { ref: canvasRef, className: "dialkit-analyser-viz", style: { width, height } }),
+    (onMuteChange || onSoloChange) && /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "dialkit-analyser-actions", children: [
+      onMuteChange && /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("button", { type: "button", "aria-label": "Mute", "aria-pressed": muted, onClick: () => onMuteChange(!muted), children: "M" }),
+      onSoloChange && /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("button", { type: "button", "aria-label": "Solo", "aria-pressed": soloed, onClick: () => onSoloChange(!soloed), children: "S" })
+    ] })
+  ] });
+}
+
 // src/components/CurveComposer.tsx
-var import_react30 = require("react");
+var import_react35 = require("react");
 
 // src/curve-composer-core.ts
 var CURVE_CYCLE = ["linear", "easeIn", "easeOut", "easeInOut", "spring"];
@@ -5332,17 +6566,31 @@ var lerp = (a, b, t) => a + (b - a) * t;
 var clamp013 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
 var clampBipolar = (v) => v < -1 ? -1 : v > 1 ? 1 : v;
 var SKEW_MAX = 0.45;
-function steepnessGain(steepness) {
-  const v = clampBipolar(steepness);
-  return v >= 0 ? 1 + v * 1.3 : 1 + v;
-}
-function deriveEase(type, curvature, steepness = 0) {
-  const base = type === "spring" ? easingPresets.linear : easingPresets[type];
-  const k = steepnessGain(steepness);
-  const x1 = base[0] * k;
-  const x2 = 1 + (base[2] - 1) * k;
+var BACK_MAX = 0.8;
+var easingExtremes = {
+  linear: [0, 0, 1, 1],
+  easeIn: [0.7, 0, 0.84, 0],
+  easeOut: [0.16, 1, 0.3, 1],
+  easeInOut: [0.87, 0, 0.13, 1]
+};
+var lerp4 = (a, b, t) => [
+  lerp(a[0], b[0], t),
+  lerp(a[1], b[1], t),
+  lerp(a[2], b[2], t),
+  lerp(a[3], b[3], t)
+];
+function deriveEase(type, curvature, steepness = 0, overshoot = 0, anticipate = 0) {
+  const key = type === "spring" ? "linear" : type;
+  const base = easingPresets[key];
+  const s = clampBipolar(steepness);
+  const pts = s >= 0 ? lerp4(base, easingExtremes[key], s) : lerp4(easingPresets.linear, base, s + 1);
+  let [x1, y1, x2, y2] = pts;
   const shift = clampBipolar(curvature) * SKEW_MAX;
-  return [clamp013(x1 + shift), base[1], clamp013(x2 + shift), base[3]];
+  x1 = clamp013(x1 + shift);
+  x2 = clamp013(x2 + shift);
+  y2 += clamp013(overshoot) * BACK_MAX;
+  y1 -= clamp013(anticipate) * BACK_MAX;
+  return [x1, y1, x2, y2];
 }
 function bezierAxis(p1, p2, s) {
   const u = 1 - s;
@@ -5398,10 +6646,35 @@ function buildSampler(curve) {
     const pts = springPoints(curve.curvature, curve.steepness);
     return (t) => interp(pts, t);
   }
-  const ease = deriveEase(curve.type, curve.curvature, curve.steepness);
+  const ease = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot, curve.anticipate);
   return (t) => bezierY(ease, t);
 }
-function boundaries(segments) {
+function totalWeight(segments) {
+  let t = 0;
+  for (const s of segments) t += Math.max(0, s.weight);
+  return t || 1;
+}
+function timelineSlots(segments, gap = 0) {
+  const n = segments.length;
+  const g = n > 1 ? clamp013(gap) : 0;
+  const total = totalWeight(segments);
+  const content = 1 - g;
+  const gapW = n > 1 ? g / (n - 1) : 0;
+  const slots = [];
+  let acc = 0;
+  for (let i = 0; i < n; i++) {
+    const sw = Math.max(0, segments[i].weight) / total * content;
+    slots.push({ kind: "segment", index: i, a: acc, b: acc + sw });
+    acc += sw;
+    if (i < n - 1) {
+      slots.push({ kind: "gap", index: i, a: acc, b: acc + gapW });
+      acc += gapW;
+    }
+  }
+  return slots;
+}
+function boundaries(segments, gap = 0) {
+  if (gap > 0 && segments.length > 1) return [];
   const total = totalWeight(segments);
   const out = [];
   let acc = 0;
@@ -5411,18 +6684,23 @@ function boundaries(segments) {
   }
   return out;
 }
-function totalWeight(segments) {
-  let t = 0;
-  for (const s of segments) t += Math.max(0, s.weight);
-  return t || 1;
-}
-function segmentSpan(segments, index) {
+function segmentSpan(segments, index, gap = 0) {
+  if (gap > 0) {
+    const slot = timelineSlots(segments, gap).find((s) => s.kind === "segment" && s.index === index);
+    if (slot) return [slot.a, slot.b];
+  }
   const total = totalWeight(segments);
   let acc = 0;
   for (let i = 0; i < index; i++) acc += segments[i].weight;
   return [acc / total, (acc + segments[index].weight) / total];
 }
-function segmentIndexAt(xNorm, segments) {
+function segmentIndexAt(xNorm, segments, gap = 0) {
+  if (gap > 0) {
+    const x2 = clamp013(xNorm);
+    const slots = timelineSlots(segments, gap);
+    for (const s of slots) if (x2 < s.b) return s.index;
+    return segments.length - 1;
+  }
   const total = totalWeight(segments);
   const x = clamp013(xNorm) * total;
   let acc = 0;
@@ -5432,9 +6710,9 @@ function segmentIndexAt(xNorm, segments) {
   }
   return segments.length - 1;
 }
-function boundaryAt(xNorm, segments, edgeHitNorm) {
+function boundaryAt(xNorm, segments, edgeHitNorm, gap = 0) {
   if (segments.length < 2) return null;
-  const bs = boundaries(segments);
+  const bs = boundaries(segments, gap);
   let best = null;
   let bestDist = edgeHitNorm;
   for (let i = 0; i < bs.length; i++) {
@@ -5445,6 +6723,10 @@ function boundaryAt(xNorm, segments, edgeHitNorm) {
     }
   }
   return best;
+}
+function smootherstep(t) {
+  const x = clamp013(t);
+  return x * x * x * (x * (x * 6 - 15) + 10);
 }
 function cloneSegments(comp, segments) {
   return { ...comp, segments };
@@ -5465,8 +6747,23 @@ function cycleSegmentType(comp, index) {
   if (!src) return comp;
   const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(src.type) + 1) % CURVE_CYCLE.length];
   const next = comp.segments.slice();
-  next[index] = { ...src, type, curvature: 0, steepness: 0 };
+  next[index] = { ...src, type, curvature: 0, steepness: 0, overshoot: 0, anticipate: 0 };
   return cloneSegments(comp, next);
+}
+function flipCurve(c) {
+  const type = c.type === "easeIn" ? "easeOut" : c.type === "easeOut" ? "easeIn" : c.type;
+  return { ...c, type, curvature: -c.curvature, overshoot: c.anticipate ?? 0, anticipate: c.overshoot ?? 0 };
+}
+function flipSegment(comp, index) {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const next = comp.segments.slice();
+  next[index] = flipCurve(src);
+  return cloneSegments(comp, next);
+}
+function flipDriver(comp) {
+  if (!comp.driver) return comp;
+  return { ...comp, driver: flipCurve(comp.driver) };
 }
 function setSegmentCurvature(comp, index, curvature) {
   const src = comp.segments[index];
@@ -5480,6 +6777,20 @@ function setSegmentSteepness(comp, index, steepness) {
   if (!src) return comp;
   const next = comp.segments.slice();
   next[index] = { ...src, steepness: clampBipolar(steepness) };
+  return cloneSegments(comp, next);
+}
+function setSegmentOvershoot(comp, index, overshoot) {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const next = comp.segments.slice();
+  next[index] = { ...src, overshoot: clamp013(overshoot) };
+  return cloneSegments(comp, next);
+}
+function setSegmentAnticipate(comp, index, anticipate) {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const next = comp.segments.slice();
+  next[index] = { ...src, anticipate: clamp013(anticipate) };
   return cloneSegments(comp, next);
 }
 function redistributeWeight(comp, boundaryIndex, deltaFrac) {
@@ -5498,7 +6809,7 @@ function redistributeWeight(comp, boundaryIndex, deltaFrac) {
 }
 function addDriver(comp) {
   if (comp.driver) return comp;
-  return { ...comp, driver: { type: "easeInOut", curvature: 0, steepness: 0 } };
+  return { ...comp, driver: { type: "easeInOut", curvature: 0, steepness: 0, overshoot: 0, anticipate: 0 } };
 }
 function removeDriver(comp) {
   return { ...comp, driver: null };
@@ -5506,7 +6817,7 @@ function removeDriver(comp) {
 function cycleDriverType(comp) {
   if (!comp.driver) return comp;
   const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(comp.driver.type) + 1) % CURVE_CYCLE.length];
-  return { ...comp, driver: { ...comp.driver, type, curvature: 0, steepness: 0 } };
+  return { ...comp, driver: { ...comp.driver, type, curvature: 0, steepness: 0, overshoot: 0, anticipate: 0 } };
 }
 function setDriverCurvature(comp, curvature) {
   if (!comp.driver) return comp;
@@ -5516,18 +6827,33 @@ function setDriverSteepness(comp, steepness) {
   if (!comp.driver) return comp;
   return { ...comp, driver: { ...comp.driver, steepness: clampBipolar(steepness) } };
 }
+function setDriverOvershoot(comp, overshoot) {
+  if (!comp.driver) return comp;
+  return { ...comp, driver: { ...comp.driver, overshoot: clamp013(overshoot) } };
+}
+function setDriverAnticipate(comp, anticipate) {
+  if (!comp.driver) return comp;
+  return { ...comp, driver: { ...comp.driver, anticipate: clamp013(anticipate) } };
+}
 var DRAG_ENERGY_GAIN = 0.6;
 var DRAG_STEEP_GAIN = 0.6;
+var COMPOSER_HEADER_H = 16;
+function headerHit(xN, py, segments, layout) {
+  if (py >= 0 && py < COMPOSER_HEADER_H) return segmentIndexAt(xN, segments, layout.gap ?? 0);
+  if (layout.driverY != null && py >= layout.driverY && py < layout.driverY + COMPOSER_HEADER_H) return "driver";
+  return null;
+}
 function toLocalCoords(clientX, clientY, rect, totalH) {
   const xN = clamp013((clientX - rect.left) / (rect.width || 1));
   const py = (clientY - rect.top) / (rect.height || 1) * totalH;
   return { xN, py };
 }
 function pointerTarget(xN, py, segments, layout, edgeHitNorm) {
+  const gap = layout.gap ?? 0;
   if (layout.driverY != null && py >= layout.driverY) return { kind: "driver" };
-  const b = boundaryAt(xN, segments, edgeHitNorm);
+  const b = boundaryAt(xN, segments, edgeHitNorm, gap);
   if (b != null) return { kind: "boundary", index: b };
-  return { kind: "segment", index: segmentIndexAt(xN, segments) };
+  return { kind: "segment", index: segmentIndexAt(xN, segments, gap) };
 }
 function applySegmentBodyDrag(comp, index, baseCurvature, baseSteepness, dxFrac, dyFrac) {
   const next = setSegmentCurvature(comp, index, baseCurvature + dxFrac / DRAG_ENERGY_GAIN);
@@ -5552,6 +6878,21 @@ function directionPhase(u, dir) {
 function readComposition(comp, u, s) {
   const inputPhase = directionPhase(u, comp.direction);
   const warpedPhase = s.driver ? clamp013(s.driver(inputPhase)) : inputPhase;
+  const gap = comp.gap ?? 0;
+  if (gap > 0 && comp.segments.length > 1) {
+    const slots = timelineSlots(comp.segments, gap);
+    const slot = slots.find((sl) => warpedPhase < sl.b) ?? slots[slots.length - 1];
+    const localT2 = slot.b > slot.a ? (warpedPhase - slot.a) / (slot.b - slot.a) : 0;
+    if (slot.kind === "segment") {
+      const value3 = s.segments[slot.index] ? s.segments[slot.index](localT2) : 0;
+      return { inputPhase, warpedPhase, value: value3, segIndex: slot.index, localT: localT2 };
+    }
+    const n = comp.segments.length;
+    const endVal = s.segments[slot.index] ? s.segments[slot.index](1) : 0;
+    const startVal = s.segments[(slot.index + 1) % n] ? s.segments[(slot.index + 1) % n](0) : 0;
+    const value2 = lerp(endVal, startVal, smootherstep(localT2));
+    return { inputPhase, warpedPhase, value: value2, segIndex: slot.index, localT: localT2 };
+  }
   const segIndex = segmentIndexAt(warpedPhase, comp.segments);
   const [a, b] = segmentSpan(comp.segments, segIndex);
   const localT = b > a ? (warpedPhase - a) / (b - a) : 0;
@@ -5592,8 +6933,20 @@ function curvePath(curve, rect, span, W, samples = 40) {
     }
     return d;
   }
-  const e = deriveEase(curve.type, curve.curvature, curve.steepness);
+  const e = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot, curve.anticipate);
   return `M ${x(0)} ${y(0)} C ${x(e[0])} ${y(e[1])}, ${x(e[2])} ${y(e[3])}, ${x(1)} ${y(1)}`;
+}
+function connectorPath(slot, samplers, segCount, rect, W, samples = 24) {
+  const endVal = samplers.segments[slot.index] ? samplers.segments[slot.index](1) : 0;
+  const next = (slot.index + 1) % segCount;
+  const startVal = samplers.segments[next] ? samplers.segments[next](0) : 0;
+  let d = `M ${slot.a * W} ${mapY(rect, endVal)}`;
+  for (let i = 1; i <= samples; i++) {
+    const t = i / samples;
+    const v = lerp(endVal, startVal, smootherstep(t));
+    d += ` L ${(slot.a + (slot.b - slot.a) * t) * W} ${mapY(rect, v)}`;
+  }
+  return d;
 }
 function diagonalLine(rect, span, W) {
   return { x1: span[0] * W, y1: mapY(rect, 0), x2: span[1] * W, y2: mapY(rect, 1) };
@@ -5640,8 +6993,8 @@ function triggersCrossed(prevValue, curValue, steps) {
 function defaultComposition() {
   return {
     segments: [
-      { type: "easeOut", weight: 1, curvature: 0, steepness: 0 },
-      { type: "easeInOut", weight: 1, curvature: 0, steepness: 0 }
+      { type: "easeOut", weight: 1, curvature: 0, steepness: 0, overshoot: 0, anticipate: 0 },
+      { type: "easeInOut", weight: 1, curvature: 0, steepness: 0, overshoot: 0, anticipate: 0 }
     ],
     driver: null,
     direction: "forward"
@@ -5649,7 +7002,7 @@ function defaultComposition() {
 }
 
 // src/components/CurveComposer.tsx
-var import_jsx_runtime28 = require("react/jsx-runtime");
+var import_jsx_runtime33 = require("react/jsx-runtime");
 function CurveComposer({
   segments,
   driver = null,
@@ -5661,6 +7014,9 @@ function CurveComposer({
   mode = "continuous",
   triggerSteps = DEFAULT_TRIGGER_STEPS,
   onTrigger,
+  selectedIndex = null,
+  onSelect,
+  gap = 0,
   curveColor,
   playheadColor,
   grid = false,
@@ -5670,25 +7026,25 @@ function CurveComposer({
 }) {
   const layout = composerLayout(width, height, driver != null);
   const { W, totalH, mainRect, driverRect } = layout;
-  const composition = (0, import_react30.useMemo)(
-    () => ({ segments, driver, direction }),
-    [segments, driver, direction]
+  const composition = (0, import_react35.useMemo)(
+    () => ({ segments, driver, direction, gap }),
+    [segments, driver, direction, gap]
   );
-  const samplers = (0, import_react30.useMemo)(() => buildSamplers(composition), [composition]);
-  const liveRef = (0, import_react30.useRef)({ composition, samplers, getPhase, phase, mode, triggerSteps });
+  const samplers = (0, import_react35.useMemo)(() => buildSamplers(composition), [composition]);
+  const liveRef = (0, import_react35.useRef)({ composition, samplers, getPhase, phase, mode, triggerSteps });
   liveRef.current = { composition, samplers, getPhase, phase, mode, triggerSteps };
-  const onTriggerRef = (0, import_react30.useRef)(onTrigger);
+  const onTriggerRef = (0, import_react35.useRef)(onTrigger);
   onTriggerRef.current = onTrigger;
-  const svgRef = (0, import_react30.useRef)(null);
-  const seriesPlayheadRef = (0, import_react30.useRef)(null);
-  const seriesDotRef = (0, import_react30.useRef)(null);
-  const driverPlayheadRef = (0, import_react30.useRef)(null);
-  const prevTrigValue = (0, import_react30.useRef)(Number.NaN);
-  const [drag, setDrag] = (0, import_react30.useState)(null);
-  const [hover, setHover] = (0, import_react30.useState)(null);
-  const dragRef = (0, import_react30.useRef)(null);
+  const svgRef = (0, import_react35.useRef)(null);
+  const seriesPlayheadRef = (0, import_react35.useRef)(null);
+  const seriesDotRef = (0, import_react35.useRef)(null);
+  const driverPlayheadRef = (0, import_react35.useRef)(null);
+  const prevTrigValue = (0, import_react35.useRef)(Number.NaN);
+  const [drag, setDrag] = (0, import_react35.useState)(null);
+  const [hover, setHover] = (0, import_react35.useState)(null);
+  const dragRef = (0, import_react35.useRef)(null);
   dragRef.current = drag;
-  (0, import_react30.useEffect)(() => {
+  (0, import_react35.useEffect)(() => {
     let raf = 0;
     prevTrigValue.current = Number.NaN;
     const tick = () => {
@@ -5722,7 +7078,7 @@ function CurveComposer({
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [W, totalH]);
-  const hitLayout = () => ({ totalH, driverY: driverRect ? driverRect.y : null });
+  const hitLayout = () => ({ totalH, driverY: driverRect ? driverRect.y : null, gap });
   const localCoords = (clientX, clientY) => {
     const rect = svgRef.current.getBoundingClientRect();
     return { ...toLocalCoords(clientX, clientY, rect, totalH), rectW: rect.width };
@@ -5732,6 +7088,11 @@ function CurveComposer({
     try {
       svgRef.current?.setPointerCapture(e.pointerId);
     } catch {
+    }
+    const header = headerHit(xN, py, segments, hitLayout());
+    if (typeof header === "number") {
+      setDrag({ kind: "select", index: header, startX: e.clientX, startY: e.clientY, moved: false });
+      return;
     }
     const target = pointerTarget(xN, py, segments, hitLayout(), EDGE_HIT2 / rectW);
     if (target.kind === "driver") {
@@ -5762,6 +7123,10 @@ function CurveComposer({
     const d = dragRef.current;
     if (!d) {
       const { xN, py, rectW: rectW2 } = localCoords(e.clientX, e.clientY);
+      if (typeof headerHit(xN, py, segments, hitLayout()) === "number") {
+        setHover({ kind: "header", index: 0 });
+        return;
+      }
       const t = pointerTarget(xN, py, segments, hitLayout(), EDGE_HIT2 / rectW2);
       setHover(t.kind === "driver" ? { kind: "driver", index: 0 } : { kind: t.kind, index: t.index });
       return;
@@ -5782,11 +7147,13 @@ function CurveComposer({
       const next = applySegmentBodyDrag(composition, d.index, d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
       onSegmentsChange?.(next.segments);
       if (!d.moved) setDrag({ ...d, moved: true });
-    } else {
+    } else if (d.kind === "driver") {
       const dxFrac = (e.clientX - d.startX) / rectW;
       const dyFrac = (e.clientY - d.startY) / rectH;
       const next = applyDriverBodyDrag(composition, d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
       if (next.driver) onDriverChange?.(next.driver);
+      if (!d.moved) setDrag({ ...d, moved: true });
+    } else {
       if (!d.moved) setDrag({ ...d, moved: true });
     }
   };
@@ -5798,7 +7165,9 @@ function CurveComposer({
     } catch {
     }
     if (!d || d.moved) return;
-    if (d.kind === "driver") {
+    if (d.kind === "select") {
+      onSelect?.(d.index);
+    } else if (d.kind === "driver") {
       const next = cycleDriverType(composition);
       if (next.driver) onDriverChange?.(next.driver);
     } else if (d.kind === "segment") {
@@ -5815,11 +7184,11 @@ function CurveComposer({
   const onDoubleClick = (e) => {
     const { xN, py } = localCoords(e.clientX, e.clientY);
     if (driverRect && py >= driverRect.y) return;
-    onSegmentsChange?.(splitSegment(composition, segmentIndexAt(xN, segments)).segments);
+    onSegmentsChange?.(splitSegment(composition, segmentIndexAt(xN, segments, gap)).segments);
   };
   const activeKind = drag?.kind ?? hover?.kind;
-  const cursor = activeKind === "boundary" ? "ew-resize" : activeKind === "segment" || activeKind === "driver" ? "move" : "default";
-  const interior = boundaries(segments);
+  const cursor = activeKind === "boundary" ? "ew-resize" : activeKind === "segment" || activeKind === "driver" ? "move" : activeKind === "select" || activeKind === "header" ? "pointer" : "default";
+  const interior = boundaries(segments, gap);
   const renderLaneGrid = (rect) => {
     if (!grid) return null;
     const n = Math.max(1, Math.round(gridSubdivisions));
@@ -5827,17 +7196,17 @@ function CurveComposer({
     for (let i = 1; i < n; i++) {
       const gx = i / n * W;
       lines.push(
-        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("line", { x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h, className: "dialkit-cc-grid" }, `g-${rect.y}-${i}`)
+        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("line", { x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h, className: "dialkit-cc-grid" }, `g-${rect.y}-${i}`)
       );
     }
     return lines;
   };
-  const renderLaneBg = (rect, key) => /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("rect", { className: "dialkit-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 }, key);
+  const renderLaneBg = (rect, key) => /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("rect", { className: "dialkit-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 }, key);
   const diagonal = (rect, span, key) => {
     const d = diagonalLine(rect, span, W);
-    return /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("line", { className: "dialkit-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 }, key);
+    return /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("line", { className: "dialkit-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 }, key);
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("div", { className: "dialkit-cc-wrap", style: { width: W }, children: /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { className: "dialkit-cc-wrap", style: { width: W }, children: /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(
     "svg",
     {
       ref: svgRef,
@@ -5855,9 +7224,23 @@ function CurveComposer({
       children: [
         renderLaneBg(mainRect, "main-bg"),
         renderLaneGrid(mainRect),
+        selectedIndex != null && selectedIndex >= 0 && selectedIndex < segments.length && (() => {
+          const span = segmentSpan(segments, selectedIndex, gap);
+          return /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+            "rect",
+            {
+              className: "dialkit-cc-seg-selected",
+              x: span[0] * W,
+              y: mainRect.y,
+              width: (span[1] - span[0]) * W,
+              height: mainRect.h,
+              rx: 8
+            }
+          );
+        })(),
         hover?.kind === "segment" && !drag && (() => {
-          const span = segmentSpan(segments, hover.index);
-          return /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
+          const span = segmentSpan(segments, hover.index, gap);
+          return /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
             "rect",
             {
               className: "dialkit-cc-seg-hover",
@@ -5870,14 +7253,22 @@ function CurveComposer({
           );
         })(),
         segments.map((seg, i) => {
-          const span = segmentSpan(segments, i);
-          return /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("g", { children: [
+          const span = segmentSpan(segments, i, gap);
+          return /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("g", { children: [
             diagonal(mainRect, span, `diag-${i}`),
-            /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("path", { className: "dialkit-cc-curve", d: curvePath(seg, mainRect, span, W) }),
-            /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("text", { className: "dialkit-cc-label", x: (span[0] + span[1]) * 0.5 * W, y: mainRect.y + 13, children: seg.type })
+            /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("path", { className: "dialkit-cc-curve", d: curvePath(seg, mainRect, span, W) }),
+            /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("text", { className: "dialkit-cc-label", x: (span[0] + span[1]) * 0.5 * W, y: mainRect.y + 13, children: seg.type })
           ] }, `seg-${i}`);
         }),
-        interior.map((bx, i) => /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
+        gap > 0 && timelineSlots(segments, gap).filter((slot) => slot.kind === "gap" && slot.b > slot.a).map((slot) => /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+          "path",
+          {
+            className: "dialkit-cc-connector",
+            d: connectorPath(slot, samplers, segments.length, mainRect, W)
+          },
+          `conn-${slot.index}`
+        )),
+        interior.map((bx, i) => /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
           "line",
           {
             className: "dialkit-cc-boundary",
@@ -5891,19 +7282,19 @@ function CurveComposer({
           },
           `b-${i}`
         )),
-        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("line", { ref: seriesPlayheadRef, className: "dialkit-cc-playhead", x1: 0, y1: mainRect.y, x2: 0, y2: mainRect.y + mainRect.h, style: { stroke: playheadColor } }),
-        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("circle", { ref: seriesDotRef, className: "dialkit-cc-dot", cx: 0, cy: mapY(mainRect, 0), r: 3, style: { fill: playheadColor } }),
-        driverRect && /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(import_jsx_runtime28.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("line", { ref: seriesPlayheadRef, className: "dialkit-cc-playhead", x1: 0, y1: mainRect.y, x2: 0, y2: mainRect.y + mainRect.h, style: { stroke: playheadColor } }),
+        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("circle", { ref: seriesDotRef, className: "dialkit-cc-dot", cx: 0, cy: mapY(mainRect, 0), r: 3, style: { fill: playheadColor } }),
+        driverRect && /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(import_jsx_runtime33.Fragment, { children: [
           renderLaneBg(driverRect, "driver-bg"),
           renderLaneGrid(driverRect),
-          hover?.kind === "driver" && !drag && /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("rect", { className: "dialkit-cc-seg-hover", x: 0, y: driverRect.y, width: W, height: driverRect.h, rx: 8 }),
+          hover?.kind === "driver" && !drag && /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("rect", { className: "dialkit-cc-seg-hover", x: 0, y: driverRect.y, width: W, height: driverRect.h, rx: 8 }),
           diagonal(driverRect, [0, 1], "driver-diag"),
-          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("path", { className: "dialkit-cc-curve dialkit-cc-curve-driver", d: curvePath(driver, driverRect, [0, 1], W) }),
-          /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("text", { className: "dialkit-cc-label", x: W * 0.5, y: driverRect.y + 13, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("path", { className: "dialkit-cc-curve dialkit-cc-curve-driver", d: curvePath(driver, driverRect, [0, 1], W) }),
+          /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("text", { className: "dialkit-cc-label", x: W * 0.5, y: driverRect.y + 13, children: [
             "driver \xB7 ",
             driver.type
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("line", { ref: driverPlayheadRef, className: "dialkit-cc-playhead", x1: 0, y1: driverRect.y, x2: 0, y2: driverRect.y + driverRect.h, style: { stroke: playheadColor } })
+          /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("line", { ref: driverPlayheadRef, className: "dialkit-cc-playhead", x1: 0, y1: driverRect.y, x2: 0, y2: driverRect.y + driverRect.h, style: { stroke: playheadColor } })
         ] })
       ]
     }
@@ -5911,10 +7302,10 @@ function CurveComposer({
 }
 
 // src/components/ShortcutsMenu.tsx
-var import_react31 = require("react");
+var import_react36 = require("react");
 var import_react_dom7 = require("react-dom");
-var import_react32 = require("motion/react");
-var import_jsx_runtime29 = require("react/jsx-runtime");
+var import_react37 = require("motion/react");
+var import_jsx_runtime34 = require("react/jsx-runtime");
 function formatShortcutKey(sc) {
   if (!sc.key) return "\u2014";
   const mod = sc.modifier === "alt" ? "\u2325" : sc.modifier === "shift" ? "\u21E7" : sc.modifier === "meta" ? "\u2318" : "";
@@ -5934,23 +7325,23 @@ function formatInteraction(sc) {
   }
 }
 function ShortcutsMenu({ panelId }) {
-  const [isOpen, setIsOpen] = (0, import_react31.useState)(false);
-  const triggerRef = (0, import_react31.useRef)(null);
-  const dropdownRef = (0, import_react31.useRef)(null);
-  const [pos, setPos] = (0, import_react31.useState)({ top: 0, right: 0 });
-  const open = (0, import_react31.useCallback)(() => {
+  const [isOpen, setIsOpen] = (0, import_react36.useState)(false);
+  const triggerRef = (0, import_react36.useRef)(null);
+  const dropdownRef = (0, import_react36.useRef)(null);
+  const [pos, setPos] = (0, import_react36.useState)({ top: 0, right: 0 });
+  const open = (0, import_react36.useCallback)(() => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
       setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
     }
     setIsOpen(true);
   }, []);
-  const close = (0, import_react31.useCallback)(() => setIsOpen(false), []);
-  const toggle = (0, import_react31.useCallback)(() => {
+  const close = (0, import_react36.useCallback)(() => setIsOpen(false), []);
+  const toggle = (0, import_react36.useCallback)(() => {
     if (isOpen) close();
     else open();
   }, [isOpen, open, close]);
-  (0, import_react31.useEffect)(() => {
+  (0, import_react36.useEffect)(() => {
     if (!isOpen) return;
     const handler = (e) => {
       const target = e.target;
@@ -5981,9 +7372,9 @@ function ShortcutsMenu({ panelId }) {
       label: findLabel(panel.controls)
     };
   });
-  return /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)(import_jsx_runtime29.Fragment, { children: [
-    /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
-      import_react32.motion.button,
+  return /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)(import_jsx_runtime34.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+      import_react37.motion.button,
       {
         ref: triggerRef,
         className: "dialkit-shortcuts-trigger",
@@ -5991,21 +7382,21 @@ function ShortcutsMenu({ panelId }) {
         title: "Keyboard shortcuts",
         whileTap: { scale: 0.9 },
         transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-        children: /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
-          /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("path", { d: "M6 10H6.01" }),
-          /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("path", { d: "M10 10H10.01" }),
-          /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("path", { d: "M14 10H14.01" }),
-          /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("path", { d: "M18 10H18.01" }),
-          /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("path", { d: "M8 14H16" })
+        children: /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
+          /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("path", { d: "M6 10H6.01" }),
+          /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("path", { d: "M10 10H10.01" }),
+          /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("path", { d: "M14 10H14.01" }),
+          /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("path", { d: "M18 10H18.01" }),
+          /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("path", { d: "M8 14H16" })
         ] })
       }
     ),
     (0, import_react_dom7.createPortal)(
-      /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(import_react32.AnimatePresence, { children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)(
-        import_react32.motion.div,
+      /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(import_react37.AnimatePresence, { children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)(
+        PresenceMotionDiv,
         {
-          ref: dropdownRef,
+          divRef: dropdownRef,
           className: "dialkit-root dialkit-shortcuts-dropdown",
           style: { position: "fixed", top: pos.top, right: pos.right },
           initial: { opacity: 0, y: 4, scale: 0.97 },
@@ -6013,13 +7404,13 @@ function ShortcutsMenu({ panelId }) {
           exit: { opacity: 0, y: 4, scale: 0.97, pointerEvents: "none" },
           transition: { type: "spring", visualDuration: 0.15, bounce: 0 },
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("div", { className: "dialkit-shortcuts-title", children: "Keyboard Shortcuts" }),
-            /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("div", { className: "dialkit-shortcuts-list", children: rows.map((row) => /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "dialkit-shortcuts-row", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "dialkit-shortcuts-row-key", children: formatShortcutKey(row.shortcut) }),
-              /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "dialkit-shortcuts-row-label", children: row.label }),
-              /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "dialkit-shortcuts-row-mode", children: formatInteraction(row.shortcut) })
+            /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("div", { className: "dialkit-shortcuts-title", children: "Keyboard Shortcuts" }),
+            /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("div", { className: "dialkit-shortcuts-list", children: rows.map((row) => /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("div", { className: "dialkit-shortcuts-row", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "dialkit-shortcuts-row-key", children: formatShortcutKey(row.shortcut) }),
+              /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "dialkit-shortcuts-row-label", children: row.label }),
+              /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "dialkit-shortcuts-row-mode", children: formatInteraction(row.shortcut) })
             ] }, row.path)) }),
-            /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("div", { className: "dialkit-shortcuts-hint", children: "See pill badges on controls for keys" })
+            /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("div", { className: "dialkit-shortcuts-hint", children: "See pill badges on controls for keys" })
           ]
         }
       ) }),
@@ -6029,6 +7420,7 @@ function ShortcutsMenu({ panelId }) {
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  AnalyserVisualization,
   ButtonGroup,
   COLOR_FORMATS,
   CURVE_CYCLE,
@@ -6050,6 +7442,7 @@ function ShortcutsMenu({ panelId }) {
   MIN_STOPS,
   Module,
   PresetManager,
+  RangeSlider,
   SegmentedControl,
   SelectControl,
   ShortcutsMenu,
@@ -6061,39 +7454,63 @@ function ShortcutsMenu({ panelId }) {
   Toggle,
   TransitionControl,
   WaveformVisualization,
+  XYControl,
+  XYPad,
+  XY_DEFAULT_STEP,
+  XY_DETENT_PX,
   addDriver,
   addStop,
+  applyDetentAxis,
   buildSamplers,
+  centerValue,
+  clamp,
   clampOklchToSrgb,
+  clampRange,
   colorAtPosition,
   cycleDriverType,
   cycleSegmentType,
   defaultComposition,
   defaultListItemParams,
   displayHex,
+  flipDriver,
+  flipSegment,
   formatHex,
   gradientFillBox,
   gradientToCss,
   gradientToTransform,
+  handleLeftStyles,
   hslToRgb,
   hsvToRgb,
+  invertY,
+  isOutsideSpan,
   moveStop,
+  nearestHandle,
+  normToValue,
   normalizeGradient,
   normalizeHex,
   normalizeListItems,
+  normalizeValue,
+  nudge,
   oklchToRgb,
   opacityPercent,
+  orderRange,
   parseHex,
   parseListItemSchema,
+  percentToValue,
+  pickDragTarget,
+  pointFromValue,
   readComposition,
   redistributeWeight,
   removeDriver,
   removeSegment,
   removeStop,
+  resolveAxis,
   rgbToHsl,
   rgbToHsv,
   rgbToOklch,
+  setDriverAnticipate,
   setDriverCurvature,
+  setDriverOvershoot,
   setDriverSteepness,
   setGradientAngle,
   setGradientCenter,
@@ -6101,12 +7518,21 @@ function ShortcutsMenu({ panelId }) {
   setGradientScale,
   setGradientSquash,
   setGradientType,
+  setHigh,
+  setLow,
+  setSegmentAnticipate,
   setSegmentCurvature,
+  setSegmentOvershoot,
   setSegmentSteepness,
   setStopColor,
+  shiftSpan,
+  snapToStep,
   splitSegment,
   triggerLevels,
   triggersCrossed,
-  useDialKit
+  useDialKit,
+  valueFromPoint,
+  valueToNorm,
+  valueToPercent
 });
 //# sourceMappingURL=index.cjs.map

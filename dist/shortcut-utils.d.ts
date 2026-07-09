@@ -1,3 +1,18 @@
+import { RangeValue } from './range-slider-core.js';
+
+/**
+ * One axis of an XY pad control. Partial — every field falls back through
+ * `resolveAxis` (min 0, max 1, step 0.01). `origin`/`bipolar` mirror the
+ * Slider's names/semantics, resolved independently per axis.
+ */
+type XYAxis = {
+    min?: number;
+    max?: number;
+    step?: number;
+    origin?: number;
+    bipolar?: boolean;
+    label?: string;
+};
 type SelectConfig = {
     type: 'select';
     options: (string | {
@@ -59,12 +74,14 @@ type ShortcutConfig = {
     interaction?: ShortcutInteraction;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'text' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
     path: string;
     label: string;
     min?: number;
     max?: number;
     step?: number;
+    /** Range control's configured reset target — its `default`, else the full {min,max} span. */
+    rangeDefault?: RangeValue;
     children?: ControlMeta[];
     defaultOpen?: boolean;
     options?: (string | {
@@ -83,6 +100,14 @@ type ControlMeta = {
     maxItems?: number;
     alpha?: boolean;
     palette?: boolean;
+    /** XY pad axes/options — carried through to the XYControl. */
+    xAxis?: XYAxis;
+    yAxis?: XYAxis;
+    grid?: boolean | number;
+    density?: number;
+    snap?: boolean;
+    returnToCenter?: boolean;
+    showValues?: boolean;
     shortcut?: ShortcutConfig;
 };
 

@@ -17,6 +17,7 @@ import {
   triggersCrossed,
   toLocalCoords,
   pointerTarget,
+  headerHit,
   applySegmentBodyDrag,
   applyDriverBodyDrag,
   composerLayout,
@@ -24,6 +25,8 @@ import {
   curvePath,
   diagonalLine,
   playheadGeometry,
+  timelineSlots,
+  connectorPath,
   DEFAULT_TRIGGER_STEPS,
   DRAG_THRESHOLD,
   EDGE_HIT,
@@ -66,10 +69,16 @@ interface CurveComposerProps {
   triggerSteps?: number;
   /** Fired in trigger mode when the value crosses a trigger level; `index` is into `triggerLevels`. */
   onTrigger?: (index: number) => void;
+  /** Index of the currently selected segment (highlighted); null/undefined for none. */
+  selectedIndex?: number | null;
+  /** Fired when a segment's header strip is clicked — lets the consumer target it (flip/remove/…). */
+  onSelect?: (index: number) => void;
   /** Curve stroke color. Defaults to the theme text color. */
   curveColor?: string;
   /** Playhead / marker color. Defaults to the theme text color. */
   playheadColor?: string;
+  /** 0..1 — space between segments; the value glides smoothly across each gap (faint connector). */
+  gap?: number;
   /** Faint vertical reference grid behind each lane. */
   grid?: boolean;
   gridSubdivisions?: number;
@@ -83,7 +92,8 @@ interface CurveComposerProps {
 type Drag =
   | { kind: 'boundary'; index: number; startX: number; startY: number; base: CurveComposition; moved: boolean }
   | { kind: 'segment'; index: number; startX: number; startY: number; baseCurvature: number; baseSteepness: number; moved: boolean }
-  | { kind: 'driver'; startX: number; startY: number; baseCurvature: number; baseSteepness: number; moved: boolean };
+  | { kind: 'driver'; startX: number; startY: number; baseCurvature: number; baseSteepness: number; moved: boolean }
+  | { kind: 'select'; index: number; startX: number; startY: number; moved: boolean };
 
 export function CurveComposer({
   segments,
@@ -96,6 +106,9 @@ export function CurveComposer({
   mode = 'continuous',
   triggerSteps = DEFAULT_TRIGGER_STEPS,
   onTrigger,
+  selectedIndex = null,
+  onSelect,
+  gap = 0,
   curveColor,
   playheadColor,
   grid = false,
@@ -107,8 +120,8 @@ export function CurveComposer({
   const { W, totalH, mainRect, driverRect } = layout;
 
   const composition: CurveComposition = useMemo(
-    () => ({ segments, driver, direction }),
-    [segments, driver, direction]
+    () => ({ segments, driver, direction, gap }),
+    [segments, driver, direction, gap]
   );
 
   // Samplers + latest state for the rAF-driven playhead (read without re-rendering).
@@ -126,7 +139,7 @@ export function CurveComposer({
   const prevTrigValue = useRef<number>(Number.NaN);
 
   const [drag, setDrag] = useState<Drag | null>(null);
-  const [hover, setHover] = useState<{ kind: 'boundary' | 'segment' | 'driver'; index: number } | null>(null);
+  const [hover, setHover] = useState<{ kind: 'boundary' | 'segment' | 'driver' | 'header'; index: number } | null>(null);
   const dragRef = useRef<Drag | null>(null);
   dragRef.current = drag;
 
@@ -178,7 +191,7 @@ export function CurveComposer({
 
   // --- pointer interaction ---
 
-  const hitLayout = () => ({ totalH, driverY: driverRect ? driverRect.y : null });
+  const hitLayout = () => ({ totalH, driverY: driverRect ? driverRect.y : null, gap });
 
   const localCoords = (clientX: number, clientY: number) => {
     const rect = svgRef.current!.getBoundingClientRect();
@@ -191,6 +204,13 @@ export function CurveComposer({
       svgRef.current?.setPointerCapture(e.pointerId);
     } catch {
       // No active pointer (e.g. a synthetic event) — capture is a nicety, not required.
+    }
+
+    // A press in a segment's header strip selects it (rather than cycling/dragging).
+    const header = headerHit(xN, py, segments, hitLayout());
+    if (typeof header === 'number') {
+      setDrag({ kind: 'select', index: header, startX: e.clientX, startY: e.clientY, moved: false });
+      return;
     }
 
     const target = pointerTarget(xN, py, segments, hitLayout(), EDGE_HIT / rectW);
@@ -224,6 +244,10 @@ export function CurveComposer({
     if (!d) {
       // Hover affordance only.
       const { xN, py, rectW } = localCoords(e.clientX, e.clientY);
+      if (typeof headerHit(xN, py, segments, hitLayout()) === 'number') {
+        setHover({ kind: 'header', index: 0 });
+        return;
+      }
       const t = pointerTarget(xN, py, segments, hitLayout(), EDGE_HIT / rectW);
       setHover(t.kind === 'driver' ? { kind: 'driver', index: 0 } : { kind: t.kind, index: t.index });
       return;
@@ -248,11 +272,14 @@ export function CurveComposer({
       const next = applySegmentBodyDrag(composition, d.index, d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
       onSegmentsChange?.(next.segments);
       if (!d.moved) setDrag({ ...d, moved: true });
-    } else {
+    } else if (d.kind === 'driver') {
       const dxFrac = (e.clientX - d.startX) / rectW;
       const dyFrac = (e.clientY - d.startY) / rectH;
       const next = applyDriverBodyDrag(composition, d.baseCurvature, d.baseSteepness, dxFrac, dyFrac);
       if (next.driver) onDriverChange?.(next.driver);
+      if (!d.moved) setDrag({ ...d, moved: true });
+    } else {
+      // 'select': moving past the threshold cancels the click so it won't select on release.
       if (!d.moved) setDrag({ ...d, moved: true });
     }
   };
@@ -266,8 +293,10 @@ export function CurveComposer({
       // Capture may not be held — ignore.
     }
     if (!d || d.moved) return;
-    // An un-moved press is a click → cycle the curve type.
-    if (d.kind === 'driver') {
+    // An un-moved press is a click → select (header) or cycle the curve type (body).
+    if (d.kind === 'select') {
+      onSelect?.(d.index);
+    } else if (d.kind === 'driver') {
       const next = cycleDriverType(composition);
       if (next.driver) onDriverChange?.(next.driver);
     } else if (d.kind === 'segment') {
@@ -287,16 +316,22 @@ export function CurveComposer({
   const onDoubleClick = (e: React.MouseEvent) => {
     const { xN, py } = localCoords(e.clientX, e.clientY);
     if (driverRect && py >= driverRect.y) return; // driver is a single curve
-    onSegmentsChange?.(splitSegment(composition, segmentIndexAt(xN, segments)).segments);
+    onSegmentsChange?.(splitSegment(composition, segmentIndexAt(xN, segments, gap)).segments);
   };
 
   const activeKind = drag?.kind ?? hover?.kind;
   const cursor =
-    activeKind === 'boundary' ? 'ew-resize' : activeKind === 'segment' || activeKind === 'driver' ? 'move' : 'default';
+    activeKind === 'boundary'
+      ? 'ew-resize'
+      : activeKind === 'segment' || activeKind === 'driver'
+        ? 'move'
+        : activeKind === 'select' || activeKind === 'header'
+          ? 'pointer'
+          : 'default';
 
   // --- path builders (geometry + path strings come from the shared core) ---
 
-  const interior = boundaries(segments);
+  const interior = boundaries(segments, gap);
 
   const renderLaneGrid = (rect: Rect) => {
     if (!grid) return null;
@@ -340,11 +375,29 @@ export function CurveComposer({
         {renderLaneBg(mainRect, 'main-bg')}
         {renderLaneGrid(mainRect)}
 
+        {/* selected segment highlight */}
+        {selectedIndex != null &&
+          selectedIndex >= 0 &&
+          selectedIndex < segments.length &&
+          (() => {
+            const span = segmentSpan(segments, selectedIndex, gap);
+            return (
+              <rect
+                className="dialkit-cc-seg-selected"
+                x={span[0] * W}
+                y={mainRect.y}
+                width={(span[1] - span[0]) * W}
+                height={mainRect.h}
+                rx={8}
+              />
+            );
+          })()}
+
         {/* hovered segment highlight */}
         {hover?.kind === 'segment' &&
           !drag &&
           (() => {
-            const span = segmentSpan(segments, hover.index);
+            const span = segmentSpan(segments, hover.index, gap);
             return (
               <rect
                 className="dialkit-cc-seg-hover"
@@ -358,7 +411,7 @@ export function CurveComposer({
           })()}
 
         {segments.map((seg, i) => {
-          const span = segmentSpan(segments, i);
+          const span = segmentSpan(segments, i, gap);
           return (
             <g key={`seg-${i}`}>
               {diagonal(mainRect, span, `diag-${i}`)}
@@ -369,6 +422,18 @@ export function CurveComposer({
             </g>
           );
         })}
+
+        {/* gap connectors: faint lines that glide each segment's end down to the next's start */}
+        {gap > 0 &&
+          timelineSlots(segments, gap)
+            .filter((slot) => slot.kind === 'gap' && slot.b > slot.a)
+            .map((slot) => (
+              <path
+                key={`conn-${slot.index}`}
+                className="dialkit-cc-connector"
+                d={connectorPath(slot, samplers, segments.length, mainRect, W)}
+              />
+            ))}
 
         {/* interior boundaries */}
         {interior.map((bx, i) => (

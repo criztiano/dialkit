@@ -38,6 +38,30 @@ type GradientValue = {
     rotation?: number;
 };
 
+type XYValue = {
+    x: number;
+    y: number;
+};
+
+/** A resolved range value. Invariant (upheld by the helpers): min <= max. */
+type RangeValue = {
+    min: number;
+    max: number;
+};
+
+/**
+ * One axis of an XY pad control. Partial — every field falls back through
+ * `resolveAxis` (min 0, max 1, step 0.01). `origin`/`bipolar` mirror the
+ * Slider's names/semantics, resolved independently per axis.
+ */
+type XYAxis = {
+    min?: number;
+    max?: number;
+    step?: number;
+    origin?: number;
+    bipolar?: boolean;
+    label?: string;
+};
 type SpringConfig = {
     type: 'spring';
     stiffness?: number;
@@ -76,10 +100,37 @@ type GradientConfig = {
     type: 'gradient';
     default?: GradientValue;
 };
+type XYConfig = {
+    type: 'xy';
+    /** Starting point. Missing/out-of-range components clamp to each axis's origin. */
+    default?: XYValue;
+    /** Per-axis range/step/origin. Each resolves through `resolveAxis`. */
+    x?: XYAxis;
+    y?: XYAxis;
+    /** Grid overlay — on by default as a 5×5 grid (faint at rest, stronger on interaction). `false` to hide, or a number for a uniform N×N count. */
+    grid?: boolean | number;
+    /** Multiplies both grid axis subdivision counts (default 1). E.g. 2 on the 5×5 default → 10×10. */
+    density?: number;
+    /** Snap the emitted value to each axis's step (default continuous). */
+    snap?: boolean;
+    /** Spring the thumb back to centre on release (joystick feel). Default hold. */
+    returnToCenter?: boolean;
+    /** Show the live value next to each axis label (default false = label only). */
+    showValues?: boolean;
+};
 type TextConfig = {
     type: 'text';
     default?: string;
     placeholder?: string;
+};
+type RangeConfig = {
+    type: 'range';
+    min: number;
+    max: number;
+    /** Falls back to the full span { min, max } when omitted. */
+    default?: RangeValue;
+    /** Falls back to inferStep(min, max) when omitted. */
+    step?: number;
 };
 type FileConfig = {
     type: 'file';
@@ -169,12 +220,12 @@ type ListField = {
     placeholder?: string;
     defaultValue: number | boolean | string;
 };
-type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | GradientConfig | GradientValue | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[];
+type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 type DialConfig = {
     [key: string]: DialValue | [number, number, number, number?] | DialConfig;
 };
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends TextConfig ? string : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -185,12 +236,14 @@ type ShortcutConfig = {
     interaction?: ShortcutInteraction;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'text' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
     path: string;
     label: string;
     min?: number;
     max?: number;
     step?: number;
+    /** Range control's configured reset target — its `default`, else the full {min,max} span. */
+    rangeDefault?: RangeValue;
     children?: ControlMeta[];
     defaultOpen?: boolean;
     options?: (string | {
@@ -209,6 +262,14 @@ type ControlMeta = {
     maxItems?: number;
     alpha?: boolean;
     palette?: boolean;
+    /** XY pad axes/options — carried through to the XYControl. */
+    xAxis?: XYAxis;
+    yAxis?: XYAxis;
+    grid?: boolean | number;
+    density?: number;
+    snap?: boolean;
+    returnToCenter?: boolean;
+    showValues?: boolean;
     shortcut?: ShortcutConfig;
 };
 type PanelConfig = {
@@ -302,6 +363,9 @@ declare class DialStoreClass {
     private isSelectConfig;
     private isColorConfig;
     private isGradientConfig;
+    private isXYConfig;
+    private isRangeConfig;
+    private isRangeValue;
     private isTextConfig;
     private isGalleryConfig;
     private isFileConfig;
@@ -325,4 +389,4 @@ declare function defaultListItemParams(schema: Record<string, ListItemField>): R
 declare function normalizeListItems(config: ListConfig): ListItemValue[];
 declare const DialStore: DialStoreClass;
 
-export { type ActionConfig, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type DialConfig, type DialEvent, DialStore, type DialValue, type EasingConfig, type FileConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type PanelConfig, type Preset, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SpringConfig, type SwatchConfig, type SwatchOption, type TextConfig, type TransitionConfig, defaultListItemParams, normalizeListItems, parseListItemSchema };
+export { type ActionConfig, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type DialConfig, type DialEvent, DialStore, type DialValue, type EasingConfig, type FileConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type PanelConfig, type Preset, type RangeConfig, type RangeValue, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SpringConfig, type SwatchConfig, type SwatchOption, type TextConfig, type TransitionConfig, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, normalizeListItems, parseListItemSchema };

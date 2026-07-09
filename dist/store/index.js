@@ -75,6 +75,58 @@ function normalizeGradient(input) {
   return { type, angle, stops, ...extras };
 }
 
+// src/xy-pad-core.ts
+var XY_DEFAULT_STEP = 0.01;
+function decimalsForStep(step) {
+  const s = step.toString();
+  const dot = s.indexOf(".");
+  return dot === -1 ? 0 : s.length - dot - 1;
+}
+function roundToStep(val, step) {
+  return parseFloat(val.toFixed(decimalsForStep(step)));
+}
+function resolveAxis(axis) {
+  const min = axis?.min ?? 0;
+  const max = axis?.max ?? 1;
+  const step = axis?.step ?? XY_DEFAULT_STEP;
+  const bipolar = axis?.bipolar ?? false;
+  const origin = axis?.origin ?? (bipolar ? (min + max) / 2 : min);
+  return { min, max, step, origin, bipolar };
+}
+function clamp2(v, min, max) {
+  return Math.min(max, Math.max(min, v));
+}
+function snapToStep(v, step, min) {
+  if (step <= 0) return v;
+  const snapped = min + Math.round((v - min) / step) * step;
+  return roundToStep(snapped, step);
+}
+function coerceComponent(v, axis) {
+  return typeof v === "number" && Number.isFinite(v) ? v : axis.origin;
+}
+function normalizeValue(value, xAxis, yAxis, snap = false) {
+  const resolve = (raw, axis) => {
+    let v = clamp2(coerceComponent(raw, axis), axis.min, axis.max);
+    if (snap) v = snapToStep(v, axis.step, axis.min);
+    return v + 0;
+  };
+  return {
+    x: resolve(value?.x, xAxis),
+    y: resolve(value?.y, yAxis)
+  };
+}
+
+// src/range-slider-core.ts
+function clamp3(v, lo, hi) {
+  return Math.min(hi, Math.max(lo, v));
+}
+function orderRange(v) {
+  return v.min <= v.max ? v : { min: v.max, max: v.min };
+}
+function clampRange(v, min, max) {
+  return orderRange({ min: clamp3(v.min, min, max), max: clamp3(v.max, min, max) });
+}
+
 // src/store/DialStore.ts
 var EMPTY_VALUES = Object.freeze({});
 var DialStoreClass = class {
@@ -352,7 +404,7 @@ var DialStoreClass = class {
         const hasPhysics = value.stiffness !== void 0 || value.damping !== void 0 || value.mass !== void 0;
         const hasTime = value.visualDuration !== void 0 || value.bounce !== void 0;
         values[`${path}.__mode`] = hasPhysics && !hasTime ? "advanced" : "simple";
-      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isTextConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isListConfig(value)) {
+      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isListConfig(value)) {
         this.initTransitionModes(value, path, values);
       }
     }
@@ -390,8 +442,20 @@ var DialStoreClass = class {
         controls.push({ type: "color", path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {
         controls.push({ type: "gradient", path, label });
+      } else if (this.isXYConfig(value)) {
+        controls.push({ type: "xy", path, label, xAxis: value.x, yAxis: value.y, grid: value.grid, density: value.density, snap: value.snap, returnToCenter: value.returnToCenter, showValues: value.showValues });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: "text", path, label, placeholder: value.placeholder });
+      } else if (this.isRangeConfig(value)) {
+        controls.push({
+          type: "range",
+          path,
+          label,
+          min: value.min,
+          max: value.max,
+          step: value.step ?? this.inferStep(value.min, value.max),
+          rangeDefault: value.default ?? { min: value.min, max: value.max }
+        });
       } else if (this.isGalleryConfig(value)) {
         controls.push({ type: "gallery", path, label, items: value.items, columns: value.columns });
       } else if (this.isFileConfig(value)) {
@@ -444,8 +508,14 @@ var DialStoreClass = class {
         values[path] = value.default ?? "#000000";
       } else if (this.isGradientConfig(value)) {
         values[path] = normalizeGradient(value.default ?? DEFAULT_GRADIENT);
+      } else if (this.isXYConfig(value)) {
+        const xAxis = resolveAxis(value.x);
+        const yAxis = resolveAxis(value.y);
+        values[path] = normalizeValue(value.default, xAxis, yAxis, value.snap ?? false);
       } else if (this.isTextConfig(value)) {
         values[path] = value.default ?? "";
+      } else if (this.isRangeConfig(value)) {
+        values[path] = value.default ?? { min: value.min, max: value.max };
       } else if (this.isGalleryConfig(value)) {
         values[path] = value.default ?? value.items[0]?.id ?? "";
       } else if (this.isFileConfig(value)) {
@@ -479,6 +549,19 @@ var DialStoreClass = class {
   }
   isGradientConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "gradient";
+  }
+  // Explicit { type: 'xy' } only — a bare { x, y } object would collide with the
+  // "nested object → folder" fallback, so the shorthand is deliberately unsupported.
+  isXYConfig(value) {
+    return typeof value === "object" && value !== null && "type" in value && value.type === "xy";
+  }
+  isRangeConfig(value) {
+    return typeof value === "object" && value !== null && "type" in value && value.type === "range";
+  }
+  // A stored range VALUE ({min,max} numbers), as opposed to a range config.
+  // Used to preserve the leaf value by identity across a panel update.
+  isRangeValue(value) {
+    return typeof value === "object" && value !== null && typeof value.min === "number" && typeof value.max === "number";
   }
   isTextConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "text";
@@ -583,11 +666,31 @@ var DialStoreClass = class {
         }
         return normalizeGradient(existingValue);
       }
+      case "xy": {
+        if (typeof existingValue !== "object" || existingValue === null || Array.isArray(existingValue)) {
+          return defaultValue;
+        }
+        const candidate = existingValue;
+        if (typeof candidate.x !== "number" || typeof candidate.y !== "number") {
+          return defaultValue;
+        }
+        const xAxis = resolveAxis(control.xAxis);
+        const yAxis = resolveAxis(control.yAxis);
+        return normalizeValue(candidate, xAxis, yAxis, false);
+      }
       case "text":
       case "file":
         return typeof existingValue === "string" ? existingValue : defaultValue;
       case "list":
         return Array.isArray(existingValue) ? existingValue : defaultValue;
+      case "range": {
+        if (!this.isRangeValue(existingValue)) {
+          return defaultValue;
+        }
+        const lo = control.min ?? Number.NEGATIVE_INFINITY;
+        const hi = control.max ?? Number.POSITIVE_INFINITY;
+        return clampRange(existingValue, lo, hi);
+      }
       case "gallery": {
         if (typeof existingValue !== "string") {
           return defaultValue;

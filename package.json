@@ -59,7 +59,7 @@
   ],
   "scripts": {
     "build": "rm -rf dist && tsup && npm run build:svelte",
-    "build:svelte": "node scripts/gen-theme-css.js && svelte-package -i src/svelte -o dist/svelte && rm -rf .svelte-kit src/store/DialStore.d.ts src/store/DialStore.d.ts.map src/color-core.d.ts src/color-core.d.ts.map src/color-palette-store.d.ts src/color-palette-store.d.ts.map src/curve-composer-core.d.ts src/curve-composer-core.d.ts.map src/gradient-core.d.ts src/gradient-core.d.ts.map",
+    "build:svelte": "node scripts/gen-theme-css.js && svelte-package -i src/svelte -o dist/svelte && rm -rf .svelte-kit src/store/DialStore.d.ts src/store/DialStore.d.ts.map src/color-core.d.ts src/color-core.d.ts.map src/color-palette-store.d.ts src/color-palette-store.d.ts.map src/curve-composer-core.d.ts src/curve-composer-core.d.ts.map src/gradient-core.d.ts src/gradient-core.d.ts.map src/xy-pad-core.d.ts src/xy-pad-core.d.ts.map src/range-slider-core.d.ts src/range-slider-core.d.ts.map src/analyser-engine.d.ts src/analyser-engine.d.ts.map src/analyser-core.d.ts src/analyser-core.d.ts.map",
     "prepare": "npm run build",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.solid.json && tsc --noEmit -p tsconfig.vue.json && node scripts/gen-theme-css.js && svelte-check --tsconfig tsconfig.svelte.json",

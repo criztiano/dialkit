@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
+import { PresenceMotionDiv } from './PresenceMotionDiv';
 import { DialStore, Preset } from '../store/DialStore';
 import { ICON_CHEVRON, ICON_TRASH } from '../icons';
 
@@ -98,8 +99,8 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd }: Prese
       {createPortal(
         <AnimatePresence>
           {isOpen && (
-            <motion.div
-              ref={dropdownRef}
+            <PresenceMotionDiv
+              divRef={dropdownRef}
               className="dialkit-root dialkit-preset-dropdown"
               style={{ position: 'fixed', top: pos.top, left: pos.left, minWidth: pos.width }}
               initial={{ opacity: 0, y: 4, scale: 0.97 }}
@@ -136,7 +137,7 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd }: Prese
                   </button>
                 </div>
               ))}
-            </motion.div>
+            </PresenceMotionDiv>
           )}
         </AnimatePresence>,
         document.body

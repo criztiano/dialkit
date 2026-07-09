@@ -1,9 +1,10 @@
 <script lang="ts">
   import { getContext } from 'svelte';
   import { DialStore } from 'dialkit/store';
-  import type { ControlMeta, DialValue, SpringConfig, TransitionConfig, ListItemValue } from 'dialkit/store';
+  import type { ControlMeta, DialValue, SpringConfig, TransitionConfig, ListItemValue, XYValue, RangeValue } from 'dialkit/store';
   import type { GradientValue } from '../../gradient-core';
   import Slider from './Slider.svelte';
+  import RangeSlider from './RangeSlider.svelte';
   import Toggle from './Toggle.svelte';
   import Folder from './Folder.svelte';
   import SpringControl from './SpringControl.svelte';
@@ -12,6 +13,7 @@
   import SelectControl from './SelectControl.svelte';
   import ColorControl from './ColorControl.svelte';
   import GradientControl from './GradientControl.svelte';
+  import XYControl from './XYControl.svelte';
   import FileControl from './FileControl.svelte';
   import SwatchControl from './SwatchControl.svelte';
   import ChipsControl from './ChipsControl.svelte';
@@ -44,6 +46,16 @@
     step={control.step}
     shortcut={control.shortcut}
     shortcutActive={isShortcutActive}
+  />
+{:else if control.type === 'range'}
+  <RangeSlider
+    label={control.label}
+    value={controlValue as RangeValue}
+    min={control.min ?? 0}
+    max={control.max ?? 1}
+    step={control.step}
+    defaultValue={control.rangeDefault}
+    onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
   />
 {:else if control.type === 'toggle'}
   <Toggle
@@ -102,6 +114,21 @@
     label={control.label}
     value={controlValue as GradientValue}
     onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+  />
+{:else if control.type === 'xy'}
+  <XYControl
+    label={control.label}
+    value={controlValue as XYValue}
+    onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+    x={control.xAxis}
+    y={control.yAxis}
+    grid={control.grid}
+    density={control.density}
+    snap={control.snap}
+    returnToCenter={control.returnToCenter}
+    showValues={control.showValues}
+    shortcut={control.shortcut}
+    shortcutActive={isShortcutActive}
   />
 {:else if control.type === 'file'}
   <FileControl

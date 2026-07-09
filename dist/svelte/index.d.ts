@@ -7,6 +7,7 @@ export { SHORTCUT_CTX } from './components/ShortcutListener.svelte';
 export type { ShortcutContextValue } from './components/ShortcutListener.svelte';
 export { default as ShortcutsMenu } from './components/ShortcutsMenu.svelte';
 export { default as Slider } from './components/Slider.svelte';
+export { default as RangeSlider } from './components/RangeSlider.svelte';
 export { default as Toggle } from './components/Toggle.svelte';
 export { default as Folder } from './components/Folder.svelte';
 export { default as Module } from './components/Module.svelte';
@@ -18,6 +19,8 @@ export { default as TransitionControl } from './components/TransitionControl.sve
 export { default as EasingVisualization } from './components/EasingVisualization.svelte';
 export { default as WaveformVisualization } from './components/WaveformVisualization.svelte';
 export type { WaveformMode, WaveformLoop } from '../waveform-engine';
+export { default as AnalyserVisualization } from './components/AnalyserVisualization.svelte';
+export type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, AnalyserSpring } from '../analyser-engine';
 export { default as CurveComposer } from './components/CurveComposer.svelte';
 export type { CurveType, CurveSegment, CurveDriver, CurveComposition, DriverDirection } from '../curve-composer-core';
 export { default as TextControl } from './components/TextControl.svelte';
@@ -28,11 +31,14 @@ export { default as GradientControl } from './components/GradientControl.svelte'
 export { default as GradientPanel } from './components/GradientPanel.svelte';
 export { gradientToCss, normalizeGradient, colorAtPosition, addStop, removeStop, moveStop, setStopColor, setGradientType, setGradientAngle, DEFAULT_GRADIENT, MIN_STOPS, } from '../gradient-core';
 export type { GradientValue, GradientStop, GradientType } from '../gradient-core';
+export { default as XYPad } from './components/XYPad.svelte';
+export { default as XYControl } from './components/XYControl.svelte';
+export type { XYValue, AxisSpec, Point } from '../xy-pad-core';
 export { default as FileControl } from './components/FileControl.svelte';
 export { default as SwatchControl } from './components/SwatchControl.svelte';
 export { default as ChipsControl } from './components/ChipsControl.svelte';
 export { default as ListControl } from './components/ListControl.svelte';
 export { default as PresetManager } from './components/PresetManager.svelte';
 export { DialStore, parseListItemSchema, defaultListItemParams, normalizeListItems } from 'dialkit/store';
-export type { SpringConfig, EasingConfig, TransitionConfig, ActionConfig, SelectConfig, ColorConfig, TextConfig, FileConfig, SwatchConfig, SwatchOption, ChipsConfig, ChipOption, ListConfig, ListItemValue, ListItemField, ListItemType, ListField, ListFieldKind, ShortcutConfig, Preset, DialValue, DialEvent, DialConfig, ResolvedValues, ControlMeta, PanelConfig, } from 'dialkit/store';
+export type { SpringConfig, EasingConfig, TransitionConfig, ActionConfig, SelectConfig, ColorConfig, XYConfig, XYAxis, RangeConfig, RangeValue, TextConfig, FileConfig, SwatchConfig, SwatchOption, ChipsConfig, ChipOption, ListConfig, ListItemValue, ListItemField, ListItemType, ListField, ListFieldKind, ShortcutConfig, Preset, DialValue, DialEvent, DialConfig, ResolvedValues, ControlMeta, PanelConfig, } from 'dialkit/store';
 //# sourceMappingURL=index.d.ts.map

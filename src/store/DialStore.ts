@@ -2,6 +2,27 @@
 
 import { HEX_COLOR_REGEX } from '../color-core';
 import { normalizeGradient, DEFAULT_GRADIENT, type GradientValue } from '../gradient-core';
+import { resolveAxis, normalizeValue as normalizeXYValue, type XYValue } from '../xy-pad-core';
+import { clampRange } from '../range-slider-core';
+// Type-only (erased in JS): lets consumers import `RangeValue` from the package types.
+import type { RangeValue } from '../range-slider-core';
+
+export type { XYValue };
+export type { RangeValue };
+
+/**
+ * One axis of an XY pad control. Partial — every field falls back through
+ * `resolveAxis` (min 0, max 1, step 0.01). `origin`/`bipolar` mirror the
+ * Slider's names/semantics, resolved independently per axis.
+ */
+export type XYAxis = {
+  min?: number;
+  max?: number;
+  step?: number;
+  origin?: number;
+  bipolar?: boolean;
+  label?: string;
+};
 
 export type SpringConfig = {
   type: 'spring';
@@ -45,10 +66,39 @@ export type GradientConfig = {
   default?: GradientValue;
 };
 
+export type XYConfig = {
+  type: 'xy';
+  /** Starting point. Missing/out-of-range components clamp to each axis's origin. */
+  default?: XYValue;
+  /** Per-axis range/step/origin. Each resolves through `resolveAxis`. */
+  x?: XYAxis;
+  y?: XYAxis;
+  /** Grid overlay — on by default as a 5×5 grid (faint at rest, stronger on interaction). `false` to hide, or a number for a uniform N×N count. */
+  grid?: boolean | number;
+  /** Multiplies both grid axis subdivision counts (default 1). E.g. 2 on the 5×5 default → 10×10. */
+  density?: number;
+  /** Snap the emitted value to each axis's step (default continuous). */
+  snap?: boolean;
+  /** Spring the thumb back to centre on release (joystick feel). Default hold. */
+  returnToCenter?: boolean;
+  /** Show the live value next to each axis label (default false = label only). */
+  showValues?: boolean;
+};
+
 export type TextConfig = {
   type: 'text';
   default?: string;
   placeholder?: string;
+};
+
+export type RangeConfig = {
+  type: 'range';
+  min: number;
+  max: number;
+  /** Falls back to the full span { min, max } when omitted. */
+  default?: RangeValue;
+  /** Falls back to inferStep(min, max) when omitted. */
+  step?: number;
 };
 
 export type FileConfig = {
@@ -157,7 +207,7 @@ export type ListField = {
   defaultValue: number | boolean | string;
 };
 
-export type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | GradientConfig | GradientValue | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[];
+export type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 
 export type DialConfig = {
   [key: string]: DialValue | [number, number, number, number?] | DialConfig;
@@ -176,21 +226,25 @@ export type ResolvedValues<T extends DialConfig> = {
             ? string
             : T[K] extends GradientConfig
               ? GradientValue
+            : T[K] extends XYConfig
+              ? XYValue
               : T[K] extends TextConfig
-              ? string
-              : T[K] extends GalleryConfig
                 ? string
-                : T[K] extends FileConfig
+                : T[K] extends RangeConfig
+                  ? RangeValue
+                : T[K] extends GalleryConfig
                   ? string
-                  : T[K] extends SwatchConfig
+                  : T[K] extends FileConfig
                     ? string
-                    : T[K] extends ChipsConfig
+                    : T[K] extends SwatchConfig
                       ? string
-                      : T[K] extends ListConfig
-                        ? ListItemValue[]
-                        : T[K] extends DialConfig
-                          ? ResolvedValues<T[K]>
-                          : T[K];
+                      : T[K] extends ChipsConfig
+                        ? string
+                        : T[K] extends ListConfig
+                          ? ListItemValue[]
+                          : T[K] extends DialConfig
+                            ? ResolvedValues<T[K]>
+                            : T[K];
 };
 
 export type ShortcutMode = 'fine' | 'normal' | 'coarse';
@@ -204,12 +258,14 @@ export type ShortcutConfig = {
 };
 
 export type ControlMeta = {
-  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'text' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
   path: string;
   label: string;
   min?: number;
   max?: number;
   step?: number;
+  /** Range control's configured reset target — its `default`, else the full {min,max} span. */
+  rangeDefault?: RangeValue;
   children?: ControlMeta[];
   defaultOpen?: boolean;
   options?: (string | { value: string; label: string })[];
@@ -225,6 +281,14 @@ export type ControlMeta = {
   maxItems?: number;
   alpha?: boolean;
   palette?: boolean;
+  /** XY pad axes/options — carried through to the XYControl. */
+  xAxis?: XYAxis;
+  yAxis?: XYAxis;
+  grid?: boolean | number;
+  density?: number;
+  snap?: boolean;
+  returnToCenter?: boolean;
+  showValues?: boolean;
   shortcut?: ShortcutConfig;
 };
 
@@ -612,7 +676,7 @@ class DialStoreClass {
         const hasPhysics = value.stiffness !== undefined || value.damping !== undefined || value.mass !== undefined;
         const hasTime = value.visualDuration !== undefined || value.bounce !== undefined;
         values[`${path}.__mode`] = hasPhysics && !hasTime ? 'advanced' : 'simple';
-      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isTextConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isListConfig(value)) {
+      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isListConfig(value)) {
         this.initTransitionModes(value as DialConfig, path, values);
       }
     }
@@ -656,8 +720,16 @@ class DialStoreClass {
         controls.push({ type: 'color', path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {
         controls.push({ type: 'gradient', path, label });
+      } else if (this.isXYConfig(value)) {
+        controls.push({ type: 'xy', path, label, xAxis: value.x, yAxis: value.y, grid: value.grid, density: value.density, snap: value.snap, returnToCenter: value.returnToCenter, showValues: value.showValues });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: 'text', path, label, placeholder: value.placeholder });
+      } else if (this.isRangeConfig(value)) {
+        // No `shortcut`: a range value is {min,max}, which the numeric-nudge
+        // shortcut path can't drive, and RangeSlider has no shortcut prop.
+        controls.push({ type: 'range', path, label, min: value.min, max: value.max,
+          step: value.step ?? this.inferStep(value.min, value.max),
+          rangeDefault: value.default ?? { min: value.min, max: value.max } });
       } else if (this.isGalleryConfig(value)) {
         controls.push({ type: 'gallery', path, label, items: value.items, columns: value.columns });
       } else if (this.isFileConfig(value)) {
@@ -719,8 +791,16 @@ class DialStoreClass {
         values[path] = value.default ?? '#000000';
       } else if (this.isGradientConfig(value)) {
         values[path] = normalizeGradient(value.default ?? DEFAULT_GRADIENT);
+      } else if (this.isXYConfig(value)) {
+        // Clamp/snap the config default into range up front (defaults might be
+        // out of range or partial); missing components fall back to each axis origin.
+        const xAxis = resolveAxis(value.x);
+        const yAxis = resolveAxis(value.y);
+        values[path] = normalizeXYValue(value.default, xAxis, yAxis, value.snap ?? false);
       } else if (this.isTextConfig(value)) {
         values[path] = value.default ?? '';
+      } else if (this.isRangeConfig(value)) {
+        values[path] = value.default ?? { min: value.min, max: value.max };
       } else if (this.isGalleryConfig(value)) {
         // Resolve to the selected item id — default, else the first item.
         values[path] = value.default ?? value.items[0]?.id ?? '';
@@ -794,6 +874,37 @@ class DialStoreClass {
       value !== null &&
       'type' in value &&
       (value as GradientConfig).type === 'gradient'
+    );
+  }
+
+  // Explicit { type: 'xy' } only — a bare { x, y } object would collide with the
+  // "nested object → folder" fallback, so the shorthand is deliberately unsupported.
+  private isXYConfig(value: unknown): value is XYConfig {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'type' in value &&
+      (value as XYConfig).type === 'xy'
+    );
+  }
+
+  private isRangeConfig(value: unknown): value is RangeConfig {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'type' in value &&
+      (value as RangeConfig).type === 'range'
+    );
+  }
+
+  // A stored range VALUE ({min,max} numbers), as opposed to a range config.
+  // Used to preserve the leaf value by identity across a panel update.
+  private isRangeValue(value: unknown): value is RangeValue {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      typeof (value as RangeValue).min === 'number' &&
+      typeof (value as RangeValue).max === 'number'
     );
   }
 
@@ -966,6 +1077,21 @@ class DialStoreClass {
         }
         return normalizeGradient(existingValue);
       }
+      case 'xy': {
+        // Re-clamp a preserved point against the (possibly edited) axes; a lost
+        // shape falls back to the default. snap intentionally off here so a
+        // continuous pad keeps sub-step precision across config edits.
+        if (typeof existingValue !== 'object' || existingValue === null || Array.isArray(existingValue)) {
+          return defaultValue;
+        }
+        const candidate = existingValue as Partial<XYValue>;
+        if (typeof candidate.x !== 'number' || typeof candidate.y !== 'number') {
+          return defaultValue;
+        }
+        const xAxis = resolveAxis(control.xAxis);
+        const yAxis = resolveAxis(control.yAxis);
+        return normalizeXYValue(candidate, xAxis, yAxis, false);
+      }
       case 'text':
       case 'file':
         return typeof existingValue === 'string' ? existingValue : defaultValue;
@@ -973,6 +1099,19 @@ class DialStoreClass {
         // Items are self-validating ({type, params}); preserve the user's array
         // across config edits, falling back to the default when shape is lost.
         return Array.isArray(existingValue) ? existingValue : defaultValue;
+      case 'range': {
+        // A range value is a leaf {min,max} preserved by identity (like color),
+        // not a folder — never let a panel update drop it. Reconcile the stored
+        // pair against (possibly changed) bounds: clamp both ends and re-order.
+        if (!this.isRangeValue(existingValue)) {
+          return defaultValue;
+        }
+        // clampRange does exactly clamp-both-ends-then-order. Missing bounds fall
+        // back to ±Infinity so the clamp is a no-op there.
+        const lo = control.min ?? Number.NEGATIVE_INFINITY;
+        const hi = control.max ?? Number.POSITIVE_INFINITY;
+        return clampRange(existingValue, lo, hi);
+      }
       case 'gallery': {
         if (typeof existingValue !== 'string') {
           return defaultValue;

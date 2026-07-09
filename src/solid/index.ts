@@ -8,6 +8,7 @@ export type { DialPosition, DialMode, DialTheme } from './components/DialRoot';
 
 // Component exports
 export { Slider } from './components/Slider';
+export { RangeSlider } from './components/RangeSlider';
 export { Toggle } from './components/Toggle';
 export { Folder } from './components/Folder';
 export { Module } from './components/Module';
@@ -17,6 +18,8 @@ export { SpringControl } from './components/SpringControl';
 export { SpringVisualization } from './components/SpringVisualization';
 export { WaveformVisualization } from './components/WaveformVisualization';
 export type { WaveformMode, WaveformLoop } from './components/WaveformVisualization';
+export { AnalyserVisualization } from './components/AnalyserVisualization';
+export type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, AnalyserSpring } from './components/AnalyserVisualization';
 export { CurveComposer } from './components/CurveComposer';
 export type { CurveType, CurveSegment, CurveDriver, CurveComposition, DriverDirection } from './components/CurveComposer';
 export { TextControl } from './components/TextControl';
@@ -27,6 +30,26 @@ export { GradientControl } from './components/GradientControl';
 export { GradientPanel } from './components/GradientPanel';
 export { gradientToCss, DEFAULT_GRADIENT } from '../gradient-core';
 export type { GradientValue, GradientStop, GradientType } from '../gradient-core';
+export { XYPad } from './components/XYPad';
+export type { XYPadProps } from './components/XYPad';
+export { XYControl } from './components/XYControl';
+export {
+  XY_DETENT_PX,
+  XY_DEFAULT_STEP,
+  resolveAxis,
+  clamp,
+  snapToStep,
+  valueToNorm,
+  normToValue,
+  invertY,
+  valueFromPoint,
+  pointFromValue,
+  applyDetentAxis,
+  nudge,
+  centerValue,
+  normalizeValue,
+} from '../xy-pad-core';
+export type { XYValue, AxisSpec, Point } from '../xy-pad-core';
 export { PresetManager } from './components/PresetManager';
 
 // Store exports
@@ -36,6 +59,8 @@ export type {
   ActionConfig,
   SelectConfig,
   ColorConfig,
+  XYConfig,
+  XYAxis,
   TextConfig,
   ShortcutConfig,
   Preset,

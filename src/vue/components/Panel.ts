@@ -2,10 +2,11 @@ import { Fragment, defineComponent, h, onMounted, onUnmounted, ref, type PropTyp
 import { AnimatePresence, motion } from 'motion-v';
 import { ICON_ADD_PRESET, ICON_CHECK, ICON_CLIPBOARD } from '../../icons';
 import { DialStore } from '../../store/DialStore';
-import type { ControlMeta, DialValue, PanelConfig, SpringConfig, TransitionConfig } from '../../store/DialStore';
+import type { ControlMeta, DialValue, PanelConfig, RangeValue, SpringConfig, TransitionConfig, XYValue } from '../../store/DialStore';
 import type { GradientValue } from '../../gradient-core';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
+import { RangeSlider } from './RangeSlider';
 import { Toggle } from './Toggle';
 import { SpringControl } from './SpringControl';
 import { TransitionControl } from './TransitionControl';
@@ -13,6 +14,7 @@ import { TextControl } from './TextControl';
 import { SelectControl } from './SelectControl';
 import { ColorControl } from './ColorControl';
 import { GradientControl } from './GradientControl';
+import { XYControl } from './XYControl';
 import { PresetManager } from './PresetManager';
 import { useShortcutContext } from './ShortcutListener';
 import { ShortcutsMenu } from './ShortcutsMenu';
@@ -101,6 +103,17 @@ export const Panel = defineComponent({
             shortcutActive: shortcutCtx.activePanelId.value === props.panel.id && shortcutCtx.activePath.value === control.path,
             onChange: (next: number) => DialStore.updateValue(props.panel.id, control.path, next),
           });
+        case 'range':
+          return h(RangeSlider, {
+            key: control.path,
+            label: control.label,
+            value: value as RangeValue,
+            min: control.min ?? 0,
+            max: control.max ?? 1,
+            step: control.step,
+            defaultValue: control.rangeDefault,
+            onChange: (next: RangeValue) => DialStore.updateValue(props.panel.id, control.path, next),
+          });
         case 'toggle':
           return h(Toggle, {
             key: control.path,
@@ -167,6 +180,22 @@ export const Panel = defineComponent({
             label: control.label,
             value: value as GradientValue,
             onChange: (next: GradientValue) => DialStore.updateValue(props.panel.id, control.path, next),
+          });
+        case 'xy':
+          return h(XYControl, {
+            key: control.path,
+            label: control.label,
+            value: value as XYValue,
+            x: control.xAxis,
+            y: control.yAxis,
+            grid: control.grid,
+            density: control.density,
+            snap: control.snap,
+            returnToCenter: control.returnToCenter,
+            showValues: control.showValues,
+            shortcut: control.shortcut,
+            shortcutActive: shortcutCtx.activePanelId.value === props.panel.id && shortcutCtx.activePath.value === control.path,
+            onChange: (next: XYValue) => DialStore.updateValue(props.panel.id, control.path, next),
           });
         case 'action':
           return h('button', {

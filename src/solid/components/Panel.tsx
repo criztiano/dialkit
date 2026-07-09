@@ -2,17 +2,19 @@ import { createSignal, createEffect, onMount, onCleanup, Show, For, JSX } from '
 import { animate } from 'motion';
 import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../../icons';
 import { DialStore } from '../../store/DialStore';
-import type { ControlMeta, PanelConfig, SpringConfig, DialValue } from '../../store/DialStore';
+import type { ControlMeta, PanelConfig, SpringConfig, DialValue, XYValue, RangeValue } from '../../store/DialStore';
 import { useShortcutContext } from './ShortcutListener';
 import { ShortcutsMenu } from './ShortcutsMenu';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
+import { RangeSlider } from './RangeSlider';
 import { Toggle } from './Toggle';
 import { SpringControl } from './SpringControl';
 import { TextControl } from './TextControl';
 import { SelectControl } from './SelectControl';
 import { ColorControl } from './ColorControl';
 import { GradientControl } from './GradientControl';
+import { XYControl } from './XYControl';
 import { PresetManager } from './PresetManager';
 import type { GradientValue } from '../../gradient-core';
 
@@ -221,6 +223,37 @@ export function Panel(props: PanelProps) {
           <GradientControl
             label={control.label}
             value={value() as GradientValue}
+            onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
+          />
+        );
+
+      case 'xy':
+        return (
+          <XYControl
+            label={control.label}
+            value={value() as XYValue}
+            onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
+            x={control.xAxis}
+            y={control.yAxis}
+            grid={control.grid}
+            density={control.density}
+            snap={control.snap}
+            returnToCenter={control.returnToCenter}
+            showValues={control.showValues}
+            shortcut={control.shortcut}
+            shortcutActive={shortcutCtx().activePanelId === props.panel.id && shortcutCtx().activePath === control.path}
+          />
+        );
+
+      case 'range':
+        return (
+          <RangeSlider
+            label={control.label}
+            value={value() as RangeValue}
+            min={control.min ?? 0}
+            max={control.max ?? 1}
+            step={control.step}
+            defaultValue={control.rangeDefault}
             onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
           />
         );
