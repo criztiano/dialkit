@@ -20,6 +20,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/vue/index.ts
 var vue_exports = {};
 __export(vue_exports, {
+  AnalyserVisualization: () => AnalyserVisualization,
   ButtonGroup: () => ButtonGroup,
   ColorControl: () => ColorControl,
   ColorPickerPanel: () => ColorPickerPanel,
@@ -66,12 +67,12 @@ function parseHex(input) {
   let s = input.trim();
   if (!s.startsWith("#")) s = `#${s}`;
   if (!HEX_COLOR_REGEX.test(s)) return null;
-  let h26 = s.slice(1);
-  if (h26.length <= 4) h26 = h26.split("").map((c) => c + c).join("");
-  const r = parseInt(h26.slice(0, 2), 16);
-  const g = parseInt(h26.slice(2, 4), 16);
-  const b = parseInt(h26.slice(4, 6), 16);
-  const a = h26.length === 8 ? parseInt(h26.slice(6, 8), 16) / 255 : 1;
+  let h27 = s.slice(1);
+  if (h27.length <= 4) h27 = h27.split("").map((c) => c + c).join("");
+  const r = parseInt(h27.slice(0, 2), 16);
+  const g = parseInt(h27.slice(2, 4), 16);
+  const b = parseInt(h27.slice(4, 6), 16);
+  const a = h27.length === 8 ? parseInt(h27.slice(6, 8), 16) / 255 : 1;
   return { r, g, b, a };
 }
 function formatHex(rgba, alphaEnabled) {
@@ -105,36 +106,36 @@ function rgbToHsv(rgba) {
   const r = rgba.r / 255, g = rgba.g / 255, b = rgba.b / 255;
   const max = Math.max(r, g, b), min = Math.min(r, g, b);
   const d = max - min;
-  let h26 = 0;
+  let h27 = 0;
   if (d !== 0) {
-    if (max === r) h26 = (g - b) / d % 6;
-    else if (max === g) h26 = (b - r) / d + 2;
-    else h26 = (r - g) / d + 4;
-    h26 *= 60;
-    if (h26 < 0) h26 += 360;
+    if (max === r) h27 = (g - b) / d % 6;
+    else if (max === g) h27 = (b - r) / d + 2;
+    else h27 = (r - g) / d + 4;
+    h27 *= 60;
+    if (h27 < 0) h27 += 360;
   }
-  return { h: h26, s: max === 0 ? 0 : d / max, v: max, a: rgba.a };
+  return { h: h27, s: max === 0 ? 0 : d / max, v: max, a: rgba.a };
 }
 function hsvToRgb(hsva) {
-  const h26 = (hsva.h % 360 + 360) % 360;
+  const h27 = (hsva.h % 360 + 360) % 360;
   const s = clamp01(hsva.s), v = clamp01(hsva.v);
   const c = v * s;
-  const x = c * (1 - Math.abs(h26 / 60 % 2 - 1));
+  const x = c * (1 - Math.abs(h27 / 60 % 2 - 1));
   const m = v - c;
   let r = 0, g = 0, b = 0;
-  if (h26 < 60) [r, g, b] = [c, x, 0];
-  else if (h26 < 120) [r, g, b] = [x, c, 0];
-  else if (h26 < 180) [r, g, b] = [0, c, x];
-  else if (h26 < 240) [r, g, b] = [0, x, c];
-  else if (h26 < 300) [r, g, b] = [x, 0, c];
+  if (h27 < 60) [r, g, b] = [c, x, 0];
+  else if (h27 < 120) [r, g, b] = [x, c, 0];
+  else if (h27 < 180) [r, g, b] = [0, c, x];
+  else if (h27 < 240) [r, g, b] = [0, x, c];
+  else if (h27 < 300) [r, g, b] = [x, 0, c];
   else [r, g, b] = [c, 0, x];
   return { r: byte((r + m) * 255), g: byte((g + m) * 255), b: byte((b + m) * 255), a: hsva.a };
 }
 function rgbToHsl(rgba) {
-  const { h: h26, s, v, a } = rgbToHsv(rgba);
+  const { h: h27, s, v, a } = rgbToHsv(rgba);
   const l = v * (1 - s / 2);
   const sl = l === 0 || l === 1 ? 0 : (v - l) / Math.min(l, 1 - l);
-  return { h: h26, s: sl, l, a };
+  return { h: h27, s: sl, l, a };
 }
 function hslToRgb(hsla) {
   const l = clamp01(hsla.l), s = clamp01(hsla.s);
@@ -170,32 +171,32 @@ function oklabToLinearRgb(L, A, B) {
 function rgbToOklch(rgba) {
   const { L, A, B } = rgbToOklab(rgba);
   const c = Math.sqrt(A * A + B * B);
-  let h26 = Math.atan2(B, A) * 180 / Math.PI;
-  if (h26 < 0) h26 += 360;
-  return { l: L, c, h: c < 1e-6 ? 0 : h26, a: rgba.a };
+  let h27 = Math.atan2(B, A) * 180 / Math.PI;
+  if (h27 < 0) h27 += 360;
+  return { l: L, c, h: c < 1e-6 ? 0 : h27, a: rgba.a };
 }
 var GAMUT_EPS = 1e-4;
-function inSrgbGamut(l, c, h26) {
-  const rad = h26 * Math.PI / 180;
+function inSrgbGamut(l, c, h27) {
+  const rad = h27 * Math.PI / 180;
   const { r, g, b } = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
   return r >= -GAMUT_EPS && r <= 1 + GAMUT_EPS && g >= -GAMUT_EPS && g <= 1 + GAMUT_EPS && b >= -GAMUT_EPS && b <= 1 + GAMUT_EPS;
 }
 function clampOklchToSrgb(oklch) {
   const l = clamp01(oklch.l);
-  const h26 = (oklch.h % 360 + 360) % 360;
+  const h27 = (oklch.h % 360 + 360) % 360;
   const c = Math.max(0, oklch.c);
-  if (inSrgbGamut(l, c, h26)) return { l, c, h: h26, a: clamp01(oklch.a) };
+  if (inSrgbGamut(l, c, h27)) return { l, c, h: h27, a: clamp01(oklch.a) };
   let lo = 0, hi = c;
   for (let i = 0; i < 24; i++) {
     const mid = (lo + hi) / 2;
-    if (inSrgbGamut(l, mid, h26)) lo = mid;
+    if (inSrgbGamut(l, mid, h27)) lo = mid;
     else hi = mid;
   }
-  return { l, c: lo, h: h26, a: clamp01(oklch.a) };
+  return { l, c: lo, h: h27, a: clamp01(oklch.a) };
 }
 function oklchToRgb(oklch) {
-  const { l, c, h: h26, a } = clampOklchToSrgb(oklch);
-  const rad = h26 * Math.PI / 180;
+  const { l, c, h: h27, a } = clampOklchToSrgb(oklch);
+  const rad = h27 * Math.PI / 180;
   const lin = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
   return {
     r: byte(linearToSrgb(clamp01(lin.r)) * 255),
@@ -234,11 +235,11 @@ function rgbaToChannels(rgba, format, alphaEnabled) {
   if (format === "rgb") {
     values = [rgba.r, rgba.g, rgba.b];
   } else if (format === "hsl") {
-    const { h: h26, s, l } = rgbToHsl(rgba);
-    values = [round(h26, 0), round(s * 100, 0), round(l * 100, 0)];
+    const { h: h27, s, l } = rgbToHsl(rgba);
+    values = [round(h27, 0), round(s * 100, 0), round(l * 100, 0)];
   } else {
-    const { l, c, h: h26 } = rgbToOklch(rgba);
-    values = [round(l, 2), round(c, 3), round(h26, 0)];
+    const { l, c, h: h27 } = rgbToOklch(rgba);
+    values = [round(l, 2), round(c, 3), round(h27, 0)];
   }
   if (alphaEnabled) values.push(opacityPercent(rgba));
   return values;
@@ -4977,11 +4978,11 @@ function createWaveformEngine(canvas, get) {
       }
     })();
   };
-  const columnWidth = (pixelSize) => Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSize)));
+  const columnWidth2 = (pixelSize) => Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSize)));
   const windowState = { start: 0, win: 1 };
   let drag = null;
   const drawColumns = (p, color, pixelSize) => {
-    const colW = columnWidth(pixelSize);
+    const colW = columnWidth2(pixelSize);
     ctx.fillStyle = color;
     ctx.globalAlpha = 1;
     for (let x = 0; x < W; x += colW) {
@@ -5340,8 +5341,438 @@ var WaveformVisualization = (0, import_vue25.defineComponent)({
   }
 });
 
-// src/vue/components/CurveComposer.ts
+// src/vue/components/AnalyserVisualization.ts
 var import_vue26 = require("vue");
+
+// src/analyser-core.ts
+function byteFreqToUnit(v) {
+  return v / 255;
+}
+function byteTimeToUnit(v) {
+  return (v - 128) / 128;
+}
+function binRange(point, points, bins, scale) {
+  if (bins <= 2) return { start: Math.max(0, bins - 1), end: Math.max(1, bins) };
+  const lo = 1;
+  const at = (t) => scale === "log" ? Math.pow(bins, t) * lo : lo + (bins - lo) * t;
+  let start = Math.floor(at(point / points));
+  start = Math.max(lo, Math.min(bins - 1, start));
+  const end = Math.max(start + 1, Math.min(bins, Math.floor(at((point + 1) / points))));
+  return { start, end };
+}
+function fillFrequencyTargets(data, out, scale) {
+  const points = out.length;
+  for (let i = 0; i < points; i++) {
+    const { start, end } = binRange(i, points, data.length, scale);
+    let mx = 0;
+    for (let b = start; b < end; b++) {
+      if (data[b] > mx) mx = data[b];
+    }
+    out[i] = byteFreqToUnit(mx);
+  }
+}
+function fillWaveformMinMax(data, cols, min, max) {
+  const step = data.length / cols;
+  for (let x = 0; x < cols; x++) {
+    const start = Math.floor(x * step);
+    const end = Math.max(start + 1, Math.min(data.length, Math.floor((x + 1) * step)));
+    let mn = 1;
+    let mx = -1;
+    for (let i = start; i < end; i++) {
+      const v = byteTimeToUnit(data[i]);
+      if (v < mn) mn = v;
+      if (v > mx) mx = v;
+    }
+    min[x] = mn;
+    max[x] = mx;
+  }
+}
+function resampleWaveform(data, out) {
+  const n = out.length;
+  if (!n) return;
+  if (!data.length) {
+    out.fill(0);
+    return;
+  }
+  if (n === 1 || data.length === 1) {
+    out.fill(byteTimeToUnit(data[0]));
+    return;
+  }
+  const step = (data.length - 1) / (n - 1);
+  for (let i = 0; i < n; i++) {
+    const x = i * step;
+    const j = Math.floor(x);
+    const a = byteTimeToUnit(data[j]);
+    const b = byteTimeToUnit(data[Math.min(data.length - 1, j + 1)]);
+    out[i] = a + (b - a) * (x - j);
+  }
+}
+var SPRING_MAX_STEP = 1 / 240;
+function stepSprings(pos, vel, targets, stiffness, damping, dt) {
+  let remaining = dt;
+  while (remaining > 0) {
+    const h27 = Math.min(remaining, SPRING_MAX_STEP);
+    remaining -= h27;
+    for (let i = 0; i < pos.length; i++) {
+      const accel = -stiffness * (pos[i] - targets[i]) - damping * vel[i];
+      vel[i] += accel * h27;
+      pos[i] += vel[i] * h27;
+    }
+  }
+}
+var SPRING_DEFAULT_STIFFNESS = 120;
+var SPRING_DEFAULT_DAMPING = 14;
+function normalizeSpring(spring) {
+  if (!spring) return null;
+  const raw = spring === true ? {} : spring;
+  return {
+    stiffness: Math.min(1e3, Math.max(1, raw.stiffness ?? SPRING_DEFAULT_STIFFNESS)),
+    damping: Math.min(100, Math.max(1, raw.damping ?? SPRING_DEFAULT_DAMPING))
+  };
+}
+function columnWidth(dpr, pixelSize) {
+  return Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSize)));
+}
+function quantizeToGrid(v, colW) {
+  return Math.round(v / colW) * colW;
+}
+
+// src/analyser-engine.ts
+var SMOOTH_POINTS = 64;
+var AREA_FILL_ALPHA = 0.2;
+var MUTED_ALPHA = 0.35;
+var FREQ_AMP = 0.92;
+var WAVE_AMP = 0.42;
+var MAX_DT = 0.05;
+function smoothThrough2(ctx, pts) {
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    ctx.bezierCurveTo(
+      p1.x + (p2.x - p0.x) / 6,
+      p1.y + (p2.y - p0.y) / 6,
+      p2.x - (p3.x - p1.x) / 6,
+      p2.y - (p3.y - p1.y) / 6,
+      p2.x,
+      p2.y
+    );
+  }
+}
+function createAnalyserEngine(canvas, get) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return { destroy() {
+  } };
+  const readDpr = () => Math.min(Math.max(window.devicePixelRatio || 1, 1), 3);
+  let dpr = readDpr();
+  let W = 0;
+  let H = 0;
+  let cy = 0;
+  const syncSize = (width, height) => {
+    dpr = readDpr();
+    const nw = Math.round(width * dpr);
+    const nh = Math.round(height * dpr);
+    if (nw === W && nh === H) return;
+    W = canvas.width = nw;
+    H = canvas.height = nh;
+    cy = H / 2;
+  };
+  const columnWidth2 = (pixelSize) => columnWidth(dpr, pixelSize);
+  let bytes = new Uint8Array(0);
+  let targetsA = new Float32Array(0);
+  let targetsB = new Float32Array(0);
+  let posA = new Float32Array(0);
+  let posB = new Float32Array(0);
+  let velA = new Float32Array(0);
+  let velB = new Float32Array(0);
+  let springSeeded = false;
+  const syncPoints = (n) => {
+    if (targetsA.length === n) return;
+    targetsA = new Float32Array(n);
+    targetsB = new Float32Array(n);
+    posA = new Float32Array(n);
+    posB = new Float32Array(n);
+    velA = new Float32Array(n);
+    velB = new Float32Array(n);
+    springSeeded = false;
+  };
+  const drawGrid = (base, subs) => {
+    const n = Math.max(1, Math.round(subs));
+    ctx.strokeStyle = base;
+    ctx.globalAlpha = 0.1;
+    ctx.lineWidth = dpr;
+    ctx.beginPath();
+    for (let i = 1; i < n; i++) {
+      const x = Math.round(i / n * W) + 0.5;
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, H);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
+  const baselineY = (source) => source === "frequency" ? H - Math.round(dpr) : cy;
+  const drawBaseline = (base, source, alpha) => {
+    ctx.strokeStyle = base;
+    ctx.globalAlpha = 0.15 * alpha;
+    ctx.lineWidth = dpr;
+    ctx.beginPath();
+    const y = Math.round(baselineY(source)) + 0.5;
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
+  const drawBand = (top, bottom, wave, fill, alpha) => {
+    const n = top.length;
+    if (n < 2) return;
+    const px = (k) => k / (n - 1) * W;
+    const toY = (v) => cy - v * (H * WAVE_AMP);
+    const topPts = new Array(n);
+    for (let k = 0; k < n; k++) topPts[k] = { x: px(k), y: toY(top[k]) };
+    const botPts = new Array(n);
+    for (let k = 0; k < n; k++) botPts[k] = { x: px(n - 1 - k), y: toY(bottom[n - 1 - k]) };
+    ctx.beginPath();
+    ctx.moveTo(topPts[0].x, topPts[0].y);
+    smoothThrough2(ctx, topPts);
+    ctx.lineTo(botPts[0].x, botPts[0].y);
+    smoothThrough2(ctx, botPts);
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.globalAlpha = AREA_FILL_ALPHA * alpha;
+    ctx.fill();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = wave;
+    ctx.lineWidth = 1.6 * dpr;
+    ctx.lineJoin = "round";
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
+  const drawSmooth = (values, toY, baseY, area, wave, fill, alpha) => {
+    const n = values.length;
+    if (n < 2) return;
+    const pts = new Array(n);
+    for (let k = 0; k < n; k++) pts[k] = { x: k / (n - 1) * W, y: toY(values[k]) };
+    if (area) {
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      smoothThrough2(ctx, pts);
+      ctx.lineTo(W, baseY);
+      ctx.lineTo(0, baseY);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.globalAlpha = AREA_FILL_ALPHA * alpha;
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    smoothThrough2(ctx, pts);
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = wave;
+    ctx.lineWidth = 1.6 * dpr;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
+  const drawColumns = (source, variant, pixelSize, wave, alpha) => {
+    const colW = columnWidth2(pixelSize);
+    ctx.fillStyle = wave;
+    ctx.globalAlpha = alpha;
+    const n = targetsA.length;
+    const src = springActive ? posA : targetsA;
+    const srcB = springActive ? posB : targetsB;
+    for (let k = 0; k < n; k++) {
+      const x = k * colW;
+      if (x >= W) break;
+      if (source === "frequency") {
+        const yTop = Math.max(0, Math.min(H - colW, quantizeToGrid(H - src[k] * (H * FREQ_AMP), colW)));
+        if (variant === "area") ctx.fillRect(x, yTop, colW, H - yTop);
+        else ctx.fillRect(x, yTop, colW, colW);
+      } else {
+        const yTop = Math.round(cy - src[k] * (H * WAVE_AMP));
+        const yBot = Math.round(cy - srcB[k] * (H * WAVE_AMP));
+        if (variant === "area") {
+          const t = Math.max(0, Math.min(H - 1, yTop));
+          ctx.fillRect(x, t, colW, Math.max(1, yBot - t));
+        } else {
+          const block = (yEdge) => {
+            const y = Math.max(0, Math.min(H - colW, quantizeToGrid(yEdge - colW / 2, colW)));
+            ctx.fillRect(x, y, colW, colW);
+          };
+          block(yTop);
+          block(yBot);
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+  };
+  let springActive = false;
+  let prevNow = null;
+  let raf = 0;
+  const frame = (now) => {
+    raf = requestAnimationFrame(frame);
+    const rt = get();
+    syncSize(rt.width, rt.height);
+    const dt = prevNow == null ? 0 : Math.min((now - prevNow) / 1e3, MAX_DT);
+    prevNow = now;
+    const base = getComputedStyle(canvas).color || "rgb(255,255,255)";
+    const alpha = rt.muted ? MUTED_ALPHA : 1;
+    ctx.globalAlpha = 1;
+    ctx.clearRect(0, 0, W, H);
+    ctx.imageSmoothingEnabled = rt.mode === "smooth";
+    if (rt.grid) drawGrid(base, rt.gridSubdivisions);
+    drawBaseline(base, rt.source, alpha);
+    const an = rt.analyser;
+    if (!an) return;
+    const needed = rt.source === "frequency" ? an.frequencyBinCount : an.fftSize;
+    if (bytes.length !== needed) bytes = new Uint8Array(needed);
+    if (rt.source === "frequency") an.getByteFrequencyData(bytes);
+    else an.getByteTimeDomainData(bytes);
+    const pixelated = rt.mode === "pixelated";
+    const n = pixelated ? Math.max(2, Math.ceil(W / columnWidth2(rt.pixelSize))) : SMOOTH_POINTS;
+    syncPoints(n);
+    const twoSeries = rt.source === "waveform" && (pixelated || rt.variant === "area");
+    if (rt.source === "frequency") {
+      fillFrequencyTargets(bytes, targetsA, rt.scale);
+    } else if (twoSeries) {
+      fillWaveformMinMax(bytes, n, targetsB, targetsA);
+    } else {
+      resampleWaveform(bytes, targetsA);
+    }
+    const spring = normalizeSpring(rt.spring);
+    springActive = !!spring;
+    if (spring) {
+      if (!springSeeded) {
+        posA.set(targetsA);
+        posB.set(targetsB);
+        velA.fill(0);
+        velB.fill(0);
+        springSeeded = true;
+      }
+      stepSprings(posA, velA, targetsA, spring.stiffness, spring.damping, dt);
+      if (twoSeries) stepSprings(posB, velB, targetsB, spring.stiffness, spring.damping, dt);
+    } else {
+      springSeeded = false;
+    }
+    const wave = rt.waveColor || base;
+    const fill = rt.fillColor || wave;
+    if (pixelated) {
+      drawColumns(rt.source, rt.variant, rt.pixelSize, wave, alpha);
+    } else {
+      const values = springActive ? posA : targetsA;
+      if (rt.source === "frequency") {
+        drawSmooth(values, (v) => H - v * (H * FREQ_AMP), baselineY("frequency"), rt.variant === "area", wave, fill, alpha);
+      } else if (rt.variant === "area") {
+        drawBand(values, springActive ? posB : targetsB, wave, fill, alpha);
+      } else {
+        drawSmooth(values, (v) => cy - v * (H * WAVE_AMP), cy, false, wave, fill, alpha);
+      }
+    }
+  };
+  raf = requestAnimationFrame(frame);
+  return {
+    destroy() {
+      cancelAnimationFrame(raf);
+    }
+  };
+}
+
+// src/vue/components/AnalyserVisualization.ts
+var AnalyserVisualization = (0, import_vue26.defineComponent)({
+  name: "DialKitAnalyserVisualization",
+  props: {
+    analyser: { type: Object, default: null },
+    source: { type: String, default: "frequency" },
+    variant: { type: String, default: "area" },
+    mode: { type: String, default: "smooth" },
+    pixelSize: { type: Number, default: 1 },
+    scale: { type: String, default: "log" },
+    spring: { type: [Boolean, Object], default: false },
+    grid: { type: Boolean, default: false },
+    gridSubdivisions: { type: Number, default: 8 },
+    waveColor: { type: String, default: void 0 },
+    fillColor: { type: String, default: void 0 },
+    muted: { type: Boolean, default: false },
+    onMuteChange: { type: Function, default: void 0 },
+    soloed: { type: Boolean, default: false },
+    onSoloChange: { type: Function, default: void 0 },
+    width: { type: Number, default: 256 },
+    height: { type: Number, default: 140 }
+  },
+  setup(props) {
+    const canvasRef = (0, import_vue26.ref)(null);
+    let engine = null;
+    (0, import_vue26.onMounted)(() => {
+      if (!canvasRef.value) return;
+      engine = createAnalyserEngine(
+        canvasRef.value,
+        () => ({
+          analyser: props.analyser,
+          source: props.source,
+          variant: props.variant,
+          mode: props.mode,
+          pixelSize: props.pixelSize,
+          scale: props.scale,
+          spring: props.spring,
+          grid: props.grid,
+          gridSubdivisions: props.gridSubdivisions,
+          waveColor: props.waveColor,
+          fillColor: props.fillColor,
+          muted: props.muted,
+          width: props.width,
+          height: props.height
+        })
+      );
+    });
+    (0, import_vue26.onBeforeUnmount)(() => engine?.destroy());
+    return () => {
+      const children = [
+        (0, import_vue26.h)("canvas", {
+          ref: canvasRef,
+          class: "dialkit-analyser-viz",
+          style: { width: `${props.width}px`, height: `${props.height}px` }
+        })
+      ];
+      if (props.onMuteChange || props.onSoloChange) {
+        const buttons = [];
+        if (props.onMuteChange) {
+          buttons.push(
+            (0, import_vue26.h)(
+              "button",
+              {
+                type: "button",
+                "aria-label": "Mute",
+                "aria-pressed": props.muted,
+                onClick: () => props.onMuteChange?.(!props.muted)
+              },
+              "M"
+            )
+          );
+        }
+        if (props.onSoloChange) {
+          buttons.push(
+            (0, import_vue26.h)(
+              "button",
+              {
+                type: "button",
+                "aria-label": "Solo",
+                "aria-pressed": props.soloed,
+                onClick: () => props.onSoloChange?.(!props.soloed)
+              },
+              "S"
+            )
+          );
+        }
+        children.push((0, import_vue26.h)("div", { class: "dialkit-analyser-actions" }, buttons));
+      }
+      return (0, import_vue26.h)("div", { class: "dialkit-analyser-viz-wrap", style: { width: `${props.width}px` } }, children);
+    };
+  }
+});
+
+// src/vue/components/CurveComposer.ts
+var import_vue27 = require("vue");
 
 // src/curve-composer-core.ts
 var CURVE_CYCLE = ["linear", "easeIn", "easeOut", "easeInOut", "spring"];
@@ -5730,7 +6161,7 @@ function triggersCrossed(prevValue, curValue, steps) {
 }
 
 // src/vue/components/CurveComposer.ts
-var CurveComposer = (0, import_vue26.defineComponent)({
+var CurveComposer = (0, import_vue27.defineComponent)({
   name: "DialKitCurveComposer",
   props: {
     /** The curve series (controlled). */
@@ -5771,24 +6202,24 @@ var CurveComposer = (0, import_vue26.defineComponent)({
     height: { type: Number, default: 140 }
   },
   setup(props) {
-    const svgRef = (0, import_vue26.ref)(null);
-    const seriesPlayheadRef = (0, import_vue26.ref)(null);
-    const seriesDotRef = (0, import_vue26.ref)(null);
-    const driverPlayheadRef = (0, import_vue26.ref)(null);
-    const drag = (0, import_vue26.ref)(null);
-    const hover = (0, import_vue26.ref)(null);
-    const layout = (0, import_vue26.computed)(() => composerLayout(props.width, props.height, props.driver != null));
-    const W = (0, import_vue26.computed)(() => layout.value.W);
-    const totalH = (0, import_vue26.computed)(() => layout.value.totalH);
-    const mainRect = (0, import_vue26.computed)(() => layout.value.mainRect);
-    const driverRect = (0, import_vue26.computed)(() => layout.value.driverRect);
-    const composition = (0, import_vue26.computed)(() => ({
+    const svgRef = (0, import_vue27.ref)(null);
+    const seriesPlayheadRef = (0, import_vue27.ref)(null);
+    const seriesDotRef = (0, import_vue27.ref)(null);
+    const driverPlayheadRef = (0, import_vue27.ref)(null);
+    const drag = (0, import_vue27.ref)(null);
+    const hover = (0, import_vue27.ref)(null);
+    const layout = (0, import_vue27.computed)(() => composerLayout(props.width, props.height, props.driver != null));
+    const W = (0, import_vue27.computed)(() => layout.value.W);
+    const totalH = (0, import_vue27.computed)(() => layout.value.totalH);
+    const mainRect = (0, import_vue27.computed)(() => layout.value.mainRect);
+    const driverRect = (0, import_vue27.computed)(() => layout.value.driverRect);
+    const composition = (0, import_vue27.computed)(() => ({
       segments: props.segments,
       driver: props.driver,
       direction: props.direction,
       gap: props.gap
     }));
-    const samplers = (0, import_vue26.computed)(() => buildSamplers(composition.value));
+    const samplers = (0, import_vue27.computed)(() => buildSamplers(composition.value));
     let raf = 0;
     let prevTrigValue = Number.NaN;
     let armW = Number.NaN;
@@ -5827,10 +6258,10 @@ var CurveComposer = (0, import_vue26.defineComponent)({
         prevTrigValue = Number.NaN;
       }
     };
-    (0, import_vue26.onMounted)(() => {
+    (0, import_vue27.onMounted)(() => {
       raf = requestAnimationFrame(tick);
     });
-    (0, import_vue26.onBeforeUnmount)(() => cancelAnimationFrame(raf));
+    (0, import_vue27.onBeforeUnmount)(() => cancelAnimationFrame(raf));
     const hitLayout = () => ({ totalH: totalH.value, driverY: driverRect.value ? driverRect.value.y : null, gap: props.gap });
     const localCoords = (clientX, clientY) => {
       const rect = svgRef.value.getBoundingClientRect();
@@ -5956,15 +6387,15 @@ var CurveComposer = (0, import_vue26.defineComponent)({
       for (let i = 1; i < n; i++) {
         const gx = i / n * W.value;
         lines.push(
-          (0, import_vue26.h)("line", { key: `g-${rect.y}-${i}`, class: "dialkit-cc-grid", x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h })
+          (0, import_vue27.h)("line", { key: `g-${rect.y}-${i}`, class: "dialkit-cc-grid", x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h })
         );
       }
       return lines;
     };
-    const renderLaneBg = (rect, key) => (0, import_vue26.h)("rect", { key, class: "dialkit-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 });
+    const renderLaneBg = (rect, key) => (0, import_vue27.h)("rect", { key, class: "dialkit-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 });
     const diagonal = (rect, span, key) => {
       const d = diagonalLine(rect, span, W.value);
-      return (0, import_vue26.h)("line", { key, class: "dialkit-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 });
+      return (0, import_vue27.h)("line", { key, class: "dialkit-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 });
     };
     return () => {
       const main = mainRect.value;
@@ -5978,7 +6409,7 @@ var CurveComposer = (0, import_vue26.defineComponent)({
       if (props.selectedIndex != null && props.selectedIndex >= 0 && props.selectedIndex < props.segments.length) {
         const span = segmentSpan(props.segments, props.selectedIndex, props.gap);
         children.push(
-          (0, import_vue26.h)("rect", {
+          (0, import_vue27.h)("rect", {
             class: "dialkit-cc-seg-selected",
             x: span[0] * W.value,
             y: main.y,
@@ -5991,7 +6422,7 @@ var CurveComposer = (0, import_vue26.defineComponent)({
       if (hover.value?.kind === "segment" && !drag.value) {
         const span = segmentSpan(props.segments, hover.value.index, props.gap);
         children.push(
-          (0, import_vue26.h)("rect", {
+          (0, import_vue27.h)("rect", {
             class: "dialkit-cc-seg-hover",
             x: span[0] * W.value,
             y: main.y,
@@ -6004,10 +6435,10 @@ var CurveComposer = (0, import_vue26.defineComponent)({
       children.push(
         props.segments.map((seg, i) => {
           const span = segmentSpan(props.segments, i, props.gap);
-          return (0, import_vue26.h)("g", { key: `seg-${i}` }, [
+          return (0, import_vue27.h)("g", { key: `seg-${i}` }, [
             diagonal(main, span, `diag-${i}`),
-            (0, import_vue26.h)("path", { class: "dialkit-cc-curve", d: curvePath(seg, main, span, W.value) }),
-            (0, import_vue26.h)(
+            (0, import_vue27.h)("path", { class: "dialkit-cc-curve", d: curvePath(seg, main, span, W.value) }),
+            (0, import_vue27.h)(
               "text",
               { class: "dialkit-cc-label", x: (span[0] + span[1]) * 0.5 * W.value, y: main.y + 13 },
               seg.type
@@ -6018,7 +6449,7 @@ var CurveComposer = (0, import_vue26.defineComponent)({
       if (props.gap > 0) {
         children.push(
           timelineSlots(props.segments, props.gap).filter((slot) => slot.kind === "gap" && slot.b > slot.a).map(
-            (slot) => (0, import_vue26.h)("path", {
+            (slot) => (0, import_vue27.h)("path", {
               key: `conn-${slot.index}`,
               class: "dialkit-cc-connector",
               d: connectorPath(slot, samplers.value, props.segments.length, main, W.value)
@@ -6028,7 +6459,7 @@ var CurveComposer = (0, import_vue26.defineComponent)({
       }
       children.push(
         interior.map(
-          (bx, i) => (0, import_vue26.h)("line", {
+          (bx, i) => (0, import_vue27.h)("line", {
             key: `b-${i}`,
             class: "dialkit-cc-boundary",
             "data-active": String(
@@ -6042,7 +6473,7 @@ var CurveComposer = (0, import_vue26.defineComponent)({
         )
       );
       children.push(
-        (0, import_vue26.h)("line", {
+        (0, import_vue27.h)("line", {
           ref: seriesPlayheadRef,
           class: "dialkit-cc-playhead",
           x1: 0,
@@ -6053,7 +6484,7 @@ var CurveComposer = (0, import_vue26.defineComponent)({
         })
       );
       children.push(
-        (0, import_vue26.h)("circle", {
+        (0, import_vue27.h)("circle", {
           ref: seriesDotRef,
           class: "dialkit-cc-dot",
           cx: 0,
@@ -6067,18 +6498,18 @@ var CurveComposer = (0, import_vue26.defineComponent)({
         children.push(renderLaneGrid(dr));
         if (hover.value?.kind === "driver" && !drag.value) {
           children.push(
-            (0, import_vue26.h)("rect", { class: "dialkit-cc-seg-hover", x: 0, y: dr.y, width: W.value, height: dr.h, rx: 8 })
+            (0, import_vue27.h)("rect", { class: "dialkit-cc-seg-hover", x: 0, y: dr.y, width: W.value, height: dr.h, rx: 8 })
           );
         }
         children.push(diagonal(dr, [0, 1], "driver-diag"));
         children.push(
-          (0, import_vue26.h)("path", { class: "dialkit-cc-curve dialkit-cc-curve-driver", d: curvePath(props.driver, dr, [0, 1], W.value) })
+          (0, import_vue27.h)("path", { class: "dialkit-cc-curve dialkit-cc-curve-driver", d: curvePath(props.driver, dr, [0, 1], W.value) })
         );
         children.push(
-          (0, import_vue26.h)("text", { class: "dialkit-cc-label", x: W.value * 0.5, y: dr.y + 13 }, `driver \xB7 ${props.driver.type}`)
+          (0, import_vue27.h)("text", { class: "dialkit-cc-label", x: W.value * 0.5, y: dr.y + 13 }, `driver \xB7 ${props.driver.type}`)
         );
         children.push(
-          (0, import_vue26.h)("line", {
+          (0, import_vue27.h)("line", {
             ref: driverPlayheadRef,
             class: "dialkit-cc-playhead",
             x1: 0,
@@ -6089,8 +6520,8 @@ var CurveComposer = (0, import_vue26.defineComponent)({
           })
         );
       }
-      return (0, import_vue26.h)("div", { class: "dialkit-cc-wrap", style: { width: `${W.value}px` } }, [
-        (0, import_vue26.h)(
+      return (0, import_vue27.h)("div", { class: "dialkit-cc-wrap", style: { width: `${W.value}px` } }, [
+        (0, import_vue27.h)(
           "svg",
           {
             ref: svgRef,
@@ -6114,6 +6545,7 @@ var CurveComposer = (0, import_vue26.defineComponent)({
 });
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  AnalyserVisualization,
   ButtonGroup,
   ColorControl,
   ColorPickerPanel,

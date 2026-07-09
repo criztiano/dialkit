@@ -1057,6 +1057,177 @@ declare const WaveformVisualization: vue.DefineComponent<vue.ExtractPropTypes<{
     autoZoomOnLoop: boolean;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
+type AnalyserScale = 'log' | 'linear';
+/** `true` enables the default spring; an object overrides stiffness/damping. */
+type AnalyserSpring = boolean | {
+    stiffness?: number;
+    damping?: number;
+};
+
+type AnalyserSource = 'frequency' | 'waveform';
+type AnalyserVariant = 'line' | 'area';
+type AnalyserMode = 'smooth' | 'pixelated';
+
+declare const AnalyserVisualization: vue.DefineComponent<vue.ExtractPropTypes<{
+    analyser: {
+        type: PropType<AnalyserNode | null>;
+        default: null;
+    };
+    source: {
+        type: PropType<AnalyserSource>;
+        default: string;
+    };
+    variant: {
+        type: PropType<AnalyserVariant>;
+        default: string;
+    };
+    mode: {
+        type: PropType<AnalyserMode>;
+        default: string;
+    };
+    pixelSize: {
+        type: NumberConstructor;
+        default: number;
+    };
+    scale: {
+        type: PropType<AnalyserScale>;
+        default: string;
+    };
+    spring: {
+        type: PropType<AnalyserSpring>;
+        default: boolean;
+    };
+    grid: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    gridSubdivisions: {
+        type: NumberConstructor;
+        default: number;
+    };
+    waveColor: {
+        type: StringConstructor;
+        default: undefined;
+    };
+    fillColor: {
+        type: StringConstructor;
+        default: undefined;
+    };
+    muted: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    onMuteChange: {
+        type: PropType<(muted: boolean) => void>;
+        default: undefined;
+    };
+    soloed: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    onSoloChange: {
+        type: PropType<(soloed: boolean) => void>;
+        default: undefined;
+    };
+    width: {
+        type: NumberConstructor;
+        default: number;
+    };
+    height: {
+        type: NumberConstructor;
+        default: number;
+    };
+}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    analyser: {
+        type: PropType<AnalyserNode | null>;
+        default: null;
+    };
+    source: {
+        type: PropType<AnalyserSource>;
+        default: string;
+    };
+    variant: {
+        type: PropType<AnalyserVariant>;
+        default: string;
+    };
+    mode: {
+        type: PropType<AnalyserMode>;
+        default: string;
+    };
+    pixelSize: {
+        type: NumberConstructor;
+        default: number;
+    };
+    scale: {
+        type: PropType<AnalyserScale>;
+        default: string;
+    };
+    spring: {
+        type: PropType<AnalyserSpring>;
+        default: boolean;
+    };
+    grid: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    gridSubdivisions: {
+        type: NumberConstructor;
+        default: number;
+    };
+    waveColor: {
+        type: StringConstructor;
+        default: undefined;
+    };
+    fillColor: {
+        type: StringConstructor;
+        default: undefined;
+    };
+    muted: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    onMuteChange: {
+        type: PropType<(muted: boolean) => void>;
+        default: undefined;
+    };
+    soloed: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    onSoloChange: {
+        type: PropType<(soloed: boolean) => void>;
+        default: undefined;
+    };
+    width: {
+        type: NumberConstructor;
+        default: number;
+    };
+    height: {
+        type: NumberConstructor;
+        default: number;
+    };
+}>> & Readonly<{}>, {
+    spring: AnalyserSpring;
+    mode: AnalyserMode;
+    grid: boolean;
+    source: AnalyserSource;
+    height: number;
+    width: number;
+    scale: AnalyserScale;
+    pixelSize: number;
+    gridSubdivisions: number;
+    waveColor: string;
+    analyser: AnalyserNode | null;
+    variant: AnalyserVariant;
+    fillColor: string;
+    muted: boolean;
+    onMuteChange: (muted: boolean) => void;
+    soloed: boolean;
+    onSoloChange: (soloed: boolean) => void;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
 /** The curve vocabulary a segment cycles through on quick-click. */
 type CurveType = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'spring';
 /** One curve in the series. `weight` is a relative duration share (normalized by the sum). */
@@ -1788,4 +1959,4 @@ declare const PresetManager: vue.DefineComponent<vue.ExtractPropTypes<{
     activePresetId: string | null;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
-export { type ActionConfig, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, type DialConfig, type DialKitDirectiveOptions, type DialKitDirectiveValue, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, Folder, Module, type PanelConfig, type Preset, PresetManager, RangeSlider, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, ShortcutKey, ShortcutListener, type ShortcutState, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYValue, useDialKit, useShortcutContext, vDialKit };
+export { type ActionConfig, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, type DialConfig, type DialKitDirectiveOptions, type DialKitDirectiveValue, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, Folder, Module, type PanelConfig, type Preset, PresetManager, RangeSlider, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, ShortcutKey, ShortcutListener, type ShortcutState, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYValue, useDialKit, useShortcutContext, vDialKit };

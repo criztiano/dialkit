@@ -719,6 +719,70 @@ interface WaveformVisualizationProps {
 }
 declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, pixelSize, grid, gridSubdivisions, onSeek, loop, onLoopChange, waveColor, playheadColor, autoZoomOnLoop, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
 
+type AnalyserScale = 'log' | 'linear';
+/** `true` enables the default spring; an object overrides stiffness/damping. */
+type AnalyserSpring = boolean | {
+    stiffness?: number;
+    damping?: number;
+};
+
+type AnalyserSource = 'frequency' | 'waveform';
+type AnalyserVariant = 'line' | 'area';
+type AnalyserMode = 'smooth' | 'pixelated';
+
+interface AnalyserVisualizationProps {
+    /**
+     * The Web Audio analyser to visualize. Purely observed — the component never
+     * mutates it, so fftSize, smoothingTimeConstant, and the minDecibels..maxDecibels
+     * window (which the byte data maps onto) stay under the host's control.
+     */
+    analyser?: AnalyserNode | null;
+    /** 'frequency' — live spectrum (EQ-style). 'waveform' — time-domain oscilloscope. */
+    source?: AnalyserSource;
+    /** 'area' — translucent fill under the trace plus a crisp outline. 'line' — outline only. */
+    variant?: AnalyserVariant;
+    /**
+     * 'smooth' — a simplified, interpolated trace. 'pixelated' — crisp, chunky
+     * per-column blocks (the waveform visualizer's pixel language).
+     */
+    mode?: AnalyserMode;
+    /**
+     * Pixelated mode only: block-size multiplier. 1 (default) ≈ one CSS pixel per
+     * column; 2 / 4 / 6 make progressively chunkier, lower-resolution columns.
+     */
+    pixelSize?: number;
+    /** Frequency-axis spacing for the spectrum: 'log' (default, musical) or 'linear'. */
+    scale?: AnalyserScale;
+    /**
+     * Spring-smooth the trace's movement (render-side; composes with the analyser's
+     * own data-side smoothingTimeConstant — the spring can overshoot, that never does).
+     * `true` for the default feel, or `{ stiffness, damping }` to tune it.
+     */
+    spring?: AnalyserSpring;
+    /** Overlay a faint reference grid (vertical divisions) behind the trace. */
+    grid?: boolean;
+    /** Vertical divisions in the grid when `grid` is on (default 8). */
+    gridSubdivisions?: number;
+    /** Trace color. Defaults to the theme color. */
+    waveColor?: string;
+    /** Area-fill color (drawn translucent). Defaults to `waveColor`. */
+    fillColor?: string;
+    /**
+     * Controlled mute state: dims the trace as feedback. The analyser is a passive
+     * tap, so actually silencing the channel is the host's job (gain routing).
+     */
+    muted?: boolean;
+    /** Shows the mute button; called with the requested state on click. */
+    onMuteChange?: (muted: boolean) => void;
+    /** Controlled solo state (cross-channel — the host owns what "solo" silences). */
+    soloed?: boolean;
+    /** Shows the solo button; called with the requested state on click. */
+    onSoloChange?: (soloed: boolean) => void;
+    width?: number;
+    height?: number;
+}
+declare function AnalyserVisualization({ analyser, source, variant, mode, pixelSize, scale, spring, grid, gridSubdivisions, waveColor, fillColor, muted, onMuteChange, soloed, onSoloChange, width, height, }: AnalyserVisualizationProps): react_jsx_runtime.JSX.Element;
+
 /** The curve vocabulary a segment cycles through on quick-click. */
 type CurveType = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'spring';
 /** Cycle order for quick-click (loops back to the start). */
@@ -1137,4 +1201,4 @@ interface ShortcutsMenuProps {
 }
 declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react_jsx_runtime.JSX.Element | null;
 
-export { type ActionConfig, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type OKLCH, type PanelConfig, type Point, type Preset, PresetManager, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, applyDetentAxis, buildSamplers, centerValue, clamp, clampOklchToSrgb, clampRange, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, flipDriver, flipSegment, formatHex, handleLeftStyles, hslToRgb, hsvToRgb, invertY, isOutsideSpan, nearestHandle, normToValue, normalizeHex, normalizeListItems, normalizeValue, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, pointFromValue, readComposition, redistributeWeight, removeDriver, removeSegment, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, shiftSpan, snapToStep, splitSegment, triggerLevels, triggersCrossed, useDialKit, valueFromPoint, valueToNorm, valueToPercent };
+export { type ActionConfig, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type OKLCH, type PanelConfig, type Point, type Preset, PresetManager, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, applyDetentAxis, buildSamplers, centerValue, clamp, clampOklchToSrgb, clampRange, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, flipDriver, flipSegment, formatHex, handleLeftStyles, hslToRgb, hsvToRgb, invertY, isOutsideSpan, nearestHandle, normToValue, normalizeHex, normalizeListItems, normalizeValue, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, pointFromValue, readComposition, redistributeWeight, removeDriver, removeSegment, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, shiftSpan, snapToStep, splitSegment, triggerLevels, triggersCrossed, useDialKit, valueFromPoint, valueToNorm, valueToPercent };

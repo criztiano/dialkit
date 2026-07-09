@@ -567,6 +567,38 @@ interface WaveformVisualizationProps {
 }
 declare function WaveformVisualization(props: WaveformVisualizationProps): solid_js.JSX.Element;
 
+type AnalyserScale = 'log' | 'linear';
+/** `true` enables the default spring; an object overrides stiffness/damping. */
+type AnalyserSpring = boolean | {
+    stiffness?: number;
+    damping?: number;
+};
+
+type AnalyserSource = 'frequency' | 'waveform';
+type AnalyserVariant = 'line' | 'area';
+type AnalyserMode = 'smooth' | 'pixelated';
+
+interface AnalyserVisualizationProps {
+    analyser?: AnalyserNode | null;
+    source?: AnalyserSource;
+    variant?: AnalyserVariant;
+    mode?: AnalyserMode;
+    pixelSize?: number;
+    scale?: AnalyserScale;
+    spring?: AnalyserSpring;
+    grid?: boolean;
+    gridSubdivisions?: number;
+    waveColor?: string;
+    fillColor?: string;
+    muted?: boolean;
+    onMuteChange?: (muted: boolean) => void;
+    soloed?: boolean;
+    onSoloChange?: (soloed: boolean) => void;
+    width?: number;
+    height?: number;
+}
+declare function AnalyserVisualization(props: AnalyserVisualizationProps): solid_js.JSX.Element;
+
 /** The curve vocabulary a segment cycles through on quick-click. */
 type CurveType = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'spring';
 /** One curve in the series. `weight` is a relative duration share (normalized by the sum). */
@@ -783,4 +815,4 @@ interface PresetManagerProps {
 }
 declare function PresetManager(props: PresetManagerProps): solid_js.JSX.Element;
 
-export { type ActionConfig, type AxisSpec, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, type CreateDialOptions, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, type DialConfig, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, Folder, Module, type PanelConfig, type Point, type Preset, PresetManager, RangeSlider, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, applyDetentAxis, centerValue, clamp, createDialKit, invertY, normToValue, normalizeValue, nudge, pointFromValue, resolveAxis, snapToStep, valueFromPoint, valueToNorm };
+export { type ActionConfig, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, type AxisSpec, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, type CreateDialOptions, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, type DialConfig, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, Folder, Module, type PanelConfig, type Point, type Preset, PresetManager, RangeSlider, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, applyDetentAxis, centerValue, clamp, createDialKit, invertY, normToValue, normalizeValue, nudge, pointFromValue, resolveAxis, snapToStep, valueFromPoint, valueToNorm };

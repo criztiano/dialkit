@@ -869,6 +869,74 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
   height: 14px;
 }
 
+/* Analyser Visualization — real-time canvas trace, themed via \`color\` (read per frame) */
+.dialkit-analyser-viz-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.dialkit-analyser-viz {
+  display: block;
+  width: 100%;
+  border-radius: var(--dial-radius);
+  background: var(--dial-surface);
+  color: var(--dial-text-root);
+}
+
+/* Mute / solo actions — fixed to the canvas's top-right corner, matching the waveform's zoom buttons */
+.dialkit-analyser-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+}
+
+.dialkit-analyser-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  border-radius: 6px;
+  border: 1px solid var(--dial-border);
+  background: var(--dial-surface-active);
+  color: var(--dial-text-root);
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.dialkit-analyser-actions button:hover:not(:disabled) {
+  background: var(--dial-surface-hover);
+  border-color: var(--dial-border-hover);
+}
+
+.dialkit-analyser-actions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Engaged states are color-coded: rose for mute, amber for solo. */
+.dialkit-analyser-actions button[aria-label='Mute'][aria-pressed='true'] {
+  background: rgba(244, 63, 94, 0.22);
+  border-color: rgba(244, 63, 94, 0.55);
+  color: #fb7185;
+}
+
+.dialkit-analyser-actions button[aria-label='Solo'][aria-pressed='true'] {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: rgba(245, 158, 11, 0.55);
+  color: #fbbf24;
+}
+
 /* Panel Wrapper (contains panel + toolbar) */
 .dialkit-panel-wrapper {
   display: inline-flex;
