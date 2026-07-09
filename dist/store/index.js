@@ -1,5 +1,79 @@
 // src/color-core.ts
 var HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
+var clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+var clamp01 = (n) => clamp(n, 0, 1);
+var byte = (n) => clamp(Math.round(n), 0, 255);
+function parseHex(input) {
+  if (typeof input !== "string") return null;
+  let s = input.trim();
+  if (!s.startsWith("#")) s = `#${s}`;
+  if (!HEX_COLOR_REGEX.test(s)) return null;
+  let h = s.slice(1);
+  if (h.length <= 4) h = h.split("").map((c) => c + c).join("");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const a = h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1;
+  return { r, g, b, a };
+}
+function formatHex(rgba, alphaEnabled) {
+  const hx = (n) => byte(n).toString(16).padStart(2, "0");
+  const base = `#${hx(rgba.r)}${hx(rgba.g)}${hx(rgba.b)}`;
+  return alphaEnabled ? `${base}${hx(clamp01(rgba.a) * 255)}` : base;
+}
+
+// src/gradient-core.ts
+var MIN_STOPS = 2;
+var DEFAULT_GRADIENT = {
+  type: "linear",
+  angle: 90,
+  stops: [
+    { color: "#6366f1ff", position: 0 },
+    { color: "#ec4899ff", position: 1 }
+  ]
+};
+var clamp012 = (n) => Math.min(1, Math.max(0, n));
+var clampPct = (n) => Math.min(100, Math.max(0, n));
+var clampScale = (n) => Math.min(200, Math.max(10, n));
+var clampSquash = (n) => Math.min(200, Math.max(1, n));
+var wrapAngle = (a) => (a % 360 + 360) % 360;
+var cloneDefaultStops = () => DEFAULT_GRADIENT.stops.map((s) => ({ ...s }));
+var cloneDefault = () => ({
+  type: DEFAULT_GRADIENT.type,
+  angle: DEFAULT_GRADIENT.angle,
+  stops: cloneDefaultStops()
+});
+function normalizeGradient(input) {
+  if (!input || typeof input !== "object") return cloneDefault();
+  const obj = input;
+  if (!Array.isArray(obj.stops)) return cloneDefault();
+  const type = obj.type === "radial" || obj.type === "conic" ? obj.type : "linear";
+  const rawAngle = Number(obj.angle);
+  const angle = Number.isFinite(rawAngle) ? wrapAngle(rawAngle) : DEFAULT_GRADIENT.angle;
+  const extras = {};
+  const cx = Number(obj.centerX);
+  if (Number.isFinite(cx)) extras.centerX = clampPct(cx);
+  const cy = Number(obj.centerY);
+  if (Number.isFinite(cy)) extras.centerY = clampPct(cy);
+  const scale = Number(obj.scale);
+  if (Number.isFinite(scale)) extras.scale = clampScale(scale);
+  const squash = Number(obj.squash);
+  if (Number.isFinite(squash)) extras.squash = clampSquash(squash);
+  const rotation = Number(obj.rotation);
+  if (Number.isFinite(rotation)) extras.rotation = wrapAngle(rotation);
+  const stops = [];
+  for (const raw of obj.stops) {
+    if (!raw || typeof raw !== "object") continue;
+    const s = raw;
+    const rgba = typeof s.color === "string" ? parseHex(s.color) : null;
+    const pos = Number(s.position);
+    if (!rgba || !Number.isFinite(pos)) continue;
+    stops.push({ color: formatHex(rgba, true), position: clamp012(pos) });
+  }
+  if (stops.length < MIN_STOPS) return { type, angle, stops: cloneDefaultStops(), ...extras };
+  stops.sort((a, b) => a.position - b.position);
+  return { type, angle, stops, ...extras };
+}
 
 // src/xy-pad-core.ts
 var XY_DEFAULT_STEP = 0.01;
@@ -19,7 +93,7 @@ function resolveAxis(axis) {
   const origin = axis?.origin ?? (bipolar ? (min + max) / 2 : min);
   return { min, max, step, origin, bipolar };
 }
-function clamp(v, min, max) {
+function clamp2(v, min, max) {
   return Math.min(max, Math.max(min, v));
 }
 function snapToStep(v, step, min) {
@@ -32,7 +106,7 @@ function coerceComponent(v, axis) {
 }
 function normalizeValue(value, xAxis, yAxis, snap = false) {
   const resolve = (raw, axis) => {
-    let v = clamp(coerceComponent(raw, axis), axis.min, axis.max);
+    let v = clamp2(coerceComponent(raw, axis), axis.min, axis.max);
     if (snap) v = snapToStep(v, axis.step, axis.min);
     return v + 0;
   };
@@ -43,14 +117,14 @@ function normalizeValue(value, xAxis, yAxis, snap = false) {
 }
 
 // src/range-slider-core.ts
-function clamp2(v, lo, hi) {
+function clamp3(v, lo, hi) {
   return Math.min(hi, Math.max(lo, v));
 }
 function orderRange(v) {
   return v.min <= v.max ? v : { min: v.max, max: v.min };
 }
 function clampRange(v, min, max) {
-  return orderRange({ min: clamp2(v.min, min, max), max: clamp2(v.max, min, max) });
+  return orderRange({ min: clamp3(v.min, min, max), max: clamp3(v.max, min, max) });
 }
 
 // src/store/DialStore.ts
@@ -330,7 +404,7 @@ var DialStoreClass = class {
         const hasPhysics = value.stiffness !== void 0 || value.damping !== void 0 || value.mass !== void 0;
         const hasTime = value.visualDuration !== void 0 || value.bounce !== void 0;
         values[`${path}.__mode`] = hasPhysics && !hasTime ? "advanced" : "simple";
-      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isColorConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isListConfig(value)) {
+      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isListConfig(value)) {
         this.initTransitionModes(value, path, values);
       }
     }
@@ -366,6 +440,8 @@ var DialStoreClass = class {
         controls.push({ type: "select", path, label, options: value.options });
       } else if (this.isColorConfig(value)) {
         controls.push({ type: "color", path, label, alpha: value.alpha, palette: value.palette });
+      } else if (this.isGradientConfig(value)) {
+        controls.push({ type: "gradient", path, label });
       } else if (this.isXYConfig(value)) {
         controls.push({ type: "xy", path, label, xAxis: value.x, yAxis: value.y, grid: value.grid, density: value.density, snap: value.snap, returnToCenter: value.returnToCenter, showValues: value.showValues });
       } else if (this.isTextConfig(value)) {
@@ -430,6 +506,8 @@ var DialStoreClass = class {
         values[path] = value.default ?? firstValue;
       } else if (this.isColorConfig(value)) {
         values[path] = value.default ?? "#000000";
+      } else if (this.isGradientConfig(value)) {
+        values[path] = normalizeGradient(value.default ?? DEFAULT_GRADIENT);
       } else if (this.isXYConfig(value)) {
         const xAxis = resolveAxis(value.x);
         const yAxis = resolveAxis(value.y);
@@ -468,6 +546,9 @@ var DialStoreClass = class {
   }
   isColorConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "color";
+  }
+  isGradientConfig(value) {
+    return typeof value === "object" && value !== null && "type" in value && value.type === "gradient";
   }
   // Explicit { type: 'xy' } only — a bare { x, y } object would collide with the
   // "nested object → folder" fallback, so the shorthand is deliberately unsupported.
@@ -578,6 +659,12 @@ var DialStoreClass = class {
           return existingValue + (existingValue.length === 7 ? "ff" : "f");
         }
         return existingValue;
+      }
+      case "gradient": {
+        if (typeof existingValue !== "object" || existingValue === null || !Array.isArray(existingValue.stops)) {
+          return defaultValue;
+        }
+        return normalizeGradient(existingValue);
       }
       case "xy": {
         if (typeof existingValue !== "object" || existingValue === null || Array.isArray(existingValue)) {

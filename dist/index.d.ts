@@ -1,6 +1,187 @@
 import * as react_jsx_runtime from 'react/jsx-runtime';
 import { ReactNode } from 'react';
 
+/**
+ * color-core — DOM-free color math shared by every framework port of the
+ * color picker (React, Solid, Vue, Svelte). Pure functions only; anything
+ * that touches the DOM or storage lives in the component layer or
+ * color-palette-store.
+ *
+ * Canonical value shape: hex string. `#rrggbb` normally, `#rrggbbaa` always
+ * (even at full opacity) when a control opts into alpha — deterministic
+ * round-tripping keeps store reconciliation trivial.
+ */
+/** r/g/b 0–255, a 0–1. */
+type RGBA = {
+    r: number;
+    g: number;
+    b: number;
+    a: number;
+};
+/** h 0–360, s/v 0–1, a 0–1. The picker's working space. */
+type HSVA = {
+    h: number;
+    s: number;
+    v: number;
+    a: number;
+};
+/** h 0–360, s/l 0–1, a 0–1. */
+type HSLA = {
+    h: number;
+    s: number;
+    l: number;
+    a: number;
+};
+/** OKLCH: l 0–1, c ≥ 0 (sRGB tops out ≈0.37), h 0–360, a 0–1. */
+type OKLCH = {
+    l: number;
+    c: number;
+    h: number;
+    a: number;
+};
+type ColorFormat = 'hex' | 'rgb' | 'hsl' | 'oklch';
+declare const COLOR_FORMATS: ColorFormat[];
+/** Parses #RGB / #RGBA / #RRGGBB / #RRGGBBAA; tolerates a missing '#' and whitespace. */
+declare function parseHex(input: string): RGBA | null;
+/** Lowercase `#rrggbb`, or `#rrggbbaa` (always, even at a=1) when alpha is enabled. */
+declare function formatHex(rgba: RGBA, alphaEnabled: boolean): string;
+/** Parse + reformat; strips the alpha channel when alpha is off. Null when unparseable. */
+declare function normalizeHex(input: string, alphaEnabled: boolean): string | null;
+/** Trigger-row presentation: uppercased, alpha digits hidden (opacity has its own readout). */
+declare function displayHex(value: string): string;
+/** 0–100 readout for the trigger row ("60 %"). */
+declare function opacityPercent(rgba: RGBA): number;
+declare function rgbToHsv(rgba: RGBA): HSVA;
+declare function hsvToRgb(hsva: HSVA): RGBA;
+declare function rgbToHsl(rgba: RGBA): HSLA;
+declare function hslToRgb(hsla: HSLA): RGBA;
+declare function rgbToOklch(rgba: RGBA): OKLCH;
+/**
+ * Maps an out-of-gamut OKLCH into sRGB by binary-searching the chroma down,
+ * preserving lightness and hue (channel-clipping would shift the hue).
+ */
+declare function clampOklchToSrgb(oklch: OKLCH): OKLCH;
+declare function oklchToRgb(oklch: OKLCH): RGBA;
+
+/**
+ * gradient-core — DOM-free gradient math shared by every framework port of the
+ * gradient editor. Pure functions only; anything touching the DOM lives in the
+ * component layer. Reuses color-core for all color math (no duplication).
+ *
+ * Canonical value shape and invariants (enforced by normalizeGradient and
+ * preserved by every helper below):
+ *   - stops sorted ascending by position
+ *   - positions clamped to 0–1
+ *   - stop colors always 8-digit lowercase hex (#rrggbbaa) — alpha always on
+ *   - angle wrapped to [0, 360)
+ *   - stops.length >= MIN_STOPS
+ * `angle` is kept even for radial gradients so switching type round-trips
+ * without losing the value.
+ */
+
+type GradientType = 'linear' | 'radial' | 'conic';
+/** color is always #rrggbbaa; position is 0–1. */
+type GradientStop = {
+    color: string;
+    position: number;
+};
+type GradientValue = {
+    type: GradientType;
+    angle: number;
+    stops: GradientStop[];
+    /** Radial/conic origin as 0–100 (%). Absent = centered (50). */
+    centerX?: number;
+    centerY?: number;
+    /** Radial horizontal radius as % of the box, 10–200. Absent = 100. */
+    scale?: number;
+    /** Radial vertical radius as % of the box, 1–200. Absent = matches `scale`
+     *  (round). Independent of `scale`, so &lt; scale is a wide ellipse and
+     *  &gt; scale is a tall one. */
+    squash?: number;
+    /** Radial ellipse tilt in degrees. Renders via the companion transform, since
+     *  CSS radial gradients are axis-aligned. Absent = 0. */
+    rotation?: number;
+};
+/** Transform + origin that renders a radial gradient's rotation (see gradientToTransform). */
+type GradientTransform = {
+    transform: string;
+    transformOrigin: string;
+};
+declare const MIN_STOPS = 2;
+declare const DEFAULT_GRADIENT: GradientValue;
+/** Ready CSS gradient string for any of the three types. #rrggbbaa is valid CSS. */
+declare function gradientToCss(value: GradientValue): string;
+/**
+ * The CSS transform that rotates a radial gradient's ellipse — CSS radial
+ * gradients are axis-aligned, so tilt has to ride the element (or a background
+ * layer) that shows the gradient. Identity (`none`) for a round radial, a
+ * non-radial type, or zero rotation. Apply alongside gradientToCss:
+ *   `<div style={{ background: gradientToCss(v), ...gradientToTransform(v) }} />`
+ * (on a clipping layer, since a rotated fill overflows its box).
+ */
+declare function gradientToTransform(value: GradientValue): GradientTransform;
+/**
+ * A positioned fill layer that paints a gradient covering a `boxW × boxH` area
+ * with no clipped corners — even a rotated radial. A CSS radial gradient's final
+ * color already extends to infinity, so the only thing that clips is the layer's
+ * own box: rotating a box the size of the pad pulls its corners inward and
+ * exposes the area behind it. So for radial we size the layer to an oversized
+ * square centered on the gradient origin and spin it around its own center
+ * (half-side ≥ the box diagonal → no rotation angle can uncover a corner), with
+ * the ellipse expressed in pixels so it matches the box exactly. Linear and
+ * conic gradients already fill their box, so the layer just matches it.
+ *
+ * Place a div with `overflow: hidden` around it and spread this onto an
+ * absolutely-positioned child (left/top/width/height are pixels):
+ *   `<div style={{ position:'absolute', ...gradientFillBox(v, w, h) }} />`
+ */
+type GradientFillBox = {
+    background: string;
+    transform: string;
+    transformOrigin: string;
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+};
+declare function gradientFillBox(value: GradientValue, boxW: number, boxH: number): GradientFillBox;
+/**
+ * The color the gradient shows at `position` (0–1), as #rrggbbaa. Interpolated
+ * in sRGB with premultiplied alpha so a stop seeded here equals the pixel the
+ * user clicked on the ramp (OKLab would visibly mismatch the strip).
+ */
+declare function colorAtPosition(value: GradientValue, position: number): string;
+/**
+ * Fail-soft validator for store reconciliation. Anything malformed degrades
+ * gracefully: bad object → default; unknown type → linear; non-finite angle →
+ * default angle; invalid stops dropped; fewer than MIN_STOPS survivors → the
+ * default ramp. Always returns a fresh object safe for store snapshots.
+ */
+declare function normalizeGradient(input: unknown): GradientValue;
+/** Insert a stop at `position`, seeded with the ramp color there. */
+declare function addStop(value: GradientValue, position: number): {
+    value: GradientValue;
+    index: number;
+};
+/** Reposition a stop; re-sorts (stable), so dragging past a neighbor swaps live. */
+declare function moveStop(value: GradientValue, index: number, position: number): {
+    value: GradientValue;
+    index: number;
+};
+/** Remove a stop — no-op (same reference) at MIN_STOPS or out of range. */
+declare function removeStop(value: GradientValue, index: number): GradientValue;
+declare function setStopColor(value: GradientValue, index: number, hex: string): GradientValue;
+declare function setGradientType(value: GradientValue, type: GradientType): GradientValue;
+declare function setGradientAngle(value: GradientValue, angle: number): GradientValue;
+/** Set the radial/conic origin (each 0–100 %). */
+declare function setGradientCenter(value: GradientValue, centerX: number, centerY: number): GradientValue;
+/** Set the radial extent (10–200 % of the box). */
+declare function setGradientScale(value: GradientValue, scale: number): GradientValue;
+/** Set the radial ovality (0 = round, up to 100). */
+declare function setGradientSquash(value: GradientValue, squash: number): GradientValue;
+/** Set the radial ellipse tilt (degrees). Renders via gradientToTransform. */
+declare function setGradientRotation(value: GradientValue, rotation: number): GradientValue;
+
 type XYValue = {
     x: number;
     y: number;
@@ -217,6 +398,10 @@ type ColorConfig = {
     /** Shows the shared saved-swatches row (persisted per machine). Default false. */
     palette?: boolean;
 };
+type GradientConfig = {
+    type: 'gradient';
+    default?: GradientValue;
+};
 type XYConfig = {
     type: 'xy';
     /** Starting point. Missing/out-of-range components clamp to each axis's origin. */
@@ -337,12 +522,12 @@ type ListField = {
     placeholder?: string;
     defaultValue: number | boolean | string;
 };
-type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
+type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 type DialConfig = {
     [key: string]: DialValue | [number, number, number, number?] | DialConfig;
 };
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -353,7 +538,7 @@ type ShortcutConfig = {
     interaction?: ShortcutInteraction;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
     path: string;
     label: string;
     min?: number;
@@ -479,6 +664,7 @@ declare class DialStoreClass {
     private isActionConfig;
     private isSelectConfig;
     private isColorConfig;
+    private isGradientConfig;
     private isXYConfig;
     private isRangeConfig;
     private isRangeValue;
@@ -1012,67 +1198,20 @@ interface ColorPickerPanelProps {
 }
 declare function ColorPickerPanel({ value, onChange, alpha, palette }: ColorPickerPanelProps): react_jsx_runtime.JSX.Element;
 
-/**
- * color-core — DOM-free color math shared by every framework port of the
- * color picker (React, Solid, Vue, Svelte). Pure functions only; anything
- * that touches the DOM or storage lives in the component layer or
- * color-palette-store.
- *
- * Canonical value shape: hex string. `#rrggbb` normally, `#rrggbbaa` always
- * (even at full opacity) when a control opts into alpha — deterministic
- * round-tripping keeps store reconciliation trivial.
- */
-/** r/g/b 0–255, a 0–1. */
-type RGBA = {
-    r: number;
-    g: number;
-    b: number;
-    a: number;
-};
-/** h 0–360, s/v 0–1, a 0–1. The picker's working space. */
-type HSVA = {
-    h: number;
-    s: number;
-    v: number;
-    a: number;
-};
-/** h 0–360, s/l 0–1, a 0–1. */
-type HSLA = {
-    h: number;
-    s: number;
-    l: number;
-    a: number;
-};
-/** OKLCH: l 0–1, c ≥ 0 (sRGB tops out ≈0.37), h 0–360, a 0–1. */
-type OKLCH = {
-    l: number;
-    c: number;
-    h: number;
-    a: number;
-};
-type ColorFormat = 'hex' | 'rgb' | 'hsl' | 'oklch';
-declare const COLOR_FORMATS: ColorFormat[];
-/** Parses #RGB / #RGBA / #RRGGBB / #RRGGBBAA; tolerates a missing '#' and whitespace. */
-declare function parseHex(input: string): RGBA | null;
-/** Lowercase `#rrggbb`, or `#rrggbbaa` (always, even at a=1) when alpha is enabled. */
-declare function formatHex(rgba: RGBA, alphaEnabled: boolean): string;
-/** Parse + reformat; strips the alpha channel when alpha is off. Null when unparseable. */
-declare function normalizeHex(input: string, alphaEnabled: boolean): string | null;
-/** Trigger-row presentation: uppercased, alpha digits hidden (opacity has its own readout). */
-declare function displayHex(value: string): string;
-/** 0–100 readout for the trigger row ("60 %"). */
-declare function opacityPercent(rgba: RGBA): number;
-declare function rgbToHsv(rgba: RGBA): HSVA;
-declare function hsvToRgb(hsva: HSVA): RGBA;
-declare function rgbToHsl(rgba: RGBA): HSLA;
-declare function hslToRgb(hsla: HSLA): RGBA;
-declare function rgbToOklch(rgba: RGBA): OKLCH;
-/**
- * Maps an out-of-gamut OKLCH into sRGB by binary-searching the chroma down,
- * preserving lightness and hue (channel-clipping would shift the hue).
- */
-declare function clampOklchToSrgb(oklch: OKLCH): OKLCH;
-declare function oklchToRgb(oklch: OKLCH): RGBA;
+interface GradientControlProps {
+    label: string;
+    value: GradientValue;
+    onChange: (value: GradientValue) => void;
+}
+declare function GradientControl({ label, value, onChange }: GradientControlProps): react_jsx_runtime.JSX.Element;
+
+interface GradientPanelProps {
+    value: GradientValue;
+    onChange: (value: GradientValue) => void;
+    /** Incremental pointer delta while the drag grip is held. */
+    onDrag?: (dx: number, dy: number) => void;
+}
+declare function GradientPanel({ value, onChange, onDrag }: GradientPanelProps): react_jsx_runtime.JSX.Element;
 
 interface XYPadProps {
     label: string;
@@ -1201,4 +1340,4 @@ interface ShortcutsMenuProps {
 }
 declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react_jsx_runtime.JSX.Element | null;
 
-export { type ActionConfig, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, type OKLCH, type PanelConfig, type Point, type Preset, PresetManager, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, applyDetentAxis, buildSamplers, centerValue, clamp, clampOklchToSrgb, clampRange, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, flipDriver, flipSegment, formatHex, handleLeftStyles, hslToRgb, hsvToRgb, invertY, isOutsideSpan, nearestHandle, normToValue, normalizeHex, normalizeListItems, normalizeValue, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, pointFromValue, readComposition, redistributeWeight, removeDriver, removeSegment, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, shiftSpan, snapToStep, splitSegment, triggerLevels, triggersCrossed, useDialKit, valueFromPoint, valueToNorm, valueToPercent };
+export { type ActionConfig, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, MIN_STOPS, Module, type OKLCH, type PanelConfig, type Point, type Preset, PresetManager, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, buildSamplers, centerValue, clamp, clampOklchToSrgb, clampRange, colorAtPosition, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, flipDriver, flipSegment, formatHex, gradientFillBox, gradientToCss, gradientToTransform, handleLeftStyles, hslToRgb, hsvToRgb, invertY, isOutsideSpan, moveStop, nearestHandle, normToValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeValue, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, pointFromValue, readComposition, redistributeWeight, removeDriver, removeSegment, removeStop, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, triggerLevels, triggersCrossed, useDialKit, valueFromPoint, valueToNorm, valueToPercent };

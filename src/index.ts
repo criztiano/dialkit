@@ -85,6 +85,28 @@ export {
   clampOklchToSrgb,
 } from './color-core';
 export type { RGBA, HSVA, HSLA, OKLCH, ColorFormat } from './color-core';
+export { GradientControl } from './components/GradientControl';
+export { GradientPanel } from './components/GradientPanel';
+export {
+  gradientToCss,
+  gradientToTransform,
+  gradientFillBox,
+  normalizeGradient,
+  colorAtPosition,
+  addStop,
+  removeStop,
+  moveStop,
+  setStopColor,
+  setGradientType,
+  setGradientAngle,
+  setGradientCenter,
+  setGradientScale,
+  setGradientSquash,
+  setGradientRotation,
+  DEFAULT_GRADIENT,
+  MIN_STOPS,
+} from './gradient-core';
+export type { GradientValue, GradientStop, GradientType, GradientTransform } from './gradient-core';
 export { XYPad } from './components/XYPad';
 export type { XYPadProps } from './components/XYPad';
 export { XYControl } from './components/XYControl';
@@ -123,6 +145,7 @@ export type {
   ActionConfig,
   SelectConfig,
   ColorConfig,
+  GradientConfig,
   XYConfig,
   XYAxis,
   TextConfig,

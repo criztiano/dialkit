@@ -1,6 +1,7 @@
 // Lightweight state store with subscriptions for dialkit
 
 import { HEX_COLOR_REGEX } from '../color-core';
+import { normalizeGradient, DEFAULT_GRADIENT, type GradientValue } from '../gradient-core';
 import { resolveAxis, normalizeValue as normalizeXYValue, type XYValue } from '../xy-pad-core';
 import { clampRange } from '../range-slider-core';
 // Type-only (erased in JS): lets consumers import `RangeValue` from the package types.
@@ -58,6 +59,11 @@ export type ColorConfig = {
   alpha?: boolean;
   /** Shows the shared saved-swatches row (persisted per machine). Default false. */
   palette?: boolean;
+};
+
+export type GradientConfig = {
+  type: 'gradient';
+  default?: GradientValue;
 };
 
 export type XYConfig = {
@@ -201,7 +207,7 @@ export type ListField = {
   defaultValue: number | boolean | string;
 };
 
-export type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
+export type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 
 export type DialConfig = {
   [key: string]: DialValue | [number, number, number, number?] | DialConfig;
@@ -218,6 +224,8 @@ export type ResolvedValues<T extends DialConfig> = {
           ? string
           : T[K] extends ColorConfig
             ? string
+            : T[K] extends GradientConfig
+              ? GradientValue
             : T[K] extends XYConfig
               ? XYValue
               : T[K] extends TextConfig
@@ -250,7 +258,7 @@ export type ShortcutConfig = {
 };
 
 export type ControlMeta = {
-  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
   path: string;
   label: string;
   min?: number;
@@ -668,7 +676,7 @@ class DialStoreClass {
         const hasPhysics = value.stiffness !== undefined || value.damping !== undefined || value.mass !== undefined;
         const hasTime = value.visualDuration !== undefined || value.bounce !== undefined;
         values[`${path}.__mode`] = hasPhysics && !hasTime ? 'advanced' : 'simple';
-      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isColorConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isListConfig(value)) {
+      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isListConfig(value)) {
         this.initTransitionModes(value as DialConfig, path, values);
       }
     }
@@ -710,6 +718,8 @@ class DialStoreClass {
         controls.push({ type: 'select', path, label, options: value.options });
       } else if (this.isColorConfig(value)) {
         controls.push({ type: 'color', path, label, alpha: value.alpha, palette: value.palette });
+      } else if (this.isGradientConfig(value)) {
+        controls.push({ type: 'gradient', path, label });
       } else if (this.isXYConfig(value)) {
         controls.push({ type: 'xy', path, label, xAxis: value.x, yAxis: value.y, grid: value.grid, density: value.density, snap: value.snap, returnToCenter: value.returnToCenter, showValues: value.showValues });
       } else if (this.isTextConfig(value)) {
@@ -779,6 +789,8 @@ class DialStoreClass {
         values[path] = value.default ?? firstValue;
       } else if (this.isColorConfig(value)) {
         values[path] = value.default ?? '#000000';
+      } else if (this.isGradientConfig(value)) {
+        values[path] = normalizeGradient(value.default ?? DEFAULT_GRADIENT);
       } else if (this.isXYConfig(value)) {
         // Clamp/snap the config default into range up front (defaults might be
         // out of range or partial); missing components fall back to each axis origin.
@@ -853,6 +865,15 @@ class DialStoreClass {
       value !== null &&
       'type' in value &&
       (value as ColorConfig).type === 'color'
+    );
+  }
+
+  private isGradientConfig(value: unknown): value is GradientConfig {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'type' in value &&
+      (value as GradientConfig).type === 'gradient'
     );
   }
 
@@ -1047,6 +1068,14 @@ class DialStoreClass {
           return existingValue + (existingValue.length === 7 ? 'ff' : 'f');
         }
         return existingValue;
+      }
+      case 'gradient': {
+        // Deep-normalize a preserved value (covers alpha/position/sort drift in
+        // hand-edited presets); fall back to the default when the shape is lost.
+        if (typeof existingValue !== 'object' || existingValue === null || !Array.isArray((existingValue as GradientValue).stops)) {
+          return defaultValue;
+        }
+        return normalizeGradient(existingValue);
       }
       case 'xy': {
         // Re-clamp a preserved point against the (possibly edited) axes; a lost

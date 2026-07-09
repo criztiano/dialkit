@@ -1,6 +1,78 @@
 import * as vue from 'vue';
 import { ComputedRef, ObjectDirective, InjectionKey, Ref, PropType, h, VNode } from 'vue';
 
+/**
+ * gradient-core — DOM-free gradient math shared by every framework port of the
+ * gradient editor. Pure functions only; anything touching the DOM lives in the
+ * component layer. Reuses color-core for all color math (no duplication).
+ *
+ * Canonical value shape and invariants (enforced by normalizeGradient and
+ * preserved by every helper below):
+ *   - stops sorted ascending by position
+ *   - positions clamped to 0–1
+ *   - stop colors always 8-digit lowercase hex (#rrggbbaa) — alpha always on
+ *   - angle wrapped to [0, 360)
+ *   - stops.length >= MIN_STOPS
+ * `angle` is kept even for radial gradients so switching type round-trips
+ * without losing the value.
+ */
+
+type GradientType = 'linear' | 'radial' | 'conic';
+/** color is always #rrggbbaa; position is 0–1. */
+type GradientStop = {
+    color: string;
+    position: number;
+};
+type GradientValue = {
+    type: GradientType;
+    angle: number;
+    stops: GradientStop[];
+    /** Radial/conic origin as 0–100 (%). Absent = centered (50). */
+    centerX?: number;
+    centerY?: number;
+    /** Radial horizontal radius as % of the box, 10–200. Absent = 100. */
+    scale?: number;
+    /** Radial vertical radius as % of the box, 1–200. Absent = matches `scale`
+     *  (round). Independent of `scale`, so &lt; scale is a wide ellipse and
+     *  &gt; scale is a tall one. */
+    squash?: number;
+    /** Radial ellipse tilt in degrees. Renders via the companion transform, since
+     *  CSS radial gradients are axis-aligned. Absent = 0. */
+    rotation?: number;
+};
+declare const MIN_STOPS = 2;
+declare const DEFAULT_GRADIENT: GradientValue;
+/** Ready CSS gradient string for any of the three types. #rrggbbaa is valid CSS. */
+declare function gradientToCss(value: GradientValue): string;
+/**
+ * The color the gradient shows at `position` (0–1), as #rrggbbaa. Interpolated
+ * in sRGB with premultiplied alpha so a stop seeded here equals the pixel the
+ * user clicked on the ramp (OKLab would visibly mismatch the strip).
+ */
+declare function colorAtPosition(value: GradientValue, position: number): string;
+/**
+ * Fail-soft validator for store reconciliation. Anything malformed degrades
+ * gracefully: bad object → default; unknown type → linear; non-finite angle →
+ * default angle; invalid stops dropped; fewer than MIN_STOPS survivors → the
+ * default ramp. Always returns a fresh object safe for store snapshots.
+ */
+declare function normalizeGradient(input: unknown): GradientValue;
+/** Insert a stop at `position`, seeded with the ramp color there. */
+declare function addStop(value: GradientValue, position: number): {
+    value: GradientValue;
+    index: number;
+};
+/** Reposition a stop; re-sorts (stable), so dragging past a neighbor swaps live. */
+declare function moveStop(value: GradientValue, index: number, position: number): {
+    value: GradientValue;
+    index: number;
+};
+/** Remove a stop — no-op (same reference) at MIN_STOPS or out of range. */
+declare function removeStop(value: GradientValue, index: number): GradientValue;
+declare function setStopColor(value: GradientValue, index: number, hex: string): GradientValue;
+declare function setGradientType(value: GradientValue, type: GradientType): GradientValue;
+declare function setGradientAngle(value: GradientValue, angle: number): GradientValue;
+
 type XYValue = {
     x: number;
     y: number;
@@ -58,6 +130,10 @@ type ColorConfig = {
     alpha?: boolean;
     /** Shows the shared saved-swatches row (persisted per machine). Default false. */
     palette?: boolean;
+};
+type GradientConfig = {
+    type: 'gradient';
+    default?: GradientValue;
 };
 type XYConfig = {
     type: 'xy';
@@ -163,12 +239,12 @@ type ListConfig = {
     /** Label for the add affordance. Defaults to 'Add'. */
     addLabel?: string;
 };
-type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
+type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 type DialConfig = {
     [key: string]: DialValue | [number, number, number, number?] | DialConfig;
 };
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -179,7 +255,7 @@ type ShortcutConfig = {
     interaction?: ShortcutInteraction;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
     path: string;
     label: string;
     min?: number;
@@ -305,6 +381,7 @@ declare class DialStoreClass {
     private isActionConfig;
     private isSelectConfig;
     private isColorConfig;
+    private isGradientConfig;
     private isXYConfig;
     private isRangeConfig;
     private isRangeValue;
@@ -379,9 +456,9 @@ declare const DialRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: boolean;
     };
 }>> & Readonly<{}>, {
+    position: DialPosition;
     mode: DialMode;
     defaultOpen: boolean;
-    position: DialPosition;
     theme: DialTheme;
     productionEnabled: boolean;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
@@ -1209,13 +1286,13 @@ declare const AnalyserVisualization: vue.DefineComponent<vue.ExtractPropTypes<{
         default: number;
     };
 }>> & Readonly<{}>, {
+    scale: AnalyserScale;
     spring: AnalyserSpring;
     mode: AnalyserMode;
     grid: boolean;
     source: AnalyserSource;
     height: number;
     width: number;
-    scale: AnalyserScale;
     pixelSize: number;
     gridSubdivisions: number;
     waveColor: string;
@@ -1643,6 +1720,47 @@ declare const ColorPickerPanel: vue.DefineComponent<vue.ExtractPropTypes<{
     palette: boolean;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
+declare const GradientControl: vue.DefineComponent<vue.ExtractPropTypes<{
+    label: {
+        type: StringConstructor;
+        required: true;
+    };
+    value: {
+        type: PropType<GradientValue>;
+        required: true;
+    };
+}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, "change"[], "change", vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    label: {
+        type: StringConstructor;
+        required: true;
+    };
+    value: {
+        type: PropType<GradientValue>;
+        required: true;
+    };
+}>> & Readonly<{
+    onChange?: ((...args: any[]) => any) | undefined;
+}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+declare const GradientPanel: vue.DefineComponent<vue.ExtractPropTypes<{
+    value: {
+        type: PropType<GradientValue>;
+        required: true;
+    };
+}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, ("drag" | "change")[], "drag" | "change", vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    value: {
+        type: PropType<GradientValue>;
+        required: true;
+    };
+}>> & Readonly<{
+    onDrag?: ((...args: any[]) => any) | undefined;
+    onChange?: ((...args: any[]) => any) | undefined;
+}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
 /**
  * Standalone 2D value pad. A single focusable surface with an absolutely
  * positioned thumb; pointer press places-and-grabs, arrows nudge, and an
@@ -1959,4 +2077,4 @@ declare const PresetManager: vue.DefineComponent<vue.ExtractPropTypes<{
     activePresetId: string | null;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
-export { type ActionConfig, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, type DialConfig, type DialKitDirectiveOptions, type DialKitDirectiveValue, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, Folder, Module, type PanelConfig, type Preset, PresetManager, RangeSlider, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, ShortcutKey, ShortcutListener, type ShortcutState, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYValue, useDialKit, useShortcutContext, vDialKit };
+export { type ActionConfig, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, type DialConfig, type DialKitDirectiveOptions, type DialKitDirectiveValue, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, Folder, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientType, type GradientValue, MIN_STOPS, Module, type PanelConfig, type Preset, PresetManager, RangeSlider, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, ShortcutKey, ShortcutListener, type ShortcutState, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYValue, addStop, colorAtPosition, gradientToCss, moveStop, normalizeGradient, removeStop, setGradientAngle, setGradientType, setStopColor, useDialKit, useShortcutContext, vDialKit };

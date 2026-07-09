@@ -2,6 +2,7 @@
   import { getContext } from 'svelte';
   import { DialStore } from 'dialkit/store';
   import type { ControlMeta, DialValue, SpringConfig, TransitionConfig, ListItemValue, XYValue, RangeValue } from 'dialkit/store';
+  import type { GradientValue } from '../../gradient-core';
   import Slider from './Slider.svelte';
   import RangeSlider from './RangeSlider.svelte';
   import Toggle from './Toggle.svelte';
@@ -11,6 +12,7 @@
   import TextControl from './TextControl.svelte';
   import SelectControl from './SelectControl.svelte';
   import ColorControl from './ColorControl.svelte';
+  import GradientControl from './GradientControl.svelte';
   import XYControl from './XYControl.svelte';
   import FileControl from './FileControl.svelte';
   import SwatchControl from './SwatchControl.svelte';
@@ -106,6 +108,12 @@
     onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
     alpha={control.alpha}
     palette={control.palette}
+  />
+{:else if control.type === 'gradient'}
+  <GradientControl
+    label={control.label}
+    value={controlValue as GradientValue}
+    onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
   />
 {:else if control.type === 'xy'}
   <XYControl

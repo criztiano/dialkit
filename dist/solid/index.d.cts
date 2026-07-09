@@ -1,6 +1,49 @@
 import * as solid_js from 'solid-js';
 import { Accessor, JSX } from 'solid-js';
 
+/**
+ * gradient-core — DOM-free gradient math shared by every framework port of the
+ * gradient editor. Pure functions only; anything touching the DOM lives in the
+ * component layer. Reuses color-core for all color math (no duplication).
+ *
+ * Canonical value shape and invariants (enforced by normalizeGradient and
+ * preserved by every helper below):
+ *   - stops sorted ascending by position
+ *   - positions clamped to 0–1
+ *   - stop colors always 8-digit lowercase hex (#rrggbbaa) — alpha always on
+ *   - angle wrapped to [0, 360)
+ *   - stops.length >= MIN_STOPS
+ * `angle` is kept even for radial gradients so switching type round-trips
+ * without losing the value.
+ */
+
+type GradientType = 'linear' | 'radial' | 'conic';
+/** color is always #rrggbbaa; position is 0–1. */
+type GradientStop = {
+    color: string;
+    position: number;
+};
+type GradientValue = {
+    type: GradientType;
+    angle: number;
+    stops: GradientStop[];
+    /** Radial/conic origin as 0–100 (%). Absent = centered (50). */
+    centerX?: number;
+    centerY?: number;
+    /** Radial horizontal radius as % of the box, 10–200. Absent = 100. */
+    scale?: number;
+    /** Radial vertical radius as % of the box, 1–200. Absent = matches `scale`
+     *  (round). Independent of `scale`, so &lt; scale is a wide ellipse and
+     *  &gt; scale is a tall one. */
+    squash?: number;
+    /** Radial ellipse tilt in degrees. Renders via the companion transform, since
+     *  CSS radial gradients are axis-aligned. Absent = 0. */
+    rotation?: number;
+};
+declare const DEFAULT_GRADIENT: GradientValue;
+/** Ready CSS gradient string for any of the three types. #rrggbbaa is valid CSS. */
+declare function gradientToCss(value: GradientValue): string;
+
 type XYValue = {
     x: number;
     y: number;
@@ -152,6 +195,10 @@ type ColorConfig = {
     /** Shows the shared saved-swatches row (persisted per machine). Default false. */
     palette?: boolean;
 };
+type GradientConfig = {
+    type: 'gradient';
+    default?: GradientValue;
+};
 type XYConfig = {
     type: 'xy';
     /** Starting point. Missing/out-of-range components clamp to each axis's origin. */
@@ -256,12 +303,12 @@ type ListConfig = {
     /** Label for the add affordance. Defaults to 'Add'. */
     addLabel?: string;
 };
-type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
+type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 type DialConfig = {
     [key: string]: DialValue | [number, number, number, number?] | DialConfig;
 };
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -272,7 +319,7 @@ type ShortcutConfig = {
     interaction?: ShortcutInteraction;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
     path: string;
     label: string;
     min?: number;
@@ -398,6 +445,7 @@ declare class DialStoreClass {
     private isActionConfig;
     private isSelectConfig;
     private isColorConfig;
+    private isGradientConfig;
     private isXYConfig;
     private isRangeConfig;
     private isRangeValue;
@@ -742,6 +790,21 @@ interface ColorPickerPanelProps {
 }
 declare function ColorPickerPanel(props: ColorPickerPanelProps): solid_js.JSX.Element;
 
+interface GradientControlProps {
+    label: string;
+    value: GradientValue;
+    onChange: (value: GradientValue) => void;
+}
+declare function GradientControl(props: GradientControlProps): solid_js.JSX.Element;
+
+interface GradientPanelProps {
+    value: GradientValue;
+    onChange: (value: GradientValue) => void;
+    /** Incremental pointer delta while the drag grip is held. */
+    onDrag?: (dx: number, dy: number) => void;
+}
+declare function GradientPanel(props: GradientPanelProps): solid_js.JSX.Element;
+
 interface XYPadProps {
     label: string;
     value: XYValue;
@@ -815,4 +878,4 @@ interface PresetManagerProps {
 }
 declare function PresetManager(props: PresetManagerProps): solid_js.JSX.Element;
 
-export { type ActionConfig, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, type AxisSpec, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, type CreateDialOptions, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, type DialConfig, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, Folder, Module, type PanelConfig, type Point, type Preset, PresetManager, RangeSlider, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, applyDetentAxis, centerValue, clamp, createDialKit, invertY, normToValue, normalizeValue, nudge, pointFromValue, resolveAxis, snapToStep, valueFromPoint, valueToNorm };
+export { type ActionConfig, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, type AxisSpec, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, type CreateDialOptions, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, type DialConfig, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, Folder, GradientControl, GradientPanel, type GradientStop, type GradientType, type GradientValue, Module, type PanelConfig, type Point, type Preset, PresetManager, RangeSlider, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, applyDetentAxis, centerValue, clamp, createDialKit, gradientToCss, invertY, normToValue, normalizeValue, nudge, pointFromValue, resolveAxis, snapToStep, valueFromPoint, valueToNorm };

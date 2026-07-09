@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion-v';
 import { ICON_ADD_PRESET, ICON_CHECK, ICON_CLIPBOARD } from '../../icons';
 import { DialStore } from '../../store/DialStore';
 import type { ControlMeta, DialValue, PanelConfig, RangeValue, SpringConfig, TransitionConfig, XYValue } from '../../store/DialStore';
+import type { GradientValue } from '../../gradient-core';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
 import { RangeSlider } from './RangeSlider';
@@ -12,6 +13,7 @@ import { TransitionControl } from './TransitionControl';
 import { TextControl } from './TextControl';
 import { SelectControl } from './SelectControl';
 import { ColorControl } from './ColorControl';
+import { GradientControl } from './GradientControl';
 import { XYControl } from './XYControl';
 import { PresetManager } from './PresetManager';
 import { useShortcutContext } from './ShortcutListener';
@@ -171,6 +173,13 @@ export const Panel = defineComponent({
             alpha: control.alpha,
             palette: control.palette,
             onChange: (next: string) => DialStore.updateValue(props.panel.id, control.path, next),
+          });
+        case 'gradient':
+          return h(GradientControl, {
+            key: control.path,
+            label: control.label,
+            value: value as GradientValue,
+            onChange: (next: GradientValue) => DialStore.updateValue(props.panel.id, control.path, next),
           });
         case 'xy':
           return h(XYControl, {

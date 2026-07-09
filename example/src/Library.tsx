@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -8,6 +8,7 @@ import {
   Toggle,
   TextControl,
   ColorControl,
+  GradientControl,
   GalleryControl,
   ButtonGroup,
   Folder,
@@ -20,8 +21,11 @@ import {
   DialRoot,
   DialStore,
   useDialKit,
+  gradientToCss,
+  gradientFillBox,
+  DEFAULT_GRADIENT,
 } from 'dialkit';
-import type { SpringConfig, TransitionConfig, EasingConfig, GalleryItem, RangeValue } from 'dialkit';
+import type { SpringConfig, TransitionConfig, EasingConfig, GalleryItem, GradientValue, RangeValue } from 'dialkit';
 import { WaveformShowcase } from './WaveformShowcase';
 import { AnalyserShowcase } from './AnalyserShowcase';
 import { CurveComposerShowcase } from './CurveComposerShowcase';
@@ -109,6 +113,7 @@ export function Library() {
   const [colorBasic, setColorBasic] = useState('#6366f1');
   const [colorAlpha, setColorAlpha] = useState('#310b0299');
   const [colorPalette, setColorPalette] = useState('#10b981ff');
+  const [gradientValue, setGradientValue] = useState<GradientValue>(DEFAULT_GRADIENT);
   const [priceRange, setPriceRange] = useState<RangeValue>({ min: 200, max: 800 });
   const [galleryValue, setGalleryValue] = useState('ember');
   const [lastAction, setLastAction] = useState('—');
@@ -134,6 +139,7 @@ export function Library() {
     color: '#6366f1',
     label: 'Press',
     variant: { type: 'select' as const, options: ['solid', 'outline', 'ghost'], default: 'solid' },
+    backdrop: { type: 'gradient' as const },
     glow: true,
     spring: { type: 'spring' as const, visualDuration: 0.5, bounce: 0.3 },
     shadow: {
@@ -175,6 +181,8 @@ export function Library() {
       fontSize: 15,
       fontWeight: 600,
       transition: 'all 0.2s ease',
+      position: 'relative',
+      zIndex: 1,
     } as const;
   })();
 
@@ -284,6 +292,17 @@ export function Library() {
           </Card>
         </Section>
 
+        <Section index="06" title="Gradient" hint="A gradient control — click the strip to open the editor: linear / radial / conic, an angle, and draggable color stops that each open the full color picker. Click the strip to add a stop, drag to move, drag it off or long-press to remove (minimum two)." single>
+          <Card title="Stop editor" desc="Click an empty spot on the ramp to add a stop (seeded with the color under the cursor); drag stops to reposition (they swap past each other live); drag a stop off the strip or long-press it to remove. The selected stop opens the alpha-enabled color picker below. Emits a { type, angle, stops } object; gradientToCss turns it into a ready CSS string." code="bg: { type: 'gradient', default }">
+            <div className="lib-gradient-demo">
+              <div className="lib-gradient-swatch">
+                <GradientFill value={gradientValue} />
+              </div>
+              <GradientControl label="bg" value={gradientValue} onChange={setGradientValue} />
+            </div>
+          </Card>
+        </Section>
+
         <Section index="07" title="Gallery" hint="Tap the trigger to reveal a masonry grid; scroll it (the edges rubber-band). Pick a tile to select it; tap the trigger again to close." single>
           <Card title="Masonry picker" desc="A trigger expands a 3:4 surface of masonry items and stays lit while open. Scrolling overshoots and springs at the edges; images load through a shimmer skeleton then blur-fade in. Mixes real photos with custom gradient tiles." code="cover: { type: 'gallery', items, default }">
             <GalleryControl label="cover" value={galleryValue} items={GALLERY_ITEMS} onChange={setGalleryValue} columns={3} />
@@ -374,6 +393,7 @@ export function Library() {
 
           <div className="lib-live">
             <div className="lib-preview-stage">
+              <GradientFill value={p.backdrop} />
               <div style={previewStyle}>{p.label}</div>
             </div>
             <div className="lib-window">
@@ -386,6 +406,40 @@ export function Library() {
       <footer className="lib-footer">
         Built entirely from the live DialKit components — the same code that renders inside the panel.
       </footer>
+    </div>
+  );
+}
+
+// Measures its own box, then paints the gradient through gradientFillBox so a
+// rotated radial covers every corner instead of clipping to a spinning square.
+function GradientFill({ value }: { value: GradientValue }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => setSize({ w: el.clientWidth, h: el.clientHeight });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const box = gradientFillBox(value, size.w, size.h);
+  return (
+    <div ref={ref} className="lib-gradient-clip">
+      <div
+        className="lib-gradient-fill"
+        style={{
+          position: 'absolute',
+          background: box.background,
+          transform: box.transform,
+          transformOrigin: box.transformOrigin,
+          left: box.left,
+          top: box.top,
+          width: box.width,
+          height: box.height,
+        }}
+      />
     </div>
   );
 }
@@ -509,6 +563,10 @@ const CSS = `
 .lib-stage { display: flex; flex-direction: column; gap: 6px; padding: 4px 0 16px; }
 .lib-viz { padding: 4px 0; }
 
+.lib-gradient-demo { display: flex; flex-direction: column; gap: 10px; }
+.lib-gradient-swatch { position: relative; overflow: hidden; width: 100%; height: 72px; border-radius: 10px; border: 1px solid var(--dial-border); }
+.lib-gradient-clip { position: absolute; inset: 0; overflow: hidden; z-index: 0; }
+
 .lib-action-log { font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--dial-text-tertiary); padding-left: 2px; }
 .lib-action-log span { color: var(--dial-text-label); }
 
@@ -521,12 +579,12 @@ const CSS = `
 /* Live panel section */
 .lib-live { display: grid; grid-template-columns: 1fr 320px; gap: 16px; align-items: stretch; }
 .lib-preview-stage {
+  position: relative; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
   min-height: 540px;
   background: var(--dial-glass-bg);
   border: 1px solid var(--dial-border);
   border-radius: 16px;
-  background-image: radial-gradient(circle at center, color-mix(in srgb, var(--lib-accent) 8%, transparent), transparent 70%);
 }
 .lib-window {
   height: 540px;

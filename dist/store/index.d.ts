@@ -1,3 +1,43 @@
+/**
+ * gradient-core — DOM-free gradient math shared by every framework port of the
+ * gradient editor. Pure functions only; anything touching the DOM lives in the
+ * component layer. Reuses color-core for all color math (no duplication).
+ *
+ * Canonical value shape and invariants (enforced by normalizeGradient and
+ * preserved by every helper below):
+ *   - stops sorted ascending by position
+ *   - positions clamped to 0–1
+ *   - stop colors always 8-digit lowercase hex (#rrggbbaa) — alpha always on
+ *   - angle wrapped to [0, 360)
+ *   - stops.length >= MIN_STOPS
+ * `angle` is kept even for radial gradients so switching type round-trips
+ * without losing the value.
+ */
+
+type GradientType = 'linear' | 'radial' | 'conic';
+/** color is always #rrggbbaa; position is 0–1. */
+type GradientStop = {
+    color: string;
+    position: number;
+};
+type GradientValue = {
+    type: GradientType;
+    angle: number;
+    stops: GradientStop[];
+    /** Radial/conic origin as 0–100 (%). Absent = centered (50). */
+    centerX?: number;
+    centerY?: number;
+    /** Radial horizontal radius as % of the box, 10–200. Absent = 100. */
+    scale?: number;
+    /** Radial vertical radius as % of the box, 1–200. Absent = matches `scale`
+     *  (round). Independent of `scale`, so &lt; scale is a wide ellipse and
+     *  &gt; scale is a tall one. */
+    squash?: number;
+    /** Radial ellipse tilt in degrees. Renders via the companion transform, since
+     *  CSS radial gradients are axis-aligned. Absent = 0. */
+    rotation?: number;
+};
+
 type XYValue = {
     x: number;
     y: number;
@@ -55,6 +95,10 @@ type ColorConfig = {
     alpha?: boolean;
     /** Shows the shared saved-swatches row (persisted per machine). Default false. */
     palette?: boolean;
+};
+type GradientConfig = {
+    type: 'gradient';
+    default?: GradientValue;
 };
 type XYConfig = {
     type: 'xy';
@@ -176,12 +220,12 @@ type ListField = {
     placeholder?: string;
     defaultValue: number | boolean | string;
 };
-type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
+type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 type DialConfig = {
     [key: string]: DialValue | [number, number, number, number?] | DialConfig;
 };
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -192,7 +236,7 @@ type ShortcutConfig = {
     interaction?: ShortcutInteraction;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
     path: string;
     label: string;
     min?: number;
@@ -318,6 +362,7 @@ declare class DialStoreClass {
     private isActionConfig;
     private isSelectConfig;
     private isColorConfig;
+    private isGradientConfig;
     private isXYConfig;
     private isRangeConfig;
     private isRangeValue;
@@ -344,4 +389,4 @@ declare function defaultListItemParams(schema: Record<string, ListItemField>): R
 declare function normalizeListItems(config: ListConfig): ListItemValue[];
 declare const DialStore: DialStoreClass;
 
-export { type ActionConfig, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type DialConfig, type DialEvent, DialStore, type DialValue, type EasingConfig, type FileConfig, type GalleryConfig, type GalleryItem, type ListConfig, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type PanelConfig, type Preset, type RangeConfig, type RangeValue, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SpringConfig, type SwatchConfig, type SwatchOption, type TextConfig, type TransitionConfig, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, normalizeListItems, parseListItemSchema };
+export { type ActionConfig, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type DialConfig, type DialEvent, DialStore, type DialValue, type EasingConfig, type FileConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type PanelConfig, type Preset, type RangeConfig, type RangeValue, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SpringConfig, type SwatchConfig, type SwatchOption, type TextConfig, type TransitionConfig, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, normalizeListItems, parseListItemSchema };
