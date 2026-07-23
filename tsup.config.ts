@@ -1,6 +1,19 @@
 import { defineConfig } from 'tsup';
 import { solidPlugin } from 'esbuild-plugin-solid';
 
+// Rewrite the shared DialStore import to the `dialkit/store` package subpath so
+// framework-neutral bundles reference the single shared store instead of
+// inlining a second, desynced copy.
+const externalizeDialStore = {
+  name: 'externalize-dialstore',
+  setup(build: { onResolve: (o: { filter: RegExp }, cb: () => { path: string; external: boolean }) => void }) {
+    build.onResolve({ filter: /store\/DialStore$/ }, () => ({
+      path: 'dialkit/store',
+      external: true,
+    }));
+  },
+};
+
 export default defineConfig([
   // Store build (shared across all framework entries)
   {
@@ -10,6 +23,17 @@ export default defineConfig([
     dts: true,
     splitting: false,
     sourcemap: true,
+  },
+  // Framework-neutral timeline runtime, consumed via the `dialkit/timeline`
+  // subpath. Externalizes the shared store; bundles the timeline-only modules.
+  {
+    entry: { index: 'src/timeline/index.ts' },
+    outDir: 'dist/timeline',
+    format: ['esm', 'cjs'],
+    dts: true,
+    splitting: false,
+    sourcemap: true,
+    esbuildPlugins: [externalizeDialStore],
   },
   // React build
   {

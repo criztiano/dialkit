@@ -561,19 +561,25 @@ var DialStoreClass = class {
     this.activePreset = /* @__PURE__ */ new Map();
     this.baseValues = /* @__PURE__ */ new Map();
   }
-  registerPanel(id, name, config, shortcuts) {
+  registerPanel(id, name, config, shortcuts, options = {}) {
+    const existingPanel = this.panels.get(id);
+    if (existingPanel && existingPanel.kind !== options.kind) {
+      console.warn(
+        `[dialkit] Panel id "${id}" cannot be shared by a timeline and a standard panel; the most recent registration controls where it renders.`
+      );
+    }
     const controls = this.parseConfig(config, "", shortcuts);
     const values = this.flattenValues(config, "");
     this.initTransitionModes(config, "", values);
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {} });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
   }
-  updatePanel(id, name, config, shortcuts) {
+  updatePanel(id, name, config, shortcuts, options = {}) {
     const existing = this.panels.get(id);
     if (!existing) {
-      this.registerPanel(id, name, config, shortcuts);
+      this.registerPanel(id, name, config, shortcuts, options);
       return;
     }
     const controls = this.parseConfig(config, "", shortcuts);
@@ -598,7 +604,7 @@ var DialStoreClass = class {
         nextValues[path] = mode;
       }
     }
-    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts };
+    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
     const previousBaseValues = this.baseValues.get(id) ?? {};
@@ -621,10 +627,10 @@ var DialStoreClass = class {
   }
   unregisterPanel(id) {
     this.panels.delete(id);
-    this.listeners.delete(id);
+    if (this.listeners.get(id)?.size === 0) this.listeners.delete(id);
+    if (this.actionListeners.get(id)?.size === 0) this.actionListeners.delete(id);
+    if (this.eventListeners.get(id)?.size === 0) this.eventListeners.delete(id);
     this.snapshots.delete(id);
-    this.actionListeners.delete(id);
-    this.eventListeners.delete(id);
     this.baseValues.delete(id);
     this.notifyGlobal();
   }
@@ -640,6 +646,24 @@ var DialStoreClass = class {
     } else {
       const base = this.baseValues.get(panelId);
       if (base) base[path] = value;
+    }
+    this.snapshots.set(panelId, { ...panel.values });
+    this.notify(panelId);
+  }
+  // Apply several path/value edits atomically — one snapshot + one notify.
+  // The timeline uses this when a single gesture trades time between fields
+  // (e.g. resizing a clip's start edge shifts both its position and duration),
+  // where an intermediate single-field state would be invalid.
+  updateValues(panelId, updates) {
+    const panel = this.panels.get(panelId);
+    if (!panel) return;
+    const activeId = this.activePreset.get(panelId);
+    const preset = activeId ? (this.presets.get(panelId) ?? []).find((p) => p.id === activeId) : void 0;
+    const base = this.baseValues.get(panelId);
+    for (const [path, value] of Object.entries(updates)) {
+      panel.values[path] = value;
+      if (preset) preset.values[path] = value;
+      else if (base) base[path] = value;
     }
     this.snapshots.set(panelId, { ...panel.values });
     this.notify(panelId);
@@ -671,8 +695,11 @@ var DialStoreClass = class {
   getValues(panelId) {
     return this.snapshots.get(panelId) ?? EMPTY_VALUES;
   }
-  getPanels() {
-    return Array.from(this.panels.values());
+  getPanels(kind) {
+    const all = Array.from(this.panels.values());
+    if (kind === "panel") return all.filter((panel) => panel.kind !== "timeline");
+    if (kind === "timeline") return all.filter((panel) => panel.kind === "timeline");
+    return all;
   }
   getPanel(id) {
     return this.panels.get(id);
@@ -683,7 +710,11 @@ var DialStoreClass = class {
     }
     this.listeners.get(panelId).add(listener);
     return () => {
-      this.listeners.get(panelId)?.delete(listener);
+      const listeners2 = this.listeners.get(panelId);
+      listeners2?.delete(listener);
+      if (listeners2?.size === 0 && !this.panels.has(panelId)) {
+        this.listeners.delete(panelId);
+      }
     };
   }
   subscribeGlobal(listener) {
@@ -696,7 +727,11 @@ var DialStoreClass = class {
     }
     this.actionListeners.get(panelId).add(listener);
     return () => {
-      this.actionListeners.get(panelId)?.delete(listener);
+      const listeners2 = this.actionListeners.get(panelId);
+      listeners2?.delete(listener);
+      if (listeners2?.size === 0 && !this.panels.has(panelId)) {
+        this.actionListeners.delete(panelId);
+      }
     };
   }
   triggerAction(panelId, path) {
@@ -709,7 +744,11 @@ var DialStoreClass = class {
     }
     this.eventListeners.get(panelId).add(listener);
     return () => {
-      this.eventListeners.get(panelId)?.delete(listener);
+      const listeners2 = this.eventListeners.get(panelId);
+      listeners2?.delete(listener);
+      if (listeners2?.size === 0 && !this.panels.has(panelId)) {
+        this.eventListeners.delete(panelId);
+      }
     };
   }
   emitEvent(panelId, path, event) {
