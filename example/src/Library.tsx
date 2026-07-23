@@ -30,6 +30,7 @@ import { WaveformShowcase } from './WaveformShowcase';
 import { AnalyserShowcase } from './AnalyserShowcase';
 import { CurveComposerShowcase } from './CurveComposerShowcase';
 import { XYPadShowcase } from './XYPadShowcase';
+import { TimelineShowcase } from './TimelineShowcase';
 import 'dialkit/styles.css';
 
 type Theme = 'dark' | 'light';
@@ -378,10 +379,16 @@ export function Library() {
           </Card>
         </Section>
 
+        <Section index="14" title="Timeline" hint="Define an animation in code, then preview and tune its timing, values, and curves in the dock. Press Play or scrub the playhead — every clip drives the card. Each named clip is one row: an entrance (spring), a looping float (a second row that keeps cycling), and a glow (easing). Open a clip to edit its from/to values, transition, and timing; resize a bar to retime a curve." single>
+          <Card title="useDialTimeline + DialTimeline" desc="useDialTimeline registers clips in the same store as panels (so presets, reset, and Copy work on timing too) and returns per-clip current values plus a transport (time, playing, play/pause/replay/seek). Bind clip.current directly while authoring — DialKit deterministically samples the configured spring/easing so every intermediate frame is scrubbable. The <DialTimeline /> dock is the visual editor; hiding it never changes how the animation renders. from/to accept any leaf values and become editable controls; the bar owns time-based durations while physics springs derive theirs from settle time." code="useDialTimeline('Timeline', { card, float, glow }, { loop }) · <DialTimeline />">
+            <TimelineShowcase />
+          </Card>
+        </Section>
+
         <section className="lib-section">
           <div className="lib-section-head">
             <div className="lib-section-headline">
-              <span className="lib-section-index">14</span>
+              <span className="lib-section-index">15</span>
               <h2 className="lib-section-title">Live panel</h2>
               {liveId && <ShortcutsMenu panelId={liveId} />}
             </div>
