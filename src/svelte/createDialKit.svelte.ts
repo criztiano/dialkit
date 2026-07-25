@@ -6,6 +6,7 @@ import type {
   ColorConfig,
   DialConfig,
   DialEvent,
+  DialKitPersistOptions,
   DialValue,
   EasingConfig,
   FileConfig,
@@ -24,6 +25,10 @@ export interface CreateDialOptions {
   /** Non-value events: file picked, chip removed, list mutated. */
   onEvent?: (path: string, event: DialEvent) => void;
   shortcuts?: Record<string, ShortcutConfig>;
+  /** Stable id shares one panel/persistence target across mounts. */
+  id?: string;
+  /** Persist values per machine (see DialKitPersistOptions). */
+  persist?: DialKitPersistOptions;
 }
 
 export type DialKitValues<T> = T;
@@ -35,13 +40,17 @@ export function createDialKit<T extends DialConfig>(
   config: T,
   options?: CreateDialOptions
 ): DialKitValues<ResolvedValues<T>> {
-  const panelId = `${name}-${++dialKitInstance}`;
+  const hasStableId = options?.id !== undefined;
+  const panelId = options?.id ?? `${name}-${++dialKitInstance}`;
   const resolve = () => buildResolvedValues(config, DialStore.getValues(panelId), '') as ResolvedValues<T>;
 
   let values = $state<ResolvedValues<T>>(resolve());
 
   $effect(() => {
-    DialStore.registerPanel(panelId, name, config, options?.shortcuts);
+    DialStore.registerPanel(panelId, name, config, options?.shortcuts, {
+      retainOnUnmount: hasStableId,
+      persist: options?.persist,
+    });
     values = resolve();
 
     const unsubValues = DialStore.subscribe(panelId, () => {
