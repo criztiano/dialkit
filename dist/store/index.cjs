@@ -162,6 +162,48 @@ function clampRange(v, min, max) {
   return orderRange({ min: clamp3(v.min, min, max), max: clamp3(v.max, min, max) });
 }
 
+// src/store/persist.ts
+var STORAGE_VERSION = "v1";
+function resolvePersistTarget(kind, id, persist) {
+  if (!persist) return null;
+  const config = persist === true ? {} : persist;
+  const base = config.key ?? id;
+  if (!base) return null;
+  return {
+    key: `dialkit:${STORAGE_VERSION}:${kind}:${base}`,
+    storage: config.storage ?? "localStorage"
+  };
+}
+function getStorage(name) {
+  try {
+    if (typeof window === "undefined") return null;
+    return name === "sessionStorage" ? window.sessionStorage : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+function loadPersisted(target) {
+  if (!target) return null;
+  try {
+    const storage = getStorage(target.storage);
+    if (!storage) return null;
+    const raw = storage.getItem(target.key);
+    if (raw == null) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+function savePersisted(target, value) {
+  if (!target) return;
+  try {
+    const storage = getStorage(target.storage);
+    if (!storage) return;
+    storage.setItem(target.key, JSON.stringify(value));
+  } catch {
+  }
+}
+
 // src/store/DialStore.ts
 var EMPTY_VALUES = Object.freeze({});
 function formatLabel(key) {
@@ -227,6 +269,9 @@ var DialStoreClass = class {
     this.presets = /* @__PURE__ */ new Map();
     this.activePreset = /* @__PURE__ */ new Map();
     this.baseValues = /* @__PURE__ */ new Map();
+    // Resolved storage target per panel (null = persistence off). Absent = not
+    // yet registered.
+    this.persistTargets = /* @__PURE__ */ new Map();
   }
   registerPanel(id, name, config, shortcuts, options = {}) {
     const existingPanel = this.panels.get(id);
@@ -235,9 +280,12 @@ var DialStoreClass = class {
         `[dialkit] Panel id "${id}" cannot be shared by a timeline and a standard panel; the most recent registration controls where it renders.`
       );
     }
+    const target = resolvePersistTarget("panel", id, options.persist);
+    this.persistTargets.set(id, target);
     const controls = this.parseConfig(config, "", shortcuts);
     const values = this.flattenValues(config, "");
     this.initTransitionModes(config, "", values);
+    this.overlayPersistedValues(target, values);
     this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
@@ -289,6 +337,7 @@ var DialStoreClass = class {
       }
     }
     this.baseValues.set(id, nextBaseValues);
+    this.savePanelValues(id);
     this.notify(id);
     this.notifyGlobal();
   }
@@ -299,7 +348,27 @@ var DialStoreClass = class {
     if (this.eventListeners.get(id)?.size === 0) this.eventListeners.delete(id);
     this.snapshots.delete(id);
     this.baseValues.delete(id);
+    this.persistTargets.delete(id);
     this.notifyGlobal();
+  }
+  // Overlay saved values onto freshly-computed defaults, in place. Only keys
+  // that still exist in `values` (i.e. the current config) are restored.
+  overlayPersistedValues(target, values) {
+    const persisted = loadPersisted(target);
+    if (!persisted) return;
+    for (const key of Object.keys(values)) {
+      if (Object.prototype.hasOwnProperty.call(persisted, key)) {
+        values[key] = persisted[key];
+      }
+    }
+  }
+  // Save the panel's current flat values (fail-soft, no-op when persistence is
+  // off). Called after every edit so timing/values survive a reload.
+  savePanelValues(panelId) {
+    const target = this.persistTargets.get(panelId);
+    if (!target) return;
+    const panel = this.panels.get(panelId);
+    if (panel) savePersisted(target, panel.values);
   }
   updateValue(panelId, path, value) {
     const panel = this.panels.get(panelId);
@@ -315,6 +384,7 @@ var DialStoreClass = class {
       if (base) base[path] = value;
     }
     this.snapshots.set(panelId, { ...panel.values });
+    this.savePanelValues(panelId);
     this.notify(panelId);
   }
   // Apply several path/value edits atomically — one snapshot + one notify.
@@ -333,6 +403,7 @@ var DialStoreClass = class {
       else if (base) base[path] = value;
     }
     this.snapshots.set(panelId, { ...panel.values });
+    this.savePanelValues(panelId);
     this.notify(panelId);
   }
   updateSpringMode(panelId, path, mode) {
@@ -446,6 +517,7 @@ var DialStoreClass = class {
     panel.values = { ...preset.values };
     this.snapshots.set(panelId, { ...panel.values });
     this.activePreset.set(panelId, presetId);
+    this.savePanelValues(panelId);
     this.notify(panelId);
   }
   deletePreset(panelId, presetId) {

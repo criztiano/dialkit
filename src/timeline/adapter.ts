@@ -69,6 +69,7 @@ export function buildTimelineValues<T extends TimelineConfig>(
   transport: TimelineTransport,
   timelineDuration: number,
   loopStart: number,
+  loopEnd: number,
   actions: TimelineActions
 ): DialTimelineValues<T> {
   const result: Record<string, unknown> = {
@@ -78,7 +79,7 @@ export function buildTimelineValues<T extends TimelineConfig>(
     ...actions,
   };
 
-  const span = loopSpan(transport.duration, loopStart);
+  const span = loopSpan(transport.duration, loopStart, loopEnd);
   const cycleTime = (span > 0 ? transport.wraps * span : 0) + transport.time;
   for (const clip of staticClips) {
     const state = computeClipState(clip, transport.time, cycleTime);

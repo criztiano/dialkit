@@ -384,6 +384,25 @@ describe('loop region (intro-then-idle)', () => {
     near(folded.wraps * span + folded.time, 4.81);
   });
 
+  it('loops within an explicit [start, end] region, not to the timeline end', () => {
+    // Region [2, 6] of a 10s timeline: span 4, wraps at 6 back to 2.
+    assert.equal(loopSpan(10, 2, 6), 4);
+    assert.deepEqual(foldLoopTime(3, 10, 2, 6), { time: 3, wraps: 0 }); // inside the region
+    const folded = foldLoopTime(6.5, 10, 2, 6); // 0.5s past the region end
+    near(folded.time, 2.5);
+    assert.equal(folded.wraps, 1);
+    // Continuous time stays monotonic across the wrap.
+    near(folded.wraps * loopSpan(10, 2, 6) + folded.time, 6.5);
+  });
+
+  it('end defaults to the timeline duration (full-timeline loop)', () => {
+    assert.equal(loopSpan(10, 0), 10);
+    assert.equal(loopSpan(10, 0, undefined), 10);
+    const folded = foldLoopTime(11, 10, 0);
+    near(folded.time, 1);
+    assert.equal(folded.wraps, 1);
+  });
+
   it('a full-timeline loop is the region degenerate case', () => {
     const folded = foldLoopTime(5.0, 4.8, 0);
     near(folded.time, 0.2);

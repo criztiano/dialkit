@@ -341,9 +341,12 @@ declare class DialStoreClass {
     private presets;
     private activePreset;
     private baseValues;
+    private persistTargets;
     registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, options?: DialStorePanelOptions): void;
     updatePanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, options?: DialStorePanelOptions): void;
     unregisterPanel(id: string): void;
+    private overlayPersistedValues;
+    private savePanelValues;
     updateValue(panelId: string, path: string, value: DialValue): void;
     updateValues(panelId: string, updates: Record<string, DialValue>): void;
     updateSpringMode(panelId: string, path: string, mode: 'simple' | 'advanced'): void;

@@ -631,9 +631,12 @@ declare class DialStoreClass {
     private presets;
     private activePreset;
     private baseValues;
+    private persistTargets;
     registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, options?: DialStorePanelOptions): void;
     updatePanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, options?: DialStorePanelOptions): void;
     unregisterPanel(id: string): void;
+    private overlayPersistedValues;
+    private savePanelValues;
     updateValue(panelId: string, path: string, value: DialValue): void;
     updateValues(panelId: string, updates: Record<string, DialValue>): void;
     updateSpringMode(panelId: string, path: string, mode: 'simple' | 'advanced'): void;
@@ -725,6 +728,24 @@ interface DialRootProps {
 }
 declare function DialRoot({ position, defaultOpen, mode, theme, productionEnabled }: DialRootProps): react_jsx_runtime.JSX.Element | null;
 
+/**
+ * Fail-soft browser persistence shared by DialStore (panel values) and
+ * TimelineStore (loop regions). Kept separate so the stores stay node-safe and
+ * side-effect-free: nothing here touches `window` at import time, and every
+ * storage access is guarded + try/caught. When storage is unavailable (SSR,
+ * Safari private mode, blocked cookies) persistence silently degrades to
+ * session-only — a broken shelf must never break the tool.
+ *
+ * Mirrors the style of color-palette-store.ts.
+ */
+/** Structural mirror of DialKitPersistOptions — duplicated here to keep this
+ * module free of a DialStore import (avoids a store ↔ persist cycle). */
+type PersistConfig = boolean | {
+    key?: string;
+    storage?: 'localStorage' | 'sessionStorage';
+    presets?: boolean;
+};
+
 type TimelineClipTrackMeta = {
     prop: string;
     /** Step folder keys when the track is a sequence. */
@@ -762,20 +783,42 @@ type TimelineTransport = {
     wraps: number;
 };
 type Listener = () => void;
+/** A user- or code-defined loop window `[start, end]` in seconds. Absent means
+ * "loop the whole timeline" — the default for this preview tool. */
+type TimelineLoopRegion = {
+    start: number;
+    end: number;
+};
 declare class TimelineStoreClass {
     private timelines;
     private transports;
     private listeners;
     private globalListeners;
     private registrationCounts;
+    private loopRegions;
+    private persistTargets;
     private listCache;
     private rafId;
     private lastTick;
     register(meta: TimelineMeta, options: {
         autoplay: boolean;
+        persist?: PersistConfig;
     }): void;
     update(meta: TimelineMeta): void;
     unregister(id: string): void;
+    /** Restore a persisted loop region, or seed one from a code-defined
+     * `options.loop`. No region at all = loop the whole timeline (the default). */
+    private hydrateLoopRegion;
+    /** Clamp to [0,duration], order min/max, and reject degenerate widths. */
+    private normalizeRegion;
+    setLoopRegion(id: string, start: number, end: number): void;
+    clearLoopRegion(id: string): void;
+    /** The raw user/code region, or undefined when looping the whole timeline.
+     * The reference is stable between changes (safe for useSyncExternalStore). */
+    getLoopRegion(id: string): TimelineLoopRegion | undefined;
+    /** The region the clock actually loops within: the user/code region, or the
+     * whole timeline `[0, duration]` when none is set. Playback always wraps. */
+    private effectiveRegion;
     play(id: string): void;
     pause(id: string): void;
     replay(id: string): void;

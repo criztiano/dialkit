@@ -217,6 +217,24 @@ type DialKitPersistOptions = boolean | {
     presets?: boolean;
 };
 
+/**
+ * Fail-soft browser persistence shared by DialStore (panel values) and
+ * TimelineStore (loop regions). Kept separate so the stores stay node-safe and
+ * side-effect-free: nothing here touches `window` at import time, and every
+ * storage access is guarded + try/caught. When storage is unavailable (SSR,
+ * Safari private mode, blocked cookies) persistence silently degrades to
+ * session-only — a broken shelf must never break the tool.
+ *
+ * Mirrors the style of color-palette-store.ts.
+ */
+/** Structural mirror of DialKitPersistOptions — duplicated here to keep this
+ * module free of a DialStore import (avoids a store ↔ persist cycle). */
+type PersistConfig = boolean | {
+    key?: string;
+    storage?: 'localStorage' | 'sessionStorage';
+    presets?: boolean;
+};
+
 type TimelineClipTrackMeta = {
     prop: string;
     /** Step folder keys when the track is a sequence. */
@@ -254,13 +272,20 @@ type TimelineTransport = {
     wraps: number;
 };
 type Listener$1 = () => void;
-/** Length of the repeating span — the whole timeline unless a loop region
- * narrows it. Degenerate regions (start ≥ duration) fall back to the whole
- * timeline so a bad `from` never stalls the clock. */
-declare function loopSpan(duration: number, loopStart: number): number;
-/** Folds an over-run playhead back into the loop region, reporting how many
- * spans were crossed so continuous time (wraps × span + time) never jumps. */
-declare function foldLoopTime(time: number, duration: number, loopStart?: number): {
+/** A user- or code-defined loop window `[start, end]` in seconds. Absent means
+ * "loop the whole timeline" — the default for this preview tool. */
+type TimelineLoopRegion = {
+    start: number;
+    end: number;
+};
+/** Length of the repeating span for a loop region `[start, end]` (end defaults
+ * to the whole timeline). Degenerate regions (empty or inverted) fall back to
+ * the whole timeline so a bad region never stalls the clock. */
+declare function loopSpan(duration: number, loopStart: number, loopEnd?: number): number;
+/** Folds an over-run playhead back into the loop region `[start, end]` (end
+ * defaults to the timeline end), reporting how many spans were crossed so
+ * continuous time (wraps × span + time) never jumps at the wrap. */
+declare function foldLoopTime(time: number, duration: number, loopStart?: number, loopEnd?: number): {
     time: number;
     wraps: number;
 };
@@ -271,14 +296,30 @@ declare class TimelineStoreClass {
     private listeners;
     private globalListeners;
     private registrationCounts;
+    private loopRegions;
+    private persistTargets;
     private listCache;
     private rafId;
     private lastTick;
     register(meta: TimelineMeta, options: {
         autoplay: boolean;
+        persist?: PersistConfig;
     }): void;
     update(meta: TimelineMeta): void;
     unregister(id: string): void;
+    /** Restore a persisted loop region, or seed one from a code-defined
+     * `options.loop`. No region at all = loop the whole timeline (the default). */
+    private hydrateLoopRegion;
+    /** Clamp to [0,duration], order min/max, and reject degenerate widths. */
+    private normalizeRegion;
+    setLoopRegion(id: string, start: number, end: number): void;
+    clearLoopRegion(id: string): void;
+    /** The raw user/code region, or undefined when looping the whole timeline.
+     * The reference is stable between changes (safe for useSyncExternalStore). */
+    getLoopRegion(id: string): TimelineLoopRegion | undefined;
+    /** The region the clock actually loops within: the user/code region, or the
+     * whole timeline `[0, duration]` when none is set. Playback always wraps. */
+    private effectiveRegion;
     play(id: string): void;
     pause(id: string): void;
     replay(id: string): void;
@@ -579,7 +620,7 @@ declare function buildTimelineMeta(id: string, name: string, duration: number, p
  * Framework-neutral frame pass. Adapters only own lifecycle and reactivity;
  * the value shape and loop-cycle math stay identical everywhere.
  */
-declare function buildTimelineValues<T extends TimelineConfig>(staticClips: TimelineClipStatic[], transport: TimelineTransport, timelineDuration: number, loopStart: number, actions: TimelineActions): DialTimelineValues<T>;
+declare function buildTimelineValues<T extends TimelineConfig>(staticClips: TimelineClipStatic[], transport: TimelineTransport, timelineDuration: number, loopStart: number, loopEnd: number, actions: TimelineActions): DialTimelineValues<T>;
 
 type Listener = () => void;
 type VisibilityController = {

@@ -4,6 +4,7 @@ import { HEX_COLOR_REGEX } from '../color-core';
 import { normalizeGradient, DEFAULT_GRADIENT, type GradientValue } from '../gradient-core';
 import { resolveAxis, normalizeValue as normalizeXYValue, type XYValue } from '../xy-pad-core';
 import { clampRange } from '../range-slider-core';
+import { resolvePersistTarget, loadPersisted, savePersisted, type PersistTarget } from './persist';
 // Type-only (erased in JS): lets consumers import `RangeValue` from the package types.
 import type { RangeValue } from '../range-slider-core';
 
@@ -325,10 +326,10 @@ export type Preset = {
 // Stable empty object for unregistered panels (React 19 useSyncExternalStore requirement)
 const EMPTY_VALUES: Record<string, DialValue> = Object.freeze({});
 
-// Persistence option shape shared with the timeline adapter. NOTE: this fork's
-// store does not yet implement value persistence or retain-on-unmount — the
-// options are accepted for API/type parity with the timeline surface and are
-// currently no-ops here. Wiring persistence is tracked for the parity phase.
+// Persistence option shape shared with the timeline adapter. When truthy AND
+// the panel has a stable `id`, the panel's flat values are saved to (and
+// restored from) browser storage — fail-soft, node-safe (see ./persist).
+// `retainOnUnmount` is still accepted for API parity but not acted on here.
 export type DialKitPersistOptions = boolean | {
   key?: string;
   storage?: 'localStorage' | 'sessionStorage';
@@ -432,6 +433,9 @@ class DialStoreClass {
   private presets: Map<string, Preset[]> = new Map();
   private activePreset: Map<string, string | null> = new Map();
   private baseValues: Map<string, Record<string, DialValue>> = new Map();
+  // Resolved storage target per panel (null = persistence off). Absent = not
+  // yet registered.
+  private persistTargets: Map<string, PersistTarget | null> = new Map();
 
   registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, options: DialStorePanelOptions = {}): void {
     const existingPanel = this.panels.get(id);
@@ -442,11 +446,19 @@ class DialStoreClass {
       );
     }
 
+    const target = resolvePersistTarget('panel', id, options.persist);
+    this.persistTargets.set(id, target);
+
     const controls = this.parseConfig(config, '', shortcuts);
     const values = this.flattenValues(config, '');
 
     // Set initial transition modes based on config types
     this.initTransitionModes(config, '', values);
+
+    // Overlay persisted values onto the config defaults, but only for keys the
+    // current config still declares — a renamed/removed control drops its
+    // stale saved value instead of resurrecting it.
+    this.overlayPersistedValues(target, values);
 
     this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, kind: options.kind });
     this.snapshots.set(id, { ...values });
@@ -511,6 +523,7 @@ class DialStoreClass {
 
     this.baseValues.set(id, nextBaseValues);
 
+    this.savePanelValues(id);
     this.notify(id);
     this.notifyGlobal();
   }
@@ -525,7 +538,29 @@ class DialStoreClass {
     if (this.eventListeners.get(id)?.size === 0) this.eventListeners.delete(id);
     this.snapshots.delete(id);
     this.baseValues.delete(id);
+    this.persistTargets.delete(id);
     this.notifyGlobal();
+  }
+
+  // Overlay saved values onto freshly-computed defaults, in place. Only keys
+  // that still exist in `values` (i.e. the current config) are restored.
+  private overlayPersistedValues(target: PersistTarget | null, values: Record<string, DialValue>): void {
+    const persisted = loadPersisted<Record<string, DialValue>>(target);
+    if (!persisted) return;
+    for (const key of Object.keys(values)) {
+      if (Object.prototype.hasOwnProperty.call(persisted, key)) {
+        values[key] = persisted[key];
+      }
+    }
+  }
+
+  // Save the panel's current flat values (fail-soft, no-op when persistence is
+  // off). Called after every edit so timing/values survive a reload.
+  private savePanelValues(panelId: string): void {
+    const target = this.persistTargets.get(panelId);
+    if (!target) return;
+    const panel = this.panels.get(panelId);
+    if (panel) savePersisted(target, panel.values);
   }
 
   updateValue(panelId: string, path: string, value: DialValue): void {
@@ -547,6 +582,7 @@ class DialStoreClass {
 
     // Create a new snapshot reference so useSyncExternalStore detects the change
     this.snapshots.set(panelId, { ...panel.values });
+    this.savePanelValues(panelId);
     this.notify(panelId);
   }
 
@@ -571,6 +607,7 @@ class DialStoreClass {
     }
 
     this.snapshots.set(panelId, { ...panel.values });
+    this.savePanelValues(panelId);
     this.notify(panelId);
   }
 
@@ -714,6 +751,7 @@ class DialStoreClass {
     panel.values = { ...preset.values };
     this.snapshots.set(panelId, { ...panel.values });
     this.activePreset.set(panelId, presetId);
+    this.savePanelValues(panelId);
     this.notify(panelId);
   }
 

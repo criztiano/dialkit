@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { DialStore, formatLabel } from '../../store/DialStore';
 import type { ControlMeta, DialValue } from '../../store/DialStore';
 import { TimelineStore } from '../../store/TimelineStore';
-import type { TimelineClipMeta, TimelineMeta } from '../../store/TimelineStore';
+import type { TimelineClipMeta, TimelineLoopRegion, TimelineMeta } from '../../store/TimelineStore';
 import { TimelineUiStore } from '../../store/TimelineUiStore';
 import {
   clampClipMove,
@@ -25,13 +25,15 @@ import type { TimelineClipLoop, TimelineStepStatic } from '../../timeline-core';
 import { clamp } from '../../transition-math';
 import { buildCopyInstruction } from '../../copy-instruction';
 import { isDevDefault } from '../../env';
-import { ICON_ADD_PRESET, ICON_CHEVRON, ICON_CHECK, ICON_CLIPBOARD, ICON_PAUSE, ICON_PLAY, ICON_REPLAY } from '../../icons';
+import { ICON_ADD_PRESET, ICON_CHEVRON, ICON_CHECK, ICON_CLIPBOARD, ICON_LOOP, ICON_PAUSE, ICON_PLAY, ICON_REPLAY } from '../../icons';
 import { findControl } from '../../shortcut-utils';
 import { ControlRenderer } from '../ControlRenderer';
 import { PresetManager } from '../PresetManager';
 import type { DialTheme } from '../DialRoot';
 
 const DRAG_THRESHOLD_PX = 3;
+// Pointer travel that turns a ruler click (seek) into a loop-region drag.
+const LOOP_DRAG_THRESHOLD_PX = 4;
 const MAJOR_TICK_TARGET_PX = 140;
 const MILLISECOND_STEP = 0.001;
 const SECOND_TICK_STEPS = [
@@ -521,6 +523,17 @@ const TimelineSection = memo(function TimelineSection({
   const presets = DialStore.getPresets(meta.id);
   const activePresetId = DialStore.getActivePresetId(meta.id);
 
+  // Committed loop region (undefined = looping the whole timeline). Shares the
+  // transport notify channel; the stored reference is stable between changes.
+  const subscribeLoopRegion = useCallback(
+    (callback: () => void) => TimelineStore.subscribe(meta.id, callback),
+    [meta.id]
+  );
+  const getLoopRegion = useCallback(() => TimelineStore.getLoopRegion(meta.id), [meta.id]);
+  const loopRegion = useSyncExternalStore(subscribeLoopRegion, getLoopRegion, getLoopRegion);
+  // Live region while the user drags a new one on the ruler.
+  const [loopDrag, setLoopDrag] = useState<TimelineLoopRegion | null>(null);
+
   // Measure the shared ruler/track span so seconds map to pixels.
   const laneAreaRef = useRef<HTMLDivElement>(null);
   const horizontalScrollRef = useRef<HTMLDivElement>(null);
@@ -585,6 +598,10 @@ const TimelineSection = memo(function TimelineSection({
     TimelineStore.replay(meta.id);
   }, [meta.id]);
 
+  const handleClearLoopRegion = useCallback(() => {
+    TimelineStore.clearLoopRegion(meta.id);
+  }, [meta.id]);
+
   const handleHorizontalScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     if (pxPerSecond <= 0) return;
     setViewStart(clampViewStart(
@@ -610,26 +627,26 @@ const TimelineSection = memo(function TimelineSection({
   // Dragging scrubs. Option/Alt-drag preserves detailed zooming, while
   // Shift-drag first restores the full 1x range.
   const zoomDragRef = useRef<ZoomDragState | null>(null);
-  const rulerScrubRef = useRef<{
-    wasPlaying: boolean;
+  // Ruler gesture: a click seeks the playhead (preserved exactly); a drag past
+  // the threshold draws a loop region instead. Option-drag still zooms.
+  const rulerGestureRef = useRef<{
+    downClientX: number;
+    downTime: number;
     rect: DOMRect;
     viewStart: number;
     visibleDuration: number;
+    moved: boolean;
   } | null>(null);
 
-  const seekRulerFromClientX = useCallback((clientX: number) => {
-    const scrub = rulerScrubRef.current;
-    const contentWidth = scrub?.rect.width ?? 0;
-    if (!scrub || contentWidth <= 0) return;
-    TimelineStore.seek(
-      meta.id,
+  const rulerTimeFromClientX = useCallback(
+    (clientX: number, rect: DOMRect, viewStartAt: number, visibleAt: number) =>
       clamp(
-        scrub.viewStart + ((clientX - scrub.rect.left) / contentWidth) * scrub.visibleDuration,
-        scrub.viewStart,
-        scrub.viewStart + scrub.visibleDuration
-      )
-    );
-  }, [meta.id]);
+        viewStartAt + ((clientX - rect.left) / rect.width) * visibleAt,
+        viewStartAt,
+        viewStartAt + visibleAt
+      ),
+    []
+  );
 
   const handleRulerPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -641,18 +658,20 @@ const TimelineSection = memo(function TimelineSection({
 
     if (!e.altKey) {
       const resetView = e.shiftKey;
-      rulerScrubRef.current = {
-        wasPlaying: TimelineStore.getTransport(meta.id).playing,
-        rect,
-        viewStart: resetView ? 0 : safeViewStart,
-        visibleDuration: resetView ? meta.duration : visibleDuration,
-      };
+      const gestureViewStart = resetView ? 0 : safeViewStart;
+      const gestureVisible = resetView ? meta.duration : visibleDuration;
       if (resetView) {
         setZoom(1);
         setViewStart(0);
       }
-      TimelineStore.pause(meta.id);
-      seekRulerFromClientX(e.clientX);
+      rulerGestureRef.current = {
+        downClientX: e.clientX,
+        downTime: rulerTimeFromClientX(e.clientX, rect, gestureViewStart, gestureVisible),
+        rect,
+        viewStart: gestureViewStart,
+        visibleDuration: gestureVisible,
+        moved: false,
+      };
       return;
     }
 
@@ -666,11 +685,19 @@ const TimelineSection = memo(function TimelineSection({
       anchorTime: safeViewStart + anchorRatio * visibleDuration,
       moved: false,
     };
-  }, [meta.duration, meta.id, safeViewStart, seekRulerFromClientX, visibleDuration, zoom]);
+  }, [meta.duration, rulerTimeFromClientX, safeViewStart, visibleDuration, zoom]);
 
   const handleRulerPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (rulerScrubRef.current) {
-      seekRulerFromClientX(e.clientX);
+    const gesture = rulerGestureRef.current;
+    if (gesture) {
+      const dx = e.clientX - gesture.downClientX;
+      if (!gesture.moved && Math.abs(dx) <= LOOP_DRAG_THRESHOLD_PX) return;
+      gesture.moved = true;
+      const current = rulerTimeFromClientX(e.clientX, gesture.rect, gesture.viewStart, gesture.visibleDuration);
+      setLoopDrag({
+        start: Math.min(gesture.downTime, current),
+        end: Math.max(gesture.downTime, current),
+      });
       return;
     }
     const drag = zoomDragRef.current;
@@ -688,19 +715,29 @@ const TimelineSection = memo(function TimelineSection({
     );
     setZoom(nextZoom);
     setViewStart(nextStart);
-  }, [maxZoom, meta.duration, seekRulerFromClientX]);
+  }, [maxZoom, meta.duration, rulerTimeFromClientX]);
 
   const handleRulerPointerUp = useCallback(() => {
-    if (rulerScrubRef.current?.wasPlaying) TimelineStore.play(meta.id);
-    rulerScrubRef.current = null;
+    const gesture = rulerGestureRef.current;
+    rulerGestureRef.current = null;
     zoomDragRef.current = null;
-  }, [meta.id]);
+    if (gesture) {
+      if (gesture.moved && loopDrag) {
+        // A real drag commits a loop region (store normalizes / rejects tiny widths).
+        TimelineStore.setLoopRegion(meta.id, loopDrag.start, loopDrag.end);
+      } else {
+        // Negligible movement = a click: seek the playhead (unchanged behavior).
+        TimelineStore.seek(meta.id, gesture.downTime);
+      }
+      setLoopDrag(null);
+    }
+  }, [loopDrag, meta.id]);
 
   const handleRulerPointerCancel = useCallback(() => {
-    if (rulerScrubRef.current?.wasPlaying) TimelineStore.play(meta.id);
-    rulerScrubRef.current = null;
+    rulerGestureRef.current = null;
     zoomDragRef.current = null;
-  }, [meta.id]);
+    setLoopDrag(null);
+  }, []);
 
   const trackScrubRef = useRef<{
     wasPlaying: boolean;
@@ -988,6 +1025,23 @@ const TimelineSection = memo(function TimelineSection({
           />
         )}
         <div className="dialkit-timeline-actions">
+          <motion.button
+            className="dialkit-timeline-loop-toggle"
+            data-active={loopRegion ? 'true' : undefined}
+            onClick={handleClearLoopRegion}
+            disabled={!loopRegion}
+            title={loopRegion
+              ? 'Looping a region · click to loop the whole timeline'
+              : 'Looping the whole timeline · drag the ruler to set a loop region'}
+            aria-label={loopRegion ? 'Clear loop region' : 'Looping whole timeline'}
+            aria-pressed={loopRegion ? true : false}
+            whileTap={loopRegion ? { scale: 0.9 } : undefined}
+            transition={{ type: 'spring', visualDuration: 0.15, bounce: 0.3 }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              {ICON_LOOP.map((d, i) => <path key={i} d={d} />)}
+            </svg>
+          </motion.button>
           <PlayPauseButton id={meta.id} />
           <ReplayButton onReplay={handleReplay} />
           <motion.button
@@ -1091,8 +1145,25 @@ const TimelineSection = memo(function TimelineSection({
                 onPointerUp={handleRulerPointerUp}
                 onPointerCancel={handleRulerPointerCancel}
                 onLostPointerCapture={handleRulerPointerCancel}
-                title="Drag to seek · Option-drag to zoom · Shift-drag to reset zoom"
+                title="Click to seek · drag to set a loop region · Option-drag to zoom · Shift-drag to reset zoom"
               >
+                {(() => {
+                  const activeLoop = loopDrag ?? loopRegion;
+                  if (!activeLoop || pxPerSecond <= 0) return null;
+                  const left = (activeLoop.start - safeViewStart) * pxPerSecond;
+                  const width = Math.max(0, (activeLoop.end - activeLoop.start) * pxPerSecond);
+                  return (
+                    <>
+                      <div className="dialkit-timeline-loop-dim" style={{ left: 0, width: Math.max(0, left) }} />
+                      <div className="dialkit-timeline-loop-dim" style={{ left: left + width, right: 0 }} />
+                      <div
+                        className="dialkit-timeline-loop-band"
+                        data-live={loopDrag ? 'true' : undefined}
+                        style={{ left, width }}
+                      />
+                    </>
+                  );
+                })()}
                 {fineTicks.map((t) => (
                   <div key={`fine:${t}`} className="dialkit-timeline-tick dialkit-timeline-tick-fine" style={{ left: (t - safeViewStart) * pxPerSecond }} />
                 ))}

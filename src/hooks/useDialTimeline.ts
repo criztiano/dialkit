@@ -5,7 +5,6 @@ import type { DialTimelineValues, TimelineConfig } from '../timeline-core';
 import {
   buildTimelineMeta,
   buildTimelineValues,
-  resolveTimelineLoop,
   type DialTimelineOptions,
 } from '../timeline/adapter';
 import { useDialStorePanel, useSerialized } from './useDialStorePanel';
@@ -59,8 +58,6 @@ export function useDialTimeline<T extends TimelineConfig>(
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
-  const { start: loopStart } = resolveTimelineLoop(options?.loop);
-
   const buildMeta = useCallback(
     () => buildTimelineMeta(panelId, name, timelineDuration, parsedRef.current, options?.loop),
     [panelId, name, timelineDuration, options?.loop]
@@ -74,7 +71,10 @@ export function useDialTimeline<T extends TimelineConfig>(
   const buildMetaRef = useRef(buildMeta);
   buildMetaRef.current = buildMeta;
   useEffect(() => {
-    TimelineStore.register(buildMetaRef.current(), { autoplay: optionsRef.current?.autoplay ?? true });
+    TimelineStore.register(buildMetaRef.current(), {
+      autoplay: optionsRef.current?.autoplay ?? true,
+      persist: optionsRef.current?.persist,
+    });
     return () => TimelineStore.unregister(panelId);
   }, [panelId, name]);
 
@@ -94,6 +94,14 @@ export function useDialTimeline<T extends TimelineConfig>(
   const getTransport = useCallback(() => TimelineStore.getTransport(panelId), [panelId]);
   const transport = useSyncExternalStore(subscribeTransport, getTransport, getTransport);
 
+  // The active loop window drives phase continuity for looping/sequence clips.
+  // Shares the transport notification channel (set/clear region notifies too);
+  // the stored region reference is stable so this snapshot never churns.
+  const getLoopRegion = useCallback(() => TimelineStore.getLoopRegion(panelId), [panelId]);
+  const loopRegion = useSyncExternalStore(subscribeTransport, getLoopRegion, getLoopRegion);
+  const loopStart = loopRegion ? loopRegion.start : 0;
+  const loopEnd = loopRegion ? loopRegion.end : timelineDuration;
+
   const play = useCallback(() => TimelineStore.play(panelId), [panelId]);
   const pause = useCallback(() => TimelineStore.pause(panelId), [panelId]);
   const replay = useCallback(() => TimelineStore.replay(panelId), [panelId]);
@@ -101,12 +109,12 @@ export function useDialTimeline<T extends TimelineConfig>(
 
   // Frame pass: only the time-dependent fields, sampling cached curve params.
   return useMemo(
-    () => buildTimelineValues<T>(staticClips, transport, timelineDuration, loopStart, {
+    () => buildTimelineValues<T>(staticClips, transport, timelineDuration, loopStart, loopEnd, {
       play,
       pause,
       replay,
       seek,
     }),
-    [staticClips, transport, timelineDuration, loopStart, play, pause, replay, seek]
+    [staticClips, transport, timelineDuration, loopStart, loopEnd, play, pause, replay, seek]
   );
 }

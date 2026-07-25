@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { TimelineStore } from './store/TimelineStore';
 import { TimelineUiStore } from './store/TimelineUiStore';
 
+const near = (actual: number, expected: number, eps = 0.01) =>
+  assert.ok(Math.abs(actual - expected) <= eps, `expected ${actual} ≈ ${expected}`);
+
 const meta = (id: string, duration = 2) => ({
   id,
   name: id,
@@ -30,6 +33,56 @@ describe('TimelineStore', () => {
       wraps: 0,
     });
     TimelineStore.unregister(id);
+  });
+
+  it('normalizes, clears, and reads back a loop region', () => {
+    const id = 'store-loop-region';
+    TimelineStore.register(meta(id, 10), { autoplay: false });
+
+    // Out of order + out of range → clamped to [0,10] and ordered.
+    TimelineStore.setLoopRegion(id, 8, 2);
+    assert.deepEqual(TimelineStore.getLoopRegion(id), { start: 2, end: 8 });
+    TimelineStore.setLoopRegion(id, -5, 12);
+    assert.deepEqual(TimelineStore.getLoopRegion(id), { start: 0, end: 10 });
+
+    // Degenerate width is ignored (treated as a click, not a loop).
+    TimelineStore.setLoopRegion(id, 3, 3.001);
+    assert.deepEqual(TimelineStore.getLoopRegion(id), { start: 0, end: 10 });
+
+    TimelineStore.clearLoopRegion(id);
+    assert.equal(TimelineStore.getLoopRegion(id), undefined);
+    TimelineStore.unregister(id);
+  });
+
+  it('loops the whole timeline by default (no play-once stop)', () => {
+    const id = 'store-default-loop';
+    const originalWindow = (globalThis as { window?: unknown }).window;
+    let frame: ((now: number) => void) | undefined;
+    (globalThis as { window?: unknown }).window = {
+      requestAnimationFrame(callback: (now: number) => void) {
+        frame = callback;
+        return 1;
+      },
+    };
+    try {
+      const before = performance.now();
+      // loop:false in meta — the store must still wrap, not stop at the end.
+      TimelineStore.register(meta(id, 2), { autoplay: true });
+      assert.ok(frame, 'autoplay schedules a frame');
+      frame!(before + 2_500); // 2.5s into a 2s timeline
+      const t = TimelineStore.getTransport(id);
+      assert.equal(t.playing, true, 'still playing after passing the end');
+      near(t.time, 0.5);
+      assert.equal(t.wraps, 1);
+      TimelineStore.unregister(id);
+      frame!(before + 2_600);
+    } finally {
+      if (originalWindow === undefined) {
+        delete (globalThis as { window?: unknown }).window;
+      } else {
+        (globalThis as { window?: unknown }).window = originalWindow;
+      }
+    }
   });
 
   it('advances by wall time after a delayed animation frame', () => {

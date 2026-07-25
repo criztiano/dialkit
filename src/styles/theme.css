@@ -27,6 +27,10 @@
      their shape stays distinct from the lane without replacing custom hues. */
   --dial-timeline-clip-overlay: transparent;
 
+  /* Timeline loop region (drag on the ruler). */
+  --dial-timeline-loop-bg: rgba(129, 140, 248, 0.20);
+  --dial-timeline-loop-border: rgba(129, 140, 248, 0.75);
+
   /* Glassmorphic panel */
   --dial-glass-bg: #212121;
   --dial-dropdown-bg: #2a2a2a;
@@ -2731,6 +2735,8 @@
   --dial-border-hover: rgba(0, 0, 0, 0.15);
 
   --dial-timeline-clip-overlay: rgba(0, 0, 0, 0.28);
+  --dial-timeline-loop-bg: rgba(79, 70, 229, 0.16);
+  --dial-timeline-loop-border: rgba(79, 70, 229, 0.65);
 
   --dial-glass-bg: #fafafa;
   --dial-dropdown-bg: #ffffff;
@@ -2778,6 +2784,8 @@
     --dial-border-hover: rgba(0, 0, 0, 0.15);
 
     --dial-timeline-clip-overlay: rgba(0, 0, 0, 0.28);
+    --dial-timeline-loop-bg: rgba(79, 70, 229, 0.16);
+    --dial-timeline-loop-border: rgba(79, 70, 229, 0.65);
 
     --dial-glass-bg: #fafafa;
     --dial-dropdown-bg: #ffffff;
@@ -3876,4 +3884,67 @@
   .dialkit-timeline-grid {
     min-width: 0;
   }
+}
+
+/* ── Timeline loop region ── */
+.dialkit-timeline-loop-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--dial-row-height);
+  height: var(--dial-row-height);
+  padding: 0;
+  flex-shrink: 0;
+  background: var(--dial-surface);
+  border: none;
+  border-radius: var(--dial-radius);
+  cursor: pointer;
+  color: var(--dial-text-label);
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+}
+
+.dialkit-timeline-loop-toggle:hover:not(:disabled) {
+  background: var(--dial-surface-hover);
+}
+
+.dialkit-timeline-loop-toggle:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.dialkit-timeline-loop-toggle[data-active] {
+  background: var(--dial-timeline-loop-bg);
+  color: var(--dial-timeline-loop-border);
+  opacity: 1;
+}
+
+.dialkit-timeline-loop-toggle svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+/* Highlighted region band + dimmed surroundings on the ruler. Rendered before
+   the ticks so tick labels stay legible on top. */
+.dialkit-timeline-loop-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--dial-timeline-loop-bg);
+  border-left: 1.5px solid var(--dial-timeline-loop-border);
+  border-right: 1.5px solid var(--dial-timeline-loop-border);
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.dialkit-timeline-loop-band[data-live] {
+  opacity: 0.85;
+}
+
+.dialkit-timeline-loop-dim {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.16);
+  pointer-events: none;
 }

@@ -711,6 +711,57 @@ function handleLeftStyles(lowPercent, highPercent) {
   };
 }
 
+// src/store/persist.ts
+var STORAGE_VERSION = "v1";
+function resolvePersistTarget(kind, id, persist) {
+  if (!persist) return null;
+  const config = persist === true ? {} : persist;
+  const base = config.key ?? id;
+  if (!base) return null;
+  return {
+    key: `dialkit:${STORAGE_VERSION}:${kind}:${base}`,
+    storage: config.storage ?? "localStorage"
+  };
+}
+function getStorage(name) {
+  try {
+    if (typeof window === "undefined") return null;
+    return name === "sessionStorage" ? window.sessionStorage : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+function loadPersisted(target) {
+  if (!target) return null;
+  try {
+    const storage = getStorage(target.storage);
+    if (!storage) return null;
+    const raw = storage.getItem(target.key);
+    if (raw == null) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+function savePersisted(target, value) {
+  if (!target) return;
+  try {
+    const storage = getStorage(target.storage);
+    if (!storage) return;
+    storage.setItem(target.key, JSON.stringify(value));
+  } catch {
+  }
+}
+function clearPersisted(target) {
+  if (!target) return;
+  try {
+    const storage = getStorage(target.storage);
+    if (!storage) return;
+    storage.removeItem(target.key);
+  } catch {
+  }
+}
+
 // src/store/DialStore.ts
 var EMPTY_VALUES = Object.freeze({});
 function formatLabel(key) {
@@ -776,6 +827,9 @@ var DialStoreClass = class {
     this.presets = /* @__PURE__ */ new Map();
     this.activePreset = /* @__PURE__ */ new Map();
     this.baseValues = /* @__PURE__ */ new Map();
+    // Resolved storage target per panel (null = persistence off). Absent = not
+    // yet registered.
+    this.persistTargets = /* @__PURE__ */ new Map();
   }
   registerPanel(id, name, config, shortcuts, options = {}) {
     const existingPanel = this.panels.get(id);
@@ -784,9 +838,12 @@ var DialStoreClass = class {
         `[dialkit] Panel id "${id}" cannot be shared by a timeline and a standard panel; the most recent registration controls where it renders.`
       );
     }
+    const target = resolvePersistTarget("panel", id, options.persist);
+    this.persistTargets.set(id, target);
     const controls = this.parseConfig(config, "", shortcuts);
     const values = this.flattenValues(config, "");
     this.initTransitionModes(config, "", values);
+    this.overlayPersistedValues(target, values);
     this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
@@ -838,6 +895,7 @@ var DialStoreClass = class {
       }
     }
     this.baseValues.set(id, nextBaseValues);
+    this.savePanelValues(id);
     this.notify(id);
     this.notifyGlobal();
   }
@@ -848,7 +906,27 @@ var DialStoreClass = class {
     if (this.eventListeners.get(id)?.size === 0) this.eventListeners.delete(id);
     this.snapshots.delete(id);
     this.baseValues.delete(id);
+    this.persistTargets.delete(id);
     this.notifyGlobal();
+  }
+  // Overlay saved values onto freshly-computed defaults, in place. Only keys
+  // that still exist in `values` (i.e. the current config) are restored.
+  overlayPersistedValues(target, values) {
+    const persisted = loadPersisted(target);
+    if (!persisted) return;
+    for (const key of Object.keys(values)) {
+      if (Object.prototype.hasOwnProperty.call(persisted, key)) {
+        values[key] = persisted[key];
+      }
+    }
+  }
+  // Save the panel's current flat values (fail-soft, no-op when persistence is
+  // off). Called after every edit so timing/values survive a reload.
+  savePanelValues(panelId) {
+    const target = this.persistTargets.get(panelId);
+    if (!target) return;
+    const panel = this.panels.get(panelId);
+    if (panel) savePersisted(target, panel.values);
   }
   updateValue(panelId, path, value) {
     const panel = this.panels.get(panelId);
@@ -864,6 +942,7 @@ var DialStoreClass = class {
       if (base) base[path] = value;
     }
     this.snapshots.set(panelId, { ...panel.values });
+    this.savePanelValues(panelId);
     this.notify(panelId);
   }
   // Apply several path/value edits atomically — one snapshot + one notify.
@@ -882,6 +961,7 @@ var DialStoreClass = class {
       else if (base) base[path] = value;
     }
     this.snapshots.set(panelId, { ...panel.values });
+    this.savePanelValues(panelId);
     this.notify(panelId);
   }
   updateSpringMode(panelId, path, mode) {
@@ -995,6 +1075,7 @@ var DialStoreClass = class {
     panel.values = { ...preset.values };
     this.snapshots.set(panelId, { ...panel.values });
     this.activePreset.set(panelId, presetId);
+    this.savePanelValues(panelId);
     this.notify(panelId);
   }
   deletePreset(panelId, presetId) {
@@ -1638,19 +1719,23 @@ var import_react36 = require("react");
 var import_react_dom6 = require("react-dom");
 
 // src/store/TimelineStore.ts
-function loopSpan(duration, loopStart) {
+var MIN_LOOP_REGION = 0.02;
+function loopSpan(duration, loopStart, loopEnd) {
   if (!Number.isFinite(duration) || duration <= 0) return 0;
   if (!Number.isFinite(loopStart)) loopStart = 0;
+  const end = Number.isFinite(loopEnd) ? Math.min(Math.max(0, loopEnd), duration) : duration;
   const start = Math.min(Math.max(0, loopStart), duration);
-  return duration - start > 0 ? duration - start : duration;
+  const span = end - start;
+  return span > 0 ? span : duration;
 }
-function foldLoopTime(time, duration, loopStart = 0) {
+function foldLoopTime(time, duration, loopStart = 0, loopEnd) {
   if (!Number.isFinite(time) || !Number.isFinite(duration) || duration <= 0) {
     return { time: 0, wraps: 0 };
   }
-  if (time < duration) return { time, wraps: 0 };
-  const span = loopSpan(duration, loopStart);
-  const base = duration - span;
+  const end = Number.isFinite(loopEnd) ? Math.min(Math.max(0, loopEnd), duration) : duration;
+  if (time < end) return { time, wraps: 0 };
+  const span = loopSpan(duration, loopStart, end);
+  const base = end - span;
   const over = time - base;
   return { time: base + over % span, wraps: Math.floor(over / span) };
 }
@@ -1666,6 +1751,11 @@ var TimelineStoreClass = class {
     this.listeners = /* @__PURE__ */ new Map();
     this.globalListeners = /* @__PURE__ */ new Set();
     this.registrationCounts = /* @__PURE__ */ new Map();
+    // User-defined loop windows. Absent = loop the whole timeline. The stored
+    // object reference is stable until set/clear so useSyncExternalStore readers
+    // don't churn.
+    this.loopRegions = /* @__PURE__ */ new Map();
+    this.persistTargets = /* @__PURE__ */ new Map();
     this.listCache = null;
     this.rafId = null;
     this.lastTick = 0;
@@ -1683,20 +1773,15 @@ var TimelineStoreClass = class {
           continue;
         }
         let time = transport.time + dt;
-        let playing = true;
         let wraps = transport.wraps;
-        if (time >= duration) {
-          if (meta?.loop) {
-            const folded = foldLoopTime(time, duration, meta.loopStart);
-            time = folded.time;
-            wraps += folded.wraps;
-          } else {
-            time = duration;
-            playing = false;
-          }
+        const region = this.effectiveRegion(id, duration);
+        if (time >= region.end) {
+          const folded = foldLoopTime(time, duration, region.start, region.end);
+          time = folded.time;
+          wraps += folded.wraps;
         }
-        this.transports.set(id, { time, playing, duration, wraps });
-        if (playing) anyPlaying = true;
+        this.transports.set(id, { time, playing: true, duration, wraps });
+        anyPlaying = true;
         this.notify(id);
       }
       this.rafId = anyPlaying ? window.requestAnimationFrame(this.tick) : null;
@@ -1709,7 +1794,12 @@ var TimelineStoreClass = class {
         `[dialkit] Timeline id "${meta.id}" is already registered by "${existing.name}"; "${meta.name}" will share and overwrite that transport.`
       );
     }
+    const firstRegistration = !this.registrationCounts.has(meta.id);
     this.registrationCounts.set(meta.id, (this.registrationCounts.get(meta.id) ?? 0) + 1);
+    if (firstRegistration) {
+      this.persistTargets.set(meta.id, resolvePersistTarget("timeline-loop", meta.id, options.persist));
+      this.hydrateLoopRegion(meta);
+    }
     this.applyMeta(meta, options.autoplay);
   }
   update(meta) {
@@ -1725,17 +1815,70 @@ var TimelineStoreClass = class {
     this.registrationCounts.delete(id);
     this.timelines.delete(id);
     this.transports.delete(id);
+    this.loopRegions.delete(id);
+    this.persistTargets.delete(id);
     if (this.listeners.get(id)?.size === 0) this.listeners.delete(id);
     this.listCache = null;
     this.notifyGlobal();
   }
+  /** Restore a persisted loop region, or seed one from a code-defined
+   * `options.loop`. No region at all = loop the whole timeline (the default). */
+  hydrateLoopRegion(meta) {
+    const duration = Number.isFinite(meta.duration) ? Math.max(0, meta.duration) : 0;
+    const persisted = loadPersisted(this.persistTargets.get(meta.id) ?? null);
+    if (persisted && Number.isFinite(persisted.start) && Number.isFinite(persisted.end)) {
+      const region = this.normalizeRegion(persisted.start, persisted.end, duration);
+      if (region) this.loopRegions.set(meta.id, region);
+      return;
+    }
+    if (meta.loop) {
+      const region = this.normalizeRegion(meta.loopStart, duration, duration);
+      if (region) this.loopRegions.set(meta.id, region);
+    }
+  }
+  /** Clamp to [0,duration], order min/max, and reject degenerate widths. */
+  normalizeRegion(start, end, duration) {
+    if (!Number.isFinite(start) || !Number.isFinite(end) || duration <= 0) return null;
+    const lo = Math.min(Math.max(0, Math.min(start, end)), duration);
+    const hi = Math.min(Math.max(0, Math.max(start, end)), duration);
+    if (hi - lo < MIN_LOOP_REGION) return null;
+    return { start: lo, end: hi };
+  }
+  setLoopRegion(id, start, end) {
+    const transport = this.transports.get(id);
+    const duration = transport?.duration ?? this.timelines.get(id)?.duration ?? 0;
+    const region = this.normalizeRegion(start, end, duration);
+    if (!region) return;
+    this.loopRegions.set(id, region);
+    savePersisted(this.persistTargets.get(id) ?? null, region);
+    this.notify(id);
+  }
+  clearLoopRegion(id) {
+    if (!this.loopRegions.has(id)) return;
+    this.loopRegions.delete(id);
+    clearPersisted(this.persistTargets.get(id) ?? null);
+    this.notify(id);
+  }
+  /** The raw user/code region, or undefined when looping the whole timeline.
+   * The reference is stable between changes (safe for useSyncExternalStore). */
+  getLoopRegion(id) {
+    return this.loopRegions.get(id);
+  }
+  /** The region the clock actually loops within: the user/code region, or the
+   * whole timeline `[0, duration]` when none is set. Playback always wraps. */
+  effectiveRegion(id, duration) {
+    const region = this.loopRegions.get(id);
+    if (region) return region;
+    return { start: 0, end: Math.max(0, duration) };
+  }
   play(id) {
     const transport = this.transports.get(id);
     if (!transport || transport.duration <= 0 || transport.playing) return;
-    const restart = transport.time >= transport.duration;
+    const region = this.effectiveRegion(id, transport.duration);
+    const restart = transport.time >= region.end;
     this.transports.set(id, {
       ...transport,
-      time: restart ? 0 : transport.time,
+      time: restart ? region.start : transport.time,
       wraps: restart ? 0 : transport.wraps,
       playing: true
     });
@@ -1751,7 +1894,8 @@ var TimelineStoreClass = class {
   replay(id) {
     const transport = this.transports.get(id);
     if (!transport || transport.duration <= 0) return;
-    this.transports.set(id, { ...transport, time: 0, wraps: 0, playing: true });
+    const region = this.effectiveRegion(id, transport.duration);
+    this.transports.set(id, { ...transport, time: region.start, wraps: 0, playing: true });
     this.notify(id);
     this.ensureLoop();
   }
@@ -1798,6 +1942,12 @@ var TimelineStoreClass = class {
     const loopStart = Number.isFinite(meta.loopStart) ? Math.min(duration, Math.max(0, meta.loopStart)) : 0;
     const safeMeta = { ...meta, duration, loopStart };
     this.timelines.set(meta.id, safeMeta);
+    const region = this.loopRegions.get(meta.id);
+    if (region) {
+      const reclamped = this.normalizeRegion(region.start, region.end, duration);
+      if (reclamped) this.loopRegions.set(meta.id, reclamped);
+      else this.loopRegions.delete(meta.id);
+    }
     const existing = this.transports.get(meta.id);
     if (existing) {
       this.transports.set(meta.id, {
@@ -1848,6 +1998,12 @@ var ICON_PLAY = "M9.24394 2.36758C7.41419 1.18362 5 2.49701 5 4.67639V19.3238C5 
 var ICON_REPLAY = [
   "M12 2.5C17.2466 2.50016 21.5 6.7534 21.5 12C21.5 17.2466 17.2466 21.4998 12 21.5C7.52191 21.5 3.76987 18.4025 2.76465 14.2344C2.63517 13.6975 2.96508 13.1578 3.50195 13.0283C4.03883 12.8988 4.57851 13.2288 4.70801 13.7656C5.5016 17.0563 8.46701 19.5 12 19.5C16.142 19.4998 19.5 16.142 19.5 12C19.5 7.85796 16.142 4.50016 12 4.5C9.32981 4.5 6.98389 5.89541 5.6543 8H7.5C8.05228 8 8.5 8.44772 8.5 9C8.5 9.55228 8.05228 10 7.5 10H3.5C2.94772 10 2.5 9.55228 2.5 9V5C2.5 4.44772 2.94772 4 3.5 4C4.05228 4 4.5 4.44772 4.5 5V6.16797C6.2376 3.93677 8.95063 2.5 12 2.5Z",
   "M10 9.94043C10 9.33379 10.6826 8.97849 11.1797 9.32617L14.1221 11.3857C14.5486 11.6843 14.5486 12.3157 14.1221 12.6143L11.1797 14.6738C10.6826 15.0215 10 14.6662 10 14.0596V9.94043Z"
+];
+var ICON_LOOP = [
+  "M17 2L21 6L17 10",
+  "M3 11V9C3 7.34315 4.34315 6 6 6H21",
+  "M7 22L3 18L7 14",
+  "M21 13V15C21 16.6569 19.6569 18 18 18H3"
 ];
 var ICON_TIMELINE = [
   "M18.868 10C20.8517 10.0003 22.2886 11.8914 21.7577 13.8027L20.369 18.8027C20.0083 20.1012 18.826 20.9999 17.4784 21H6.51941C5.17179 21 3.98948 20.1012 3.62878 18.8027L2.24011 13.8027C1.7092 11.8913 3.14603 10.0003 5.12976 10H18.868Z",
@@ -7047,7 +7203,7 @@ function buildTimelineMeta(id, name, duration, parsed, loop) {
     clips: parsed.clips
   };
 }
-function buildTimelineValues(staticClips, transport, timelineDuration, loopStart, actions) {
+function buildTimelineValues(staticClips, transport, timelineDuration, loopStart, loopEnd, actions) {
   var _a;
   const result = {
     time: transport.time,
@@ -7055,7 +7211,7 @@ function buildTimelineValues(staticClips, transport, timelineDuration, loopStart
     duration: timelineDuration,
     ...actions
   };
-  const span = loopSpan(transport.duration, loopStart);
+  const span = loopSpan(transport.duration, loopStart, loopEnd);
   const cycleTime = (span > 0 ? transport.wraps * span : 0) + transport.time;
   for (const clip of staticClips) {
     const state = computeClipState(clip, transport.time, cycleTime);
@@ -7088,7 +7244,6 @@ function useDialTimeline(name, config, options) {
   parsedRef.current = parsed;
   const optionsRef = (0, import_react37.useRef)(options);
   optionsRef.current = options;
-  const { start: loopStart } = resolveTimelineLoop(options?.loop);
   const buildMeta = (0, import_react37.useCallback)(
     () => buildTimelineMeta(panelId, name, timelineDuration, parsedRef.current, options?.loop),
     [panelId, name, timelineDuration, options?.loop]
@@ -7096,7 +7251,10 @@ function useDialTimeline(name, config, options) {
   const buildMetaRef = (0, import_react37.useRef)(buildMeta);
   buildMetaRef.current = buildMeta;
   (0, import_react37.useEffect)(() => {
-    TimelineStore.register(buildMetaRef.current(), { autoplay: optionsRef.current?.autoplay ?? true });
+    TimelineStore.register(buildMetaRef.current(), {
+      autoplay: optionsRef.current?.autoplay ?? true,
+      persist: optionsRef.current?.persist
+    });
     return () => TimelineStore.unregister(panelId);
   }, [panelId, name]);
   const mountedRef = (0, import_react37.useRef)(false);
@@ -7113,18 +7271,22 @@ function useDialTimeline(name, config, options) {
   );
   const getTransport = (0, import_react37.useCallback)(() => TimelineStore.getTransport(panelId), [panelId]);
   const transport = (0, import_react37.useSyncExternalStore)(subscribeTransport, getTransport, getTransport);
+  const getLoopRegion = (0, import_react37.useCallback)(() => TimelineStore.getLoopRegion(panelId), [panelId]);
+  const loopRegion = (0, import_react37.useSyncExternalStore)(subscribeTransport, getLoopRegion, getLoopRegion);
+  const loopStart = loopRegion ? loopRegion.start : 0;
+  const loopEnd = loopRegion ? loopRegion.end : timelineDuration;
   const play = (0, import_react37.useCallback)(() => TimelineStore.play(panelId), [panelId]);
   const pause = (0, import_react37.useCallback)(() => TimelineStore.pause(panelId), [panelId]);
   const replay = (0, import_react37.useCallback)(() => TimelineStore.replay(panelId), [panelId]);
   const seek = (0, import_react37.useCallback)((time) => TimelineStore.seek(panelId, time), [panelId]);
   return (0, import_react37.useMemo)(
-    () => buildTimelineValues(staticClips, transport, timelineDuration, loopStart, {
+    () => buildTimelineValues(staticClips, transport, timelineDuration, loopStart, loopEnd, {
       play,
       pause,
       replay,
       seek
     }),
-    [staticClips, transport, timelineDuration, loopStart, play, pause, replay, seek]
+    [staticClips, transport, timelineDuration, loopStart, loopEnd, play, pause, replay, seek]
   );
 }
 
@@ -7134,6 +7296,7 @@ var import_react_dom7 = require("react-dom");
 var import_react39 = require("motion/react");
 var import_jsx_runtime31 = require("react/jsx-runtime");
 var DRAG_THRESHOLD_PX = 3;
+var LOOP_DRAG_THRESHOLD_PX = 4;
 var MAJOR_TICK_TARGET_PX = 140;
 var MILLISECOND_STEP = 1e-3;
 var SECOND_TICK_STEPS = [
@@ -7535,6 +7698,13 @@ var TimelineSection = (0, import_react38.memo)(function TimelineSection2({
   const values = (0, import_react38.useSyncExternalStore)(subscribeValues, getValues, getValues);
   const presets = DialStore.getPresets(meta.id);
   const activePresetId = DialStore.getActivePresetId(meta.id);
+  const subscribeLoopRegion = (0, import_react38.useCallback)(
+    (callback) => TimelineStore.subscribe(meta.id, callback),
+    [meta.id]
+  );
+  const getLoopRegion = (0, import_react38.useCallback)(() => TimelineStore.getLoopRegion(meta.id), [meta.id]);
+  const loopRegion = (0, import_react38.useSyncExternalStore)(subscribeLoopRegion, getLoopRegion, getLoopRegion);
+  const [loopDrag, setLoopDrag] = (0, import_react38.useState)(null);
   const laneAreaRef = (0, import_react38.useRef)(null);
   const horizontalScrollRef = (0, import_react38.useRef)(null);
   const [laneWidth, setLaneWidth] = (0, import_react38.useState)(0);
@@ -7586,6 +7756,9 @@ var TimelineSection = (0, import_react38.memo)(function TimelineSection2({
     setViewStart(0);
     TimelineStore.replay(meta.id);
   }, [meta.id]);
+  const handleClearLoopRegion = (0, import_react38.useCallback)(() => {
+    TimelineStore.clearLoopRegion(meta.id);
+  }, [meta.id]);
   const handleHorizontalScroll = (0, import_react38.useCallback)((e) => {
     if (pxPerSecond <= 0) return;
     setViewStart(clampViewStart(
@@ -7603,20 +7776,15 @@ var TimelineSection = (0, import_react38.memo)(function TimelineSection2({
     scroller.scrollLeft += horizontalDelta;
   }, [zoom]);
   const zoomDragRef = (0, import_react38.useRef)(null);
-  const rulerScrubRef = (0, import_react38.useRef)(null);
-  const seekRulerFromClientX = (0, import_react38.useCallback)((clientX) => {
-    const scrub = rulerScrubRef.current;
-    const contentWidth = scrub?.rect.width ?? 0;
-    if (!scrub || contentWidth <= 0) return;
-    TimelineStore.seek(
-      meta.id,
-      clamp5(
-        scrub.viewStart + (clientX - scrub.rect.left) / contentWidth * scrub.visibleDuration,
-        scrub.viewStart,
-        scrub.viewStart + scrub.visibleDuration
-      )
-    );
-  }, [meta.id]);
+  const rulerGestureRef = (0, import_react38.useRef)(null);
+  const rulerTimeFromClientX = (0, import_react38.useCallback)(
+    (clientX, rect, viewStartAt, visibleAt) => clamp5(
+      viewStartAt + (clientX - rect.left) / rect.width * visibleAt,
+      viewStartAt,
+      viewStartAt + visibleAt
+    ),
+    []
+  );
   const handleRulerPointerDown = (0, import_react38.useCallback)((e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -7626,18 +7794,20 @@ var TimelineSection = (0, import_react38.memo)(function TimelineSection2({
     e.currentTarget.setPointerCapture(e.pointerId);
     if (!e.altKey) {
       const resetView2 = e.shiftKey;
-      rulerScrubRef.current = {
-        wasPlaying: TimelineStore.getTransport(meta.id).playing,
-        rect,
-        viewStart: resetView2 ? 0 : safeViewStart,
-        visibleDuration: resetView2 ? meta.duration : visibleDuration
-      };
+      const gestureViewStart = resetView2 ? 0 : safeViewStart;
+      const gestureVisible = resetView2 ? meta.duration : visibleDuration;
       if (resetView2) {
         setZoom(1);
         setViewStart(0);
       }
-      TimelineStore.pause(meta.id);
-      seekRulerFromClientX(e.clientX);
+      rulerGestureRef.current = {
+        downClientX: e.clientX,
+        downTime: rulerTimeFromClientX(e.clientX, rect, gestureViewStart, gestureVisible),
+        rect,
+        viewStart: gestureViewStart,
+        visibleDuration: gestureVisible,
+        moved: false
+      };
       return;
     }
     const anchorRatio = clamp5((e.clientX - rect.left) / contentWidth, 0, 1);
@@ -7650,10 +7820,18 @@ var TimelineSection = (0, import_react38.memo)(function TimelineSection2({
       anchorTime: safeViewStart + anchorRatio * visibleDuration,
       moved: false
     };
-  }, [meta.duration, meta.id, safeViewStart, seekRulerFromClientX, visibleDuration, zoom]);
+  }, [meta.duration, rulerTimeFromClientX, safeViewStart, visibleDuration, zoom]);
   const handleRulerPointerMove = (0, import_react38.useCallback)((e) => {
-    if (rulerScrubRef.current) {
-      seekRulerFromClientX(e.clientX);
+    const gesture = rulerGestureRef.current;
+    if (gesture) {
+      const dx2 = e.clientX - gesture.downClientX;
+      if (!gesture.moved && Math.abs(dx2) <= LOOP_DRAG_THRESHOLD_PX) return;
+      gesture.moved = true;
+      const current = rulerTimeFromClientX(e.clientX, gesture.rect, gesture.viewStart, gesture.visibleDuration);
+      setLoopDrag({
+        start: Math.min(gesture.downTime, current),
+        end: Math.max(gesture.downTime, current)
+      });
       return;
     }
     const drag = zoomDragRef.current;
@@ -7670,17 +7848,25 @@ var TimelineSection = (0, import_react38.memo)(function TimelineSection2({
     );
     setZoom(nextZoom);
     setViewStart(nextStart);
-  }, [maxZoom, meta.duration, seekRulerFromClientX]);
+  }, [maxZoom, meta.duration, rulerTimeFromClientX]);
   const handleRulerPointerUp = (0, import_react38.useCallback)(() => {
-    if (rulerScrubRef.current?.wasPlaying) TimelineStore.play(meta.id);
-    rulerScrubRef.current = null;
+    const gesture = rulerGestureRef.current;
+    rulerGestureRef.current = null;
     zoomDragRef.current = null;
-  }, [meta.id]);
+    if (gesture) {
+      if (gesture.moved && loopDrag) {
+        TimelineStore.setLoopRegion(meta.id, loopDrag.start, loopDrag.end);
+      } else {
+        TimelineStore.seek(meta.id, gesture.downTime);
+      }
+      setLoopDrag(null);
+    }
+  }, [loopDrag, meta.id]);
   const handleRulerPointerCancel = (0, import_react38.useCallback)(() => {
-    if (rulerScrubRef.current?.wasPlaying) TimelineStore.play(meta.id);
-    rulerScrubRef.current = null;
+    rulerGestureRef.current = null;
     zoomDragRef.current = null;
-  }, [meta.id]);
+    setLoopDrag(null);
+  }, []);
   const trackScrubRef = (0, import_react38.useRef)(null);
   const seekTrackFromClientX = (0, import_react38.useCallback)((clientX) => {
     const scrub = trackScrubRef.current;
@@ -7936,6 +8122,21 @@ var TimelineSection = (0, import_react38.memo)(function TimelineSection2({
         }
       ),
       /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "dialkit-timeline-actions", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
+          import_react39.motion.button,
+          {
+            className: "dialkit-timeline-loop-toggle",
+            "data-active": loopRegion ? "true" : void 0,
+            onClick: handleClearLoopRegion,
+            disabled: !loopRegion,
+            title: loopRegion ? "Looping a region \xB7 click to loop the whole timeline" : "Looping the whole timeline \xB7 drag the ruler to set a loop region",
+            "aria-label": loopRegion ? "Clear loop region" : "Looping whole timeline",
+            "aria-pressed": loopRegion ? true : false,
+            whileTap: loopRegion ? { scale: 0.9 } : void 0,
+            transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
+            children: /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true", children: ICON_LOOP.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("path", { d }, i)) })
+          }
+        ),
         /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(PlayPauseButton, { id: meta.id }),
         /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(ReplayButton, { onReplay: handleReplay }),
         /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
@@ -8044,8 +8245,26 @@ var TimelineSection = (0, import_react38.memo)(function TimelineSection2({
                   onPointerUp: handleRulerPointerUp,
                   onPointerCancel: handleRulerPointerCancel,
                   onLostPointerCapture: handleRulerPointerCancel,
-                  title: "Drag to seek \xB7 Option-drag to zoom \xB7 Shift-drag to reset zoom",
+                  title: "Click to seek \xB7 drag to set a loop region \xB7 Option-drag to zoom \xB7 Shift-drag to reset zoom",
                   children: [
+                    (() => {
+                      const activeLoop = loopDrag ?? loopRegion;
+                      if (!activeLoop || pxPerSecond <= 0) return null;
+                      const left = (activeLoop.start - safeViewStart) * pxPerSecond;
+                      const width = Math.max(0, (activeLoop.end - activeLoop.start) * pxPerSecond);
+                      return /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)(import_jsx_runtime31.Fragment, { children: [
+                        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("div", { className: "dialkit-timeline-loop-dim", style: { left: 0, width: Math.max(0, left) } }),
+                        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("div", { className: "dialkit-timeline-loop-dim", style: { left: left + width, right: 0 } }),
+                        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
+                          "div",
+                          {
+                            className: "dialkit-timeline-loop-band",
+                            "data-live": loopDrag ? "true" : void 0,
+                            style: { left, width }
+                          }
+                        )
+                      ] });
+                    })(),
                     fineTicks.map((t) => /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("div", { className: "dialkit-timeline-tick dialkit-timeline-tick-fine", style: { left: (t - safeViewStart) * pxPerSecond } }, `fine:${t}`)),
                     mediumTicks.map((t) => /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("div", { className: "dialkit-timeline-tick dialkit-timeline-tick-medium", style: { left: (t - safeViewStart) * pxPerSecond } }, `medium:${t}`)),
                     majorTicks.map((t) => /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("div", { className: "dialkit-timeline-tick", style: { left: (t - safeViewStart) * pxPerSecond }, children: /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { className: "dialkit-timeline-tick-label", children: formatRulerSeconds(t, majorStep) }) }, t))
