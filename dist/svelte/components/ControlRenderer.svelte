@@ -9,6 +9,7 @@
   import Folder from './Folder.svelte';
   import SpringControl from './SpringControl.svelte';
   import TransitionControl from './TransitionControl.svelte';
+  import type { TransitionDurationControl } from './TransitionControl.svelte';
   import TextControl from './TextControl.svelte';
   import SelectControl from './SelectControl.svelte';
   import ColorControl from './ColorControl.svelte';
@@ -22,10 +23,11 @@
   import { SHORTCUT_CTX } from './ShortcutListener.svelte';
   import type { ShortcutContextValue } from './ShortcutListener.svelte';
 
-  let { panelId, control, values } = $props<{
+  let { panelId, control, values, transitionDuration } = $props<{
     panelId: string;
     control: ControlMeta;
     values: Record<string, DialValue>;
+    transitionDuration?: TransitionDurationControl;
   }>();
 
   const shortcutCtx = getContext<ShortcutContextValue | undefined>(SHORTCUT_CTX);
@@ -80,11 +82,12 @@
     label={control.label}
     value={controlValue as TransitionConfig}
     onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+    durationControl={transitionDuration}
   />
 {:else if control.type === 'folder'}
   <Folder title={control.label} defaultOpen={control.defaultOpen ?? true}>
     {#each control.children ?? [] as child (child.path)}
-      <ControlRenderer {panelId} control={child} {values} />
+      <ControlRenderer {panelId} control={child} {values} {transitionDuration} />
     {/each}
   </Folder>
 {:else if control.type === 'text'}

@@ -4,6 +4,7 @@ import { HEX_COLOR_REGEX } from '../color-core';
 import { normalizeGradient, DEFAULT_GRADIENT, type GradientValue } from '../gradient-core';
 import { resolveAxis, normalizeValue as normalizeXYValue, type XYValue } from '../xy-pad-core';
 import { clampRange } from '../range-slider-core';
+import { resolvePersistTarget, loadPersisted, savePersisted, type PersistTarget } from './persist';
 // Type-only (erased in JS): lets consumers import `RangeValue` from the package types.
 import type { RangeValue } from '../range-slider-core';
 
@@ -298,6 +299,7 @@ export type PanelConfig = {
   controls: ControlMeta[];
   values: Record<string, DialValue>;
   shortcuts: Record<string, ShortcutConfig>;
+  kind?: 'timeline';
 };
 
 type Listener = () => void;
@@ -324,6 +326,103 @@ export type Preset = {
 // Stable empty object for unregistered panels (React 19 useSyncExternalStore requirement)
 const EMPTY_VALUES: Record<string, DialValue> = Object.freeze({});
 
+// Persistence option shape shared with the timeline adapter. When truthy AND
+// the panel has a stable `id`, the panel's flat values are saved to (and
+// restored from) browser storage — fail-soft, node-safe (see ./persist).
+// `retainOnUnmount` is still accepted for API parity but not acted on here.
+export type DialKitPersistOptions = boolean | {
+  key?: string;
+  storage?: 'localStorage' | 'sessionStorage';
+  presets?: boolean;
+};
+
+export type DialStorePanelOptions = {
+  retainOnUnmount?: boolean;
+  persist?: DialKitPersistOptions;
+  /** Timeline panels render in DialTimeline and are filtered out of the panel dock. */
+  kind?: 'timeline';
+};
+
+/** camelCase → Title Case, the label rule used everywhere a key becomes UI text. */
+export function formatLabel(key: string): string {
+  return key
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, str => str.toUpperCase())
+    .trim();
+}
+
+/** Default slider step for a numeric range. */
+export function inferStep(min: number, max: number): number {
+  const range = max - min;
+  if (range <= 1) return 0.01;
+  if (range <= 10) return 0.1;
+  if (range <= 100) return 1;
+  return 10;
+}
+
+export function isHexColor(value: string): boolean {
+  return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(value);
+}
+
+function resolveValueHasType(value: unknown, type: string): boolean {
+  return typeof value === 'object' && value !== null && 'type' in value && (value as { type: string }).type === type;
+}
+
+export function isSpringConfigValue(value: unknown): value is SpringConfig {
+  return resolveValueHasType(value, 'spring');
+}
+
+export function isEasingConfigValue(value: unknown): value is EasingConfig {
+  return resolveValueHasType(value, 'easing');
+}
+
+/**
+ * Resolve a flat value snapshot back into the nested shape declared by a config.
+ * Shared by the timeline core (timing-only configs). Handles the primitive,
+ * spring/easing, select, color, and text config kinds a timeline emits.
+ */
+export function resolveDialValues<T extends DialConfig>(
+  config: T,
+  flatValues: Record<string, DialValue>
+): ResolvedValues<T> {
+  return resolveConfigValues(config, flatValues, '') as ResolvedValues<T>;
+}
+
+function resolveConfigValues(
+  config: DialConfig,
+  flatValues: Record<string, DialValue>,
+  prefix: string
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+
+  for (const [key, configValue] of Object.entries(config)) {
+    if (key === '_collapsed') continue;
+    const path = prefix ? `${prefix}.${key}` : key;
+
+    if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === 'number') {
+      result[key] = flatValues[path] ?? configValue[0];
+    } else if (typeof configValue === 'number' || typeof configValue === 'boolean' || typeof configValue === 'string') {
+      result[key] = flatValues[path] ?? configValue;
+    } else if (resolveValueHasType(configValue, 'spring') || resolveValueHasType(configValue, 'easing')) {
+      result[key] = flatValues[path] ?? configValue;
+    } else if (resolveValueHasType(configValue, 'action')) {
+      result[key] = flatValues[path] ?? configValue;
+    } else if (resolveValueHasType(configValue, 'select') && Array.isArray((configValue as SelectConfig).options)) {
+      const select = configValue as SelectConfig;
+      const defaultValue = select.default ?? (typeof select.options[0] === 'string' ? select.options[0] : select.options[0]?.value);
+      result[key] = flatValues[path] ?? defaultValue;
+    } else if (resolveValueHasType(configValue, 'color')) {
+      result[key] = flatValues[path] ?? (configValue as ColorConfig).default ?? '#000000';
+    } else if (resolveValueHasType(configValue, 'text')) {
+      result[key] = flatValues[path] ?? (configValue as TextConfig).default ?? '';
+    } else if (typeof configValue === 'object' && configValue !== null) {
+      result[key] = resolveConfigValues(configValue as DialConfig, flatValues, path);
+    }
+  }
+
+  return result;
+}
+
 class DialStoreClass {
   private panels: Map<string, PanelConfig> = new Map();
   private listeners: Map<string, Set<Listener>> = new Map();
@@ -334,24 +433,43 @@ class DialStoreClass {
   private presets: Map<string, Preset[]> = new Map();
   private activePreset: Map<string, string | null> = new Map();
   private baseValues: Map<string, Record<string, DialValue>> = new Map();
+  // Resolved storage target per panel (null = persistence off). Absent = not
+  // yet registered.
+  private persistTargets: Map<string, PersistTarget | null> = new Map();
 
-  registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>): void {
+  registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, options: DialStorePanelOptions = {}): void {
+    const existingPanel = this.panels.get(id);
+    if (existingPanel && existingPanel.kind !== options.kind) {
+      console.warn(
+        `[dialkit] Panel id "${id}" cannot be shared by a timeline and a standard panel; ` +
+        `the most recent registration controls where it renders.`
+      );
+    }
+
+    const target = resolvePersistTarget('panel', id, options.persist);
+    this.persistTargets.set(id, target);
+
     const controls = this.parseConfig(config, '', shortcuts);
     const values = this.flattenValues(config, '');
 
     // Set initial transition modes based on config types
     this.initTransitionModes(config, '', values);
 
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {} });
+    // Overlay persisted values onto the config defaults, but only for keys the
+    // current config still declares — a renamed/removed control drops its
+    // stale saved value instead of resurrecting it.
+    this.overlayPersistedValues(target, values);
+
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
   }
 
-  updatePanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>): void {
+  updatePanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, options: DialStorePanelOptions = {}): void {
     const existing = this.panels.get(id);
     if (!existing) {
-      this.registerPanel(id, name, config, shortcuts);
+      this.registerPanel(id, name, config, shortcuts, options);
       return;
     }
 
@@ -383,7 +501,7 @@ class DialStoreClass {
       }
     }
 
-    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts };
+    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
 
@@ -405,18 +523,44 @@ class DialStoreClass {
 
     this.baseValues.set(id, nextBaseValues);
 
+    this.savePanelValues(id);
     this.notify(id);
     this.notifyGlobal();
   }
 
   unregisterPanel(id: string): void {
     this.panels.delete(id);
-    this.listeners.delete(id);
+    // Keep listener sets: subscribed components can outlive the registration
+    // (HMR unregister/re-register of the same id) and must keep receiving
+    // notifications. Cleanup happens via the unsubscribe closures below.
+    if (this.listeners.get(id)?.size === 0) this.listeners.delete(id);
+    if (this.actionListeners.get(id)?.size === 0) this.actionListeners.delete(id);
+    if (this.eventListeners.get(id)?.size === 0) this.eventListeners.delete(id);
     this.snapshots.delete(id);
-    this.actionListeners.delete(id);
-    this.eventListeners.delete(id);
     this.baseValues.delete(id);
+    this.persistTargets.delete(id);
     this.notifyGlobal();
+  }
+
+  // Overlay saved values onto freshly-computed defaults, in place. Only keys
+  // that still exist in `values` (i.e. the current config) are restored.
+  private overlayPersistedValues(target: PersistTarget | null, values: Record<string, DialValue>): void {
+    const persisted = loadPersisted<Record<string, DialValue>>(target);
+    if (!persisted) return;
+    for (const key of Object.keys(values)) {
+      if (Object.prototype.hasOwnProperty.call(persisted, key)) {
+        values[key] = persisted[key];
+      }
+    }
+  }
+
+  // Save the panel's current flat values (fail-soft, no-op when persistence is
+  // off). Called after every edit so timing/values survive a reload.
+  private savePanelValues(panelId: string): void {
+    const target = this.persistTargets.get(panelId);
+    if (!target) return;
+    const panel = this.panels.get(panelId);
+    if (panel) savePersisted(target, panel.values);
   }
 
   updateValue(panelId: string, path: string, value: DialValue): void {
@@ -438,6 +582,32 @@ class DialStoreClass {
 
     // Create a new snapshot reference so useSyncExternalStore detects the change
     this.snapshots.set(panelId, { ...panel.values });
+    this.savePanelValues(panelId);
+    this.notify(panelId);
+  }
+
+  // Apply several path/value edits atomically — one snapshot + one notify.
+  // The timeline uses this when a single gesture trades time between fields
+  // (e.g. resizing a clip's start edge shifts both its position and duration),
+  // where an intermediate single-field state would be invalid.
+  updateValues(panelId: string, updates: Record<string, DialValue>): void {
+    const panel = this.panels.get(panelId);
+    if (!panel) return;
+
+    const activeId = this.activePreset.get(panelId);
+    const preset = activeId
+      ? (this.presets.get(panelId) ?? []).find(p => p.id === activeId)
+      : undefined;
+    const base = this.baseValues.get(panelId);
+
+    for (const [path, value] of Object.entries(updates)) {
+      panel.values[path] = value;
+      if (preset) preset.values[path] = value;
+      else if (base) base[path] = value;
+    }
+
+    this.snapshots.set(panelId, { ...panel.values });
+    this.savePanelValues(panelId);
     this.notify(panelId);
   }
 
@@ -477,8 +647,11 @@ class DialStoreClass {
     return this.snapshots.get(panelId) ?? EMPTY_VALUES;
   }
 
-  getPanels(): PanelConfig[] {
-    return Array.from(this.panels.values());
+  getPanels(kind?: 'panel' | 'timeline'): PanelConfig[] {
+    const all = Array.from(this.panels.values());
+    if (kind === 'panel') return all.filter((panel) => panel.kind !== 'timeline');
+    if (kind === 'timeline') return all.filter((panel) => panel.kind === 'timeline');
+    return all;
   }
 
   getPanel(id: string): PanelConfig | undefined {
@@ -492,7 +665,11 @@ class DialStoreClass {
     this.listeners.get(panelId)!.add(listener);
 
     return () => {
-      this.listeners.get(panelId)?.delete(listener);
+      const listeners = this.listeners.get(panelId);
+      listeners?.delete(listener);
+      if (listeners?.size === 0 && !this.panels.has(panelId)) {
+        this.listeners.delete(panelId);
+      }
     };
   }
 
@@ -508,7 +685,11 @@ class DialStoreClass {
     this.actionListeners.get(panelId)!.add(listener);
 
     return () => {
-      this.actionListeners.get(panelId)?.delete(listener);
+      const listeners = this.actionListeners.get(panelId);
+      listeners?.delete(listener);
+      if (listeners?.size === 0 && !this.panels.has(panelId)) {
+        this.actionListeners.delete(panelId);
+      }
     };
   }
 
@@ -524,7 +705,11 @@ class DialStoreClass {
     this.eventListeners.get(panelId)!.add(listener);
 
     return () => {
-      this.eventListeners.get(panelId)?.delete(listener);
+      const listeners = this.eventListeners.get(panelId);
+      listeners?.delete(listener);
+      if (listeners?.size === 0 && !this.panels.has(panelId)) {
+        this.eventListeners.delete(panelId);
+      }
     };
   }
 
@@ -566,6 +751,7 @@ class DialStoreClass {
     panel.values = { ...preset.values };
     this.snapshots.set(panelId, { ...panel.values });
     this.activePreset.set(panelId, presetId);
+    this.savePanelValues(panelId);
     this.notify(panelId);
   }
 

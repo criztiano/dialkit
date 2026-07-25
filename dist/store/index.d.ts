@@ -278,6 +278,7 @@ type PanelConfig = {
     controls: ControlMeta[];
     values: Record<string, DialValue>;
     shortcuts: Record<string, ShortcutConfig>;
+    kind?: 'timeline';
 };
 type Listener = () => void;
 type ActionListener = (action: string) => void;
@@ -306,6 +307,30 @@ type Preset = {
     name: string;
     values: Record<string, DialValue>;
 };
+type DialKitPersistOptions = boolean | {
+    key?: string;
+    storage?: 'localStorage' | 'sessionStorage';
+    presets?: boolean;
+};
+type DialStorePanelOptions = {
+    retainOnUnmount?: boolean;
+    persist?: DialKitPersistOptions;
+    /** Timeline panels render in DialTimeline and are filtered out of the panel dock. */
+    kind?: 'timeline';
+};
+/** camelCase → Title Case, the label rule used everywhere a key becomes UI text. */
+declare function formatLabel(key: string): string;
+/** Default slider step for a numeric range. */
+declare function inferStep(min: number, max: number): number;
+declare function isHexColor(value: string): boolean;
+declare function isSpringConfigValue(value: unknown): value is SpringConfig;
+declare function isEasingConfigValue(value: unknown): value is EasingConfig;
+/**
+ * Resolve a flat value snapshot back into the nested shape declared by a config.
+ * Shared by the timeline core (timing-only configs). Handles the primitive,
+ * spring/easing, select, color, and text config kinds a timeline emits.
+ */
+declare function resolveDialValues<T extends DialConfig>(config: T, flatValues: Record<string, DialValue>): ResolvedValues<T>;
 declare class DialStoreClass {
     private panels;
     private listeners;
@@ -316,17 +341,21 @@ declare class DialStoreClass {
     private presets;
     private activePreset;
     private baseValues;
-    registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>): void;
-    updatePanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>): void;
+    private persistTargets;
+    registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, options?: DialStorePanelOptions): void;
+    updatePanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, options?: DialStorePanelOptions): void;
     unregisterPanel(id: string): void;
+    private overlayPersistedValues;
+    private savePanelValues;
     updateValue(panelId: string, path: string, value: DialValue): void;
+    updateValues(panelId: string, updates: Record<string, DialValue>): void;
     updateSpringMode(panelId: string, path: string, mode: 'simple' | 'advanced'): void;
     getSpringMode(panelId: string, path: string): 'simple' | 'advanced';
     updateTransitionMode(panelId: string, path: string, mode: 'easing' | 'simple' | 'advanced'): void;
     getTransitionMode(panelId: string, path: string): 'easing' | 'simple' | 'advanced';
     getValue(panelId: string, path: string): DialValue | undefined;
     getValues(panelId: string): Record<string, DialValue>;
-    getPanels(): PanelConfig[];
+    getPanels(kind?: 'panel' | 'timeline'): PanelConfig[];
     getPanel(id: string): PanelConfig | undefined;
     subscribe(panelId: string, listener: Listener): () => void;
     subscribeGlobal(listener: Listener): () => void;
@@ -389,4 +418,4 @@ declare function defaultListItemParams(schema: Record<string, ListItemField>): R
 declare function normalizeListItems(config: ListConfig): ListItemValue[];
 declare const DialStore: DialStoreClass;
 
-export { type ActionConfig, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type DialConfig, type DialEvent, DialStore, type DialValue, type EasingConfig, type FileConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type PanelConfig, type Preset, type RangeConfig, type RangeValue, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SpringConfig, type SwatchConfig, type SwatchOption, type TextConfig, type TransitionConfig, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, normalizeListItems, parseListItemSchema };
+export { type ActionConfig, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type DialConfig, type DialEvent, type DialKitPersistOptions, DialStore, type DialStorePanelOptions, type DialValue, type EasingConfig, type FileConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type PanelConfig, type Preset, type RangeConfig, type RangeValue, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SpringConfig, type SwatchConfig, type SwatchOption, type TextConfig, type TransitionConfig, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, formatLabel, inferStep, isEasingConfigValue, isHexColor, isSpringConfigValue, normalizeListItems, parseListItemSchema, resolveDialValues };

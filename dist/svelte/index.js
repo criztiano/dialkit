@@ -2,6 +2,10 @@
 export { createDialKit } from './createDialKit.svelte';
 // Root component
 export { default as DialRoot } from './components/DialRoot.svelte';
+// Timeline (prototype)
+export { createDialTimeline } from './createDialTimeline.svelte';
+export { default as DialTimeline } from './components/Timeline/DialTimeline.svelte';
+export { formatClock, TimelineStore } from 'dialkit/timeline';
 // Shortcut components
 export { default as ShortcutListener } from './components/ShortcutListener.svelte';
 export { SHORTCUT_CTX } from './components/ShortcutListener.svelte';

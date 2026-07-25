@@ -6,6 +6,30 @@ export type { CreateDialOptions, DialKitValues } from './createDialKit.svelte';
 export { default as DialRoot } from './components/DialRoot.svelte';
 export type { DialPosition, DialMode, DialTheme } from './components/DialRoot.svelte';
 
+// Timeline (prototype)
+export { createDialTimeline } from './createDialTimeline.svelte';
+export type { CreateDialTimelineOptions } from './createDialTimeline.svelte';
+export { default as DialTimeline } from './components/Timeline/DialTimeline.svelte';
+export { formatClock, TimelineStore } from 'dialkit/timeline';
+export type {
+  TimelineClipConfig,
+  TimelineClipCss,
+  TimelineClipLoop,
+  TimelineConfig,
+  TimelineClipValues,
+  TimelineGroupConfig,
+  TimelineGroupValues,
+  TimelinePropConfig,
+  TimelinePropStepConfig,
+  TimelineStepConfig,
+  TimelineStepValues,
+  DialTimelineValues,
+  TimelineMeta,
+  TimelineClipMeta,
+  TimelineClipTrackMeta,
+  TimelineTransport,
+} from 'dialkit/timeline';
+
 // Shortcut components
 export { default as ShortcutListener } from './components/ShortcutListener.svelte';
 export { SHORTCUT_CTX } from './components/ShortcutListener.svelte';

@@ -127,8 +127,102 @@ function clampRange(v, min, max) {
   return orderRange({ min: clamp3(v.min, min, max), max: clamp3(v.max, min, max) });
 }
 
+// src/store/persist.ts
+var STORAGE_VERSION = "v1";
+function resolvePersistTarget(kind, id, persist) {
+  if (!persist) return null;
+  const config = persist === true ? {} : persist;
+  const base = config.key ?? id;
+  if (!base) return null;
+  return {
+    key: `dialkit:${STORAGE_VERSION}:${kind}:${base}`,
+    storage: config.storage ?? "localStorage"
+  };
+}
+function getStorage(name) {
+  try {
+    if (typeof window === "undefined") return null;
+    return name === "sessionStorage" ? window.sessionStorage : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+function loadPersisted(target) {
+  if (!target) return null;
+  try {
+    const storage = getStorage(target.storage);
+    if (!storage) return null;
+    const raw = storage.getItem(target.key);
+    if (raw == null) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+function savePersisted(target, value) {
+  if (!target) return;
+  try {
+    const storage = getStorage(target.storage);
+    if (!storage) return;
+    storage.setItem(target.key, JSON.stringify(value));
+  } catch {
+  }
+}
+
 // src/store/DialStore.ts
 var EMPTY_VALUES = Object.freeze({});
+function formatLabel(key) {
+  return key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()).trim();
+}
+function inferStep(min, max) {
+  const range = max - min;
+  if (range <= 1) return 0.01;
+  if (range <= 10) return 0.1;
+  if (range <= 100) return 1;
+  return 10;
+}
+function isHexColor(value) {
+  return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(value);
+}
+function resolveValueHasType(value, type) {
+  return typeof value === "object" && value !== null && "type" in value && value.type === type;
+}
+function isSpringConfigValue(value) {
+  return resolveValueHasType(value, "spring");
+}
+function isEasingConfigValue(value) {
+  return resolveValueHasType(value, "easing");
+}
+function resolveDialValues(config, flatValues) {
+  return resolveConfigValues(config, flatValues, "");
+}
+function resolveConfigValues(config, flatValues, prefix) {
+  const result = {};
+  for (const [key, configValue] of Object.entries(config)) {
+    if (key === "_collapsed") continue;
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === "number") {
+      result[key] = flatValues[path] ?? configValue[0];
+    } else if (typeof configValue === "number" || typeof configValue === "boolean" || typeof configValue === "string") {
+      result[key] = flatValues[path] ?? configValue;
+    } else if (resolveValueHasType(configValue, "spring") || resolveValueHasType(configValue, "easing")) {
+      result[key] = flatValues[path] ?? configValue;
+    } else if (resolveValueHasType(configValue, "action")) {
+      result[key] = flatValues[path] ?? configValue;
+    } else if (resolveValueHasType(configValue, "select") && Array.isArray(configValue.options)) {
+      const select = configValue;
+      const defaultValue = select.default ?? (typeof select.options[0] === "string" ? select.options[0] : select.options[0]?.value);
+      result[key] = flatValues[path] ?? defaultValue;
+    } else if (resolveValueHasType(configValue, "color")) {
+      result[key] = flatValues[path] ?? configValue.default ?? "#000000";
+    } else if (resolveValueHasType(configValue, "text")) {
+      result[key] = flatValues[path] ?? configValue.default ?? "";
+    } else if (typeof configValue === "object" && configValue !== null) {
+      result[key] = resolveConfigValues(configValue, flatValues, path);
+    }
+  }
+  return result;
+}
 var DialStoreClass = class {
   constructor() {
     this.panels = /* @__PURE__ */ new Map();
@@ -140,20 +234,32 @@ var DialStoreClass = class {
     this.presets = /* @__PURE__ */ new Map();
     this.activePreset = /* @__PURE__ */ new Map();
     this.baseValues = /* @__PURE__ */ new Map();
+    // Resolved storage target per panel (null = persistence off). Absent = not
+    // yet registered.
+    this.persistTargets = /* @__PURE__ */ new Map();
   }
-  registerPanel(id, name, config, shortcuts) {
+  registerPanel(id, name, config, shortcuts, options = {}) {
+    const existingPanel = this.panels.get(id);
+    if (existingPanel && existingPanel.kind !== options.kind) {
+      console.warn(
+        `[dialkit] Panel id "${id}" cannot be shared by a timeline and a standard panel; the most recent registration controls where it renders.`
+      );
+    }
+    const target = resolvePersistTarget("panel", id, options.persist);
+    this.persistTargets.set(id, target);
     const controls = this.parseConfig(config, "", shortcuts);
     const values = this.flattenValues(config, "");
     this.initTransitionModes(config, "", values);
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {} });
+    this.overlayPersistedValues(target, values);
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
   }
-  updatePanel(id, name, config, shortcuts) {
+  updatePanel(id, name, config, shortcuts, options = {}) {
     const existing = this.panels.get(id);
     if (!existing) {
-      this.registerPanel(id, name, config, shortcuts);
+      this.registerPanel(id, name, config, shortcuts, options);
       return;
     }
     const controls = this.parseConfig(config, "", shortcuts);
@@ -178,7 +284,7 @@ var DialStoreClass = class {
         nextValues[path] = mode;
       }
     }
-    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts };
+    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
     const previousBaseValues = this.baseValues.get(id) ?? {};
@@ -196,17 +302,38 @@ var DialStoreClass = class {
       }
     }
     this.baseValues.set(id, nextBaseValues);
+    this.savePanelValues(id);
     this.notify(id);
     this.notifyGlobal();
   }
   unregisterPanel(id) {
     this.panels.delete(id);
-    this.listeners.delete(id);
+    if (this.listeners.get(id)?.size === 0) this.listeners.delete(id);
+    if (this.actionListeners.get(id)?.size === 0) this.actionListeners.delete(id);
+    if (this.eventListeners.get(id)?.size === 0) this.eventListeners.delete(id);
     this.snapshots.delete(id);
-    this.actionListeners.delete(id);
-    this.eventListeners.delete(id);
     this.baseValues.delete(id);
+    this.persistTargets.delete(id);
     this.notifyGlobal();
+  }
+  // Overlay saved values onto freshly-computed defaults, in place. Only keys
+  // that still exist in `values` (i.e. the current config) are restored.
+  overlayPersistedValues(target, values) {
+    const persisted = loadPersisted(target);
+    if (!persisted) return;
+    for (const key of Object.keys(values)) {
+      if (Object.prototype.hasOwnProperty.call(persisted, key)) {
+        values[key] = persisted[key];
+      }
+    }
+  }
+  // Save the panel's current flat values (fail-soft, no-op when persistence is
+  // off). Called after every edit so timing/values survive a reload.
+  savePanelValues(panelId) {
+    const target = this.persistTargets.get(panelId);
+    if (!target) return;
+    const panel = this.panels.get(panelId);
+    if (panel) savePersisted(target, panel.values);
   }
   updateValue(panelId, path, value) {
     const panel = this.panels.get(panelId);
@@ -222,6 +349,26 @@ var DialStoreClass = class {
       if (base) base[path] = value;
     }
     this.snapshots.set(panelId, { ...panel.values });
+    this.savePanelValues(panelId);
+    this.notify(panelId);
+  }
+  // Apply several path/value edits atomically — one snapshot + one notify.
+  // The timeline uses this when a single gesture trades time between fields
+  // (e.g. resizing a clip's start edge shifts both its position and duration),
+  // where an intermediate single-field state would be invalid.
+  updateValues(panelId, updates) {
+    const panel = this.panels.get(panelId);
+    if (!panel) return;
+    const activeId = this.activePreset.get(panelId);
+    const preset = activeId ? (this.presets.get(panelId) ?? []).find((p) => p.id === activeId) : void 0;
+    const base = this.baseValues.get(panelId);
+    for (const [path, value] of Object.entries(updates)) {
+      panel.values[path] = value;
+      if (preset) preset.values[path] = value;
+      else if (base) base[path] = value;
+    }
+    this.snapshots.set(panelId, { ...panel.values });
+    this.savePanelValues(panelId);
     this.notify(panelId);
   }
   updateSpringMode(panelId, path, mode) {
@@ -251,8 +398,11 @@ var DialStoreClass = class {
   getValues(panelId) {
     return this.snapshots.get(panelId) ?? EMPTY_VALUES;
   }
-  getPanels() {
-    return Array.from(this.panels.values());
+  getPanels(kind) {
+    const all = Array.from(this.panels.values());
+    if (kind === "panel") return all.filter((panel) => panel.kind !== "timeline");
+    if (kind === "timeline") return all.filter((panel) => panel.kind === "timeline");
+    return all;
   }
   getPanel(id) {
     return this.panels.get(id);
@@ -263,7 +413,11 @@ var DialStoreClass = class {
     }
     this.listeners.get(panelId).add(listener);
     return () => {
-      this.listeners.get(panelId)?.delete(listener);
+      const listeners = this.listeners.get(panelId);
+      listeners?.delete(listener);
+      if (listeners?.size === 0 && !this.panels.has(panelId)) {
+        this.listeners.delete(panelId);
+      }
     };
   }
   subscribeGlobal(listener) {
@@ -276,7 +430,11 @@ var DialStoreClass = class {
     }
     this.actionListeners.get(panelId).add(listener);
     return () => {
-      this.actionListeners.get(panelId)?.delete(listener);
+      const listeners = this.actionListeners.get(panelId);
+      listeners?.delete(listener);
+      if (listeners?.size === 0 && !this.panels.has(panelId)) {
+        this.actionListeners.delete(panelId);
+      }
     };
   }
   triggerAction(panelId, path) {
@@ -289,7 +447,11 @@ var DialStoreClass = class {
     }
     this.eventListeners.get(panelId).add(listener);
     return () => {
-      this.eventListeners.get(panelId)?.delete(listener);
+      const listeners = this.eventListeners.get(panelId);
+      listeners?.delete(listener);
+      if (listeners?.size === 0 && !this.panels.has(panelId)) {
+        this.eventListeners.delete(panelId);
+      }
     };
   }
   emitEvent(panelId, path, event) {
@@ -320,6 +482,7 @@ var DialStoreClass = class {
     panel.values = { ...preset.values };
     this.snapshots.set(panelId, { ...panel.values });
     this.activePreset.set(panelId, presetId);
+    this.savePanelValues(panelId);
     this.notify(panelId);
   }
   deletePreset(panelId, presetId) {
@@ -807,7 +970,13 @@ var DialStore = new DialStoreClass();
 export {
   DialStore,
   defaultListItemParams,
+  formatLabel,
+  inferStep,
+  isEasingConfigValue,
+  isHexColor,
+  isSpringConfigValue,
   normalizeListItems,
-  parseListItemSchema
+  parseListItemSchema,
+  resolveDialValues
 };
 //# sourceMappingURL=index.js.map

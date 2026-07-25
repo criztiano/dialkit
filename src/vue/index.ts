@@ -3,6 +3,34 @@ export type { UseDialOptions } from './useDialKit';
 export { vDialKit } from './directives/dialkit';
 export type { DialKitDirectiveOptions, DialKitDirectiveValue } from './directives/dialkit';
 
+// Timeline (prototype)
+export { useDialTimeline } from './useDialTimeline';
+export type { UseDialTimelineOptions } from './useDialTimeline';
+export type {
+  DialTimelineValues,
+  TimelineClipConfig,
+  TimelineClipCss,
+  TimelineClipLoop,
+  TimelineClipValues,
+  TimelineConfig,
+  TimelineGroupConfig,
+  TimelineGroupValues,
+  TimelinePropConfig,
+  TimelinePropStepConfig,
+  TimelineStepConfig,
+  TimelineStepValues,
+} from '../timeline';
+export { DialTimeline } from './components/Timeline/DialTimeline';
+export { TimelineToggleButton } from './components/Timeline/TimelineToggleButton';
+export { ControlRenderer } from './components/ControlRenderer';
+export { TimelineStore } from '../store/TimelineStore';
+export type {
+  TimelineMeta,
+  TimelineClipMeta,
+  TimelineClipTrackMeta,
+  TimelineTransport,
+} from '../store/TimelineStore';
+
 export { DialRoot } from './components/DialRoot';
 export type { DialPosition, DialMode, DialTheme } from './components/DialRoot';
 
