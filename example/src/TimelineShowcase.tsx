@@ -1,11 +1,11 @@
 import { useDialTimeline, DialTimeline } from 'dialkit';
 import type { UseDialTimelineOptions } from 'dialkit';
 
-// Stable options identity: the timeline hook keys effects off `options.loop`,
-// so an inline `{ loop: { from } }` object would be new every render and spin
-// the transport update effect into an infinite loop. The config may stay inline
-// (the hook content-compares it), but options must be referentially stable.
-const TIMELINE_OPTIONS: UseDialTimelineOptions = { loop: { from: 0.8 } };
+// Stable options identity (the hook keys effects off options), plus a stable
+// `id` and `persist` so the timing edits and any loop region survive a reload.
+// No `loop` option: the timeline loops the whole thing by default — drag the
+// ruler to set a loop region, and the loop button clears it.
+const TIMELINE_OPTIONS: UseDialTimelineOptions = { id: 'timeline-demo', persist: true };
 
 // A small but representative timeline: an entrance clip (transform + fade with a
 // spring), a looping float that adds a second row and keeps cycling, and a glow
