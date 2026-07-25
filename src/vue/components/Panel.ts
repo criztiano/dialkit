@@ -1,23 +1,11 @@
-import { Fragment, defineComponent, h, onMounted, onUnmounted, ref, type PropType } from 'vue';
+import { Fragment, defineComponent, h, onMounted, onUnmounted, ref, type PropType, type VNodeChild } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
 import { ICON_ADD_PRESET, ICON_CHECK, ICON_CLIPBOARD } from '../../icons';
 import { DialStore } from '../../store/DialStore';
-import type { ControlMeta, DialValue, PanelConfig, RangeValue, SpringConfig, TransitionConfig, XYValue } from '../../store/DialStore';
-import type { GradientValue } from '../../gradient-core';
+import type { DialValue, PanelConfig } from '../../store/DialStore';
 import { Folder } from './Folder';
-import { Slider } from './Slider';
-import { RangeSlider } from './RangeSlider';
-import { Toggle } from './Toggle';
-import { SpringControl } from './SpringControl';
-import { TransitionControl } from './TransitionControl';
-import { TextControl } from './TextControl';
-import { SelectControl } from './SelectControl';
-import { ColorControl } from './ColorControl';
-import { GradientControl } from './GradientControl';
-import { XYControl } from './XYControl';
+import { ControlRenderer } from './ControlRenderer';
 import { PresetManager } from './PresetManager';
-import { useShortcutContext } from './ShortcutListener';
-import { ShortcutsMenu } from './ShortcutsMenu';
 
 export const Panel = defineComponent({
   name: 'DialKitPanel',
@@ -34,14 +22,15 @@ export const Panel = defineComponent({
       type: Boolean,
       default: false,
     },
+    // Extra toolbar node injected after the built-in preset/copy controls —
+    // used to surface the timeline visibility toggle in the panel header.
+    toolbarExtra: Function as PropType<() => VNodeChild>,
   },
   setup(props) {
-    const shortcutCtx = useShortcutContext();
     const values = ref<Record<string, DialValue>>(DialStore.getValues(props.panel.id));
     const presets = ref(DialStore.getPresets(props.panel.id));
     const activePresetId = ref<string | null>(DialStore.getActivePresetId(props.panel.id));
     const copied = ref(false);
-    const hasShortcuts = () => Object.keys(DialStore.getPanel(props.panel.id)?.shortcuts ?? {}).length > 0;
 
     let unsubscribe: (() => void) | undefined;
     let copiedTimeout: ReturnType<typeof window.setTimeout> | null = null;
@@ -85,127 +74,6 @@ export const Panel = defineComponent({
       copiedTimeout = window.setTimeout(() => {
         copied.value = false;
       }, 1500);
-    };
-
-    const renderControl = (control: ControlMeta) => {
-      const value = values.value[control.path];
-
-      switch (control.type) {
-        case 'slider':
-          return h(Slider, {
-            key: control.path,
-            label: control.label,
-            value: value as number,
-            min: control.min,
-            max: control.max,
-            step: control.step,
-            shortcut: control.shortcut,
-            shortcutActive: shortcutCtx.activePanelId.value === props.panel.id && shortcutCtx.activePath.value === control.path,
-            onChange: (next: number) => DialStore.updateValue(props.panel.id, control.path, next),
-          });
-        case 'range':
-          return h(RangeSlider, {
-            key: control.path,
-            label: control.label,
-            value: value as RangeValue,
-            min: control.min ?? 0,
-            max: control.max ?? 1,
-            step: control.step,
-            defaultValue: control.rangeDefault,
-            onChange: (next: RangeValue) => DialStore.updateValue(props.panel.id, control.path, next),
-          });
-        case 'toggle':
-          return h(Toggle, {
-            key: control.path,
-            label: control.label,
-            checked: value as boolean,
-            shortcut: control.shortcut,
-            shortcutActive: shortcutCtx.activePanelId.value === props.panel.id && shortcutCtx.activePath.value === control.path,
-            onChange: (next: boolean) => DialStore.updateValue(props.panel.id, control.path, next),
-          });
-        case 'spring':
-          return h(SpringControl, {
-            key: control.path,
-            panelId: props.panel.id,
-            path: control.path,
-            label: control.label,
-            spring: value as SpringConfig,
-            onChange: (next: SpringConfig) => DialStore.updateValue(props.panel.id, control.path, next),
-          });
-        case 'transition':
-          return h(TransitionControl, {
-            key: control.path,
-            panelId: props.panel.id,
-            path: control.path,
-            label: control.label,
-            value: value as TransitionConfig,
-            onChange: (next: TransitionConfig) => DialStore.updateValue(props.panel.id, control.path, next),
-          });
-        case 'folder':
-          return h(Folder, {
-            key: control.path,
-            title: control.label,
-            defaultOpen: control.defaultOpen ?? true,
-          }, {
-            default: () => (control.children ?? []).map(renderControl),
-          });
-        case 'text':
-          return h(TextControl, {
-            key: control.path,
-            label: control.label,
-            value: value as string,
-            placeholder: control.placeholder,
-            onChange: (next: string) => DialStore.updateValue(props.panel.id, control.path, next),
-          });
-        case 'select':
-          return h(SelectControl, {
-            key: control.path,
-            label: control.label,
-            value: value as string,
-            options: control.options ?? [],
-            onChange: (next: string) => DialStore.updateValue(props.panel.id, control.path, next),
-          });
-        case 'color':
-          return h(ColorControl, {
-            key: control.path,
-            label: control.label,
-            value: value as string,
-            alpha: control.alpha,
-            palette: control.palette,
-            onChange: (next: string) => DialStore.updateValue(props.panel.id, control.path, next),
-          });
-        case 'gradient':
-          return h(GradientControl, {
-            key: control.path,
-            label: control.label,
-            value: value as GradientValue,
-            onChange: (next: GradientValue) => DialStore.updateValue(props.panel.id, control.path, next),
-          });
-        case 'xy':
-          return h(XYControl, {
-            key: control.path,
-            label: control.label,
-            value: value as XYValue,
-            x: control.xAxis,
-            y: control.yAxis,
-            grid: control.grid,
-            density: control.density,
-            snap: control.snap,
-            returnToCenter: control.returnToCenter,
-            showValues: control.showValues,
-            shortcut: control.shortcut,
-            shortcutActive: shortcutCtx.activePanelId.value === props.panel.id && shortcutCtx.activePath.value === control.path,
-            onChange: (next: XYValue) => DialStore.updateValue(props.panel.id, control.path, next),
-          });
-        case 'action':
-          return h('button', {
-            key: control.path,
-            class: 'dialkit-button',
-            onClick: () => DialStore.triggerAction(props.panel.id, control.path),
-          }, control.label);
-        default:
-          return null;
-      }
     };
 
     return () => {
@@ -294,6 +162,7 @@ export const Panel = defineComponent({
           ]),
           'Copy',
         ]),
+        props.toolbarExtra?.(),
       ]);
 
       return h('div', { class: 'dialkit-panel-wrapper' }, [
@@ -304,7 +173,13 @@ export const Panel = defineComponent({
           inline: props.inline,
           toolbar: () => toolbarNode,
         }, {
-          default: () => props.panel.controls.map(renderControl),
+          default: () => [
+            h(ControlRenderer, {
+              panelId: props.panel.id,
+              controls: props.panel.controls,
+              values: values.value,
+            }),
+          ],
         }),
       ]);
     };
