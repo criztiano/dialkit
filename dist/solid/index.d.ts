@@ -488,6 +488,162 @@ interface CreateDialOptions {
 }
 declare function createDialKit<T extends DialConfig>(name: string, config: T, options?: CreateDialOptions): Accessor<ResolvedValues<T>>;
 
+type TimelineClipLoop = 'off' | 'repeat';
+type TimelineStepValues = {
+    [key: string]: DialConfig[string] | undefined;
+};
+type TimelineStepConfig = {
+    duration?: number;
+    to?: TimelineStepValues;
+    transition?: TransitionConfig;
+};
+type TimelinePropStepConfig = {
+    duration?: number;
+    to?: number | string;
+    transition?: TransitionConfig;
+};
+type TimelinePropConfig = {
+    from?: number | string;
+    to?: number | string;
+    duration?: number;
+    /** Offset from the clip's `at` in seconds. */
+    delay?: number;
+    transition?: TransitionConfig;
+    steps?: TimelinePropStepConfig[];
+};
+type TimelineClipBase = {
+    at: number;
+    duration?: number;
+    transition?: TransitionConfig;
+    loop?: boolean | TimelineClipLoop;
+};
+type TimelineClipConfig = TimelineClipBase & ({
+    from?: DialConfig;
+    to?: DialConfig;
+    steps?: never;
+    props?: never;
+} | {
+    from?: DialConfig;
+    to?: never;
+    /** Sequential legs on one row — a segmented bar; boundaries retime legs. */
+    steps: TimelineStepConfig[];
+    props?: never;
+} | {
+    from?: never;
+    to?: never;
+    steps?: never;
+    /** Independent per-property tracks — mutually exclusive with from/to/steps. */
+    props: {
+        [prop: string]: TimelinePropConfig;
+    };
+});
+/** Nested keys group clips into a collapsible layer — purely presentational. */
+type TimelineGroupConfig = {
+    [key: string]: TimelineClipConfig;
+};
+type TimelineConfig = {
+    /** Total timeline length in seconds. Inferred from the last clip when omitted. */
+    duration?: number;
+} & {
+    [key: string]: TimelineClipConfig | TimelineGroupConfig | number | undefined;
+};
+/** CSS-friendly output for consumers not using Motion — spread into a style. */
+type TimelineClipCss = {
+    transitionDuration: string;
+    transitionTimingFunction: string;
+};
+type TimelineClipValues<C extends TimelineClipConfig = TimelineClipConfig> = {
+    at: number;
+    duration: number;
+    /** Effective code-defined loop mode. */
+    loop: TimelineClipLoop;
+    /** Playhead is at or past the clip start. */
+    started: boolean;
+    /** Playhead is inside the clip — for looping clips, inside any cycle. */
+    active: boolean;
+    /** Playhead is past the clip end (for looping clips, past the timeline end). */
+    done: boolean;
+    /**
+     * 0–1 position of the playhead within the clip — cycle progress (a
+     * sawtooth) for looping clips, sequence progress for steps clips.
+     */
+    progress: number;
+    /** Index of the leg under the playhead, for sequence clips. */
+    step: C['steps'] extends TimelineStepConfig[] ? number : undefined;
+    from: C['props'] extends Record<string, TimelinePropConfig> ? {
+        [K in keyof C['props']]: number | string;
+    } : C['from'] extends DialConfig ? ResolvedValues<C['from']> : undefined;
+    to: C['props'] extends Record<string, TimelinePropConfig> ? {
+        [K in keyof C['props']]: number | string;
+    } : C['steps'] extends TimelineStepConfig[] ? C['from'] extends DialConfig ? ResolvedValues<C['from']> : Record<string, number | string> : C['to'] extends DialConfig ? ResolvedValues<C['to']> : undefined;
+    /** `to` once the clip has started, `from` before — hand it to Motion's animate.
+     * For sequences this is the final merged state; for props clips, per-track
+     * endpoint records. */
+    animate: C['props'] extends Record<string, TimelinePropConfig> ? {
+        [K in keyof C['props']]: number | string;
+    } : C['steps'] extends TimelineStepConfig[] ? C['from'] extends DialConfig ? ResolvedValues<C['from']> : Record<string, number | string> | undefined : C['to'] extends DialConfig ? C['from'] extends DialConfig ? ResolvedValues<C['from']> | ResolvedValues<C['to']> : ResolvedValues<C['to']> | undefined : undefined;
+    /** The clip's editable curve — single-curve clips only. */
+    transition: C['props'] extends Record<string, TimelinePropConfig> ? undefined : C['steps'] extends TimelineStepConfig[] ? undefined : C extends {
+        transition: TransitionConfig;
+    } | {
+        from: DialConfig;
+    } | {
+        to: DialConfig;
+    } ? TransitionConfig : undefined;
+    /** Duration + timing-function for native CSS transitions — single-curve clips only. */
+    css: C['props'] extends Record<string, TimelinePropConfig> ? undefined : C['steps'] extends TimelineStepConfig[] ? undefined : C extends {
+        transition: TransitionConfig;
+    } | {
+        from: DialConfig;
+    } | {
+        to: DialConfig;
+    } ? TimelineClipCss : undefined;
+    /**
+     * Values interpolated through the clip's curves at the current playhead —
+     * bind to style for true scrubbing: the element is exactly at this point
+     * in time whether playing, paused, or scrubbing. Sequence clips report the
+     * merged state of all legs (declare every animated property in `from`);
+     * props clips report every track's value.
+     */
+    current: C['props'] extends Record<string, TimelinePropConfig> ? {
+        [K in keyof C['props']]: number | string;
+    } : C['steps'] extends TimelineStepConfig[] ? C['from'] extends DialConfig ? ResolvedValues<C['from']> : Record<string, number | string> : C['to'] extends DialConfig ? C['from'] extends DialConfig ? ResolvedValues<C['from']> | ResolvedValues<C['to']> : undefined : undefined;
+};
+type TimelineGroupValues<G extends TimelineGroupConfig> = {
+    [K in keyof G as G[K] extends TimelineClipConfig ? K : never]: TimelineClipValues<Extract<G[K], TimelineClipConfig>>;
+};
+type DialTimelineValues<T extends TimelineConfig> = {
+    time: number;
+    playing: boolean;
+    duration: number;
+    play: () => void;
+    pause: () => void;
+    replay: () => void;
+    seek: (time: number) => void;
+} & {
+    [K in keyof T as T[K] extends TimelineClipConfig ? K : never]: TimelineClipValues<Extract<T[K], TimelineClipConfig>>;
+} & {
+    [K in keyof T as T[K] extends TimelineClipConfig ? never : T[K] extends TimelineGroupConfig ? K : never]: TimelineGroupValues<Extract<T[K], TimelineGroupConfig>>;
+};
+
+interface DialTimelineOptions {
+    id?: string;
+    persist?: DialKitPersistOptions;
+    /** Start playing on mount. Defaults to true. */
+    autoplay?: boolean;
+    /**
+     * Loop when the playhead reaches the end. `true` restarts the whole
+     * timeline; `{ from }` wraps back to that time instead, so clips before it
+     * play once and looping clips keep cycling forever. Defaults to false.
+     */
+    loop?: boolean | {
+        from: number;
+    };
+}
+
+type CreateDialTimelineOptions = DialTimelineOptions;
+declare function createDialTimeline<T extends TimelineConfig>(name: string, config: T, options?: CreateDialTimelineOptions): Accessor<DialTimelineValues<T>>;
+
 type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 type DialMode = 'popover' | 'inline';
 type DialTheme = 'light' | 'dark' | 'system';
@@ -499,6 +655,18 @@ interface DialRootProps {
     productionEnabled?: boolean;
 }
 declare function DialRoot(props: DialRootProps): solid_js.JSX.Element;
+
+interface DialTimelineProps {
+    theme?: DialTheme;
+    defaultVisible?: boolean;
+    visible?: boolean;
+    onVisibilityChange?: (visible: boolean) => void;
+    defaultOpen?: boolean;
+    productionEnabled?: boolean;
+}
+declare function DialTimeline(props: DialTimelineProps): JSX.Element;
+
+declare function TimelineToggleButton(): solid_js.JSX.Element;
 
 interface SliderProps {
     label: string;
@@ -894,4 +1062,35 @@ interface PresetManagerProps {
 }
 declare function PresetManager(props: PresetManagerProps): solid_js.JSX.Element;
 
-export { type ActionConfig, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, type AxisSpec, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, type CreateDialOptions, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, type DialConfig, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, Folder, GradientControl, GradientPanel, type GradientStop, type GradientType, type GradientValue, Module, type PanelConfig, type Point, type Preset, PresetManager, RangeSlider, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, applyDetentAxis, centerValue, clamp, createDialKit, gradientToCss, invertY, normToValue, normalizeValue, nudge, pointFromValue, resolveAxis, snapToStep, valueFromPoint, valueToNorm };
+interface TransitionDurationControl {
+    value: number;
+    onChange: (value: number) => void;
+    min?: number;
+    max?: number;
+    step?: number;
+}
+interface TransitionControlProps {
+    panelId: string;
+    path: string;
+    label: string;
+    value: TransitionConfig;
+    onChange: (value: TransitionConfig) => void;
+    hideDuration?: boolean;
+    durationControl?: TransitionDurationControl;
+}
+declare function TransitionControl(props: TransitionControlProps): solid_js.JSX.Element;
+
+interface ControlRendererProps {
+    panelId: string;
+    controls: ControlMeta[];
+    values: Record<string, DialValue>;
+    /** Optional timeline-owned duration rendered inside the transition editor. */
+    transitionDuration?: TransitionDurationControl;
+}
+declare function ControlRenderer(props: ControlRendererProps): solid_js.JSX.Element;
+
+declare function EasingVisualization(props: {
+    easing: EasingConfig;
+}): solid_js.JSX.Element;
+
+export { type ActionConfig, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, type AxisSpec, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, ControlRenderer, type CreateDialOptions, type CreateDialTimelineOptions, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, type DialConfig, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, DialTimeline, type DialTimelineProps, type DialTimelineValues, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, Folder, GradientControl, GradientPanel, type GradientStop, type GradientType, type GradientValue, Module, type PanelConfig, type Point, type Preset, PresetManager, RangeSlider, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineToggleButton, Toggle, type TransitionConfig, TransitionControl, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, applyDetentAxis, centerValue, clamp, createDialKit, createDialTimeline, gradientToCss, invertY, normToValue, normalizeValue, nudge, pointFromValue, resolveAxis, snapToStep, valueFromPoint, valueToNorm };

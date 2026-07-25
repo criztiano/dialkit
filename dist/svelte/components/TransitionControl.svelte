@@ -9,12 +9,24 @@
 
   type CurveMode = 'easing' | 'simple' | 'advanced';
 
-  let { panelId, path, label, value, onChange } = $props<{
+  // A clip bar can own the transition duration (e.g. the timeline popover binds
+  // it to the clip's `.duration`); when provided the Duration slider defers to it.
+  export type TransitionDurationControl = {
+    value: number;
+    onChange: (value: number) => void;
+    min?: number;
+    max?: number;
+    step?: number;
+  };
+
+  let { panelId, path, label, value, onChange, hideDuration, durationControl } = $props<{
     panelId: string;
     path: string;
     label: string;
     value: TransitionConfig;
     onChange: (value: TransitionConfig) => void;
+    hideDuration?: boolean;
+    durationControl?: TransitionDurationControl;
   }>();
 
   let mode = $state<CurveMode>(DialStore.getTransitionMode(panelId, path));
@@ -108,6 +120,24 @@
     if (parsed) onChange({ ...easing, ease: parsed });
     editingEase = false;
   };
+
+  // Duration is meaningful only for easing/time curves; physics derives it.
+  const showDuration = $derived(!hideDuration && (isEasing || isSimpleSpring));
+  const durationValue = $derived(
+    durationControl?.value ?? (isEasing ? easing.duration : spring.visualDuration ?? 0.3)
+  );
+  const durationMin = $derived(durationControl?.min ?? 0.1);
+  const durationMax = $derived(durationControl?.max ?? (isEasing ? 2 : 1));
+  const durationStep = $derived(durationControl?.step ?? 0.05);
+
+  const handleDurationChange = (v: number) => {
+    if (durationControl) {
+      durationControl.onChange(v);
+      return;
+    }
+    if (isEasing) onChange({ ...easing, duration: v });
+    else handleSpringUpdate('visualDuration', v);
+  };
 </script>
 
 <Folder title={label} defaultOpen={true}>
@@ -136,7 +166,6 @@
       <Slider label="y1" value={easing.ease[1]} onChange={(v) => updateEase(1, v)} min={-1} max={2} step={0.01} />
       <Slider label="x2" value={easing.ease[2]} onChange={(v) => updateEase(2, v)} min={0} max={1} step={0.01} />
       <Slider label="y2" value={easing.ease[3]} onChange={(v) => updateEase(3, v)} min={-1} max={2} step={0.01} />
-      <Slider label="Duration" value={easing.duration} onChange={(v) => onChange({ ...easing, duration: v })} min={0.1} max={2} step={0.05} unit="s" />
 
       <div class="dialkit-labeled-control">
         <span class="dialkit-labeled-control-label">Ease</span>
@@ -156,15 +185,6 @@
         />
       </div>
     {:else if isSimpleSpring}
-      <Slider
-        label="Duration"
-        value={spring.visualDuration ?? 0.3}
-        onChange={(v) => handleSpringUpdate('visualDuration', v)}
-        min={0.1}
-        max={1}
-        step={0.05}
-        unit="s"
-      />
       <Slider
         label="Bounce"
         value={spring.bounce ?? 0.2}
@@ -197,6 +217,18 @@
         min={0.1}
         max={10}
         step={0.1}
+      />
+    {/if}
+
+    {#if showDuration}
+      <Slider
+        label="Duration"
+        value={durationValue}
+        onChange={handleDurationChange}
+        min={durationMin}
+        max={durationMax}
+        step={durationStep}
+        unit="s"
       />
     {/if}
   </div>

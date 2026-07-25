@@ -24,10 +24,12 @@ __export(vue_exports, {
   ButtonGroup: () => ButtonGroup,
   ColorControl: () => ColorControl,
   ColorPickerPanel: () => ColorPickerPanel,
+  ControlRenderer: () => ControlRenderer,
   CurveComposer: () => CurveComposer,
   DEFAULT_GRADIENT: () => DEFAULT_GRADIENT,
   DialRoot: () => DialRoot,
   DialStore: () => DialStore,
+  DialTimeline: () => DialTimeline,
   EasingVisualization: () => EasingVisualization,
   Folder: () => Folder,
   GradientControl: () => GradientControl,
@@ -45,6 +47,8 @@ __export(vue_exports, {
   SpringControl: () => SpringControl,
   SpringVisualization: () => SpringVisualization,
   TextControl: () => TextControl,
+  TimelineStore: () => TimelineStore,
+  TimelineToggleButton: () => TimelineToggleButton,
   Toggle: () => Toggle,
   TransitionControl: () => TransitionControl,
   WaveformVisualization: () => WaveformVisualization,
@@ -60,6 +64,7 @@ __export(vue_exports, {
   setGradientType: () => setGradientType,
   setStopColor: () => setStopColor,
   useDialKit: () => useDialKit,
+  useDialTimeline: () => useDialTimeline,
   useShortcutContext: () => useShortcutContext,
   vDialKit: () => vDialKit
 });
@@ -80,12 +85,12 @@ function parseHex(input) {
   let s = input.trim();
   if (!s.startsWith("#")) s = `#${s}`;
   if (!HEX_COLOR_REGEX.test(s)) return null;
-  let h30 = s.slice(1);
-  if (h30.length <= 4) h30 = h30.split("").map((c) => c + c).join("");
-  const r = parseInt(h30.slice(0, 2), 16);
-  const g = parseInt(h30.slice(2, 4), 16);
-  const b = parseInt(h30.slice(4, 6), 16);
-  const a = h30.length === 8 ? parseInt(h30.slice(6, 8), 16) / 255 : 1;
+  let h33 = s.slice(1);
+  if (h33.length <= 4) h33 = h33.split("").map((c) => c + c).join("");
+  const r = parseInt(h33.slice(0, 2), 16);
+  const g = parseInt(h33.slice(2, 4), 16);
+  const b = parseInt(h33.slice(4, 6), 16);
+  const a = h33.length === 8 ? parseInt(h33.slice(6, 8), 16) / 255 : 1;
   return { r, g, b, a };
 }
 function formatHex(rgba, alphaEnabled) {
@@ -119,36 +124,36 @@ function rgbToHsv(rgba) {
   const r = rgba.r / 255, g = rgba.g / 255, b = rgba.b / 255;
   const max = Math.max(r, g, b), min = Math.min(r, g, b);
   const d = max - min;
-  let h30 = 0;
+  let h33 = 0;
   if (d !== 0) {
-    if (max === r) h30 = (g - b) / d % 6;
-    else if (max === g) h30 = (b - r) / d + 2;
-    else h30 = (r - g) / d + 4;
-    h30 *= 60;
-    if (h30 < 0) h30 += 360;
+    if (max === r) h33 = (g - b) / d % 6;
+    else if (max === g) h33 = (b - r) / d + 2;
+    else h33 = (r - g) / d + 4;
+    h33 *= 60;
+    if (h33 < 0) h33 += 360;
   }
-  return { h: h30, s: max === 0 ? 0 : d / max, v: max, a: rgba.a };
+  return { h: h33, s: max === 0 ? 0 : d / max, v: max, a: rgba.a };
 }
 function hsvToRgb(hsva) {
-  const h30 = (hsva.h % 360 + 360) % 360;
+  const h33 = (hsva.h % 360 + 360) % 360;
   const s = clamp01(hsva.s), v = clamp01(hsva.v);
   const c = v * s;
-  const x = c * (1 - Math.abs(h30 / 60 % 2 - 1));
+  const x = c * (1 - Math.abs(h33 / 60 % 2 - 1));
   const m = v - c;
   let r = 0, g = 0, b = 0;
-  if (h30 < 60) [r, g, b] = [c, x, 0];
-  else if (h30 < 120) [r, g, b] = [x, c, 0];
-  else if (h30 < 180) [r, g, b] = [0, c, x];
-  else if (h30 < 240) [r, g, b] = [0, x, c];
-  else if (h30 < 300) [r, g, b] = [x, 0, c];
+  if (h33 < 60) [r, g, b] = [c, x, 0];
+  else if (h33 < 120) [r, g, b] = [x, c, 0];
+  else if (h33 < 180) [r, g, b] = [0, c, x];
+  else if (h33 < 240) [r, g, b] = [0, x, c];
+  else if (h33 < 300) [r, g, b] = [x, 0, c];
   else [r, g, b] = [c, 0, x];
   return { r: byte((r + m) * 255), g: byte((g + m) * 255), b: byte((b + m) * 255), a: hsva.a };
 }
 function rgbToHsl(rgba) {
-  const { h: h30, s, v, a } = rgbToHsv(rgba);
+  const { h: h33, s, v, a } = rgbToHsv(rgba);
   const l = v * (1 - s / 2);
   const sl = l === 0 || l === 1 ? 0 : (v - l) / Math.min(l, 1 - l);
-  return { h: h30, s: sl, l, a };
+  return { h: h33, s: sl, l, a };
 }
 function hslToRgb(hsla) {
   const l = clamp01(hsla.l), s = clamp01(hsla.s);
@@ -184,32 +189,32 @@ function oklabToLinearRgb(L, A, B) {
 function rgbToOklch(rgba) {
   const { L, A, B } = rgbToOklab(rgba);
   const c = Math.sqrt(A * A + B * B);
-  let h30 = Math.atan2(B, A) * 180 / Math.PI;
-  if (h30 < 0) h30 += 360;
-  return { l: L, c, h: c < 1e-6 ? 0 : h30, a: rgba.a };
+  let h33 = Math.atan2(B, A) * 180 / Math.PI;
+  if (h33 < 0) h33 += 360;
+  return { l: L, c, h: c < 1e-6 ? 0 : h33, a: rgba.a };
 }
 var GAMUT_EPS = 1e-4;
-function inSrgbGamut(l, c, h30) {
-  const rad = h30 * Math.PI / 180;
+function inSrgbGamut(l, c, h33) {
+  const rad = h33 * Math.PI / 180;
   const { r, g, b } = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
   return r >= -GAMUT_EPS && r <= 1 + GAMUT_EPS && g >= -GAMUT_EPS && g <= 1 + GAMUT_EPS && b >= -GAMUT_EPS && b <= 1 + GAMUT_EPS;
 }
 function clampOklchToSrgb(oklch) {
   const l = clamp01(oklch.l);
-  const h30 = (oklch.h % 360 + 360) % 360;
+  const h33 = (oklch.h % 360 + 360) % 360;
   const c = Math.max(0, oklch.c);
-  if (inSrgbGamut(l, c, h30)) return { l, c, h: h30, a: clamp01(oklch.a) };
+  if (inSrgbGamut(l, c, h33)) return { l, c, h: h33, a: clamp01(oklch.a) };
   let lo = 0, hi = c;
   for (let i = 0; i < 24; i++) {
     const mid = (lo + hi) / 2;
-    if (inSrgbGamut(l, mid, h30)) lo = mid;
+    if (inSrgbGamut(l, mid, h33)) lo = mid;
     else hi = mid;
   }
-  return { l, c: lo, h: h30, a: clamp01(oklch.a) };
+  return { l, c: lo, h: h33, a: clamp01(oklch.a) };
 }
 function oklchToRgb(oklch) {
-  const { l, c, h: h30, a } = clampOklchToSrgb(oklch);
-  const rad = h30 * Math.PI / 180;
+  const { l, c, h: h33, a } = clampOklchToSrgb(oklch);
+  const rad = h33 * Math.PI / 180;
   const lin = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
   return {
     r: byte(linearToSrgb(clamp01(lin.r)) * 255),
@@ -248,11 +253,11 @@ function rgbaToChannels(rgba, format, alphaEnabled) {
   if (format === "rgb") {
     values = [rgba.r, rgba.g, rgba.b];
   } else if (format === "hsl") {
-    const { h: h30, s, l } = rgbToHsl(rgba);
-    values = [round(h30, 0), round(s * 100, 0), round(l * 100, 0)];
+    const { h: h33, s, l } = rgbToHsl(rgba);
+    values = [round(h33, 0), round(s * 100, 0), round(l * 100, 0)];
   } else {
-    const { l, c, h: h30 } = rgbToOklch(rgba);
-    values = [round(l, 2), round(c, 3), round(h30, 0)];
+    const { l, c, h: h33 } = rgbToOklch(rgba);
+    values = [round(l, 2), round(c, 3), round(h33, 0)];
   }
   if (alphaEnabled) values.push(opacityPercent(rgba));
   return values;
@@ -655,9 +660,70 @@ function savePersisted(target, value) {
   } catch {
   }
 }
+function clearPersisted(target) {
+  if (!target) return;
+  try {
+    const storage = getStorage(target.storage);
+    if (!storage) return;
+    storage.removeItem(target.key);
+  } catch {
+  }
+}
 
 // src/store/DialStore.ts
 var EMPTY_VALUES = Object.freeze({});
+function formatLabel(key) {
+  return key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()).trim();
+}
+function inferStep(min, max) {
+  const range = max - min;
+  if (range <= 1) return 0.01;
+  if (range <= 10) return 0.1;
+  if (range <= 100) return 1;
+  return 10;
+}
+function isHexColor(value) {
+  return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(value);
+}
+function resolveValueHasType(value, type) {
+  return typeof value === "object" && value !== null && "type" in value && value.type === type;
+}
+function isSpringConfigValue(value) {
+  return resolveValueHasType(value, "spring");
+}
+function isEasingConfigValue(value) {
+  return resolveValueHasType(value, "easing");
+}
+function resolveDialValues(config, flatValues) {
+  return resolveConfigValues(config, flatValues, "");
+}
+function resolveConfigValues(config, flatValues, prefix) {
+  const result = {};
+  for (const [key, configValue] of Object.entries(config)) {
+    if (key === "_collapsed") continue;
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === "number") {
+      result[key] = flatValues[path] ?? configValue[0];
+    } else if (typeof configValue === "number" || typeof configValue === "boolean" || typeof configValue === "string") {
+      result[key] = flatValues[path] ?? configValue;
+    } else if (resolveValueHasType(configValue, "spring") || resolveValueHasType(configValue, "easing")) {
+      result[key] = flatValues[path] ?? configValue;
+    } else if (resolveValueHasType(configValue, "action")) {
+      result[key] = flatValues[path] ?? configValue;
+    } else if (resolveValueHasType(configValue, "select") && Array.isArray(configValue.options)) {
+      const select = configValue;
+      const defaultValue = select.default ?? (typeof select.options[0] === "string" ? select.options[0] : select.options[0]?.value);
+      result[key] = flatValues[path] ?? defaultValue;
+    } else if (resolveValueHasType(configValue, "color")) {
+      result[key] = flatValues[path] ?? configValue.default ?? "#000000";
+    } else if (resolveValueHasType(configValue, "text")) {
+      result[key] = flatValues[path] ?? configValue.default ?? "";
+    } else if (typeof configValue === "object" && configValue !== null) {
+      result[key] = resolveConfigValues(configValue, flatValues, path);
+    }
+  }
+  return result;
+}
 var DialStoreClass = class {
   constructor() {
     this.panels = /* @__PURE__ */ new Map();
@@ -1509,18 +1575,299 @@ function getFirstOptionValue(options) {
 }
 
 // src/vue/directives/dialkit.ts
-var import_vue24 = require("vue");
+var import_vue26 = require("vue");
 
 // src/vue/components/DialRoot.ts
-var import_vue23 = require("vue");
+var import_vue25 = require("vue");
+
+// src/store/TimelineStore.ts
+var MIN_LOOP_REGION = 0.02;
+function loopSpan(duration, loopStart, loopEnd) {
+  if (!Number.isFinite(duration) || duration <= 0) return 0;
+  if (!Number.isFinite(loopStart)) loopStart = 0;
+  const end = Number.isFinite(loopEnd) ? Math.min(Math.max(0, loopEnd), duration) : duration;
+  const start = Math.min(Math.max(0, loopStart), duration);
+  const span = end - start;
+  return span > 0 ? span : duration;
+}
+function foldLoopTime(time, duration, loopStart = 0, loopEnd) {
+  if (!Number.isFinite(time) || !Number.isFinite(duration) || duration <= 0) {
+    return { time: 0, wraps: 0 };
+  }
+  const end = Number.isFinite(loopEnd) ? Math.min(Math.max(0, loopEnd), duration) : duration;
+  if (time < end) return { time, wraps: 0 };
+  const span = loopSpan(duration, loopStart, end);
+  const base = end - span;
+  const over = time - base;
+  return { time: base + over % span, wraps: Math.floor(over / span) };
+}
+var TIMELINE_CLIP_COLORS = [
+  "#E8E8E8"
+  // neutral white — slightly off-white so the pure-white selection ring still reads
+];
+var EMPTY_TRANSPORT = Object.freeze({ time: 0, playing: false, duration: 0, wraps: 0 });
+var TimelineStoreClass = class {
+  constructor() {
+    this.timelines = /* @__PURE__ */ new Map();
+    this.transports = /* @__PURE__ */ new Map();
+    this.listeners = /* @__PURE__ */ new Map();
+    this.globalListeners = /* @__PURE__ */ new Set();
+    this.registrationCounts = /* @__PURE__ */ new Map();
+    // User-defined loop windows. Absent = loop the whole timeline. The stored
+    // object reference is stable until set/clear so useSyncExternalStore readers
+    // don't churn.
+    this.loopRegions = /* @__PURE__ */ new Map();
+    this.persistTargets = /* @__PURE__ */ new Map();
+    this.listCache = null;
+    this.rafId = null;
+    this.lastTick = 0;
+    this.tick = (now) => {
+      const dt = Math.max(0, (now - this.lastTick) / 1e3);
+      this.lastTick = now;
+      let anyPlaying = false;
+      for (const [id, transport] of this.transports) {
+        if (!transport.playing) continue;
+        const meta = this.timelines.get(id);
+        const duration = meta?.duration ?? transport.duration;
+        if (!Number.isFinite(duration) || duration <= 0) {
+          this.transports.set(id, { time: 0, playing: false, duration: 0, wraps: 0 });
+          this.notify(id);
+          continue;
+        }
+        let time = transport.time + dt;
+        let wraps = transport.wraps;
+        const region = this.effectiveRegion(id, duration);
+        if (time >= region.end) {
+          const folded = foldLoopTime(time, duration, region.start, region.end);
+          time = folded.time;
+          wraps += folded.wraps;
+        }
+        this.transports.set(id, { time, playing: true, duration, wraps });
+        anyPlaying = true;
+        this.notify(id);
+      }
+      this.rafId = anyPlaying ? window.requestAnimationFrame(this.tick) : null;
+    };
+  }
+  register(meta, options) {
+    const existing = this.timelines.get(meta.id);
+    if (existing && existing.name !== meta.name) {
+      console.warn(
+        `[dialkit] Timeline id "${meta.id}" is already registered by "${existing.name}"; "${meta.name}" will share and overwrite that transport.`
+      );
+    }
+    const firstRegistration = !this.registrationCounts.has(meta.id);
+    this.registrationCounts.set(meta.id, (this.registrationCounts.get(meta.id) ?? 0) + 1);
+    if (firstRegistration) {
+      this.persistTargets.set(meta.id, resolvePersistTarget("timeline-loop", meta.id, options.persist));
+      this.hydrateLoopRegion(meta);
+    }
+    this.applyMeta(meta, options.autoplay);
+  }
+  update(meta) {
+    if (!this.timelines.has(meta.id)) return;
+    this.applyMeta(meta, false);
+  }
+  unregister(id) {
+    const nextCount = (this.registrationCounts.get(id) ?? 1) - 1;
+    if (nextCount > 0) {
+      this.registrationCounts.set(id, nextCount);
+      return;
+    }
+    this.registrationCounts.delete(id);
+    this.timelines.delete(id);
+    this.transports.delete(id);
+    this.loopRegions.delete(id);
+    this.persistTargets.delete(id);
+    if (this.listeners.get(id)?.size === 0) this.listeners.delete(id);
+    this.listCache = null;
+    this.notifyGlobal();
+  }
+  /** Restore a persisted loop region, or seed one from a code-defined
+   * `options.loop`. No region at all = loop the whole timeline (the default). */
+  hydrateLoopRegion(meta) {
+    const duration = Number.isFinite(meta.duration) ? Math.max(0, meta.duration) : 0;
+    const persisted = loadPersisted(this.persistTargets.get(meta.id) ?? null);
+    if (persisted && Number.isFinite(persisted.start) && Number.isFinite(persisted.end)) {
+      const region = this.normalizeRegion(persisted.start, persisted.end, duration);
+      if (region) this.loopRegions.set(meta.id, region);
+      return;
+    }
+    if (meta.loop) {
+      const region = this.normalizeRegion(meta.loopStart, duration, duration);
+      if (region) this.loopRegions.set(meta.id, region);
+    }
+  }
+  /** Clamp to [0,duration], order min/max, and reject degenerate widths. */
+  normalizeRegion(start, end, duration) {
+    if (!Number.isFinite(start) || !Number.isFinite(end) || duration <= 0) return null;
+    const lo = Math.min(Math.max(0, Math.min(start, end)), duration);
+    const hi = Math.min(Math.max(0, Math.max(start, end)), duration);
+    if (hi - lo < MIN_LOOP_REGION) return null;
+    return { start: lo, end: hi };
+  }
+  setLoopRegion(id, start, end) {
+    const transport = this.transports.get(id);
+    const duration = transport?.duration ?? this.timelines.get(id)?.duration ?? 0;
+    const region = this.normalizeRegion(start, end, duration);
+    if (!region) return;
+    this.loopRegions.set(id, region);
+    savePersisted(this.persistTargets.get(id) ?? null, region);
+    this.notify(id);
+  }
+  clearLoopRegion(id) {
+    if (!this.loopRegions.has(id)) return;
+    this.loopRegions.delete(id);
+    clearPersisted(this.persistTargets.get(id) ?? null);
+    this.notify(id);
+  }
+  /** The raw user/code region, or undefined when looping the whole timeline.
+   * The reference is stable between changes (safe for useSyncExternalStore). */
+  getLoopRegion(id) {
+    return this.loopRegions.get(id);
+  }
+  /** The region the clock actually loops within: the user/code region, or the
+   * whole timeline `[0, duration]` when none is set. Playback always wraps. */
+  effectiveRegion(id, duration) {
+    const region = this.loopRegions.get(id);
+    if (region) return region;
+    return { start: 0, end: Math.max(0, duration) };
+  }
+  play(id) {
+    const transport = this.transports.get(id);
+    if (!transport || transport.duration <= 0 || transport.playing) return;
+    const region = this.effectiveRegion(id, transport.duration);
+    const restart = transport.time >= region.end;
+    this.transports.set(id, {
+      ...transport,
+      time: restart ? region.start : transport.time,
+      wraps: restart ? 0 : transport.wraps,
+      playing: true
+    });
+    this.notify(id);
+    this.ensureLoop();
+  }
+  pause(id) {
+    const transport = this.transports.get(id);
+    if (!transport || !transport.playing) return;
+    this.transports.set(id, { ...transport, playing: false });
+    this.notify(id);
+  }
+  replay(id) {
+    const transport = this.transports.get(id);
+    if (!transport || transport.duration <= 0) return;
+    const region = this.effectiveRegion(id, transport.duration);
+    this.transports.set(id, { ...transport, time: region.start, wraps: 0, playing: true });
+    this.notify(id);
+    this.ensureLoop();
+  }
+  seek(id, time) {
+    const transport = this.transports.get(id);
+    if (!transport || !Number.isFinite(time)) return;
+    const clamped = Math.min(transport.duration, Math.max(0, time));
+    this.transports.set(id, { ...transport, time: clamped, wraps: 0 });
+    this.notify(id);
+  }
+  getTransport(id) {
+    return this.transports.get(id) ?? EMPTY_TRANSPORT;
+  }
+  getTimeline(id) {
+    return this.timelines.get(id);
+  }
+  getTimelines() {
+    if (!this.listCache) {
+      this.listCache = Array.from(this.timelines.values());
+    }
+    return this.listCache;
+  }
+  subscribe(id, listener) {
+    if (!this.listeners.has(id)) {
+      this.listeners.set(id, /* @__PURE__ */ new Set());
+    }
+    this.listeners.get(id).add(listener);
+    return () => {
+      const listeners2 = this.listeners.get(id);
+      listeners2?.delete(listener);
+      if (listeners2?.size === 0 && !this.timelines.has(id)) {
+        this.listeners.delete(id);
+      }
+    };
+  }
+  subscribeGlobal(listener) {
+    this.globalListeners.add(listener);
+    return () => {
+      this.globalListeners.delete(listener);
+    };
+  }
+  applyMeta(meta, autoplay) {
+    const duration = Number.isFinite(meta.duration) ? Math.max(0, meta.duration) : 0;
+    const loopStart = Number.isFinite(meta.loopStart) ? Math.min(duration, Math.max(0, meta.loopStart)) : 0;
+    const safeMeta = { ...meta, duration, loopStart };
+    this.timelines.set(meta.id, safeMeta);
+    const region = this.loopRegions.get(meta.id);
+    if (region) {
+      const reclamped = this.normalizeRegion(region.start, region.end, duration);
+      if (reclamped) this.loopRegions.set(meta.id, reclamped);
+      else this.loopRegions.delete(meta.id);
+    }
+    const existing = this.transports.get(meta.id);
+    if (existing) {
+      this.transports.set(meta.id, {
+        time: Math.min(existing.time, duration),
+        playing: duration > 0 && existing.playing,
+        duration,
+        wraps: existing.wraps
+      });
+    } else {
+      const playing = duration > 0 && autoplay;
+      this.transports.set(meta.id, { time: 0, playing, duration, wraps: 0 });
+      if (playing) this.ensureLoop();
+    }
+    this.listCache = null;
+    this.notify(meta.id);
+    this.notifyGlobal();
+  }
+  ensureLoop() {
+    if (this.rafId !== null || typeof window === "undefined") return;
+    this.lastTick = performance.now();
+    this.rafId = window.requestAnimationFrame(this.tick);
+  }
+  notify(id) {
+    this.listeners.get(id)?.forEach((fn) => fn());
+  }
+  notifyGlobal() {
+    this.globalListeners.forEach((fn) => fn());
+  }
+};
+var TimelineStore = /* @__PURE__ */ new TimelineStoreClass();
 
 // src/vue/components/Panel.ts
-var import_vue22 = require("vue");
+var import_vue23 = require("vue");
 var import_motion_v8 = require("motion-v");
 
 // src/icons.ts
 var ICON_CHEVRON = "M6 9.5L12 15.5L18 9.5";
 var ICON_CHECK = "M5 12.75L10 19L19 5";
+var ICON_PAUSE = [
+  "M6.75 3C5.23122 3 4 4.23122 4 5.75V18.25C4 19.7688 5.23122 21 6.75 21H7.25C8.76878 21 10 19.7688 10 18.25V5.75C10 4.23122 8.76878 3 7.25 3H6.75Z",
+  "M16.75 3C15.2312 3 14 4.23122 14 5.75V18.25C14 19.7688 15.2312 21 16.75 21H17.25C18.7688 21 20 19.7688 20 18.25V5.75C20 4.23122 18.7688 3 17.25 3H16.75Z"
+];
+var ICON_PLAY = "M9.24394 2.36758C7.41419 1.18362 5 2.49701 5 4.67639V19.3238C5 21.5032 7.41419 22.8166 9.24394 21.6326L20.5624 14.3089C22.2371 13.2253 22.2372 10.775 20.5624 9.69129L9.24394 2.36758Z";
+var ICON_REPLAY = [
+  "M12 2.5C17.2466 2.50016 21.5 6.7534 21.5 12C21.5 17.2466 17.2466 21.4998 12 21.5C7.52191 21.5 3.76987 18.4025 2.76465 14.2344C2.63517 13.6975 2.96508 13.1578 3.50195 13.0283C4.03883 12.8988 4.57851 13.2288 4.70801 13.7656C5.5016 17.0563 8.46701 19.5 12 19.5C16.142 19.4998 19.5 16.142 19.5 12C19.5 7.85796 16.142 4.50016 12 4.5C9.32981 4.5 6.98389 5.89541 5.6543 8H7.5C8.05228 8 8.5 8.44772 8.5 9C8.5 9.55228 8.05228 10 7.5 10H3.5C2.94772 10 2.5 9.55228 2.5 9V5C2.5 4.44772 2.94772 4 3.5 4C4.05228 4 4.5 4.44772 4.5 5V6.16797C6.2376 3.93677 8.95063 2.5 12 2.5Z",
+  "M10 9.94043C10 9.33379 10.6826 8.97849 11.1797 9.32617L14.1221 11.3857C14.5486 11.6843 14.5486 12.3157 14.1221 12.6143L11.1797 14.6738C10.6826 15.0215 10 14.6662 10 14.0596V9.94043Z"
+];
+var ICON_LOOP = [
+  "M17 2L21 6L17 10",
+  "M3 11V9C3 7.34315 4.34315 6 6 6H21",
+  "M7 22L3 18L7 14",
+  "M21 13V15C21 16.6569 19.6569 18 18 18H3"
+];
+var ICON_TIMELINE = [
+  "M18.868 10C20.8517 10.0003 22.2886 11.8914 21.7577 13.8027L20.369 18.8027C20.0083 20.1012 18.826 20.9999 17.4784 21H6.51941C5.17179 21 3.98948 20.1012 3.62878 18.8027L2.24011 13.8027C1.7092 11.8913 3.14603 10.0003 5.12976 10H18.868Z",
+  "M18.9989 6.5C19.5511 6.50007 19.9989 6.94776 19.9989 7.5C19.9989 8.05224 19.5511 8.49993 18.9989 8.5H4.9989C4.44661 8.5 3.9989 8.05228 3.9989 7.5C3.9989 6.94772 4.44661 6.5 4.9989 6.5H18.9989Z",
+  "M16.9989 3C17.5511 3.00007 17.9989 3.44776 17.9989 4C17.9989 4.55224 17.5511 4.99993 16.9989 5H6.9989C6.44661 5 5.9989 4.55228 5.9989 4C5.9989 3.44772 6.44661 3 6.9989 3H16.9989Z"
+];
 var ICON_GRIP = [
   { cx: "9", cy: "6" },
   { cx: "9", cy: "12" },
@@ -1709,835 +2056,20 @@ var Folder = (0, import_vue2.defineComponent)({
   }
 });
 
-// src/vue/components/Slider.ts
-var import_vue3 = require("vue");
+// src/vue/components/ControlRenderer.ts
+var import_vue21 = require("vue");
+
+// src/vue/components/ColorControl.ts
+var import_vue5 = require("vue");
 var import_motion_v2 = require("motion-v");
 
-// src/shortcut-utils.ts
-function decimalsForStep2(step) {
-  const s = step.toString();
-  const dot = s.indexOf(".");
-  return dot === -1 ? 0 : s.length - dot - 1;
-}
-function roundValue(val, step) {
-  const raw = Math.round(val / step) * step;
-  return parseFloat(raw.toFixed(decimalsForStep2(step)));
-}
-function getEffectiveStep(control, shortcut) {
-  const min = control.min ?? 0;
-  const max = control.max ?? 1;
-  const range = max - min;
-  const mode = shortcut.mode ?? "normal";
-  return mode === "fine" ? range * 0.01 : mode === "coarse" ? range * 0.1 : control.step ?? 1;
-}
-function applySliderDelta(panelId, path, control, effectiveStep2, direction) {
-  const currentValue = DialStore.getValue(panelId, path);
-  const min = control.min ?? 0;
-  const max = control.max ?? 1;
-  const newValue = Math.max(min, Math.min(max, currentValue + direction * effectiveStep2));
-  DialStore.updateValue(panelId, path, roundValue(newValue, effectiveStep2));
-}
-function snapToDecile(rawValue, min, max) {
-  const normalized = (rawValue - min) / (max - min);
-  const nearest = Math.round(normalized * 10) / 10;
-  if (Math.abs(normalized - nearest) <= 0.03125) {
-    return min + nearest * (max - min);
-  }
-  return rawValue;
-}
-function isInputFocused() {
-  const el = document.activeElement;
-  if (!el) return false;
-  const tag = el.tagName;
-  if (tag === "INPUT" || tag === "TEXTAREA") return true;
-  if (el.contentEditable === "true") return true;
-  return false;
-}
-function getActiveModifier(e) {
-  if (e.altKey) return "alt";
-  if (e.shiftKey) return "shift";
-  if (e.metaKey) return "meta";
-  return void 0;
-}
-function findControl(controls, path) {
-  for (const control of controls) {
-    if (control.path === path) return control;
-    if (control.type === "folder" && control.children) {
-      const found = findControl(control.children, path);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-var DRAG_SENSITIVITY = 4;
-function formatInteractionLabel(interaction) {
-  switch (interaction) {
-    case "drag":
-      return "Drag";
-    case "move":
-      return "Move";
-    case "scroll-only":
-      return "Scroll";
-    default:
-      return "Scroll";
-  }
-}
-function formatSliderShortcut(sc) {
-  const interaction = sc.interaction ?? "scroll";
-  const actionLabel = formatInteractionLabel(interaction);
-  if (!sc.key) return actionLabel;
-  const mod = formatModifier(sc.modifier);
-  return `${mod}${sc.key.toUpperCase()}+${actionLabel}`;
-}
-function formatToggleShortcut(sc) {
-  if (!sc.key) return "Press";
-  const mod = formatModifier(sc.modifier);
-  return `${mod}${sc.key.toUpperCase()}`;
-}
-function formatModifier(modifier) {
-  return modifier === "alt" ? "\u2325" : modifier === "shift" ? "\u21E7" : modifier === "meta" ? "\u2318" : "";
-}
-
-// src/vue/components/Slider.ts
-var CLICK_THRESHOLD = 3;
-var DEAD_ZONE = 32;
-var MAX_CURSOR_RANGE = 200;
-var MAX_STRETCH = 8;
-var Slider = (0, import_vue3.defineComponent)({
-  name: "DialKitSlider",
-  props: {
-    label: { type: String, required: true },
-    value: { type: Number, required: true },
-    min: { type: Number, required: false },
-    max: { type: Number, required: false },
-    step: { type: Number, required: false },
-    unit: { type: String, required: false },
-    /**
-     * Anchor the fill at this value instead of `min`. Bipolar parameters fill
-     * out from the origin in either direction and gain an escapable detent at
-     * the origin while dragging. Defaults to `min`.
-     */
-    origin: { type: Number, required: false, default: void 0 },
-    /** Convenience for `origin={0}` on a symmetric range. */
-    bipolar: { type: Boolean, default: false },
-    shortcut: { type: Object, default: void 0 },
-    shortcutActive: { type: Boolean, default: false }
-  },
-  emits: ["change"],
-  setup(props, { emit }) {
-    const min = (0, import_vue3.computed)(() => props.min ?? 0);
-    const max = (0, import_vue3.computed)(() => props.max ?? 1);
-    const step = (0, import_vue3.computed)(() => props.step ?? 0.01);
-    const resolvedOrigin = (0, import_vue3.computed)(
-      () => Math.min(max.value, Math.max(min.value, props.origin ?? (props.bipolar ? 0 : min.value)))
-    );
-    const hasOrigin = (0, import_vue3.computed)(() => resolvedOrigin.value > min.value);
-    const originPercent = (0, import_vue3.computed)(
-      () => (resolvedOrigin.value - min.value) / (max.value - min.value) * 100
-    );
-    const DETENT_PX = 6;
-    const wrapperRef = (0, import_vue3.ref)(null);
-    const trackRef = (0, import_vue3.ref)(null);
-    const fillRef = (0, import_vue3.ref)(null);
-    const handleRef = (0, import_vue3.ref)(null);
-    const labelRef = (0, import_vue3.ref)(null);
-    const valueSpanRef = (0, import_vue3.ref)(null);
-    const inputRef = (0, import_vue3.ref)(null);
-    const isInteracting = (0, import_vue3.ref)(false);
-    const isDragging = (0, import_vue3.ref)(false);
-    const isHovered = (0, import_vue3.ref)(false);
-    const isValueHovered = (0, import_vue3.ref)(false);
-    const isValueEditable = (0, import_vue3.ref)(false);
-    const showInput = (0, import_vue3.ref)(false);
-    const inputValue = (0, import_vue3.ref)("");
-    const fillPercent = (0, import_motion_v2.motionValue)((props.value - min.value) / (max.value - min.value) * 100);
-    const rubberStretchPx = (0, import_motion_v2.motionValue)(0);
-    const handleOpacityMv = (0, import_motion_v2.motionValue)(0);
-    const handleScaleXMv = (0, import_motion_v2.motionValue)(0.25);
-    const handleScaleYMv = (0, import_motion_v2.motionValue)(1);
-    const percentage = (0, import_vue3.computed)(() => (props.value - min.value) / (max.value - min.value) * 100);
-    const isActive = (0, import_vue3.computed)(() => isInteracting.value || isHovered.value);
-    const displayValue = (0, import_vue3.computed)(() => props.value.toFixed(decimalsForStep2(step.value)));
-    let pointerDownPos = null;
-    let isClickFlag = true;
-    let wrapperRect = null;
-    let scaleVal = 1;
-    let hoverTimeout = null;
-    let snapAnim = null;
-    let rubberAnim = null;
-    let handleOpacityAnim = null;
-    let handleScaleXAnim = null;
-    let handleScaleYAnim = null;
-    const applyFillStyles = (pct) => {
-      if (fillRef.value) {
-        fillRef.value.style.left = hasOrigin.value ? `${Math.min(pct, originPercent.value)}%` : "0%";
-        fillRef.value.style.width = hasOrigin.value ? `${Math.abs(pct - originPercent.value)}%` : `${pct}%`;
-      }
-      if (handleRef.value) handleRef.value.style.left = `max(5px, calc(${pct}% - 9px))`;
-    };
-    const applyDetent = (v) => {
-      if (!hasOrigin.value || !wrapperRef.value) return v;
-      const trackWidth = wrapperRef.value.offsetWidth;
-      if (trackWidth <= 0) return v;
-      const detentValue = DETENT_PX / trackWidth * (max.value - min.value);
-      return Math.abs(v - resolvedOrigin.value) <= detentValue ? resolvedOrigin.value : v;
-    };
-    const applyRubberStyles = (stretch) => {
-      if (!trackRef.value) return;
-      trackRef.value.style.width = `calc(100% + ${Math.abs(stretch)}px)`;
-      trackRef.value.style.transform = `translateX(${stretch < 0 ? stretch : 0}px)`;
-    };
-    const applyHandleVisualStyles = () => {
-      if (!handleRef.value) return;
-      handleRef.value.style.opacity = String(handleOpacityMv.get());
-      handleRef.value.style.transform = `translateY(-50%) scaleX(${handleScaleXMv.get()}) scaleY(${handleScaleYMv.get()})`;
-    };
-    const positionToValue = (clientX) => {
-      if (!wrapperRect) return props.value;
-      const screenX = clientX - wrapperRect.left;
-      const sceneX = screenX / scaleVal;
-      const nativeWidth = wrapperRef.value ? wrapperRef.value.offsetWidth : wrapperRect.width;
-      const pct = Math.max(0, Math.min(1, sceneX / nativeWidth));
-      const rawValue = min.value + pct * (max.value - min.value);
-      return Math.max(min.value, Math.min(max.value, rawValue));
-    };
-    const percentFromValue = (value) => (value - min.value) / (max.value - min.value) * 100;
-    const computeRubberStretch = (clientX, sign) => {
-      if (!wrapperRect) return 0;
-      const distancePast = sign < 0 ? wrapperRect.left - clientX : clientX - wrapperRect.right;
-      const overflow = Math.max(0, distancePast - DEAD_ZONE);
-      return sign * MAX_STRETCH * Math.sqrt(Math.min(overflow / MAX_CURSOR_RANGE, 1));
-    };
-    const leftThreshold = () => {
-      const HANDLE_BUFFER = 8;
-      const LABEL_CSS_LEFT = 10;
-      const trackWidth = wrapperRef.value?.offsetWidth;
-      if (trackWidth && labelRef.value) {
-        return (LABEL_CSS_LEFT + labelRef.value.offsetWidth + HANDLE_BUFFER) / trackWidth * 100;
-      }
-      return 30;
-    };
-    const rightThreshold = () => {
-      const HANDLE_BUFFER = 8;
-      const VALUE_CSS_RIGHT = 10;
-      const trackWidth = wrapperRef.value?.offsetWidth;
-      if (trackWidth && valueSpanRef.value) {
-        return (trackWidth - VALUE_CSS_RIGHT - valueSpanRef.value.offsetWidth - HANDLE_BUFFER) / trackWidth * 100;
-      }
-      return 78;
-    };
-    const valueDodge = () => percentage.value < leftThreshold() || percentage.value > rightThreshold();
-    const handleOpacity = () => {
-      if (!isActive.value) return 0;
-      if (valueDodge()) return 0.1;
-      if (isDragging.value) return 0.9;
-      return 0.5;
-    };
-    const animateHandleState = () => {
-      const targetOpacity = handleOpacity();
-      const targetScaleX = isActive.value ? 1 : 0.25;
-      const targetScaleY = isActive.value && valueDodge() ? 0.75 : 1;
-      handleOpacityAnim?.stop();
-      handleScaleXAnim?.stop();
-      handleScaleYAnim?.stop();
-      handleOpacityAnim = (0, import_motion_v2.animate)(handleOpacityMv, targetOpacity, { duration: 0.15 });
-      handleScaleXAnim = (0, import_motion_v2.animate)(handleScaleXMv, targetScaleX, {
-        type: "spring",
-        visualDuration: 0.25,
-        bounce: 0.15
-      });
-      handleScaleYAnim = (0, import_motion_v2.animate)(handleScaleYMv, targetScaleY, {
-        type: "spring",
-        visualDuration: 0.2,
-        bounce: 0.1
-      });
-    };
-    const handlePointerDown = (event) => {
-      if (showInput.value) return;
-      event.preventDefault();
-      event.currentTarget.setPointerCapture(event.pointerId);
-      pointerDownPos = { x: event.clientX, y: event.clientY };
-      isClickFlag = true;
-      isInteracting.value = true;
-      if (wrapperRef.value) {
-        wrapperRect = wrapperRef.value.getBoundingClientRect();
-        scaleVal = wrapperRect.width / wrapperRef.value.offsetWidth;
-      }
-    };
-    const handlePointerMove = (event) => {
-      if (!isInteracting.value || !pointerDownPos) return;
-      const dx = event.clientX - pointerDownPos.x;
-      const dy = event.clientY - pointerDownPos.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      if (isClickFlag && distance > CLICK_THRESHOLD) {
-        isClickFlag = false;
-        isDragging.value = true;
-      }
-      if (!isClickFlag) {
-        if (wrapperRect) {
-          if (event.clientX < wrapperRect.left) {
-            rubberStretchPx.jump(computeRubberStretch(event.clientX, -1));
-          } else if (event.clientX > wrapperRect.right) {
-            rubberStretchPx.jump(computeRubberStretch(event.clientX, 1));
-          } else {
-            rubberStretchPx.jump(0);
-          }
-        }
-        const nextValue = applyDetent(positionToValue(event.clientX));
-        const nextPct = percentFromValue(nextValue);
-        if (snapAnim) {
-          snapAnim.stop();
-          snapAnim = null;
-        }
-        fillPercent.jump(nextPct);
-        emit("change", roundValue(nextValue, step.value));
-      }
-    };
-    const handlePointerUp = (event) => {
-      if (!isInteracting.value) return;
-      if (isClickFlag) {
-        const rawValue = positionToValue(event.clientX);
-        const discreteSteps2 = (max.value - min.value) / step.value;
-        const snappedValue = discreteSteps2 <= 10 ? Math.max(min.value, Math.min(max.value, min.value + Math.round((rawValue - min.value) / step.value) * step.value)) : snapToDecile(rawValue, min.value, max.value);
-        const nextPct = percentFromValue(snappedValue);
-        snapAnim?.stop();
-        snapAnim = (0, import_motion_v2.animate)(fillPercent, nextPct, {
-          type: "spring",
-          stiffness: 300,
-          damping: 25,
-          mass: 0.8,
-          onComplete: () => {
-            snapAnim = null;
-          }
-        });
-        emit("change", roundValue(snappedValue, step.value));
-      }
-      if (rubberStretchPx.get() !== 0) {
-        rubberAnim?.stop();
-        rubberAnim = (0, import_motion_v2.animate)(rubberStretchPx, 0, {
-          type: "spring",
-          visualDuration: 0.35,
-          bounce: 0.15
-        });
-      }
-      isInteracting.value = false;
-      isDragging.value = false;
-      pointerDownPos = null;
-    };
-    const handlePointerCancel = () => {
-      if (!isInteracting.value) return;
-      isInteracting.value = false;
-      isDragging.value = false;
-      rubberStretchPx.jump(0);
-      pointerDownPos = null;
-    };
-    const handleInputSubmit = () => {
-      const parsed = parseFloat(inputValue.value);
-      if (!Number.isNaN(parsed)) {
-        const clamped = Math.max(min.value, Math.min(max.value, parsed));
-        emit("change", roundValue(clamped, step.value));
-      }
-      showInput.value = false;
-      isValueHovered.value = false;
-      isValueEditable.value = false;
-    };
-    const handleValueClick = (event) => {
-      if (!isValueEditable.value) return;
-      event.stopPropagation();
-      event.preventDefault();
-      showInput.value = true;
-      inputValue.value = props.value.toFixed(decimalsForStep2(step.value));
-    };
-    const handleInputKeydown = (event) => {
-      if (event.key === "Enter") {
-        handleInputSubmit();
-      } else if (event.key === "Escape") {
-        showInput.value = false;
-        isValueHovered.value = false;
-      }
-    };
-    (0, import_vue3.watch)(() => props.value, () => {
-      if (!isInteracting.value && !snapAnim) {
-        fillPercent.jump(percentage.value);
-      }
-    });
-    (0, import_vue3.watch)([isInteracting, isHovered, isDragging, () => props.value], () => {
-      animateHandleState();
-    });
-    (0, import_vue3.watch)([isValueHovered, showInput, isValueEditable], () => {
-      if (hoverTimeout) {
-        clearTimeout(hoverTimeout);
-        hoverTimeout = null;
-      }
-      if (isValueHovered.value && !showInput.value && !isValueEditable.value) {
-        hoverTimeout = setTimeout(() => {
-          isValueEditable.value = true;
-          animateHandleState();
-        }, 800);
-      } else if (!isValueHovered.value && !showInput.value) {
-        isValueEditable.value = false;
-      }
-    });
-    (0, import_vue3.watch)(showInput, async (visible) => {
-      if (!visible) return;
-      await (0, import_vue3.nextTick)();
-      inputRef.value?.focus();
-      inputRef.value?.select();
-    });
-    const discreteSteps = (0, import_vue3.computed)(() => (max.value - min.value) / step.value);
-    const hashMarks = (0, import_vue3.computed)(() => {
-      const marks = [];
-      if (discreteSteps.value <= 10) {
-        const count = Math.max(0, Math.floor(discreteSteps.value) - 1);
-        for (let i = 0; i < count; i += 1) {
-          const pct = (i + 1) * step.value / (max.value - min.value) * 100;
-          marks.push((0, import_vue3.h)("div", { class: "dialkit-slider-hashmark", style: { left: `${pct}%` } }));
-        }
-        return marks;
-      }
-      for (let i = 0; i < 9; i += 1) {
-        const pct = (i + 1) * 10;
-        marks.push((0, import_vue3.h)("div", { class: "dialkit-slider-hashmark", style: { left: `${pct}%` } }));
-      }
-      return marks;
-    });
-    let unsubFill = null;
-    let unsubRubber = null;
-    let unsubHandleOpacity = null;
-    let unsubHandleScaleX = null;
-    let unsubHandleScaleY = null;
-    (0, import_vue3.onMounted)(() => {
-      unsubFill = fillPercent.on("change", applyFillStyles);
-      unsubRubber = rubberStretchPx.on("change", applyRubberStyles);
-      unsubHandleOpacity = handleOpacityMv.on("change", applyHandleVisualStyles);
-      unsubHandleScaleX = handleScaleXMv.on("change", applyHandleVisualStyles);
-      unsubHandleScaleY = handleScaleYMv.on("change", applyHandleVisualStyles);
-      applyFillStyles(fillPercent.get());
-      applyRubberStyles(rubberStretchPx.get());
-      applyHandleVisualStyles();
-      animateHandleState();
-    });
-    (0, import_vue3.onUnmounted)(() => {
-      if (hoverTimeout) clearTimeout(hoverTimeout);
-      snapAnim?.stop();
-      rubberAnim?.stop();
-      handleOpacityAnim?.stop();
-      handleScaleXAnim?.stop();
-      handleScaleYAnim?.stop();
-      unsubFill?.();
-      unsubRubber?.();
-      unsubHandleOpacity?.();
-      unsubHandleScaleX?.();
-      unsubHandleScaleY?.();
-    });
-    return () => (0, import_vue3.h)("div", { ref: wrapperRef, class: "dialkit-slider-wrapper" }, [
-      (0, import_vue3.h)("div", {
-        ref: trackRef,
-        class: `dialkit-slider ${isActive.value ? "dialkit-slider-active" : ""}`,
-        onPointerdown: handlePointerDown,
-        onPointermove: handlePointerMove,
-        onPointerup: handlePointerUp,
-        onPointercancel: handlePointerCancel,
-        onMouseenter: () => {
-          isHovered.value = true;
-          animateHandleState();
-        },
-        onMouseleave: () => {
-          isHovered.value = false;
-          animateHandleState();
-        }
-      }, [
-        (0, import_vue3.h)("div", { class: "dialkit-slider-hashmarks" }, hashMarks.value),
-        (0, import_vue3.h)("div", {
-          ref: fillRef,
-          class: "dialkit-slider-fill",
-          style: {
-            left: hasOrigin.value ? `${Math.min(fillPercent.get(), originPercent.value)}%` : "0%",
-            width: hasOrigin.value ? `${Math.abs(fillPercent.get() - originPercent.value)}%` : `${fillPercent.get()}%`
-          }
-        }),
-        (0, import_vue3.h)("div", {
-          ref: handleRef,
-          class: "dialkit-slider-handle",
-          style: {
-            left: `max(5px, calc(${fillPercent.get()}% - 9px))`,
-            transform: "translateY(-50%) scaleX(0.25) scaleY(1)",
-            opacity: 0
-          }
-        }),
-        (0, import_vue3.h)("span", { ref: labelRef, class: "dialkit-slider-label" }, [
-          props.label,
-          props.shortcut ? (0, import_vue3.h)("span", {
-            class: `dialkit-shortcut-pill${props.shortcutActive ? " dialkit-shortcut-pill-active" : ""}`
-          }, formatSliderShortcut(props.shortcut)) : null
-        ]),
-        showInput.value ? (0, import_vue3.h)("input", {
-          ref: inputRef,
-          type: "text",
-          class: "dialkit-slider-input",
-          value: inputValue.value,
-          onInput: (event) => {
-            inputValue.value = event.target.value;
-          },
-          onKeydown: handleInputKeydown,
-          onBlur: handleInputSubmit,
-          onClick: (event) => event.stopPropagation(),
-          onMousedown: (event) => event.stopPropagation()
-        }) : (0, import_vue3.h)("span", {
-          ref: valueSpanRef,
-          class: `dialkit-slider-value ${isValueEditable.value ? "dialkit-slider-value-editable" : ""}`,
-          onMouseenter: () => {
-            isValueHovered.value = true;
-          },
-          onMouseleave: () => {
-            isValueHovered.value = false;
-          },
-          onClick: handleValueClick,
-          onMousedown: (event) => {
-            if (isValueEditable.value) event.stopPropagation();
-          },
-          style: { cursor: isValueEditable.value ? "text" : "default" }
-        }, displayValue.value)
-      ])
-    ]);
-  }
-});
-
-// src/vue/components/RangeSlider.ts
+// src/vue/components/ColorPickerPanel.ts
 var import_vue4 = require("vue");
-var import_motion_v3 = require("motion-v");
-var CLICK_THRESHOLD2 = 3;
-var HANDLE_HIT_PX = 12;
-var RangeSlider = (0, import_vue4.defineComponent)({
-  name: "DialKitRangeSlider",
-  props: {
-    label: { type: String, required: true },
-    value: { type: Object, required: true },
-    /** Lower bound of the track. */
-    min: { type: Number, required: false },
-    /** Upper bound of the track. */
-    max: { type: Number, required: false },
-    step: { type: Number, required: false },
-    /** Reset target for a double-click on the track. Falls back to the full {min,max} span. */
-    defaultValue: { type: Object, required: false, default: void 0 }
-  },
-  emits: ["change"],
-  setup(props, { emit }) {
-    const min = (0, import_vue4.computed)(() => props.min ?? 0);
-    const max = (0, import_vue4.computed)(() => props.max ?? 1);
-    const step = (0, import_vue4.computed)(() => props.step ?? 0.01);
-    const wrapperRef = (0, import_vue4.ref)(null);
-    const fillRef = (0, import_vue4.ref)(null);
-    const lowHandleRef = (0, import_vue4.ref)(null);
-    const highHandleRef = (0, import_vue4.ref)(null);
-    const inputRef = (0, import_vue4.ref)(null);
-    const isInteracting = (0, import_vue4.ref)(false);
-    const isDragging = (0, import_vue4.ref)(false);
-    const isHovered = (0, import_vue4.ref)(false);
-    const editing = (0, import_vue4.ref)(null);
-    const inputValue = (0, import_vue4.ref)("");
-    const value = (0, import_vue4.computed)(
-      () => isInteracting.value ? props.value : clampRange(props.value, min.value, max.value)
-    );
-    const span = (0, import_vue4.computed)(() => max.value - min.value);
-    const percentFromValue = (v) => span.value === 0 ? 0 : (v - min.value) / span.value * 100;
-    const lowPercent = (0, import_vue4.computed)(() => percentFromValue(value.value.min));
-    const highPercent = (0, import_vue4.computed)(() => percentFromValue(value.value.max));
-    const isActive = (0, import_vue4.computed)(() => isInteracting.value || isHovered.value);
-    const lowMotion = (0, import_motion_v3.motionValue)(lowPercent.value);
-    const highMotion = (0, import_motion_v3.motionValue)(highPercent.value);
-    let pointerDownPos = null;
-    let isClickFlag = true;
-    let dragTarget = null;
-    let clickMoves = false;
-    let dragStartValue = props.value;
-    let dragStartValueAt = 0;
-    let wrapperRect = null;
-    let scaleVal = 1;
-    let lowAnim = null;
-    let highAnim = null;
-    const stopAnims = () => {
-      lowAnim?.stop();
-      highAnim?.stop();
-      lowAnim = null;
-      highAnim = null;
-    };
-    const applyFillStyles = () => {
-      const lo = lowMotion.get();
-      const hi = highMotion.get();
-      if (fillRef.value) {
-        fillRef.value.style.left = `${lo}%`;
-        fillRef.value.style.width = `${Math.max(0, hi - lo)}%`;
-      }
-      const handles = handleLeftStyles(lo, hi);
-      if (lowHandleRef.value) lowHandleRef.value.style.left = handles.low;
-      if (highHandleRef.value) highHandleRef.value.style.left = handles.high;
-    };
-    const REST_OPACITY = 0.35;
-    const handleOpacityFor = (which) => {
-      if (!isActive.value) return REST_OPACITY;
-      if (isDragging.value && dragTarget === which) return 0.95;
-      return 0.7;
-    };
-    const applyHandleOpacity = () => {
-      if (lowHandleRef.value) lowHandleRef.value.style.opacity = String(handleOpacityFor("min"));
-      if (highHandleRef.value) highHandleRef.value.style.opacity = String(handleOpacityFor("max"));
-    };
-    const positionToValue = (clientX) => {
-      if (!wrapperRect) return value.value.min;
-      const screenX = clientX - wrapperRect.left;
-      const sceneX = screenX / scaleVal;
-      const nativeWidth = wrapperRef.value ? wrapperRef.value.offsetWidth : wrapperRect.width;
-      const pct = Math.max(0, Math.min(1, sceneX / nativeWidth));
-      const rawValue = min.value + pct * (max.value - min.value);
-      return Math.max(min.value, Math.min(max.value, rawValue));
-    };
-    const syncMotion = (next) => {
-      lowMotion.jump(percentFromValue(next.min));
-      highMotion.jump(percentFromValue(next.max));
-    };
-    const handlePointerDown = (event) => {
-      if (editing.value) return;
-      event.preventDefault();
-      event.currentTarget.setPointerCapture(event.pointerId);
-      pointerDownPos = { x: event.clientX, y: event.clientY };
-      isClickFlag = true;
-      isInteracting.value = true;
-      if (wrapperRef.value) {
-        wrapperRect = wrapperRef.value.getBoundingClientRect();
-        scaleVal = wrapperRect.width / wrapperRef.value.offsetWidth;
-      }
-      const current = clampRange(props.value, min.value, max.value);
-      const atValue = positionToValue(event.clientX);
-      const trackW = wrapperRef.value?.offsetWidth ?? 1;
-      const hitV = HANDLE_HIT_PX / trackW * (max.value - min.value);
-      dragTarget = pickDragTarget(atValue, current, hitV);
-      clickMoves = dragTarget !== "span" && isOutsideSpan(atValue, current);
-      dragStartValue = current;
-      dragStartValueAt = atValue;
-    };
-    const handlePointerMove = (event) => {
-      if (!isInteracting.value || !pointerDownPos) return;
-      const dx = event.clientX - pointerDownPos.x;
-      const dy = event.clientY - pointerDownPos.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      if (isClickFlag && distance > CLICK_THRESHOLD2) {
-        isClickFlag = false;
-        isDragging.value = true;
-      }
-      if (isClickFlag) return;
-      const raw = roundValue(positionToValue(event.clientX), step.value);
-      const current = value.value;
-      let next;
-      if (dragTarget === "span") {
-        const delta = raw - roundValue(dragStartValueAt, step.value);
-        next = shiftSpan(delta, dragStartValue, min.value, max.value);
-      } else if (dragTarget === "min") {
-        next = setLow(raw, current, min.value);
-      } else {
-        next = setHigh(raw, current, max.value);
-      }
-      stopAnims();
-      syncMotion(next);
-      emit("change", next);
-    };
-    const handlePointerUp = (event) => {
-      if (!isInteracting.value) return;
-      if (isClickFlag && clickMoves) {
-        const current = value.value;
-        const raw = roundValue(positionToValue(event.clientX), step.value);
-        const which = dragTarget ?? nearestHandle(raw, current);
-        const next = which === "min" ? setLow(raw, current, min.value) : setHigh(raw, current, max.value);
-        const targetMotion = which === "min" ? lowMotion : highMotion;
-        const targetPct = percentFromValue(which === "min" ? next.min : next.max);
-        stopAnims();
-        const active = (0, import_motion_v3.animate)(targetMotion, targetPct, {
-          type: "spring",
-          stiffness: 300,
-          damping: 25,
-          mass: 0.8,
-          onComplete: () => {
-            if (which === "min") lowAnim = null;
-            else highAnim = null;
-          }
-        });
-        if (which === "min") lowAnim = active;
-        else highAnim = active;
-        emit("change", next);
-      }
-      isInteracting.value = false;
-      isDragging.value = false;
-      pointerDownPos = null;
-      dragTarget = null;
-    };
-    const handlePointerCancel = () => {
-      if (!isInteracting.value) return;
-      isInteracting.value = false;
-      isDragging.value = false;
-      pointerDownPos = null;
-      dragTarget = null;
-    };
-    const handleDoubleClick = () => {
-      if (editing.value !== null) return;
-      const d = clampRange(props.defaultValue ?? { min: min.value, max: max.value }, min.value, max.value);
-      stopAnims();
-      lowAnim = (0, import_motion_v3.animate)(lowMotion, percentFromValue(d.min), {
-        type: "spring",
-        stiffness: 300,
-        damping: 25,
-        mass: 0.8,
-        onComplete: () => {
-          lowAnim = null;
-        }
-      });
-      highAnim = (0, import_motion_v3.animate)(highMotion, percentFromValue(d.max), {
-        type: "spring",
-        stiffness: 300,
-        damping: 25,
-        mass: 0.8,
-        onComplete: () => {
-          highAnim = null;
-        }
-      });
-      emit("change", d);
-    };
-    const decimals = (0, import_vue4.computed)(() => decimalsForStep2(step.value));
-    const openEditor = (which, event) => {
-      event.stopPropagation();
-      editing.value = which;
-      inputValue.value = (which === "min" ? value.value.min : value.value.max).toFixed(decimals.value);
-    };
-    const commitEditor = () => {
-      if (!editing.value) return;
-      const parsed = parseFloat(inputValue.value);
-      if (!Number.isNaN(parsed)) {
-        const rounded = roundValue(parsed, step.value);
-        const current = value.value;
-        const next = editing.value === "min" ? setLow(rounded, current, min.value) : setHigh(rounded, current, max.value);
-        emit("change", next);
-      }
-      editing.value = null;
-    };
-    const handleInputKeydown = (event) => {
-      if (event.key === "Enter") {
-        commitEditor();
-      } else if (event.key === "Escape") {
-        editing.value = null;
-      }
-    };
-    (0, import_vue4.watch)([lowPercent, highPercent], ([lo, hi]) => {
-      if (!isInteracting.value && !lowAnim && !highAnim) {
-        lowMotion.jump(lo);
-        highMotion.jump(hi);
-      }
-    });
-    (0, import_vue4.watch)([isActive, isDragging], () => {
-      applyHandleOpacity();
-    });
-    (0, import_vue4.watch)(editing, async (which) => {
-      if (which === null) return;
-      await (0, import_vue4.nextTick)();
-      inputRef.value?.focus();
-      inputRef.value?.select();
-    });
-    let unsubLow = null;
-    let unsubHigh = null;
-    (0, import_vue4.onMounted)(() => {
-      unsubLow = lowMotion.on("change", applyFillStyles);
-      unsubHigh = highMotion.on("change", applyFillStyles);
-      applyFillStyles();
-      applyHandleOpacity();
-    });
-    (0, import_vue4.onUnmounted)(() => {
-      stopAnims();
-      unsubLow?.();
-      unsubHigh?.();
-    });
-    return () => {
-      const current = value.value;
-      const lowText = current.min.toFixed(decimals.value);
-      const highText = current.max.toFixed(decimals.value);
-      const handles = handleLeftStyles(lowPercent.value, highPercent.value);
-      return (0, import_vue4.h)("div", { ref: wrapperRef, class: "dialkit-range-slider-wrapper" }, [
-        (0, import_vue4.h)("div", {
-          class: `dialkit-range-slider ${isActive.value ? "dialkit-range-slider-active" : ""}`,
-          onPointerdown: handlePointerDown,
-          onPointermove: handlePointerMove,
-          onPointerup: handlePointerUp,
-          onPointercancel: handlePointerCancel,
-          onDblclick: handleDoubleClick,
-          onMouseenter: () => {
-            isHovered.value = true;
-          },
-          onMouseleave: () => {
-            isHovered.value = false;
-          }
-        }, [
-          (0, import_vue4.h)("div", {
-            ref: fillRef,
-            class: "dialkit-range-slider-fill",
-            style: {
-              left: `${lowPercent.value}%`,
-              width: `${Math.max(0, highPercent.value - lowPercent.value)}%`
-            }
-          }),
-          (0, import_vue4.h)("div", {
-            ref: lowHandleRef,
-            class: "dialkit-range-slider-handle",
-            style: {
-              left: handles.low,
-              transform: "translateY(-50%)",
-              opacity: handleOpacityFor("min")
-            }
-          }),
-          (0, import_vue4.h)("div", {
-            ref: highHandleRef,
-            class: "dialkit-range-slider-handle",
-            style: {
-              left: handles.high,
-              transform: "translateY(-50%)",
-              opacity: handleOpacityFor("max")
-            }
-          }),
-          (0, import_vue4.h)("span", { class: "dialkit-range-slider-label" }, props.label),
-          editing.value !== null ? (0, import_vue4.h)("input", {
-            ref: inputRef,
-            type: "text",
-            class: "dialkit-range-slider-input",
-            value: inputValue.value,
-            onInput: (event) => {
-              inputValue.value = event.target.value;
-            },
-            onKeydown: handleInputKeydown,
-            onBlur: commitEditor,
-            onClick: (event) => event.stopPropagation(),
-            onPointerdown: (event) => event.stopPropagation()
-          }) : (0, import_vue4.h)("span", { class: "dialkit-range-slider-value" }, [
-            (0, import_vue4.h)("span", {
-              class: "dialkit-range-slider-bound",
-              onClick: (event) => openEditor("min", event),
-              onPointerdown: (event) => event.stopPropagation()
-            }, lowText),
-            (0, import_vue4.h)("span", { class: "dialkit-range-slider-dash" }, "\u2013"),
-            (0, import_vue4.h)("span", {
-              class: "dialkit-range-slider-bound",
-              onClick: (event) => openEditor("max", event),
-              onPointerdown: (event) => event.stopPropagation()
-            }, highText)
-          ])
-        ])
-      ]);
-    };
-  }
-});
-
-// src/vue/components/Toggle.ts
-var import_vue6 = require("vue");
 
 // src/vue/components/SegmentedControl.ts
-var import_vue5 = require("vue");
+var import_vue3 = require("vue");
 var import_motion = require("motion");
-var SegmentedControl = (0, import_vue5.defineComponent)({
+var SegmentedControl = (0, import_vue3.defineComponent)({
   name: "DialKitSegmentedControl",
   props: {
     options: {
@@ -2551,10 +2083,10 @@ var SegmentedControl = (0, import_vue5.defineComponent)({
   },
   emits: ["change"],
   setup(props, { emit }) {
-    const containerRef = (0, import_vue5.ref)(null);
-    const pillRef = (0, import_vue5.ref)(null);
+    const containerRef = (0, import_vue3.ref)(null);
+    const pillRef = (0, import_vue3.ref)(null);
     const buttonRefs = /* @__PURE__ */ new Map();
-    const pillReady = (0, import_vue5.ref)(false);
+    const pillReady = (0, import_vue3.ref)(false);
     let hasAnimated = false;
     let pillAnim = null;
     const measurePill = () => {
@@ -2606,8 +2138,8 @@ var SegmentedControl = (0, import_vue5.defineComponent)({
       );
     };
     let ro;
-    (0, import_vue5.onMounted)(() => {
-      (0, import_vue5.nextTick)(() => {
+    (0, import_vue3.onMounted)(() => {
+      (0, import_vue3.nextTick)(() => {
         updatePill(false);
         hasAnimated = true;
       });
@@ -2616,19 +2148,19 @@ var SegmentedControl = (0, import_vue5.defineComponent)({
         ro.observe(containerRef.value);
       }
     });
-    (0, import_vue5.onUnmounted)(() => {
+    (0, import_vue3.onUnmounted)(() => {
       pillAnim?.stop();
       ro?.disconnect();
     });
-    (0, import_vue5.watch)(
+    (0, import_vue3.watch)(
       () => props.value,
       () => {
         updatePill(true);
       },
       { flush: "post" }
     );
-    return () => (0, import_vue5.h)("div", { ref: containerRef, class: "dialkit-segmented" }, [
-      (0, import_vue5.h)("div", {
+    return () => (0, import_vue3.h)("div", { ref: containerRef, class: "dialkit-segmented" }, [
+      (0, import_vue3.h)("div", {
         ref: pillRef,
         class: "dialkit-segmented-pill",
         style: {
@@ -2637,7 +2169,7 @@ var SegmentedControl = (0, import_vue5.defineComponent)({
           visibility: pillReady.value ? "visible" : "hidden"
         }
       }),
-      ...props.options.map((option) => (0, import_vue5.h)("button", {
+      ...props.options.map((option) => (0, import_vue3.h)("button", {
         ref: ((el) => {
           if (el instanceof HTMLElement) {
             buttonRefs.set(option.value, el);
@@ -2652,701 +2184,6 @@ var SegmentedControl = (0, import_vue5.defineComponent)({
     ]);
   }
 });
-
-// src/vue/components/Toggle.ts
-var Toggle = (0, import_vue6.defineComponent)({
-  name: "DialKitToggle",
-  props: {
-    label: { type: String, required: true },
-    checked: { type: Boolean, required: true },
-    shortcut: { type: Object, default: void 0 },
-    shortcutActive: { type: Boolean, default: false }
-  },
-  emits: ["change"],
-  setup(props, { emit }) {
-    return () => (0, import_vue6.h)("div", { class: "dialkit-labeled-control" }, [
-      (0, import_vue6.h)("span", { class: "dialkit-labeled-control-label" }, [
-        props.label,
-        props.shortcut ? (0, import_vue6.h)("span", {
-          class: `dialkit-shortcut-pill${props.shortcutActive ? " dialkit-shortcut-pill-active" : ""}`
-        }, formatToggleShortcut(props.shortcut)) : null
-      ]),
-      (0, import_vue6.h)(SegmentedControl, {
-        options: [
-          { value: "off", label: "Off" },
-          { value: "on", label: "On" }
-        ],
-        value: props.checked ? "on" : "off",
-        onChange: (value) => emit("change", value === "on")
-      })
-    ]);
-  }
-});
-
-// src/vue/components/SpringControl.ts
-var import_vue8 = require("vue");
-
-// src/vue/components/SpringVisualization.ts
-var import_vue7 = require("vue");
-function generateSpringCurve(stiffness, damping, mass, duration) {
-  const points = [];
-  const steps = 100;
-  const dt = duration / steps;
-  let position = 0;
-  let velocity = 0;
-  const target = 1;
-  for (let i = 0; i <= steps; i += 1) {
-    const time = i * dt;
-    points.push([time, position]);
-    const springForce = -stiffness * (position - target);
-    const dampingForce = -damping * velocity;
-    const acceleration = (springForce + dampingForce) / mass;
-    velocity += acceleration * dt;
-    position += velocity * dt;
-  }
-  return points;
-}
-var SpringVisualization = (0, import_vue7.defineComponent)({
-  name: "DialKitSpringVisualization",
-  props: {
-    spring: {
-      type: Object,
-      required: true
-    },
-    isSimpleMode: {
-      type: Boolean,
-      required: true
-    }
-  },
-  setup(props) {
-    const width = 256;
-    const height = 140;
-    const pathData = (0, import_vue7.computed)(() => {
-      let stiffness;
-      let damping;
-      let mass;
-      if (props.isSimpleMode) {
-        const visualDuration = props.spring.visualDuration ?? 0.3;
-        const bounce = props.spring.bounce ?? 0.2;
-        mass = 1;
-        stiffness = (2 * Math.PI / visualDuration) ** 2;
-        const dampingRatio = 1 - bounce;
-        damping = 2 * dampingRatio * Math.sqrt(stiffness * mass);
-      } else {
-        stiffness = props.spring.stiffness ?? 400;
-        damping = props.spring.damping ?? 17;
-        mass = props.spring.mass ?? 1;
-      }
-      const duration = 2;
-      const points = generateSpringCurve(stiffness, damping, mass, duration);
-      const values = points.map(([, value]) => value);
-      const minValue = Math.min(...values);
-      const maxValue = Math.max(...values);
-      const valueRange = maxValue - minValue;
-      return points.map(([time, value], index) => {
-        const x = time / duration * width;
-        const normalizedValue = (value - minValue) / (valueRange || 1);
-        const y = height - (normalizedValue * height * 0.6 + height * 0.2);
-        return `${index === 0 ? "M" : "L"} ${x} ${y}`;
-      }).join(" ");
-    });
-    return () => (0, import_vue7.h)("svg", { viewBox: `0 0 ${width} ${height}`, class: "dialkit-spring-viz" }, [
-      ...Array.from({ length: 3 }).flatMap((_, index) => {
-        const lineIndex = index + 1;
-        const x = width / 4 * lineIndex;
-        const y = height / 4 * lineIndex;
-        return [
-          (0, import_vue7.h)("line", { x1: x, y1: 0, x2: x, y2: height, stroke: "rgba(255, 255, 255, 0.08)", "stroke-width": 1 }),
-          (0, import_vue7.h)("line", { x1: 0, y1: y, x2: width, y2: y, stroke: "rgba(255, 255, 255, 0.08)", "stroke-width": 1 })
-        ];
-      }),
-      (0, import_vue7.h)("line", {
-        x1: 0,
-        y1: height / 2,
-        x2: width,
-        y2: height / 2,
-        stroke: "rgba(255, 255, 255, 0.15)",
-        "stroke-width": 1,
-        "stroke-dasharray": "4,4"
-      }),
-      (0, import_vue7.h)("path", {
-        d: pathData.value,
-        fill: "none",
-        stroke: "rgba(255, 255, 255, 0.6)",
-        "stroke-width": 2,
-        "stroke-linecap": "round",
-        "stroke-linejoin": "round"
-      })
-    ]);
-  }
-});
-
-// src/vue/components/SpringControl.ts
-var SpringControl = (0, import_vue8.defineComponent)({
-  name: "DialKitSpringControl",
-  props: {
-    panelId: { type: String, required: true },
-    path: { type: String, required: true },
-    label: { type: String, required: true },
-    spring: {
-      type: Object,
-      required: true
-    }
-  },
-  emits: ["change"],
-  setup(props, { emit }) {
-    const mode = (0, import_vue8.ref)(DialStore.getSpringMode(props.panelId, props.path));
-    let unsub;
-    (0, import_vue8.onMounted)(() => {
-      unsub = DialStore.subscribe(props.panelId, () => {
-        mode.value = DialStore.getSpringMode(props.panelId, props.path);
-      });
-    });
-    (0, import_vue8.onUnmounted)(() => {
-      unsub?.();
-    });
-    const isSimpleMode = () => mode.value === "simple";
-    const cache2 = {
-      simple: props.spring.visualDuration !== void 0 ? { ...props.spring } : { type: "spring", visualDuration: 0.3, bounce: 0.2 },
-      advanced: props.spring.stiffness !== void 0 ? { ...props.spring } : { type: "spring", stiffness: 200, damping: 25, mass: 1 }
-    };
-    const handleModeChange = (nextMode) => {
-      if (isSimpleMode()) {
-        cache2.simple = { ...props.spring };
-      } else {
-        cache2.advanced = { ...props.spring };
-      }
-      DialStore.updateSpringMode(props.panelId, props.path, nextMode);
-      if (nextMode === "simple") {
-        emit("change", cache2.simple);
-      } else {
-        emit("change", cache2.advanced);
-      }
-    };
-    const handleUpdate = (key, value) => {
-      if (isSimpleMode()) {
-        const { stiffness, damping, mass, ...rest } = props.spring;
-        emit("change", { ...rest, [key]: value });
-      } else {
-        const { visualDuration, bounce, ...rest } = props.spring;
-        emit("change", { ...rest, [key]: value });
-      }
-    };
-    return () => (0, import_vue8.h)(Folder, { title: props.label, defaultOpen: true }, {
-      default: () => [
-        (0, import_vue8.h)("div", { style: { display: "flex", flexDirection: "column", gap: "6px" } }, [
-          (0, import_vue8.h)(SpringVisualization, { spring: props.spring, isSimpleMode: isSimpleMode() }),
-          (0, import_vue8.h)("div", { class: "dialkit-labeled-control" }, [
-            (0, import_vue8.h)("span", { class: "dialkit-labeled-control-label" }, "Type"),
-            (0, import_vue8.h)(SegmentedControl, {
-              options: [
-                { value: "simple", label: "Time" },
-                { value: "advanced", label: "Physics" }
-              ],
-              value: mode.value,
-              onChange: handleModeChange
-            })
-          ]),
-          ...isSimpleMode() ? [
-            (0, import_vue8.h)(Slider, {
-              label: "Duration",
-              value: props.spring.visualDuration ?? 0.3,
-              min: 0.1,
-              max: 1,
-              step: 0.05,
-              unit: "s",
-              onChange: (next) => handleUpdate("visualDuration", next)
-            }),
-            (0, import_vue8.h)(Slider, {
-              label: "Bounce",
-              value: props.spring.bounce ?? 0.2,
-              min: 0,
-              max: 1,
-              step: 0.05,
-              onChange: (next) => handleUpdate("bounce", next)
-            })
-          ] : [
-            (0, import_vue8.h)(Slider, {
-              label: "Stiffness",
-              value: props.spring.stiffness ?? 400,
-              min: 1,
-              max: 1e3,
-              step: 10,
-              onChange: (next) => handleUpdate("stiffness", next)
-            }),
-            (0, import_vue8.h)(Slider, {
-              label: "Damping",
-              value: props.spring.damping ?? 17,
-              min: 1,
-              max: 100,
-              step: 1,
-              onChange: (next) => handleUpdate("damping", next)
-            }),
-            (0, import_vue8.h)(Slider, {
-              label: "Mass",
-              value: props.spring.mass ?? 1,
-              min: 0.1,
-              max: 10,
-              step: 0.1,
-              onChange: (next) => handleUpdate("mass", next)
-            })
-          ]
-        ])
-      ]
-    });
-  }
-});
-
-// src/vue/components/TransitionControl.ts
-var import_vue10 = require("vue");
-
-// src/vue/components/EasingVisualization.ts
-var import_vue9 = require("vue");
-var EasingVisualization = (0, import_vue9.defineComponent)({
-  name: "DialKitEasingVisualization",
-  props: {
-    easing: {
-      type: Object,
-      required: true
-    }
-  },
-  setup(props) {
-    const size = 200;
-    const pad = 10;
-    const inner = size - pad * 2;
-    const unit = inner / 2;
-    const curve = (0, import_vue9.computed)(() => {
-      const [x1, y1, x2, y2] = props.easing.ease;
-      const toSvg = (nx, ny) => ({
-        x: pad + (nx + 0.5) * unit,
-        y: pad + (1.5 - ny) * unit
-      });
-      const start = toSvg(0, 0);
-      const end = toSvg(1, 1);
-      const p1 = toSvg(x1, y1);
-      const p2 = toSvg(x2, y2);
-      return `M ${start.x} ${start.y} C ${p1.x} ${p1.y}, ${p2.x} ${p2.y}, ${end.x} ${end.y}`;
-    });
-    return () => (0, import_vue9.h)("svg", {
-      viewBox: `0 0 ${size} ${size}`,
-      preserveAspectRatio: "xMidYMid slice",
-      class: "dialkit-spring-viz dialkit-easing-viz"
-    }, [
-      (0, import_vue9.h)("line", {
-        x1: pad + (0 + 0.5) * unit,
-        y1: pad + (1.5 - 0) * unit,
-        x2: pad + (1 + 0.5) * unit,
-        y2: pad + (1.5 - 1) * unit,
-        stroke: "rgba(255, 255, 255, 0.15)",
-        "stroke-width": 1,
-        "stroke-dasharray": "4,4"
-      }),
-      (0, import_vue9.h)("path", {
-        d: curve.value,
-        fill: "none",
-        stroke: "rgba(255, 255, 255, 0.6)",
-        "stroke-width": 2,
-        "stroke-linecap": "round"
-      })
-    ]);
-  }
-});
-
-// src/vue/components/TransitionControl.ts
-function formatEase(ease) {
-  return ease.map((value) => Number(value.toFixed(2))).join(", ");
-}
-function parseEase(value) {
-  const parts = value.split(",").map((part) => Number.parseFloat(part.trim()));
-  if (parts.length === 4 && parts.every((part) => Number.isFinite(part))) {
-    return parts;
-  }
-  return null;
-}
-var EaseTextInput = (0, import_vue10.defineComponent)({
-  name: "DialKitEaseTextInput",
-  props: {
-    ease: {
-      type: Array,
-      required: true
-    },
-    onChange: {
-      type: Function,
-      required: true
-    }
-  },
-  setup(props) {
-    const editing = (0, import_vue10.ref)(false);
-    const draft = (0, import_vue10.ref)("");
-    const handleFocus = () => {
-      draft.value = formatEase(props.ease);
-      editing.value = true;
-    };
-    const handleBlur = () => {
-      const parsed = parseEase(draft.value);
-      if (parsed) props.onChange(parsed);
-      editing.value = false;
-    };
-    const handleKeydown = (event) => {
-      if (event.key === "Enter") {
-        event.target.blur();
-      }
-    };
-    return () => (0, import_vue10.h)("div", { class: "dialkit-labeled-control" }, [
-      (0, import_vue10.h)("span", { class: "dialkit-labeled-control-label" }, "Ease"),
-      (0, import_vue10.h)("input", {
-        type: "text",
-        class: "dialkit-text-input",
-        value: editing.value ? draft.value : formatEase(props.ease),
-        spellcheck: false,
-        onInput: (event) => {
-          draft.value = event.target.value;
-        },
-        onFocus: handleFocus,
-        onBlur: handleBlur,
-        onKeydown: handleKeydown
-      })
-    ]);
-  }
-});
-var TransitionControl = (0, import_vue10.defineComponent)({
-  name: "DialKitTransitionControl",
-  props: {
-    panelId: { type: String, required: true },
-    path: { type: String, required: true },
-    label: { type: String, required: true },
-    value: {
-      type: Object,
-      required: true
-    }
-  },
-  emits: ["change"],
-  setup(props, { emit }) {
-    const mode = (0, import_vue10.ref)(DialStore.getTransitionMode(props.panelId, props.path));
-    let unsub;
-    (0, import_vue10.onMounted)(() => {
-      unsub = DialStore.subscribe(props.panelId, () => {
-        mode.value = DialStore.getTransitionMode(props.panelId, props.path);
-      });
-    });
-    (0, import_vue10.onUnmounted)(() => unsub?.());
-    const cache2 = {
-      easing: props.value.type === "easing" ? { ...props.value } : { type: "easing", duration: 0.3, ease: [1, -0.4, 0.5, 1] },
-      simple: props.value.type === "spring" && props.value.visualDuration !== void 0 ? { ...props.value } : { type: "spring", visualDuration: 0.3, bounce: 0.2 },
-      advanced: props.value.type === "spring" && props.value.stiffness !== void 0 ? { ...props.value } : { type: "spring", stiffness: 200, damping: 25, mass: 1 }
-    };
-    const spring = () => {
-      if (props.value.type === "spring") {
-        if (mode.value === "simple") cache2.simple = props.value;
-        else if (mode.value === "advanced") cache2.advanced = props.value;
-        return props.value;
-      }
-      return cache2.simple;
-    };
-    const easing = () => {
-      if (props.value.type === "easing") {
-        cache2.easing = props.value;
-        return props.value;
-      }
-      return cache2.easing;
-    };
-    const handleModeChange = (nextMode) => {
-      DialStore.updateTransitionMode(props.panelId, props.path, nextMode);
-      if (nextMode === "easing") {
-        emit("change", cache2.easing);
-      } else if (nextMode === "simple") {
-        emit("change", cache2.simple);
-      } else {
-        emit("change", cache2.advanced);
-      }
-    };
-    const updateEase = (index, value) => {
-      const current = easing();
-      const next = [...current.ease];
-      next[index] = value;
-      emit("change", { ...current, ease: next });
-    };
-    const handleSpringUpdate = (key, value) => {
-      const current = spring();
-      if (mode.value === "simple") {
-        const { stiffness, damping, mass, ...rest } = current;
-        emit("change", { ...rest, [key]: value });
-      } else {
-        const { visualDuration, bounce, ...rest } = current;
-        emit("change", { ...rest, [key]: value });
-      }
-    };
-    return () => {
-      const isEasing = mode.value === "easing";
-      const isSimpleSpring = mode.value === "simple";
-      const currentSpring = spring();
-      const currentEasing = easing();
-      return (0, import_vue10.h)(Folder, { title: props.label, defaultOpen: true }, {
-        default: () => [
-          (0, import_vue10.h)("div", { style: { display: "flex", flexDirection: "column", gap: "6px" } }, [
-            isEasing ? (0, import_vue10.h)(EasingVisualization, { easing: currentEasing }) : (0, import_vue10.h)(SpringVisualization, { spring: currentSpring, isSimpleMode: isSimpleSpring }),
-            (0, import_vue10.h)("div", { class: "dialkit-labeled-control" }, [
-              (0, import_vue10.h)("span", { class: "dialkit-labeled-control-label" }, "Type"),
-              (0, import_vue10.h)(SegmentedControl, {
-                options: [
-                  { value: "easing", label: "Easing" },
-                  { value: "simple", label: "Time" },
-                  { value: "advanced", label: "Physics" }
-                ],
-                value: mode.value,
-                onChange: handleModeChange
-              })
-            ]),
-            ...isEasing ? [
-              (0, import_vue10.h)(Slider, { label: "x1", value: currentEasing.ease[0], min: 0, max: 1, step: 0.01, onChange: (next) => updateEase(0, next) }),
-              (0, import_vue10.h)(Slider, { label: "y1", value: currentEasing.ease[1], min: -1, max: 2, step: 0.01, onChange: (next) => updateEase(1, next) }),
-              (0, import_vue10.h)(Slider, { label: "x2", value: currentEasing.ease[2], min: 0, max: 1, step: 0.01, onChange: (next) => updateEase(2, next) }),
-              (0, import_vue10.h)(Slider, { label: "y2", value: currentEasing.ease[3], min: -1, max: 2, step: 0.01, onChange: (next) => updateEase(3, next) }),
-              (0, import_vue10.h)(Slider, {
-                label: "Duration",
-                value: currentEasing.duration,
-                min: 0.1,
-                max: 2,
-                step: 0.05,
-                unit: "s",
-                onChange: (next) => emit("change", { ...currentEasing, duration: next })
-              }),
-              (0, import_vue10.h)(EaseTextInput, {
-                ease: currentEasing.ease,
-                onChange: (next) => emit("change", { ...currentEasing, ease: next })
-              })
-            ] : isSimpleSpring ? [
-              (0, import_vue10.h)(Slider, {
-                label: "Duration",
-                value: currentSpring.visualDuration ?? 0.3,
-                min: 0.1,
-                max: 1,
-                step: 0.05,
-                unit: "s",
-                onChange: (next) => handleSpringUpdate("visualDuration", next)
-              }),
-              (0, import_vue10.h)(Slider, {
-                label: "Bounce",
-                value: currentSpring.bounce ?? 0.2,
-                min: 0,
-                max: 1,
-                step: 0.05,
-                onChange: (next) => handleSpringUpdate("bounce", next)
-              })
-            ] : [
-              (0, import_vue10.h)(Slider, {
-                label: "Stiffness",
-                value: currentSpring.stiffness ?? 400,
-                min: 1,
-                max: 1e3,
-                step: 10,
-                onChange: (next) => handleSpringUpdate("stiffness", next)
-              }),
-              (0, import_vue10.h)(Slider, {
-                label: "Damping",
-                value: currentSpring.damping ?? 17,
-                min: 1,
-                max: 100,
-                step: 1,
-                onChange: (next) => handleSpringUpdate("damping", next)
-              }),
-              (0, import_vue10.h)(Slider, {
-                label: "Mass",
-                value: currentSpring.mass ?? 1,
-                min: 0.1,
-                max: 10,
-                step: 0.1,
-                onChange: (next) => handleSpringUpdate("mass", next)
-              })
-            ]
-          ])
-        ]
-      });
-    };
-  }
-});
-
-// src/vue/components/TextControl.ts
-var import_vue11 = require("vue");
-var textControlInstance = 0;
-var TextControl = (0, import_vue11.defineComponent)({
-  name: "DialKitTextControl",
-  props: {
-    label: { type: String, required: true },
-    value: { type: String, required: true },
-    placeholder: { type: String, required: false }
-  },
-  emits: ["change"],
-  setup(props, { emit }) {
-    const inputId = (0, import_vue11.ref)(`dialkit-text-${++textControlInstance}`);
-    return () => (0, import_vue11.h)("div", { class: "dialkit-text-control" }, [
-      (0, import_vue11.h)("label", { class: "dialkit-text-label", for: inputId.value }, props.label),
-      (0, import_vue11.h)("input", {
-        id: inputId.value,
-        type: "text",
-        class: "dialkit-text-input",
-        value: props.value,
-        placeholder: props.placeholder,
-        onInput: (event) => emit("change", event.target.value)
-      })
-    ]);
-  }
-});
-
-// src/vue/components/SelectControl.ts
-var import_vue12 = require("vue");
-var import_motion_v4 = require("motion-v");
-function toTitleCase(value) {
-  return value.replace(/\b\w/g, (char) => char.toUpperCase());
-}
-function normalizeOptions(options) {
-  return options.map(
-    (option) => typeof option === "string" ? { value: option, label: toTitleCase(option) } : option
-  );
-}
-var SelectControl = (0, import_vue12.defineComponent)({
-  name: "DialKitSelectControl",
-  props: {
-    label: { type: String, required: true },
-    value: { type: String, required: true },
-    options: {
-      type: Array,
-      required: true
-    }
-  },
-  emits: ["change"],
-  setup(props, { emit }) {
-    const isOpen = (0, import_vue12.ref)(false);
-    const pos = (0, import_vue12.ref)(null);
-    const portalTarget = (0, import_vue12.ref)(null);
-    const triggerRef = (0, import_vue12.ref)(null);
-    const dropdownRef = (0, import_vue12.ref)(null);
-    const normalizedOptions = () => normalizeOptions(props.options);
-    const selectedLabel = () => normalizedOptions().find((option) => option.value === props.value)?.label ?? props.value;
-    const updatePos = () => {
-      if (!triggerRef.value) return;
-      const rect = triggerRef.value.getBoundingClientRect();
-      const dropdownHeight = 8 + normalizedOptions().length * 36;
-      const spaceBelow = window.innerHeight - rect.bottom - 4;
-      const above = spaceBelow < dropdownHeight && rect.top > spaceBelow;
-      pos.value = {
-        top: above ? rect.top - 4 : rect.bottom + 4,
-        left: rect.left,
-        width: rect.width,
-        above
-      };
-    };
-    const openDropdown = () => {
-      updatePos();
-      isOpen.value = true;
-    };
-    const closeDropdown = () => {
-      isOpen.value = false;
-    };
-    const setDropdownRef = (node) => {
-      if (node instanceof HTMLElement) {
-        dropdownRef.value = node;
-        return;
-      }
-      if (node && typeof node === "object" && "$el" in node) {
-        const el = node.$el;
-        dropdownRef.value = el instanceof HTMLElement ? el : null;
-        return;
-      }
-      dropdownRef.value = null;
-    };
-    const toggleDropdown = () => {
-      if (isOpen.value) closeDropdown();
-      else openDropdown();
-    };
-    (0, import_vue12.watch)(isOpen, (open, _, onCleanup) => {
-      if (!open) return;
-      const handleViewportChange = () => updatePos();
-      const handleDocumentClick = (event) => {
-        const target = event.target;
-        if (triggerRef.value?.contains(target) || dropdownRef.value?.contains(target)) return;
-        closeDropdown();
-      };
-      updatePos();
-      document.addEventListener("mousedown", handleDocumentClick);
-      window.addEventListener("resize", handleViewportChange);
-      window.addEventListener("scroll", handleViewportChange, true);
-      onCleanup(() => {
-        document.removeEventListener("mousedown", handleDocumentClick);
-        window.removeEventListener("resize", handleViewportChange);
-        window.removeEventListener("scroll", handleViewportChange, true);
-      });
-    });
-    (0, import_vue12.onMounted)(() => {
-      const root = triggerRef.value?.closest(".dialkit-root");
-      portalTarget.value = root ?? document.body;
-    });
-    return () => (0, import_vue12.h)("div", { class: "dialkit-select-row" }, [
-      (0, import_vue12.h)("button", {
-        ref: triggerRef,
-        class: "dialkit-select-trigger",
-        "data-open": String(isOpen.value),
-        onClick: toggleDropdown
-      }, [
-        (0, import_vue12.h)("span", { class: "dialkit-select-label" }, props.label),
-        (0, import_vue12.h)("div", { class: "dialkit-select-right" }, [
-          (0, import_vue12.h)("span", { class: "dialkit-select-value" }, selectedLabel()),
-          (0, import_vue12.h)(import_motion_v4.motion.svg, {
-            class: "dialkit-select-chevron",
-            viewBox: "0 0 24 24",
-            fill: "none",
-            stroke: "currentColor",
-            "stroke-width": "2.5",
-            "stroke-linecap": "round",
-            "stroke-linejoin": "round",
-            animate: { rotate: isOpen.value ? 180 : 0 },
-            transition: { type: "spring", visualDuration: 0.2, bounce: 0.15 }
-          }, [(0, import_vue12.h)("path", { d: "M6 9.5L12 15.5L18 9.5" })])
-        ])
-      ]),
-      portalTarget.value ? (0, import_vue12.h)(import_vue12.Teleport, { to: portalTarget.value }, [
-        (0, import_vue12.h)(import_motion_v4.AnimatePresence, null, {
-          default: () => isOpen.value && pos.value ? [(0, import_vue12.h)(import_motion_v4.motion.div, {
-            key: "dialkit-select-dropdown",
-            ref: setDropdownRef,
-            class: "dialkit-select-dropdown",
-            initial: { opacity: 0, y: pos.value.above ? 8 : -8, scale: 0.95 },
-            animate: { opacity: 1, y: 0, scale: 1 },
-            exit: { opacity: 0, y: pos.value.above ? 8 : -8, scale: 0.95 },
-            transition: { type: "spring", visualDuration: 0.15, bounce: 0 },
-            style: {
-              position: "fixed",
-              left: `${pos.value.left}px`,
-              width: `${pos.value.width}px`,
-              ...pos.value.above ? {
-                bottom: `${window.innerHeight - pos.value.top}px`,
-                transformOrigin: "bottom"
-              } : {
-                top: `${pos.value.top}px`,
-                transformOrigin: "top"
-              }
-            }
-          }, normalizedOptions().map((option) => (0, import_vue12.h)("button", {
-            key: option.value,
-            class: "dialkit-select-option",
-            "data-selected": String(option.value === props.value),
-            onClick: () => {
-              emit("change", option.value);
-              closeDropdown();
-            }
-          }, option.label)))] : []
-        })
-      ]) : null
-    ]);
-  }
-});
-
-// src/vue/components/ColorControl.ts
-var import_vue14 = require("vue");
-var import_motion_v5 = require("motion-v");
-
-// src/vue/components/ColorPickerPanel.ts
-var import_vue13 = require("vue");
 
 // src/color-palette-store.ts
 var cache = null;
@@ -3409,7 +2246,7 @@ var stickyFormat = "hex";
 var BLACK = { h: 0, s: 0, v: 0, a: 1 };
 var HEX_ALPHA_SPEC = { key: "a", label: "A", min: 0, max: 100, step: 1, precision: 0 };
 function useAreaDrag(onPoint) {
-  const elRef = (0, import_vue13.ref)(null);
+  const elRef = (0, import_vue4.ref)(null);
   let dragging = false;
   const readPoint = (e) => {
     const el = elRef.value;
@@ -3441,7 +2278,7 @@ function useAreaDrag(onPoint) {
   };
   return { elRef, handlers };
 }
-var ChannelField = (0, import_vue13.defineComponent)({
+var ChannelField = (0, import_vue4.defineComponent)({
   name: "DialKitColorChannelField",
   props: {
     spec: { type: Object, required: true },
@@ -3449,13 +2286,13 @@ var ChannelField = (0, import_vue13.defineComponent)({
   },
   emits: ["commit"],
   setup(props, { emit }) {
-    const draft = (0, import_vue13.ref)(null);
+    const draft = (0, import_vue4.ref)(null);
     const commit = () => {
       if (draft.value !== null) emit("commit", Number(draft.value));
       draft.value = null;
     };
-    return () => (0, import_vue13.h)("label", { class: "dialkit-color-field" }, [
-      (0, import_vue13.h)("input", {
+    return () => (0, import_vue4.h)("label", { class: "dialkit-color-field" }, [
+      (0, import_vue4.h)("input", {
         type: "text",
         inputmode: "decimal",
         value: draft.value ?? String(props.value),
@@ -3478,11 +2315,11 @@ var ChannelField = (0, import_vue13.defineComponent)({
           }
         }
       }),
-      (0, import_vue13.h)("span", { class: "dialkit-color-field-label" }, props.spec.label)
+      (0, import_vue4.h)("span", { class: "dialkit-color-field-label" }, props.spec.label)
     ]);
   }
 });
-var HexField = (0, import_vue13.defineComponent)({
+var HexField = (0, import_vue4.defineComponent)({
   name: "DialKitColorHexField",
   props: {
     value: { type: String, required: true },
@@ -3490,7 +2327,7 @@ var HexField = (0, import_vue13.defineComponent)({
   },
   emits: ["commit"],
   setup(props, { emit }) {
-    const draft = (0, import_vue13.ref)(null);
+    const draft = (0, import_vue4.ref)(null);
     const commit = () => {
       if (draft.value !== null) {
         const normalized = normalizeHex(draft.value, props.alpha);
@@ -3498,8 +2335,8 @@ var HexField = (0, import_vue13.defineComponent)({
       }
       draft.value = null;
     };
-    return () => (0, import_vue13.h)("label", { class: "dialkit-color-field dialkit-color-field-hex" }, [
-      (0, import_vue13.h)("input", {
+    return () => (0, import_vue4.h)("label", { class: "dialkit-color-field dialkit-color-field-hex" }, [
+      (0, import_vue4.h)("input", {
         type: "text",
         spellcheck: false,
         value: (draft.value ?? props.value).toUpperCase(),
@@ -3522,18 +2359,18 @@ var HexField = (0, import_vue13.defineComponent)({
           }
         }
       }),
-      (0, import_vue13.h)("span", { class: "dialkit-color-field-label" }, "HEX")
+      (0, import_vue4.h)("span", { class: "dialkit-color-field-label" }, "HEX")
     ]);
   }
 });
-var PaletteSlot = (0, import_vue13.defineComponent)({
+var PaletteSlot = (0, import_vue4.defineComponent)({
   name: "DialKitColorPaletteSlot",
   props: {
     color: { type: String, default: null }
   },
   emits: ["save", "apply", "clear"],
   setup(props, { emit }) {
-    const holding = (0, import_vue13.ref)(false);
+    const holding = (0, import_vue4.ref)(false);
     let timer = null;
     let origin = null;
     let fired = false;
@@ -3543,8 +2380,8 @@ var PaletteSlot = (0, import_vue13.defineComponent)({
       origin = null;
       holding.value = false;
     };
-    (0, import_vue13.onBeforeUnmount)(cancelHold);
-    return () => (0, import_vue13.h)("button", {
+    (0, import_vue4.onBeforeUnmount)(cancelHold);
+    return () => (0, import_vue4.h)("button", {
       class: "dialkit-color-palette-slot",
       "data-filled": String(props.color !== null),
       "data-holding": String(holding.value),
@@ -3582,7 +2419,7 @@ var PaletteSlot = (0, import_vue13.defineComponent)({
     });
   }
 });
-var ColorPickerPanel = (0, import_vue13.defineComponent)({
+var ColorPickerPanel = (0, import_vue4.defineComponent)({
   name: "DialKitColorPickerPanel",
   props: {
     value: { type: String, required: true },
@@ -3592,25 +2429,25 @@ var ColorPickerPanel = (0, import_vue13.defineComponent)({
   emits: ["change"],
   setup(props, { emit }) {
     const initialRgba = parseHex(props.value);
-    const hsva = (0, import_vue13.ref)(initialRgba ? rgbToHsv(initialRgba) : { ...BLACK });
-    const format = (0, import_vue13.ref)(stickyFormat);
-    const slots = (0, import_vue13.ref)(props.palette ? loadPalette() : emptyPalette());
+    const hsva = (0, import_vue4.ref)(initialRgba ? rgbToHsv(initialRgba) : { ...BLACK });
+    const format = (0, import_vue4.ref)(stickyFormat);
+    const slots = (0, import_vue4.ref)(props.palette ? loadPalette() : emptyPalette());
     let lastEmitted = props.value;
-    (0, import_vue13.watch)(() => props.value, (value) => {
+    (0, import_vue4.watch)(() => props.value, (value) => {
       if (value === lastEmitted) return;
       lastEmitted = value;
       const rgba2 = parseHex(value);
       if (rgba2) hsva.value = rgbToHsv(rgba2);
     });
     let unsubscribePalette;
-    (0, import_vue13.onMounted)(() => {
+    (0, import_vue4.onMounted)(() => {
       if (props.palette) {
         unsubscribePalette = subscribePalette((next) => {
           slots.value = next;
         });
       }
     });
-    (0, import_vue13.onBeforeUnmount)(() => unsubscribePalette?.());
+    (0, import_vue4.onBeforeUnmount)(() => unsubscribePalette?.());
     const emitColor = (next) => {
       hsva.value = next;
       const hex = formatHex(hsvToRgb(next), props.alpha);
@@ -3628,11 +2465,11 @@ var ColorPickerPanel = (0, import_vue13.defineComponent)({
     const svDrag = useAreaDrag((x, y) => emitColor({ ...hsva.value, s: x, v: 1 - y }));
     const hueDrag = useAreaDrag((x) => emitColor({ ...hsva.value, h: Math.min(x * 360, 359.999) }));
     const alphaDrag = useAreaDrag((x) => emitColor({ ...hsva.value, a: x }));
-    const rgba = (0, import_vue13.computed)(() => hsvToRgb(hsva.value));
-    const opaqueHex = (0, import_vue13.computed)(() => formatHex(rgba.value, false));
-    const currentHex = (0, import_vue13.computed)(() => formatHex(rgba.value, props.alpha));
-    const channelSpecs = (0, import_vue13.computed)(() => format.value === "hex" ? [] : getChannels(format.value, props.alpha));
-    const channelValues = (0, import_vue13.computed)(() => format.value === "hex" ? [] : rgbaToChannels(rgba.value, format.value, props.alpha));
+    const rgba = (0, import_vue4.computed)(() => hsvToRgb(hsva.value));
+    const opaqueHex = (0, import_vue4.computed)(() => formatHex(rgba.value, false));
+    const currentHex = (0, import_vue4.computed)(() => formatHex(rgba.value, props.alpha));
+    const channelSpecs = (0, import_vue4.computed)(() => format.value === "hex" ? [] : getChannels(format.value, props.alpha));
+    const channelValues = (0, import_vue4.computed)(() => format.value === "hex" ? [] : rgbaToChannels(rgba.value, format.value, props.alpha));
     const commitChannel = (index, n) => {
       const next = [...channelValues.value];
       next[index] = n;
@@ -3642,16 +2479,16 @@ var ColorPickerPanel = (0, import_vue13.defineComponent)({
       if (nextHsva.v === 0) nextHsva.s = hsva.value.s;
       emitColor(nextHsva);
     };
-    return () => (0, import_vue13.h)("div", {
+    return () => (0, import_vue4.h)("div", {
       class: "dialkit-color-picker",
       style: { "--picker-hue": String(hsva.value.h) }
     }, [
-      (0, import_vue13.h)("div", {
+      (0, import_vue4.h)("div", {
         class: "dialkit-color-sv",
         ref: svDrag.elRef,
         ...svDrag.handlers
       }, [
-        (0, import_vue13.h)("div", {
+        (0, import_vue4.h)("div", {
           class: "dialkit-color-sv-thumb",
           style: {
             left: `${hsva.value.s * 100}%`,
@@ -3660,12 +2497,12 @@ var ColorPickerPanel = (0, import_vue13.defineComponent)({
           }
         })
       ]),
-      (0, import_vue13.h)("div", {
+      (0, import_vue4.h)("div", {
         class: "dialkit-color-slider dialkit-color-hue",
         ref: hueDrag.elRef,
         ...hueDrag.handlers
       }, [
-        (0, import_vue13.h)("div", {
+        (0, import_vue4.h)("div", {
           class: "dialkit-color-slider-thumb",
           style: {
             left: `${hsva.value.h / 360 * 100}%`,
@@ -3673,16 +2510,16 @@ var ColorPickerPanel = (0, import_vue13.defineComponent)({
           }
         })
       ]),
-      props.alpha ? (0, import_vue13.h)("div", {
+      props.alpha ? (0, import_vue4.h)("div", {
         class: "dialkit-color-slider dialkit-color-alpha dialkit-checker",
         ref: alphaDrag.elRef,
         ...alphaDrag.handlers
       }, [
-        (0, import_vue13.h)("div", {
+        (0, import_vue4.h)("div", {
           class: "dialkit-color-alpha-gradient",
           style: { background: `linear-gradient(to right, transparent, ${opaqueHex.value})` }
         }),
-        (0, import_vue13.h)("div", {
+        (0, import_vue4.h)("div", {
           class: "dialkit-color-slider-thumb",
           style: {
             left: `${hsva.value.a * 100}%`,
@@ -3691,7 +2528,7 @@ var ColorPickerPanel = (0, import_vue13.defineComponent)({
           }
         })
       ]) : null,
-      (0, import_vue13.h)(SegmentedControl, {
+      (0, import_vue4.h)(SegmentedControl, {
         options: FORMAT_OPTIONS,
         value: format.value,
         onChange: (f) => {
@@ -3699,24 +2536,24 @@ var ColorPickerPanel = (0, import_vue13.defineComponent)({
           format.value = f;
         }
       }),
-      (0, import_vue13.h)("div", { class: "dialkit-color-fields", "data-format": format.value }, format.value === "hex" ? [
-        (0, import_vue13.h)(HexField, {
+      (0, import_vue4.h)("div", { class: "dialkit-color-fields", "data-format": format.value }, format.value === "hex" ? [
+        (0, import_vue4.h)(HexField, {
           value: currentHex.value,
           alpha: props.alpha,
           onCommit: (hex) => applyHex(hex)
         }),
-        props.alpha ? (0, import_vue13.h)(ChannelField, {
+        props.alpha ? (0, import_vue4.h)(ChannelField, {
           spec: HEX_ALPHA_SPEC,
           value: opacityPercent(rgba.value),
           onCommit: (n) => emitColor({ ...hsva.value, a: Math.min(1, Math.max(0, n / 100)) })
         }) : null
-      ] : channelSpecs.value.map((spec, i) => (0, import_vue13.h)(ChannelField, {
+      ] : channelSpecs.value.map((spec, i) => (0, import_vue4.h)(ChannelField, {
         key: `${format.value}-${spec.key}`,
         spec,
         value: channelValues.value[i],
         onCommit: (n) => commitChannel(i, n)
       }))),
-      props.palette ? (0, import_vue13.h)("div", { class: "dialkit-color-palette" }, Array.from({ length: PALETTE_SIZE }, (_, i) => (0, import_vue13.h)(PaletteSlot, {
+      props.palette ? (0, import_vue4.h)("div", { class: "dialkit-color-palette" }, Array.from({ length: PALETTE_SIZE }, (_, i) => (0, import_vue4.h)(PaletteSlot, {
         key: i,
         color: slots.value[i] ?? null,
         // Read the store at commit time — a 500ms hold is long enough for
@@ -3737,7 +2574,7 @@ var PICKER_WIDTH = 240;
 var PICKER_BASE_HEIGHT = 270;
 var PICKER_ALPHA_HEIGHT = 22;
 var PICKER_PALETTE_HEIGHT = 30;
-var ColorControl = (0, import_vue14.defineComponent)({
+var ColorControl = (0, import_vue5.defineComponent)({
   name: "DialKitColorControl",
   props: {
     label: { type: String, required: true },
@@ -3747,20 +2584,20 @@ var ColorControl = (0, import_vue14.defineComponent)({
   },
   emits: ["change"],
   setup(props, { emit }) {
-    const isEditing = (0, import_vue14.ref)(false);
-    const editValue = (0, import_vue14.ref)(bareHex(props.value));
-    const isOpen = (0, import_vue14.ref)(false);
-    const pos = (0, import_vue14.ref)(null);
-    const portalTarget = (0, import_vue14.ref)(null);
-    const swatchRef = (0, import_vue14.ref)(null);
-    const pickerRef = (0, import_vue14.ref)(null);
-    const hexInputRef = (0, import_vue14.ref)(null);
-    (0, import_vue14.watch)(() => props.value, (value) => {
+    const isEditing = (0, import_vue5.ref)(false);
+    const editValue = (0, import_vue5.ref)(bareHex(props.value));
+    const isOpen = (0, import_vue5.ref)(false);
+    const pos = (0, import_vue5.ref)(null);
+    const portalTarget = (0, import_vue5.ref)(null);
+    const swatchRef = (0, import_vue5.ref)(null);
+    const pickerRef = (0, import_vue5.ref)(null);
+    const hexInputRef = (0, import_vue5.ref)(null);
+    (0, import_vue5.watch)(() => props.value, (value) => {
       if (!isEditing.value) editValue.value = bareHex(value);
     });
-    (0, import_vue14.watch)(isEditing, async (editing) => {
+    (0, import_vue5.watch)(isEditing, async (editing) => {
       if (!editing) return;
-      await (0, import_vue14.nextTick)();
+      await (0, import_vue5.nextTick)();
       hexInputRef.value?.focus();
       hexInputRef.value?.select();
     });
@@ -3797,7 +2634,7 @@ var ColorControl = (0, import_vue14.defineComponent)({
       }
       pickerRef.value = null;
     };
-    (0, import_vue14.watch)(isOpen, (open, _, onCleanup) => {
+    (0, import_vue5.watch)(isOpen, (open, _, onCleanup) => {
       if (!open) return;
       const handleViewportChange = () => updatePos();
       const handleDocumentClick = (event) => {
@@ -3823,7 +2660,7 @@ var ColorControl = (0, import_vue14.defineComponent)({
         window.removeEventListener("scroll", handleViewportChange, true);
       });
     });
-    (0, import_vue14.onMounted)(() => {
+    (0, import_vue5.onMounted)(() => {
       const root = swatchRef.value?.closest(".dialkit-root");
       portalTarget.value = root ?? document.body;
     });
@@ -3838,18 +2675,18 @@ var ColorControl = (0, import_vue14.defineComponent)({
     };
     return () => {
       const rgba = parseHex(props.value);
-      return (0, import_vue14.h)("div", { class: "dialkit-color-control" }, [
-        (0, import_vue14.h)("span", { class: "dialkit-color-label" }, props.label),
-        (0, import_vue14.h)("div", { class: "dialkit-color-inputs" }, [
+      return (0, import_vue5.h)("div", { class: "dialkit-color-control" }, [
+        (0, import_vue5.h)("span", { class: "dialkit-color-label" }, props.label),
+        (0, import_vue5.h)("div", { class: "dialkit-color-inputs" }, [
           // The whole token (hash included) is the click target for editing.
-          (0, import_vue14.h)("span", {
+          (0, import_vue5.h)("span", {
             class: "dialkit-color-hex-wrap",
             onClick: () => {
               isEditing.value = true;
             }
           }, [
-            (0, import_vue14.h)("span", { class: "dialkit-color-hash", "aria-hidden": "true" }, "#"),
-            isEditing.value ? (0, import_vue14.h)("input", {
+            (0, import_vue5.h)("span", { class: "dialkit-color-hash", "aria-hidden": "true" }, "#"),
+            isEditing.value ? (0, import_vue5.h)("input", {
               ref: hexInputRef,
               type: "text",
               class: "dialkit-color-hex-input",
@@ -3868,19 +2705,19 @@ var ColorControl = (0, import_vue14.defineComponent)({
                   editValue.value = bareHex(props.value);
                 }
               }
-            }) : (0, import_vue14.h)("span", {
+            }) : (0, import_vue5.h)("span", {
               class: "dialkit-color-hex",
               "aria-label": `Hex color for ${props.label}`
             }, bareHex(props.value))
           ]),
           ...props.alpha && rgba ? [
-            (0, import_vue14.h)("span", { class: "dialkit-color-divider", "aria-hidden": "true" }),
-            (0, import_vue14.h)("span", { class: "dialkit-color-opacity" }, [
+            (0, import_vue5.h)("span", { class: "dialkit-color-divider", "aria-hidden": "true" }),
+            (0, import_vue5.h)("span", { class: "dialkit-color-opacity" }, [
               `${opacityPercent(rgba)} `,
-              (0, import_vue14.h)("span", { class: "dialkit-color-opacity-unit" }, "%")
+              (0, import_vue5.h)("span", { class: "dialkit-color-opacity-unit" }, "%")
             ])
           ] : [],
-          (0, import_vue14.h)("button", {
+          (0, import_vue5.h)("button", {
             ref: swatchRef,
             class: "dialkit-color-swatch",
             style: { "--swatch-color": props.value },
@@ -3891,9 +2728,9 @@ var ColorControl = (0, import_vue14.defineComponent)({
             onClick: togglePicker
           })
         ]),
-        portalTarget.value ? (0, import_vue14.h)(import_vue14.Teleport, { to: portalTarget.value }, [
-          (0, import_vue14.h)(import_motion_v5.AnimatePresence, null, {
-            default: () => isOpen.value && pos.value ? [(0, import_vue14.h)(import_motion_v5.motion.div, {
+        portalTarget.value ? (0, import_vue5.h)(import_vue5.Teleport, { to: portalTarget.value }, [
+          (0, import_vue5.h)(import_motion_v2.AnimatePresence, null, {
+            default: () => isOpen.value && pos.value ? [(0, import_vue5.h)(import_motion_v2.motion.div, {
               key: "dialkit-color-picker-popover",
               ref: setPickerRef,
               class: "dialkit-color-picker-popover",
@@ -3914,7 +2751,7 @@ var ColorControl = (0, import_vue14.defineComponent)({
                 }
               }
             }, [
-              (0, import_vue14.h)(ColorPickerPanel, {
+              (0, import_vue5.h)(ColorPickerPanel, {
                 value: props.value,
                 alpha: props.alpha,
                 palette: props.palette,
@@ -3929,30 +2766,30 @@ var ColorControl = (0, import_vue14.defineComponent)({
 });
 
 // src/vue/components/GradientControl.ts
-var import_vue17 = require("vue");
-var import_motion_v6 = require("motion-v");
+var import_vue8 = require("vue");
+var import_motion_v3 = require("motion-v");
 
 // src/vue/components/GradientPanel.ts
-var import_vue16 = require("vue");
+var import_vue7 = require("vue");
 
 // src/vue/components/GradientTransformPad.ts
-var import_vue15 = require("vue");
+var import_vue6 = require("vue");
 var clamp4 = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 var wrap360 = (deg) => (deg % 360 + 360) % 360;
 var RAD = Math.PI / 180;
 var vectorToAngle = (dx, dy) => wrap360(Math.atan2(dx, -dy) / RAD);
-var GradientTransformPad = (0, import_vue15.defineComponent)({
+var GradientTransformPad = (0, import_vue6.defineComponent)({
   name: "DialKitGradientTransformPad",
   props: {
     value: { type: Object, required: true }
   },
   emits: ["change"],
   setup(props, { emit }) {
-    const padRef = (0, import_vue15.ref)(null);
+    const padRef = (0, import_vue6.ref)(null);
     let drag = null;
-    const size = (0, import_vue15.ref)({ w: 0, h: 0 });
+    const size = (0, import_vue6.ref)({ w: 0, h: 0 });
     let ro = null;
-    (0, import_vue15.onMounted)(() => {
+    (0, import_vue6.onMounted)(() => {
       const el = padRef.value;
       if (!el) return;
       const measure = () => {
@@ -3962,7 +2799,7 @@ var GradientTransformPad = (0, import_vue15.defineComponent)({
       ro = new ResizeObserver(measure);
       ro.observe(el);
     });
-    (0, import_vue15.onBeforeUnmount)(() => ro?.disconnect());
+    (0, import_vue6.onBeforeUnmount)(() => ro?.disconnect());
     const onHandleDown = (kind) => (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -4048,8 +2885,8 @@ var GradientTransformPad = (0, import_vue15.defineComponent)({
       const angleLineLen = Math.hypot(angleHandle.x - angleOx, angleHandle.y - angleOy);
       const angleLineAngle = Math.atan2(angleHandle.y - angleOy, angleHandle.x - angleOx) / RAD;
       const fill = gradientFillBox(value, w, hh);
-      return (0, import_vue15.h)("div", { ref: padRef, class: "dialkit-gradient-pad dialkit-checker" }, [
-        (0, import_vue15.h)("div", {
+      return (0, import_vue6.h)("div", { ref: padRef, class: "dialkit-gradient-pad dialkit-checker" }, [
+        (0, import_vue6.h)("div", {
           class: "dialkit-gradient-pad-fill",
           style: {
             background: fill.background,
@@ -4062,7 +2899,7 @@ var GradientTransformPad = (0, import_vue15.defineComponent)({
           }
         }),
         ...radial ? [
-          (0, import_vue15.h)("div", {
+          (0, import_vue6.h)("div", {
             class: "dialkit-gradient-pad-line",
             style: {
               left: `${cxPx}px`,
@@ -4071,7 +2908,7 @@ var GradientTransformPad = (0, import_vue15.defineComponent)({
               transform: `rotate(${majorLineAngle}deg)`
             }
           }),
-          (0, import_vue15.h)("button", {
+          (0, import_vue6.h)("button", {
             type: "button",
             class: "dialkit-gradient-pad-handle",
             "data-kind": "major",
@@ -4079,7 +2916,7 @@ var GradientTransformPad = (0, import_vue15.defineComponent)({
             style: { left: `${major.x}px`, top: `${major.y}px` },
             ...handleProps("major")
           }),
-          (0, import_vue15.h)("button", {
+          (0, import_vue6.h)("button", {
             type: "button",
             class: "dialkit-gradient-pad-handle",
             "data-kind": "minor",
@@ -4088,7 +2925,7 @@ var GradientTransformPad = (0, import_vue15.defineComponent)({
             ...handleProps("minor")
           })
         ] : [
-          (0, import_vue15.h)("div", {
+          (0, import_vue6.h)("div", {
             class: "dialkit-gradient-pad-line",
             style: {
               left: `${angleOx}px`,
@@ -4097,7 +2934,7 @@ var GradientTransformPad = (0, import_vue15.defineComponent)({
               transform: `rotate(${angleLineAngle}deg)`
             }
           }),
-          (0, import_vue15.h)("button", {
+          (0, import_vue6.h)("button", {
             type: "button",
             class: "dialkit-gradient-pad-handle",
             "data-kind": "angle",
@@ -4107,7 +2944,7 @@ var GradientTransformPad = (0, import_vue15.defineComponent)({
           })
         ],
         ...radial || conic ? [
-          (0, import_vue15.h)("button", {
+          (0, import_vue6.h)("button", {
             type: "button",
             class: "dialkit-gradient-pad-handle",
             "data-kind": "center",
@@ -4130,19 +2967,19 @@ var TYPE_OPTIONS = [
 function rampCss(stops) {
   return gradientToCss({ type: "linear", angle: 90, stops });
 }
-var GradientPanel = (0, import_vue16.defineComponent)({
+var GradientPanel = (0, import_vue7.defineComponent)({
   name: "DialKitGradientPanel",
   props: {
     value: { type: Object, required: true }
   },
   emits: ["change", "drag"],
   setup(props, { emit }) {
-    const selectedIndex = (0, import_vue16.ref)(0);
-    const holdingIndex = (0, import_vue16.ref)(-1);
-    const detach = (0, import_vue16.ref)(null);
-    const stripRef = (0, import_vue16.ref)(null);
-    const gripRef = (0, import_vue16.ref)(null);
-    const gripOrigin = (0, import_vue16.ref)(null);
+    const selectedIndex = (0, import_vue7.ref)(0);
+    const holdingIndex = (0, import_vue7.ref)(-1);
+    const detach = (0, import_vue7.ref)(null);
+    const stripRef = (0, import_vue7.ref)(null);
+    const gripRef = (0, import_vue7.ref)(null);
+    const gripOrigin = (0, import_vue7.ref)(null);
     const onGripDown = (e) => {
       e.preventDefault();
       try {
@@ -4167,7 +3004,7 @@ var GradientPanel = (0, import_vue16.defineComponent)({
       timer: null,
       working: props.value
     };
-    const safeIndex = (0, import_vue16.computed)(() => Math.min(selectedIndex.value, props.value.stops.length - 1));
+    const safeIndex = (0, import_vue7.computed)(() => Math.min(selectedIndex.value, props.value.stops.length - 1));
     const stripPos = (clientX) => {
       const rect = stripRef.value.getBoundingClientRect();
       return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
@@ -4180,7 +3017,7 @@ var GradientPanel = (0, import_vue16.defineComponent)({
       if (drag.timer) clearTimeout(drag.timer);
       drag.timer = null;
     };
-    (0, import_vue16.onBeforeUnmount)(clearTimer);
+    (0, import_vue7.onBeforeUnmount)(clearTimer);
     const resetDrag = () => {
       clearTimer();
       drag.mode = "idle";
@@ -4274,9 +3111,9 @@ var GradientPanel = (0, import_vue16.defineComponent)({
     return () => {
       const value = props.value;
       const previewStops = detach.value ? value.stops.filter((_, i) => i !== detach.value.index) : value.stops;
-      return (0, import_vue16.h)("div", { class: "dialkit-gradient-panel" }, [
-        (0, import_vue16.h)("div", { class: "dialkit-gradient-toolbar" }, [
-          (0, import_vue16.h)("button", {
+      return (0, import_vue7.h)("div", { class: "dialkit-gradient-panel" }, [
+        (0, import_vue7.h)("div", { class: "dialkit-gradient-toolbar" }, [
+          (0, import_vue7.h)("button", {
             ref: gripRef,
             type: "button",
             class: "dialkit-gradient-grip",
@@ -4288,23 +3125,23 @@ var GradientPanel = (0, import_vue16.defineComponent)({
             onPointercancel: onGripUp,
             onLostpointercapture: onGripUp
           }, [
-            (0, import_vue16.h)(
+            (0, import_vue7.h)(
               "svg",
               { viewBox: "0 0 24 24", fill: "currentColor", "aria-hidden": "true" },
-              ICON_GRIP.map((c) => (0, import_vue16.h)("circle", { cx: c.cx, cy: c.cy, r: "1.5" }))
+              ICON_GRIP.map((c) => (0, import_vue7.h)("circle", { cx: c.cx, cy: c.cy, r: "1.5" }))
             )
           ]),
-          (0, import_vue16.h)(SegmentedControl, {
+          (0, import_vue7.h)(SegmentedControl, {
             options: TYPE_OPTIONS,
             value: value.type,
             onChange: (t) => emit("change", setGradientType(value, t))
           })
         ]),
-        (0, import_vue16.h)(GradientTransformPad, {
+        (0, import_vue7.h)(GradientTransformPad, {
           value,
           onChange: (v) => emit("change", v)
         }),
-        (0, import_vue16.h)("div", {
+        (0, import_vue7.h)("div", {
           ref: stripRef,
           class: "dialkit-gradient-strip",
           style: { "--gradient-ramp": rampCss(previewStops) },
@@ -4314,7 +3151,7 @@ var GradientPanel = (0, import_vue16.defineComponent)({
           onPointercancel: onPointerUp
         }, value.stops.map((stop, i) => {
           const detaching = detach.value?.index === i;
-          return (0, import_vue16.h)("button", {
+          return (0, import_vue7.h)("button", {
             key: i,
             type: "button",
             class: "dialkit-gradient-stop",
@@ -4331,8 +3168,8 @@ var GradientPanel = (0, import_vue16.defineComponent)({
             "aria-label": `Gradient stop ${i + 1}`
           });
         })),
-        (0, import_vue16.h)("span", { class: "dialkit-gradient-divider", "aria-hidden": "true" }),
-        (0, import_vue16.h)(ColorPickerPanel, {
+        (0, import_vue7.h)("span", { class: "dialkit-gradient-divider", "aria-hidden": "true" }),
+        (0, import_vue7.h)(ColorPickerPanel, {
           key: safeIndex.value,
           value: value.stops[safeIndex.value].color,
           alpha: true,
@@ -4348,7 +3185,7 @@ var GradientPanel = (0, import_vue16.defineComponent)({
 var PANEL_WIDTH = 240;
 var PANEL_HEIGHT_ANGLED = 470;
 var PANEL_HEIGHT_RADIAL = 430;
-var GradientControl = (0, import_vue17.defineComponent)({
+var GradientControl = (0, import_vue8.defineComponent)({
   name: "DialKitGradientControl",
   props: {
     label: { type: String, required: true },
@@ -4356,12 +3193,12 @@ var GradientControl = (0, import_vue17.defineComponent)({
   },
   emits: ["change"],
   setup(props, { emit }) {
-    const isOpen = (0, import_vue17.ref)(false);
-    const pos = (0, import_vue17.ref)(null);
-    const dragPos = (0, import_vue17.ref)(null);
-    const portalTarget = (0, import_vue17.ref)(null);
-    const triggerRef = (0, import_vue17.ref)(null);
-    const panelRef = (0, import_vue17.ref)(null);
+    const isOpen = (0, import_vue8.ref)(false);
+    const pos = (0, import_vue8.ref)(null);
+    const dragPos = (0, import_vue8.ref)(null);
+    const portalTarget = (0, import_vue8.ref)(null);
+    const triggerRef = (0, import_vue8.ref)(null);
+    const panelRef = (0, import_vue8.ref)(null);
     const onPanelDrag = (dx, dy) => {
       let base = dragPos.value;
       if (!base) {
@@ -4408,10 +3245,10 @@ var GradientControl = (0, import_vue17.defineComponent)({
       }
       panelRef.value = null;
     };
-    (0, import_vue17.watch)(() => props.value.type, () => {
+    (0, import_vue8.watch)(() => props.value.type, () => {
       if (isOpen.value) updatePos();
     });
-    (0, import_vue17.watch)(isOpen, (open, _, onCleanup) => {
+    (0, import_vue8.watch)(isOpen, (open, _, onCleanup) => {
       if (!open) return;
       const handleViewportChange = () => updatePos();
       const handleDocumentClick = (event) => {
@@ -4437,13 +3274,13 @@ var GradientControl = (0, import_vue17.defineComponent)({
         window.removeEventListener("scroll", handleViewportChange, true);
       });
     });
-    (0, import_vue17.onMounted)(() => {
+    (0, import_vue8.onMounted)(() => {
       const root = triggerRef.value?.closest(".dialkit-root");
       portalTarget.value = root ?? document.body;
     });
-    return () => (0, import_vue17.h)("div", { class: "dialkit-gradient-control" }, [
-      (0, import_vue17.h)("span", { class: "dialkit-gradient-label" }, props.label),
-      (0, import_vue17.h)("button", {
+    return () => (0, import_vue8.h)("div", { class: "dialkit-gradient-control" }, [
+      (0, import_vue8.h)("span", { class: "dialkit-gradient-label" }, props.label),
+      (0, import_vue8.h)("button", {
         ref: triggerRef,
         class: "dialkit-gradient-preview dialkit-checker",
         style: { "--gradient-preview": gradientToCss(props.value) },
@@ -4453,9 +3290,9 @@ var GradientControl = (0, import_vue17.defineComponent)({
         "aria-expanded": isOpen.value,
         onClick: togglePanel
       }),
-      portalTarget.value ? (0, import_vue17.h)(import_vue17.Teleport, { to: portalTarget.value }, [
-        (0, import_vue17.h)(import_motion_v6.AnimatePresence, null, {
-          default: () => isOpen.value && pos.value ? [(0, import_vue17.h)(import_motion_v6.motion.div, {
+      portalTarget.value ? (0, import_vue8.h)(import_vue8.Teleport, { to: portalTarget.value }, [
+        (0, import_vue8.h)(import_motion_v3.AnimatePresence, null, {
+          default: () => isOpen.value && pos.value ? [(0, import_vue8.h)(import_motion_v3.motion.div, {
             key: "dialkit-gradient-popover",
             ref: setPanelRef,
             class: "dialkit-gradient-popover",
@@ -4481,7 +3318,7 @@ var GradientControl = (0, import_vue17.defineComponent)({
               }
             }
           }, [
-            (0, import_vue17.h)(GradientPanel, {
+            (0, import_vue8.h)(GradientPanel, {
               value: props.value,
               onChange: (next) => emit("change", next),
               onDrag: onPanelDrag
@@ -4493,341 +3330,469 @@ var GradientControl = (0, import_vue17.defineComponent)({
   }
 });
 
-// src/vue/components/XYControl.ts
-var import_vue19 = require("vue");
+// src/vue/components/RangeSlider.ts
+var import_vue9 = require("vue");
+var import_motion_v4 = require("motion-v");
 
-// src/vue/components/XYPad.ts
-var import_vue18 = require("vue");
-var DEFAULT_GRID_X = 5;
-var DEFAULT_GRID_Y = 5;
-var FINE_DRAG = 0.15;
-function decimalsForStep3(step) {
+// src/shortcut-utils.ts
+function decimalsForStep2(step) {
   const s = step.toString();
   const dot = s.indexOf(".");
   return dot === -1 ? 0 : s.length - dot - 1;
 }
-function formatComponent(v, axis) {
-  return (v + 0).toFixed(decimalsForStep3(axis.step));
+function roundValue(val, step) {
+  const raw = Math.round(val / step) * step;
+  return parseFloat(raw.toFixed(decimalsForStep2(step)));
 }
-var XYPad = (0, import_vue18.defineComponent)({
-  name: "DialKitXYPad",
+function getEffectiveStep(control, shortcut) {
+  const min = control.min ?? 0;
+  const max = control.max ?? 1;
+  const range = max - min;
+  const mode = shortcut.mode ?? "normal";
+  return mode === "fine" ? range * 0.01 : mode === "coarse" ? range * 0.1 : control.step ?? 1;
+}
+function applySliderDelta(panelId, path, control, effectiveStep2, direction) {
+  const currentValue = DialStore.getValue(panelId, path);
+  const min = control.min ?? 0;
+  const max = control.max ?? 1;
+  const newValue = Math.max(min, Math.min(max, currentValue + direction * effectiveStep2));
+  DialStore.updateValue(panelId, path, roundValue(newValue, effectiveStep2));
+}
+function snapToDecile(rawValue, min, max) {
+  const normalized = (rawValue - min) / (max - min);
+  const nearest = Math.round(normalized * 10) / 10;
+  if (Math.abs(normalized - nearest) <= 0.03125) {
+    return min + nearest * (max - min);
+  }
+  return rawValue;
+}
+function isInputFocused() {
+  const el = document.activeElement;
+  if (!el) return false;
+  const tag = el.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA") return true;
+  if (el.contentEditable === "true") return true;
+  return false;
+}
+function getActiveModifier(e) {
+  if (e.altKey) return "alt";
+  if (e.shiftKey) return "shift";
+  if (e.metaKey) return "meta";
+  return void 0;
+}
+function findControl(controls, path) {
+  for (const control of controls) {
+    if (control.path === path) return control;
+    if (control.type === "folder" && control.children) {
+      const found = findControl(control.children, path);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+var DRAG_SENSITIVITY = 4;
+function formatInteractionLabel(interaction) {
+  switch (interaction) {
+    case "drag":
+      return "Drag";
+    case "move":
+      return "Move";
+    case "scroll-only":
+      return "Scroll";
+    default:
+      return "Scroll";
+  }
+}
+function formatSliderShortcut(sc) {
+  const interaction = sc.interaction ?? "scroll";
+  const actionLabel = formatInteractionLabel(interaction);
+  if (!sc.key) return actionLabel;
+  const mod = formatModifier(sc.modifier);
+  return `${mod}${sc.key.toUpperCase()}+${actionLabel}`;
+}
+function formatToggleShortcut(sc) {
+  if (!sc.key) return "Press";
+  const mod = formatModifier(sc.modifier);
+  return `${mod}${sc.key.toUpperCase()}`;
+}
+function formatModifier(modifier) {
+  return modifier === "alt" ? "\u2325" : modifier === "shift" ? "\u21E7" : modifier === "meta" ? "\u2318" : "";
+}
+
+// src/vue/components/RangeSlider.ts
+var CLICK_THRESHOLD = 3;
+var HANDLE_HIT_PX = 12;
+var RangeSlider = (0, import_vue9.defineComponent)({
+  name: "DialKitRangeSlider",
   props: {
     label: { type: String, required: true },
     value: { type: Object, required: true },
-    /** Horizontal axis (defaults: min 0, max 1, step 0.01). */
-    x: { type: Object, default: void 0 },
-    /** Vertical axis, Cartesian (top = max). Same defaults as x. */
-    y: { type: Object, default: void 0 },
-    /** Height of the pad in px; the pad grows to fill the container width (it is not forced square). Default 160. */
-    size: { type: Number, default: 160 },
-    /**
-     * Grid overlay — on by default as a 5×5 grid (5 columns on X, 5 rows on Y),
-     * faint at rest and stronger on interaction. Pass `false` to hide it, or a
-     * number for a uniform N×N count. `density` multiplies whichever grid applies.
-     */
-    grid: { type: [Boolean, Number], default: void 0 },
-    /** Multiplies both axis subdivision counts (default 1). E.g. 2 on the 5×5 default → 10×10. */
-    density: { type: Number, default: 1 },
-    /** Snap the emitted value to each axis's step. Default false (continuous). */
-    snap: { type: Boolean, default: false },
-    /** Spring back to centre on release (joystick). Default false = hold. */
-    returnToCenter: { type: Boolean, default: false },
-    /** Show the live value next to each axis label (default false = label only). */
-    showValues: { type: Boolean, default: false },
-    disabled: { type: Boolean, default: false },
-    /** Override the readout / aria-valuetext text. Owns the full string. */
-    formatValue: { type: Function, default: void 0 },
-    shortcut: { type: Object, default: void 0 },
-    shortcutActive: { type: Boolean, default: false }
+    /** Lower bound of the track. */
+    min: { type: Number, required: false },
+    /** Upper bound of the track. */
+    max: { type: Number, required: false },
+    step: { type: Number, required: false },
+    /** Reset target for a double-click on the track. Falls back to the full {min,max} span. */
+    defaultValue: { type: Object, required: false, default: void 0 }
   },
   emits: ["change"],
   setup(props, { emit }) {
-    const xAxis = (0, import_vue18.computed)(() => resolveAxis(props.x));
-    const yAxis = (0, import_vue18.computed)(() => resolveAxis(props.y));
-    const areaRef = (0, import_vue18.ref)(null);
-    let dragging = false;
-    const active = (0, import_vue18.ref)(false);
-    const draggingState = (0, import_vue18.ref)(false);
-    const pointToValue = (clientX, clientY, fine) => {
-      const el = areaRef.value;
-      if (!el) return props.value;
-      const rect = el.getBoundingClientRect();
-      const xa = xAxis.value;
-      const ya = yAxis.value;
-      let px = (clientX - rect.left) / rect.width;
-      let py = (clientY - rect.top) / rect.height;
-      if (fine) {
-        const cur = pointFromValue(props.value, xa, ya);
-        px = cur.x + (px - cur.x) * FINE_DRAG;
-        py = cur.y + (py - cur.y) * FINE_DRAG;
-      }
-      px = Math.min(1, Math.max(0, px));
-      py = Math.min(1, Math.max(0, py));
-      const next = valueFromPoint({ x: px, y: py }, xa, ya, props.snap);
-      const originPoint = pointFromValue({ x: xa.origin, y: ya.origin }, xa, ya);
-      const dxPx = Math.abs(px - originPoint.x) * rect.width;
-      const dyPx = Math.abs(py - originPoint.y) * rect.height;
-      return {
-        x: applyDetentAxis(next.x, xa, dxPx),
-        y: applyDetentAxis(next.y, ya, dyPx)
-      };
+    const min = (0, import_vue9.computed)(() => props.min ?? 0);
+    const max = (0, import_vue9.computed)(() => props.max ?? 1);
+    const step = (0, import_vue9.computed)(() => props.step ?? 0.01);
+    const wrapperRef = (0, import_vue9.ref)(null);
+    const fillRef = (0, import_vue9.ref)(null);
+    const lowHandleRef = (0, import_vue9.ref)(null);
+    const highHandleRef = (0, import_vue9.ref)(null);
+    const inputRef = (0, import_vue9.ref)(null);
+    const isInteracting = (0, import_vue9.ref)(false);
+    const isDragging = (0, import_vue9.ref)(false);
+    const isHovered = (0, import_vue9.ref)(false);
+    const editing = (0, import_vue9.ref)(null);
+    const inputValue = (0, import_vue9.ref)("");
+    const value = (0, import_vue9.computed)(
+      () => isInteracting.value ? props.value : clampRange(props.value, min.value, max.value)
+    );
+    const span = (0, import_vue9.computed)(() => max.value - min.value);
+    const percentFromValue = (v) => span.value === 0 ? 0 : (v - min.value) / span.value * 100;
+    const lowPercent = (0, import_vue9.computed)(() => percentFromValue(value.value.min));
+    const highPercent = (0, import_vue9.computed)(() => percentFromValue(value.value.max));
+    const isActive = (0, import_vue9.computed)(() => isInteracting.value || isHovered.value);
+    const lowMotion = (0, import_motion_v4.motionValue)(lowPercent.value);
+    const highMotion = (0, import_motion_v4.motionValue)(highPercent.value);
+    let pointerDownPos = null;
+    let isClickFlag = true;
+    let dragTarget = null;
+    let clickMoves = false;
+    let dragStartValue = props.value;
+    let dragStartValueAt = 0;
+    let wrapperRect = null;
+    let scaleVal = 1;
+    let lowAnim = null;
+    let highAnim = null;
+    const stopAnims = () => {
+      lowAnim?.stop();
+      highAnim?.stop();
+      lowAnim = null;
+      highAnim = null;
     };
-    const emitValue = (next) => {
+    const applyFillStyles = () => {
+      const lo = lowMotion.get();
+      const hi = highMotion.get();
+      if (fillRef.value) {
+        fillRef.value.style.left = `${lo}%`;
+        fillRef.value.style.width = `${Math.max(0, hi - lo)}%`;
+      }
+      const handles = handleLeftStyles(lo, hi);
+      if (lowHandleRef.value) lowHandleRef.value.style.left = handles.low;
+      if (highHandleRef.value) highHandleRef.value.style.left = handles.high;
+    };
+    const REST_OPACITY = 0.35;
+    const handleOpacityFor = (which) => {
+      if (!isActive.value) return REST_OPACITY;
+      if (isDragging.value && dragTarget === which) return 0.95;
+      return 0.7;
+    };
+    const applyHandleOpacity = () => {
+      if (lowHandleRef.value) lowHandleRef.value.style.opacity = String(handleOpacityFor("min"));
+      if (highHandleRef.value) highHandleRef.value.style.opacity = String(handleOpacityFor("max"));
+    };
+    const positionToValue = (clientX) => {
+      if (!wrapperRect) return value.value.min;
+      const screenX = clientX - wrapperRect.left;
+      const sceneX = screenX / scaleVal;
+      const nativeWidth = wrapperRef.value ? wrapperRef.value.offsetWidth : wrapperRect.width;
+      const pct = Math.max(0, Math.min(1, sceneX / nativeWidth));
+      const rawValue = min.value + pct * (max.value - min.value);
+      return Math.max(min.value, Math.min(max.value, rawValue));
+    };
+    const syncMotion = (next) => {
+      lowMotion.jump(percentFromValue(next.min));
+      highMotion.jump(percentFromValue(next.max));
+    };
+    const handlePointerDown = (event) => {
+      if (editing.value) return;
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      pointerDownPos = { x: event.clientX, y: event.clientY };
+      isClickFlag = true;
+      isInteracting.value = true;
+      if (wrapperRef.value) {
+        wrapperRect = wrapperRef.value.getBoundingClientRect();
+        scaleVal = wrapperRect.width / wrapperRef.value.offsetWidth;
+      }
+      const current = clampRange(props.value, min.value, max.value);
+      const atValue = positionToValue(event.clientX);
+      const trackW = wrapperRef.value?.offsetWidth ?? 1;
+      const hitV = HANDLE_HIT_PX / trackW * (max.value - min.value);
+      dragTarget = pickDragTarget(atValue, current, hitV);
+      clickMoves = dragTarget !== "span" && isOutsideSpan(atValue, current);
+      dragStartValue = current;
+      dragStartValueAt = atValue;
+    };
+    const handlePointerMove = (event) => {
+      if (!isInteracting.value || !pointerDownPos) return;
+      const dx = event.clientX - pointerDownPos.x;
+      const dy = event.clientY - pointerDownPos.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (isClickFlag && distance > CLICK_THRESHOLD) {
+        isClickFlag = false;
+        isDragging.value = true;
+      }
+      if (isClickFlag) return;
+      const raw = roundValue(positionToValue(event.clientX), step.value);
+      const current = value.value;
+      let next;
+      if (dragTarget === "span") {
+        const delta = raw - roundValue(dragStartValueAt, step.value);
+        next = shiftSpan(delta, dragStartValue, min.value, max.value);
+      } else if (dragTarget === "min") {
+        next = setLow(raw, current, min.value);
+      } else {
+        next = setHigh(raw, current, max.value);
+      }
+      stopAnims();
+      syncMotion(next);
       emit("change", next);
     };
-    const handlePointerDown = (e) => {
-      if (props.disabled) return;
-      if (e.button !== 0 || !e.isPrimary) return;
-      if (e.altKey) return;
-      e.preventDefault();
-      try {
-        areaRef.value?.setPointerCapture(e.pointerId);
-      } catch {
+    const handlePointerUp = (event) => {
+      if (!isInteracting.value) return;
+      if (isClickFlag && clickMoves) {
+        const current = value.value;
+        const raw = roundValue(positionToValue(event.clientX), step.value);
+        const which = dragTarget ?? nearestHandle(raw, current);
+        const next = which === "min" ? setLow(raw, current, min.value) : setHigh(raw, current, max.value);
+        const targetMotion = which === "min" ? lowMotion : highMotion;
+        const targetPct = percentFromValue(which === "min" ? next.min : next.max);
+        stopAnims();
+        const active = (0, import_motion_v4.animate)(targetMotion, targetPct, {
+          type: "spring",
+          stiffness: 300,
+          damping: 25,
+          mass: 0.8,
+          onComplete: () => {
+            if (which === "min") lowAnim = null;
+            else highAnim = null;
+          }
+        });
+        if (which === "min") lowAnim = active;
+        else highAnim = active;
+        emit("change", next);
       }
-      areaRef.value?.focus();
-      dragging = true;
-      active.value = true;
-      draggingState.value = true;
-      emitValue(pointToValue(e.clientX, e.clientY, e.shiftKey));
+      isInteracting.value = false;
+      isDragging.value = false;
+      pointerDownPos = null;
+      dragTarget = null;
     };
-    const handlePointerMove = (e) => {
-      if (!dragging) return;
-      if (e.buttons === 0) {
-        finishDrag(e);
-        return;
+    const handlePointerCancel = () => {
+      if (!isInteracting.value) return;
+      isInteracting.value = false;
+      isDragging.value = false;
+      pointerDownPos = null;
+      dragTarget = null;
+    };
+    const handleDoubleClick = () => {
+      if (editing.value !== null) return;
+      const d = clampRange(props.defaultValue ?? { min: min.value, max: max.value }, min.value, max.value);
+      stopAnims();
+      lowAnim = (0, import_motion_v4.animate)(lowMotion, percentFromValue(d.min), {
+        type: "spring",
+        stiffness: 300,
+        damping: 25,
+        mass: 0.8,
+        onComplete: () => {
+          lowAnim = null;
+        }
+      });
+      highAnim = (0, import_motion_v4.animate)(highMotion, percentFromValue(d.max), {
+        type: "spring",
+        stiffness: 300,
+        damping: 25,
+        mass: 0.8,
+        onComplete: () => {
+          highAnim = null;
+        }
+      });
+      emit("change", d);
+    };
+    const decimals = (0, import_vue9.computed)(() => decimalsForStep2(step.value));
+    const openEditor = (which, event) => {
+      event.stopPropagation();
+      editing.value = which;
+      inputValue.value = (which === "min" ? value.value.min : value.value.max).toFixed(decimals.value);
+    };
+    const commitEditor = () => {
+      if (!editing.value) return;
+      const parsed = parseFloat(inputValue.value);
+      if (!Number.isNaN(parsed)) {
+        const rounded = roundValue(parsed, step.value);
+        const current = value.value;
+        const next = editing.value === "min" ? setLow(rounded, current, min.value) : setHigh(rounded, current, max.value);
+        emit("change", next);
       }
-      emitValue(pointToValue(e.clientX, e.clientY, e.shiftKey));
+      editing.value = null;
     };
-    const finishDrag = (e) => {
-      if (!dragging) return;
-      dragging = false;
-      draggingState.value = false;
-      try {
-        areaRef.value?.releasePointerCapture(e.pointerId);
-      } catch {
-      }
-      const el = areaRef.value;
-      const stillActive = (el?.matches(":hover") ?? false) || el === (el?.ownerDocument ?? document).activeElement;
-      if (!stillActive) active.value = false;
-      if (props.returnToCenter) {
-        emitValue(normalizeValue(centerValue(xAxis.value, yAxis.value), xAxis.value, yAxis.value, props.snap));
+    const handleInputKeydown = (event) => {
+      if (event.key === "Enter") {
+        commitEditor();
+      } else if (event.key === "Escape") {
+        editing.value = null;
       }
     };
-    const handleKeyDown = (e) => {
-      if (props.disabled) return;
-      const mode = e.shiftKey ? "coarse" : e.altKey ? "fine" : "normal";
-      const cur = props.value;
-      const xa = xAxis.value;
-      const ya = yAxis.value;
-      const ctrl = e.ctrlKey || e.metaKey;
-      let next = null;
-      switch (e.key) {
-        case "ArrowUp":
-          next = nudge(cur, "y", 1, xa, ya, mode);
-          break;
-        case "ArrowDown":
-          next = nudge(cur, "y", -1, xa, ya, mode);
-          break;
-        case "ArrowRight":
-          next = nudge(cur, "x", 1, xa, ya, mode);
-          break;
-        case "ArrowLeft":
-          next = nudge(cur, "x", -1, xa, ya, mode);
-          break;
-        case "PageUp":
-          next = nudge(cur, "y", 1, xa, ya, "coarse");
-          break;
-        case "PageDown":
-          next = nudge(cur, "y", -1, xa, ya, "coarse");
-          break;
-        case "Home":
-          next = ctrl ? { x: xa.min, y: ya.min } : { x: xa.min, y: cur.y };
-          break;
-        case "End":
-          next = ctrl ? { x: xa.max, y: ya.max } : { x: xa.max, y: cur.y };
-          break;
-        default:
-          return;
+    (0, import_vue9.watch)([lowPercent, highPercent], ([lo, hi]) => {
+      if (!isInteracting.value && !lowAnim && !highAnim) {
+        lowMotion.jump(lo);
+        highMotion.jump(hi);
       }
-      e.preventDefault();
-      emitValue(next);
-    };
-    const reset = () => {
-      if (props.disabled) return;
-      emitValue(normalizeValue(centerValue(xAxis.value, yAxis.value), xAxis.value, yAxis.value, props.snap));
-    };
+    });
+    (0, import_vue9.watch)([isActive, isDragging], () => {
+      applyHandleOpacity();
+    });
+    (0, import_vue9.watch)(editing, async (which) => {
+      if (which === null) return;
+      await (0, import_vue9.nextTick)();
+      inputRef.value?.focus();
+      inputRef.value?.select();
+    });
+    let unsubLow = null;
+    let unsubHigh = null;
+    (0, import_vue9.onMounted)(() => {
+      unsubLow = lowMotion.on("change", applyFillStyles);
+      unsubHigh = highMotion.on("change", applyFillStyles);
+      applyFillStyles();
+      applyHandleOpacity();
+    });
+    (0, import_vue9.onUnmounted)(() => {
+      stopAnims();
+      unsubLow?.();
+      unsubHigh?.();
+    });
     return () => {
-      const xa = xAxis.value;
-      const ya = yAxis.value;
-      const value = props.value;
-      const xLabel = props.x?.label ?? "X";
-      const yLabel = props.y?.label ?? "Y";
-      const xText = `${xLabel} ${formatComponent(value.x, xa)}`;
-      const yText = `${yLabel} ${formatComponent(value.y, ya)}`;
-      const xVisual = props.showValues ? xText : xLabel;
-      const yVisual = props.showValues ? yText : yLabel;
-      const readout = props.formatValue ? props.formatValue(value) : `${xText}  ${yText}`;
-      const dens = typeof props.density === "number" && props.density > 0 ? props.density : 1;
-      let baseX, baseY;
-      if (props.grid === false) {
-        baseX = 0;
-        baseY = 0;
-      } else if (typeof props.grid === "number") {
-        baseX = props.grid;
-        baseY = props.grid;
-      } else {
-        baseX = DEFAULT_GRID_X;
-        baseY = DEFAULT_GRID_Y;
-      }
-      const gridX = baseX > 0 ? Math.round(baseX * dens) : 0;
-      const gridY = baseY > 0 ? Math.round(baseY * dens) : 0;
-      const showGrid = gridX > 0 && gridY > 0;
-      const point = pointFromValue(value, xa, ya);
-      const leftPct = `${point.x * 100}%`;
-      const topPct = `${point.y * 100}%`;
-      return (0, import_vue18.h)("div", {
-        class: "dialkit-xy",
-        "data-active": String(active.value),
-        "data-disabled": String(props.disabled)
-      }, [
-        (0, import_vue18.h)("div", { class: "dialkit-xy-header" }, [
-          (0, import_vue18.h)("span", { class: "dialkit-xy-label" }, [
-            props.label,
-            props.shortcut ? (0, import_vue18.h)("span", {
-              class: `dialkit-shortcut-pill${props.shortcutActive ? " dialkit-shortcut-pill-active" : ""}`
-            }, formatSliderShortcut(props.shortcut)) : null
-          ])
-        ]),
-        (0, import_vue18.h)("div", {
-          ref: areaRef,
-          class: "dialkit-xy-area",
-          // Only the height is fixed (from `size`); width is fluid (CSS width:100%),
-          // so the pad grows to fill the container and is no longer forced square.
-          style: { height: `${props.size}px` },
-          role: "application",
-          "aria-roledescription": "2D pad",
-          "aria-label": props.label,
-          "aria-valuetext": readout,
-          "aria-valuemin": xa.min,
-          "aria-valuemax": xa.max,
-          "aria-valuenow": value.x,
-          "aria-disabled": props.disabled || void 0,
-          tabindex: props.disabled ? -1 : 0,
-          "data-active": String(active.value),
-          "data-dragging": String(draggingState.value),
-          "data-disabled": String(props.disabled),
+      const current = value.value;
+      const lowText = current.min.toFixed(decimals.value);
+      const highText = current.max.toFixed(decimals.value);
+      const handles = handleLeftStyles(lowPercent.value, highPercent.value);
+      return (0, import_vue9.h)("div", { ref: wrapperRef, class: "dialkit-range-slider-wrapper" }, [
+        (0, import_vue9.h)("div", {
+          class: `dialkit-range-slider ${isActive.value ? "dialkit-range-slider-active" : ""}`,
           onPointerdown: handlePointerDown,
           onPointermove: handlePointerMove,
-          onPointerup: finishDrag,
-          onPointercancel: finishDrag,
-          onDblclick: reset,
-          onClick: (e) => {
-            if (e.altKey) reset();
+          onPointerup: handlePointerUp,
+          onPointercancel: handlePointerCancel,
+          onDblclick: handleDoubleClick,
+          onMouseenter: () => {
+            isHovered.value = true;
           },
-          onKeydown: handleKeyDown,
-          onFocus: () => {
-            active.value = true;
-          },
-          onBlur: () => {
-            active.value = false;
-          },
-          onPointerenter: () => {
-            active.value = true;
-          },
-          onPointerleave: () => {
-            if (!dragging) active.value = false;
+          onMouseleave: () => {
+            isHovered.value = false;
           }
         }, [
-          showGrid ? (0, import_vue18.h)("div", {
-            class: "dialkit-xy-grid",
-            "aria-hidden": "true",
+          (0, import_vue9.h)("div", {
+            ref: fillRef,
+            class: "dialkit-range-slider-fill",
             style: {
-              "--dial-xy-grid-step-x": `${100 / gridX}%`,
-              "--dial-xy-grid-step-y": `${100 / gridY}%`
+              left: `${lowPercent.value}%`,
+              width: `${Math.max(0, highPercent.value - lowPercent.value)}%`
             }
-          }) : null,
-          // Live axis labels, decorative (aria-valuetext owns the accessible string):
-          // X along the bottom edge, Y up the left edge.
-          (0, import_vue18.h)("div", { class: "dialkit-xy-axis dialkit-xy-axis-x", "aria-hidden": "true" }, xVisual),
-          (0, import_vue18.h)("div", { class: "dialkit-xy-axis dialkit-xy-axis-y", "aria-hidden": "true" }, yVisual),
-          // Crosshair guides tracking the thumb, revealed on data-active.
-          (0, import_vue18.h)("div", { class: "dialkit-xy-guide dialkit-xy-guide-v", "aria-hidden": "true", style: { left: leftPct } }),
-          (0, import_vue18.h)("div", { class: "dialkit-xy-guide dialkit-xy-guide-h", "aria-hidden": "true", style: { top: topPct } }),
-          (0, import_vue18.h)("div", { class: "dialkit-xy-thumb", "aria-hidden": "true", style: { left: leftPct, top: topPct } })
+          }),
+          (0, import_vue9.h)("div", {
+            ref: lowHandleRef,
+            class: "dialkit-range-slider-handle",
+            style: {
+              left: handles.low,
+              transform: "translateY(-50%)",
+              opacity: handleOpacityFor("min")
+            }
+          }),
+          (0, import_vue9.h)("div", {
+            ref: highHandleRef,
+            class: "dialkit-range-slider-handle",
+            style: {
+              left: handles.high,
+              transform: "translateY(-50%)",
+              opacity: handleOpacityFor("max")
+            }
+          }),
+          (0, import_vue9.h)("span", { class: "dialkit-range-slider-label" }, props.label),
+          editing.value !== null ? (0, import_vue9.h)("input", {
+            ref: inputRef,
+            type: "text",
+            class: "dialkit-range-slider-input",
+            value: inputValue.value,
+            onInput: (event) => {
+              inputValue.value = event.target.value;
+            },
+            onKeydown: handleInputKeydown,
+            onBlur: commitEditor,
+            onClick: (event) => event.stopPropagation(),
+            onPointerdown: (event) => event.stopPropagation()
+          }) : (0, import_vue9.h)("span", { class: "dialkit-range-slider-value" }, [
+            (0, import_vue9.h)("span", {
+              class: "dialkit-range-slider-bound",
+              onClick: (event) => openEditor("min", event),
+              onPointerdown: (event) => event.stopPropagation()
+            }, lowText),
+            (0, import_vue9.h)("span", { class: "dialkit-range-slider-dash" }, "\u2013"),
+            (0, import_vue9.h)("span", {
+              class: "dialkit-range-slider-bound",
+              onClick: (event) => openEditor("max", event),
+              onPointerdown: (event) => event.stopPropagation()
+            }, highText)
+          ])
         ])
       ]);
     };
   }
 });
 
-// src/vue/components/XYControl.ts
-var XYControl = (0, import_vue19.defineComponent)({
-  name: "DialKitXYControl",
+// src/vue/components/SelectControl.ts
+var import_vue10 = require("vue");
+var import_motion_v5 = require("motion-v");
+function toTitleCase(value) {
+  return value.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+function normalizeOptions(options) {
+  return options.map(
+    (option) => typeof option === "string" ? { value: option, label: toTitleCase(option) } : option
+  );
+}
+var SelectControl = (0, import_vue10.defineComponent)({
+  name: "DialKitSelectControl",
   props: {
     label: { type: String, required: true },
-    value: { type: Object, required: true },
-    x: { type: Object, default: void 0 },
-    y: { type: Object, default: void 0 },
-    grid: { type: [Boolean, Number], default: void 0 },
-    density: { type: Number, default: void 0 },
-    snap: { type: Boolean, default: void 0 },
-    returnToCenter: { type: Boolean, default: void 0 },
-    showValues: { type: Boolean, default: void 0 },
-    shortcut: { type: Object, default: void 0 },
-    shortcutActive: { type: Boolean, default: false }
+    value: { type: String, required: true },
+    options: {
+      type: Array,
+      required: true
+    }
   },
   emits: ["change"],
   setup(props, { emit }) {
-    return () => (0, import_vue19.h)(XYPad, {
-      label: props.label,
-      value: props.value,
-      x: props.x,
-      y: props.y,
-      grid: props.grid,
-      density: props.density,
-      snap: props.snap,
-      returnToCenter: props.returnToCenter,
-      showValues: props.showValues,
-      shortcut: props.shortcut,
-      shortcutActive: props.shortcutActive,
-      onChange: (next) => emit("change", next)
-    });
-  }
-});
-
-// src/vue/components/PresetManager.ts
-var import_vue20 = require("vue");
-var import_motion_v7 = require("motion-v");
-var PresetManager = (0, import_vue20.defineComponent)({
-  name: "DialKitPresetManager",
-  props: {
-    panelId: { type: String, required: true },
-    presets: {
-      type: Array,
-      required: true
-    },
-    activePresetId: {
-      type: String,
-      required: false,
-      default: null
-    }
-  },
-  setup(props) {
-    const isOpen = (0, import_vue20.ref)(false);
-    const pos = (0, import_vue20.ref)({ top: 0, left: 0, width: 0 });
-    const triggerRef = (0, import_vue20.ref)(null);
-    const dropdownRef = (0, import_vue20.ref)(null);
-    const hasPresets = () => props.presets.length > 0;
-    const activePreset = () => props.presets.find((preset) => preset.id === props.activePresetId);
-    const open = () => {
-      if (!hasPresets()) return;
-      const rect = triggerRef.value?.getBoundingClientRect();
-      if (rect) {
-        pos.value = { top: rect.bottom + 4, left: rect.left, width: rect.width };
-      }
+    const isOpen = (0, import_vue10.ref)(false);
+    const pos = (0, import_vue10.ref)(null);
+    const portalTarget = (0, import_vue10.ref)(null);
+    const triggerRef = (0, import_vue10.ref)(null);
+    const dropdownRef = (0, import_vue10.ref)(null);
+    const normalizedOptions = () => normalizeOptions(props.options);
+    const selectedLabel = () => normalizedOptions().find((option) => option.value === props.value)?.label ?? props.value;
+    const updatePos = () => {
+      if (!triggerRef.value) return;
+      const rect = triggerRef.value.getBoundingClientRect();
+      const dropdownHeight = 8 + normalizedOptions().length * 36;
+      const spaceBelow = window.innerHeight - rect.bottom - 4;
+      const above = spaceBelow < dropdownHeight && rect.top > spaceBelow;
+      pos.value = {
+        top: above ? rect.top - 4 : rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+        above
+      };
+    };
+    const openDropdown = () => {
+      updatePos();
       isOpen.value = true;
     };
-    const close = () => {
+    const closeDropdown = () => {
       isOpen.value = false;
     };
     const setDropdownRef = (node) => {
@@ -4842,126 +3807,111 @@ var PresetManager = (0, import_vue20.defineComponent)({
       }
       dropdownRef.value = null;
     };
-    const toggle = () => {
-      if (isOpen.value) close();
-      else open();
+    const toggleDropdown = () => {
+      if (isOpen.value) closeDropdown();
+      else openDropdown();
     };
-    (0, import_vue20.watch)(isOpen, (open2, _, onCleanup) => {
-      if (!open2) return;
-      const handler = (event) => {
+    (0, import_vue10.watch)(isOpen, (open, _, onCleanup) => {
+      if (!open) return;
+      const handleViewportChange = () => updatePos();
+      const handleDocumentClick = (event) => {
         const target = event.target;
         if (triggerRef.value?.contains(target) || dropdownRef.value?.contains(target)) return;
-        close();
+        closeDropdown();
       };
-      document.addEventListener("mousedown", handler);
+      updatePos();
+      document.addEventListener("mousedown", handleDocumentClick);
+      window.addEventListener("resize", handleViewportChange);
+      window.addEventListener("scroll", handleViewportChange, true);
       onCleanup(() => {
-        document.removeEventListener("mousedown", handler);
+        document.removeEventListener("mousedown", handleDocumentClick);
+        window.removeEventListener("resize", handleViewportChange);
+        window.removeEventListener("scroll", handleViewportChange, true);
       });
     });
-    const handleSelect = (presetId) => {
-      if (presetId) {
-        DialStore.loadPreset(props.panelId, presetId);
-      } else {
-        DialStore.clearActivePreset(props.panelId);
-      }
-      close();
-    };
-    const handleDelete = (event, presetId) => {
-      event.stopPropagation();
-      DialStore.deletePreset(props.panelId, presetId);
-    };
-    return () => (0, import_vue20.h)("div", { class: "dialkit-preset-manager" }, [
-      (0, import_vue20.h)("button", {
+    (0, import_vue10.onMounted)(() => {
+      const root = triggerRef.value?.closest(".dialkit-root");
+      portalTarget.value = root ?? document.body;
+    });
+    return () => (0, import_vue10.h)("div", { class: "dialkit-select-row" }, [
+      (0, import_vue10.h)("button", {
         ref: triggerRef,
-        class: "dialkit-preset-trigger",
-        onClick: toggle,
+        class: "dialkit-select-trigger",
         "data-open": String(isOpen.value),
-        "data-has-preset": String(!!activePreset()),
-        "data-disabled": String(!hasPresets())
+        onClick: toggleDropdown
       }, [
-        (0, import_vue20.h)("span", { class: "dialkit-preset-label" }, activePreset()?.name ?? "Version 1"),
-        (0, import_vue20.h)(import_motion_v7.motion.svg, {
-          class: "dialkit-select-chevron",
-          viewBox: "0 0 24 24",
-          fill: "none",
-          stroke: "currentColor",
-          "stroke-width": "2.5",
-          "stroke-linecap": "round",
-          "stroke-linejoin": "round",
-          animate: { rotate: isOpen.value ? 180 : 0, opacity: hasPresets() ? 0.6 : 0.25 },
-          transition: { type: "spring", visualDuration: 0.2, bounce: 0.15 }
-        }, [(0, import_vue20.h)("path", { d: ICON_CHEVRON })])
+        (0, import_vue10.h)("span", { class: "dialkit-select-label" }, props.label),
+        (0, import_vue10.h)("div", { class: "dialkit-select-right" }, [
+          (0, import_vue10.h)("span", { class: "dialkit-select-value" }, selectedLabel()),
+          (0, import_vue10.h)(import_motion_v5.motion.svg, {
+            class: "dialkit-select-chevron",
+            viewBox: "0 0 24 24",
+            fill: "none",
+            stroke: "currentColor",
+            "stroke-width": "2.5",
+            "stroke-linecap": "round",
+            "stroke-linejoin": "round",
+            animate: { rotate: isOpen.value ? 180 : 0 },
+            transition: { type: "spring", visualDuration: 0.2, bounce: 0.15 }
+          }, [(0, import_vue10.h)("path", { d: "M6 9.5L12 15.5L18 9.5" })])
+        ])
       ]),
-      (0, import_vue20.h)(import_vue20.Teleport, { to: "body" }, [
-        (0, import_vue20.h)(import_motion_v7.AnimatePresence, null, {
-          default: () => isOpen.value ? [(0, import_vue20.h)(import_motion_v7.motion.div, {
-            key: "dialkit-preset-dropdown",
+      portalTarget.value ? (0, import_vue10.h)(import_vue10.Teleport, { to: portalTarget.value }, [
+        (0, import_vue10.h)(import_motion_v5.AnimatePresence, null, {
+          default: () => isOpen.value && pos.value ? [(0, import_vue10.h)(import_motion_v5.motion.div, {
+            key: "dialkit-select-dropdown",
             ref: setDropdownRef,
-            class: "dialkit-root dialkit-preset-dropdown",
+            class: "dialkit-select-dropdown",
+            initial: { opacity: 0, y: pos.value.above ? 8 : -8, scale: 0.95 },
+            animate: { opacity: 1, y: 0, scale: 1 },
+            exit: { opacity: 0, y: pos.value.above ? 8 : -8, scale: 0.95 },
+            transition: { type: "spring", visualDuration: 0.15, bounce: 0 },
             style: {
               position: "fixed",
-              top: `${pos.value.top}px`,
               left: `${pos.value.left}px`,
-              minWidth: `${pos.value.width}px`
-            },
-            initial: { opacity: 0, y: 4, scale: 0.97 },
-            animate: { opacity: 1, y: 0, scale: 1 },
-            exit: { opacity: 0, y: 4, scale: 0.97, pointerEvents: "none" },
-            transition: { type: "spring", visualDuration: 0.15, bounce: 0 }
-          }, [
-            (0, import_vue20.h)("div", {
-              class: "dialkit-preset-item",
-              "data-active": String(!props.activePresetId),
-              onClick: () => handleSelect(null)
-            }, [(0, import_vue20.h)("span", { class: "dialkit-preset-name" }, "Version 1")]),
-            ...props.presets.map((preset) => (0, import_vue20.h)("div", {
-              key: preset.id,
-              class: "dialkit-preset-item",
-              "data-active": String(preset.id === props.activePresetId),
-              onClick: () => handleSelect(preset.id)
-            }, [
-              (0, import_vue20.h)("span", { class: "dialkit-preset-name" }, preset.name),
-              (0, import_vue20.h)("button", {
-                class: "dialkit-preset-delete",
-                onClick: (event) => handleDelete(event, preset.id),
-                title: "Delete preset"
-              }, [
-                (0, import_vue20.h)("svg", {
-                  viewBox: "0 0 24 24",
-                  fill: "none",
-                  stroke: "currentColor",
-                  "stroke-width": "2",
-                  "stroke-linecap": "round",
-                  "stroke-linejoin": "round"
-                }, ICON_TRASH.map((d) => (0, import_vue20.h)("path", { d })))
-              ])
-            ]))
-          ])] : []
+              width: `${pos.value.width}px`,
+              ...pos.value.above ? {
+                bottom: `${window.innerHeight - pos.value.top}px`,
+                transformOrigin: "bottom"
+              } : {
+                top: `${pos.value.top}px`,
+                transformOrigin: "top"
+              }
+            }
+          }, normalizedOptions().map((option) => (0, import_vue10.h)("button", {
+            key: option.value,
+            class: "dialkit-select-option",
+            "data-selected": String(option.value === props.value),
+            onClick: () => {
+              emit("change", option.value);
+              closeDropdown();
+            }
+          }, option.label)))] : []
         })
-      ])
+      ]) : null
     ]);
   }
 });
 
 // src/vue/components/ShortcutListener.ts
-var import_vue21 = require("vue");
+var import_vue11 = require("vue");
 var ShortcutKey = /* @__PURE__ */ Symbol("DialKitShortcut");
 function useShortcutContext() {
-  return (0, import_vue21.inject)(ShortcutKey, {
-    activePanelId: (0, import_vue21.ref)(null),
-    activePath: (0, import_vue21.ref)(null)
+  return (0, import_vue11.inject)(ShortcutKey, {
+    activePanelId: (0, import_vue11.ref)(null),
+    activePath: (0, import_vue11.ref)(null)
   });
 }
-var ShortcutListener = (0, import_vue21.defineComponent)({
+var ShortcutListener = (0, import_vue11.defineComponent)({
   name: "DialKitShortcutListener",
   setup(_, { slots }) {
-    const activePanelId = (0, import_vue21.ref)(null);
-    const activePath = (0, import_vue21.ref)(null);
+    const activePanelId = (0, import_vue11.ref)(null);
+    const activePath = (0, import_vue11.ref)(null);
     const activeKeys = /* @__PURE__ */ new Set();
     let isDragging = false;
     let lastMouseX = null;
     let dragAccumulator = 0;
-    (0, import_vue21.provide)(ShortcutKey, { activePanelId, activePath });
+    (0, import_vue11.provide)(ShortcutKey, { activePanelId, activePath });
     const resolveActiveTarget = (interaction) => {
       for (const key of activeKeys) {
         const panels = DialStore.getPanels();
@@ -5124,7 +4074,7 @@ var ShortcutListener = (0, import_vue21.defineComponent)({
       activePanelId.value = null;
       activePath.value = null;
     };
-    (0, import_vue21.onMounted)(() => {
+    (0, import_vue11.onMounted)(() => {
       window.addEventListener("keydown", handleKeyDown);
       window.addEventListener("keyup", handleKeyUp);
       window.addEventListener("wheel", handleWheel, { passive: false });
@@ -5133,7 +4083,7 @@ var ShortcutListener = (0, import_vue21.defineComponent)({
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("blur", handleWindowBlur);
     });
-    (0, import_vue21.onUnmounted)(() => {
+    (0, import_vue11.onUnmounted)(() => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("wheel", handleWheel);
@@ -5146,8 +4096,1537 @@ var ShortcutListener = (0, import_vue21.defineComponent)({
   }
 });
 
+// src/vue/components/Slider.ts
+var import_vue12 = require("vue");
+var import_motion_v6 = require("motion-v");
+var CLICK_THRESHOLD2 = 3;
+var DEAD_ZONE = 32;
+var MAX_CURSOR_RANGE = 200;
+var MAX_STRETCH = 8;
+var Slider = (0, import_vue12.defineComponent)({
+  name: "DialKitSlider",
+  props: {
+    label: { type: String, required: true },
+    value: { type: Number, required: true },
+    min: { type: Number, required: false },
+    max: { type: Number, required: false },
+    step: { type: Number, required: false },
+    unit: { type: String, required: false },
+    /**
+     * Anchor the fill at this value instead of `min`. Bipolar parameters fill
+     * out from the origin in either direction and gain an escapable detent at
+     * the origin while dragging. Defaults to `min`.
+     */
+    origin: { type: Number, required: false, default: void 0 },
+    /** Convenience for `origin={0}` on a symmetric range. */
+    bipolar: { type: Boolean, default: false },
+    shortcut: { type: Object, default: void 0 },
+    shortcutActive: { type: Boolean, default: false }
+  },
+  emits: ["change"],
+  setup(props, { emit }) {
+    const min = (0, import_vue12.computed)(() => props.min ?? 0);
+    const max = (0, import_vue12.computed)(() => props.max ?? 1);
+    const step = (0, import_vue12.computed)(() => props.step ?? 0.01);
+    const resolvedOrigin = (0, import_vue12.computed)(
+      () => Math.min(max.value, Math.max(min.value, props.origin ?? (props.bipolar ? 0 : min.value)))
+    );
+    const hasOrigin = (0, import_vue12.computed)(() => resolvedOrigin.value > min.value);
+    const originPercent = (0, import_vue12.computed)(
+      () => (resolvedOrigin.value - min.value) / (max.value - min.value) * 100
+    );
+    const DETENT_PX = 6;
+    const wrapperRef = (0, import_vue12.ref)(null);
+    const trackRef = (0, import_vue12.ref)(null);
+    const fillRef = (0, import_vue12.ref)(null);
+    const handleRef = (0, import_vue12.ref)(null);
+    const labelRef = (0, import_vue12.ref)(null);
+    const valueSpanRef = (0, import_vue12.ref)(null);
+    const inputRef = (0, import_vue12.ref)(null);
+    const isInteracting = (0, import_vue12.ref)(false);
+    const isDragging = (0, import_vue12.ref)(false);
+    const isHovered = (0, import_vue12.ref)(false);
+    const isValueHovered = (0, import_vue12.ref)(false);
+    const isValueEditable = (0, import_vue12.ref)(false);
+    const showInput = (0, import_vue12.ref)(false);
+    const inputValue = (0, import_vue12.ref)("");
+    const fillPercent = (0, import_motion_v6.motionValue)((props.value - min.value) / (max.value - min.value) * 100);
+    const rubberStretchPx = (0, import_motion_v6.motionValue)(0);
+    const handleOpacityMv = (0, import_motion_v6.motionValue)(0);
+    const handleScaleXMv = (0, import_motion_v6.motionValue)(0.25);
+    const handleScaleYMv = (0, import_motion_v6.motionValue)(1);
+    const percentage = (0, import_vue12.computed)(() => (props.value - min.value) / (max.value - min.value) * 100);
+    const isActive = (0, import_vue12.computed)(() => isInteracting.value || isHovered.value);
+    const displayValue = (0, import_vue12.computed)(() => props.value.toFixed(decimalsForStep2(step.value)));
+    let pointerDownPos = null;
+    let isClickFlag = true;
+    let wrapperRect = null;
+    let scaleVal = 1;
+    let hoverTimeout = null;
+    let snapAnim = null;
+    let rubberAnim = null;
+    let handleOpacityAnim = null;
+    let handleScaleXAnim = null;
+    let handleScaleYAnim = null;
+    const applyFillStyles = (pct) => {
+      if (fillRef.value) {
+        fillRef.value.style.left = hasOrigin.value ? `${Math.min(pct, originPercent.value)}%` : "0%";
+        fillRef.value.style.width = hasOrigin.value ? `${Math.abs(pct - originPercent.value)}%` : `${pct}%`;
+      }
+      if (handleRef.value) handleRef.value.style.left = `max(5px, calc(${pct}% - 9px))`;
+    };
+    const applyDetent = (v) => {
+      if (!hasOrigin.value || !wrapperRef.value) return v;
+      const trackWidth = wrapperRef.value.offsetWidth;
+      if (trackWidth <= 0) return v;
+      const detentValue = DETENT_PX / trackWidth * (max.value - min.value);
+      return Math.abs(v - resolvedOrigin.value) <= detentValue ? resolvedOrigin.value : v;
+    };
+    const applyRubberStyles = (stretch) => {
+      if (!trackRef.value) return;
+      trackRef.value.style.width = `calc(100% + ${Math.abs(stretch)}px)`;
+      trackRef.value.style.transform = `translateX(${stretch < 0 ? stretch : 0}px)`;
+    };
+    const applyHandleVisualStyles = () => {
+      if (!handleRef.value) return;
+      handleRef.value.style.opacity = String(handleOpacityMv.get());
+      handleRef.value.style.transform = `translateY(-50%) scaleX(${handleScaleXMv.get()}) scaleY(${handleScaleYMv.get()})`;
+    };
+    const positionToValue = (clientX) => {
+      if (!wrapperRect) return props.value;
+      const screenX = clientX - wrapperRect.left;
+      const sceneX = screenX / scaleVal;
+      const nativeWidth = wrapperRef.value ? wrapperRef.value.offsetWidth : wrapperRect.width;
+      const pct = Math.max(0, Math.min(1, sceneX / nativeWidth));
+      const rawValue = min.value + pct * (max.value - min.value);
+      return Math.max(min.value, Math.min(max.value, rawValue));
+    };
+    const percentFromValue = (value) => (value - min.value) / (max.value - min.value) * 100;
+    const computeRubberStretch = (clientX, sign) => {
+      if (!wrapperRect) return 0;
+      const distancePast = sign < 0 ? wrapperRect.left - clientX : clientX - wrapperRect.right;
+      const overflow = Math.max(0, distancePast - DEAD_ZONE);
+      return sign * MAX_STRETCH * Math.sqrt(Math.min(overflow / MAX_CURSOR_RANGE, 1));
+    };
+    const leftThreshold = () => {
+      const HANDLE_BUFFER = 8;
+      const LABEL_CSS_LEFT = 10;
+      const trackWidth = wrapperRef.value?.offsetWidth;
+      if (trackWidth && labelRef.value) {
+        return (LABEL_CSS_LEFT + labelRef.value.offsetWidth + HANDLE_BUFFER) / trackWidth * 100;
+      }
+      return 30;
+    };
+    const rightThreshold = () => {
+      const HANDLE_BUFFER = 8;
+      const VALUE_CSS_RIGHT = 10;
+      const trackWidth = wrapperRef.value?.offsetWidth;
+      if (trackWidth && valueSpanRef.value) {
+        return (trackWidth - VALUE_CSS_RIGHT - valueSpanRef.value.offsetWidth - HANDLE_BUFFER) / trackWidth * 100;
+      }
+      return 78;
+    };
+    const valueDodge = () => percentage.value < leftThreshold() || percentage.value > rightThreshold();
+    const handleOpacity = () => {
+      if (!isActive.value) return 0;
+      if (valueDodge()) return 0.1;
+      if (isDragging.value) return 0.9;
+      return 0.5;
+    };
+    const animateHandleState = () => {
+      const targetOpacity = handleOpacity();
+      const targetScaleX = isActive.value ? 1 : 0.25;
+      const targetScaleY = isActive.value && valueDodge() ? 0.75 : 1;
+      handleOpacityAnim?.stop();
+      handleScaleXAnim?.stop();
+      handleScaleYAnim?.stop();
+      handleOpacityAnim = (0, import_motion_v6.animate)(handleOpacityMv, targetOpacity, { duration: 0.15 });
+      handleScaleXAnim = (0, import_motion_v6.animate)(handleScaleXMv, targetScaleX, {
+        type: "spring",
+        visualDuration: 0.25,
+        bounce: 0.15
+      });
+      handleScaleYAnim = (0, import_motion_v6.animate)(handleScaleYMv, targetScaleY, {
+        type: "spring",
+        visualDuration: 0.2,
+        bounce: 0.1
+      });
+    };
+    const handlePointerDown = (event) => {
+      if (showInput.value) return;
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      pointerDownPos = { x: event.clientX, y: event.clientY };
+      isClickFlag = true;
+      isInteracting.value = true;
+      if (wrapperRef.value) {
+        wrapperRect = wrapperRef.value.getBoundingClientRect();
+        scaleVal = wrapperRect.width / wrapperRef.value.offsetWidth;
+      }
+    };
+    const handlePointerMove = (event) => {
+      if (!isInteracting.value || !pointerDownPos) return;
+      const dx = event.clientX - pointerDownPos.x;
+      const dy = event.clientY - pointerDownPos.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (isClickFlag && distance > CLICK_THRESHOLD2) {
+        isClickFlag = false;
+        isDragging.value = true;
+      }
+      if (!isClickFlag) {
+        if (wrapperRect) {
+          if (event.clientX < wrapperRect.left) {
+            rubberStretchPx.jump(computeRubberStretch(event.clientX, -1));
+          } else if (event.clientX > wrapperRect.right) {
+            rubberStretchPx.jump(computeRubberStretch(event.clientX, 1));
+          } else {
+            rubberStretchPx.jump(0);
+          }
+        }
+        const nextValue = applyDetent(positionToValue(event.clientX));
+        const nextPct = percentFromValue(nextValue);
+        if (snapAnim) {
+          snapAnim.stop();
+          snapAnim = null;
+        }
+        fillPercent.jump(nextPct);
+        emit("change", roundValue(nextValue, step.value));
+      }
+    };
+    const handlePointerUp = (event) => {
+      if (!isInteracting.value) return;
+      if (isClickFlag) {
+        const rawValue = positionToValue(event.clientX);
+        const discreteSteps2 = (max.value - min.value) / step.value;
+        const snappedValue = discreteSteps2 <= 10 ? Math.max(min.value, Math.min(max.value, min.value + Math.round((rawValue - min.value) / step.value) * step.value)) : snapToDecile(rawValue, min.value, max.value);
+        const nextPct = percentFromValue(snappedValue);
+        snapAnim?.stop();
+        snapAnim = (0, import_motion_v6.animate)(fillPercent, nextPct, {
+          type: "spring",
+          stiffness: 300,
+          damping: 25,
+          mass: 0.8,
+          onComplete: () => {
+            snapAnim = null;
+          }
+        });
+        emit("change", roundValue(snappedValue, step.value));
+      }
+      if (rubberStretchPx.get() !== 0) {
+        rubberAnim?.stop();
+        rubberAnim = (0, import_motion_v6.animate)(rubberStretchPx, 0, {
+          type: "spring",
+          visualDuration: 0.35,
+          bounce: 0.15
+        });
+      }
+      isInteracting.value = false;
+      isDragging.value = false;
+      pointerDownPos = null;
+    };
+    const handlePointerCancel = () => {
+      if (!isInteracting.value) return;
+      isInteracting.value = false;
+      isDragging.value = false;
+      rubberStretchPx.jump(0);
+      pointerDownPos = null;
+    };
+    const handleInputSubmit = () => {
+      const parsed = parseFloat(inputValue.value);
+      if (!Number.isNaN(parsed)) {
+        const clamped = Math.max(min.value, Math.min(max.value, parsed));
+        emit("change", roundValue(clamped, step.value));
+      }
+      showInput.value = false;
+      isValueHovered.value = false;
+      isValueEditable.value = false;
+    };
+    const handleValueClick = (event) => {
+      if (!isValueEditable.value) return;
+      event.stopPropagation();
+      event.preventDefault();
+      showInput.value = true;
+      inputValue.value = props.value.toFixed(decimalsForStep2(step.value));
+    };
+    const handleInputKeydown = (event) => {
+      if (event.key === "Enter") {
+        handleInputSubmit();
+      } else if (event.key === "Escape") {
+        showInput.value = false;
+        isValueHovered.value = false;
+      }
+    };
+    (0, import_vue12.watch)(() => props.value, () => {
+      if (!isInteracting.value && !snapAnim) {
+        fillPercent.jump(percentage.value);
+      }
+    });
+    (0, import_vue12.watch)([isInteracting, isHovered, isDragging, () => props.value], () => {
+      animateHandleState();
+    });
+    (0, import_vue12.watch)([isValueHovered, showInput, isValueEditable], () => {
+      if (hoverTimeout) {
+        clearTimeout(hoverTimeout);
+        hoverTimeout = null;
+      }
+      if (isValueHovered.value && !showInput.value && !isValueEditable.value) {
+        hoverTimeout = setTimeout(() => {
+          isValueEditable.value = true;
+          animateHandleState();
+        }, 800);
+      } else if (!isValueHovered.value && !showInput.value) {
+        isValueEditable.value = false;
+      }
+    });
+    (0, import_vue12.watch)(showInput, async (visible) => {
+      if (!visible) return;
+      await (0, import_vue12.nextTick)();
+      inputRef.value?.focus();
+      inputRef.value?.select();
+    });
+    const discreteSteps = (0, import_vue12.computed)(() => (max.value - min.value) / step.value);
+    const hashMarks = (0, import_vue12.computed)(() => {
+      const marks = [];
+      if (discreteSteps.value <= 10) {
+        const count = Math.max(0, Math.floor(discreteSteps.value) - 1);
+        for (let i = 0; i < count; i += 1) {
+          const pct = (i + 1) * step.value / (max.value - min.value) * 100;
+          marks.push((0, import_vue12.h)("div", { class: "dialkit-slider-hashmark", style: { left: `${pct}%` } }));
+        }
+        return marks;
+      }
+      for (let i = 0; i < 9; i += 1) {
+        const pct = (i + 1) * 10;
+        marks.push((0, import_vue12.h)("div", { class: "dialkit-slider-hashmark", style: { left: `${pct}%` } }));
+      }
+      return marks;
+    });
+    let unsubFill = null;
+    let unsubRubber = null;
+    let unsubHandleOpacity = null;
+    let unsubHandleScaleX = null;
+    let unsubHandleScaleY = null;
+    (0, import_vue12.onMounted)(() => {
+      unsubFill = fillPercent.on("change", applyFillStyles);
+      unsubRubber = rubberStretchPx.on("change", applyRubberStyles);
+      unsubHandleOpacity = handleOpacityMv.on("change", applyHandleVisualStyles);
+      unsubHandleScaleX = handleScaleXMv.on("change", applyHandleVisualStyles);
+      unsubHandleScaleY = handleScaleYMv.on("change", applyHandleVisualStyles);
+      applyFillStyles(fillPercent.get());
+      applyRubberStyles(rubberStretchPx.get());
+      applyHandleVisualStyles();
+      animateHandleState();
+    });
+    (0, import_vue12.onUnmounted)(() => {
+      if (hoverTimeout) clearTimeout(hoverTimeout);
+      snapAnim?.stop();
+      rubberAnim?.stop();
+      handleOpacityAnim?.stop();
+      handleScaleXAnim?.stop();
+      handleScaleYAnim?.stop();
+      unsubFill?.();
+      unsubRubber?.();
+      unsubHandleOpacity?.();
+      unsubHandleScaleX?.();
+      unsubHandleScaleY?.();
+    });
+    return () => (0, import_vue12.h)("div", { ref: wrapperRef, class: "dialkit-slider-wrapper" }, [
+      (0, import_vue12.h)("div", {
+        ref: trackRef,
+        class: `dialkit-slider ${isActive.value ? "dialkit-slider-active" : ""}`,
+        onPointerdown: handlePointerDown,
+        onPointermove: handlePointerMove,
+        onPointerup: handlePointerUp,
+        onPointercancel: handlePointerCancel,
+        onMouseenter: () => {
+          isHovered.value = true;
+          animateHandleState();
+        },
+        onMouseleave: () => {
+          isHovered.value = false;
+          animateHandleState();
+        }
+      }, [
+        (0, import_vue12.h)("div", { class: "dialkit-slider-hashmarks" }, hashMarks.value),
+        (0, import_vue12.h)("div", {
+          ref: fillRef,
+          class: "dialkit-slider-fill",
+          style: {
+            left: hasOrigin.value ? `${Math.min(fillPercent.get(), originPercent.value)}%` : "0%",
+            width: hasOrigin.value ? `${Math.abs(fillPercent.get() - originPercent.value)}%` : `${fillPercent.get()}%`
+          }
+        }),
+        (0, import_vue12.h)("div", {
+          ref: handleRef,
+          class: "dialkit-slider-handle",
+          style: {
+            left: `max(5px, calc(${fillPercent.get()}% - 9px))`,
+            transform: "translateY(-50%) scaleX(0.25) scaleY(1)",
+            opacity: 0
+          }
+        }),
+        (0, import_vue12.h)("span", { ref: labelRef, class: "dialkit-slider-label" }, [
+          props.label,
+          props.shortcut ? (0, import_vue12.h)("span", {
+            class: `dialkit-shortcut-pill${props.shortcutActive ? " dialkit-shortcut-pill-active" : ""}`
+          }, formatSliderShortcut(props.shortcut)) : null
+        ]),
+        showInput.value ? (0, import_vue12.h)("input", {
+          ref: inputRef,
+          type: "text",
+          class: "dialkit-slider-input",
+          value: inputValue.value,
+          onInput: (event) => {
+            inputValue.value = event.target.value;
+          },
+          onKeydown: handleInputKeydown,
+          onBlur: handleInputSubmit,
+          onClick: (event) => event.stopPropagation(),
+          onMousedown: (event) => event.stopPropagation()
+        }) : (0, import_vue12.h)("span", {
+          ref: valueSpanRef,
+          class: `dialkit-slider-value ${isValueEditable.value ? "dialkit-slider-value-editable" : ""}`,
+          onMouseenter: () => {
+            isValueHovered.value = true;
+          },
+          onMouseleave: () => {
+            isValueHovered.value = false;
+          },
+          onClick: handleValueClick,
+          onMousedown: (event) => {
+            if (isValueEditable.value) event.stopPropagation();
+          },
+          style: { cursor: isValueEditable.value ? "text" : "default" }
+        }, displayValue.value)
+      ])
+    ]);
+  }
+});
+
+// src/vue/components/SpringControl.ts
+var import_vue14 = require("vue");
+
+// src/vue/components/SpringVisualization.ts
+var import_vue13 = require("vue");
+function generateSpringCurve(stiffness, damping, mass, duration) {
+  const points = [];
+  const steps = 100;
+  const dt = duration / steps;
+  let position = 0;
+  let velocity = 0;
+  const target = 1;
+  for (let i = 0; i <= steps; i += 1) {
+    const time = i * dt;
+    points.push([time, position]);
+    const springForce = -stiffness * (position - target);
+    const dampingForce = -damping * velocity;
+    const acceleration = (springForce + dampingForce) / mass;
+    velocity += acceleration * dt;
+    position += velocity * dt;
+  }
+  return points;
+}
+var SpringVisualization = (0, import_vue13.defineComponent)({
+  name: "DialKitSpringVisualization",
+  props: {
+    spring: {
+      type: Object,
+      required: true
+    },
+    isSimpleMode: {
+      type: Boolean,
+      required: true
+    }
+  },
+  setup(props) {
+    const width = 256;
+    const height = 140;
+    const pathData = (0, import_vue13.computed)(() => {
+      let stiffness;
+      let damping;
+      let mass;
+      if (props.isSimpleMode) {
+        const visualDuration = props.spring.visualDuration ?? 0.3;
+        const bounce = props.spring.bounce ?? 0.2;
+        mass = 1;
+        stiffness = (2 * Math.PI / visualDuration) ** 2;
+        const dampingRatio = 1 - bounce;
+        damping = 2 * dampingRatio * Math.sqrt(stiffness * mass);
+      } else {
+        stiffness = props.spring.stiffness ?? 400;
+        damping = props.spring.damping ?? 17;
+        mass = props.spring.mass ?? 1;
+      }
+      const duration = 2;
+      const points = generateSpringCurve(stiffness, damping, mass, duration);
+      const values = points.map(([, value]) => value);
+      const minValue = Math.min(...values);
+      const maxValue = Math.max(...values);
+      const valueRange = maxValue - minValue;
+      return points.map(([time, value], index) => {
+        const x = time / duration * width;
+        const normalizedValue = (value - minValue) / (valueRange || 1);
+        const y = height - (normalizedValue * height * 0.6 + height * 0.2);
+        return `${index === 0 ? "M" : "L"} ${x} ${y}`;
+      }).join(" ");
+    });
+    return () => (0, import_vue13.h)("svg", { viewBox: `0 0 ${width} ${height}`, class: "dialkit-spring-viz" }, [
+      ...Array.from({ length: 3 }).flatMap((_, index) => {
+        const lineIndex = index + 1;
+        const x = width / 4 * lineIndex;
+        const y = height / 4 * lineIndex;
+        return [
+          (0, import_vue13.h)("line", { x1: x, y1: 0, x2: x, y2: height, stroke: "rgba(255, 255, 255, 0.08)", "stroke-width": 1 }),
+          (0, import_vue13.h)("line", { x1: 0, y1: y, x2: width, y2: y, stroke: "rgba(255, 255, 255, 0.08)", "stroke-width": 1 })
+        ];
+      }),
+      (0, import_vue13.h)("line", {
+        x1: 0,
+        y1: height / 2,
+        x2: width,
+        y2: height / 2,
+        stroke: "rgba(255, 255, 255, 0.15)",
+        "stroke-width": 1,
+        "stroke-dasharray": "4,4"
+      }),
+      (0, import_vue13.h)("path", {
+        d: pathData.value,
+        fill: "none",
+        stroke: "rgba(255, 255, 255, 0.6)",
+        "stroke-width": 2,
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round"
+      })
+    ]);
+  }
+});
+
+// src/vue/components/SpringControl.ts
+var SpringControl = (0, import_vue14.defineComponent)({
+  name: "DialKitSpringControl",
+  props: {
+    panelId: { type: String, required: true },
+    path: { type: String, required: true },
+    label: { type: String, required: true },
+    spring: {
+      type: Object,
+      required: true
+    }
+  },
+  emits: ["change"],
+  setup(props, { emit }) {
+    const mode = (0, import_vue14.ref)(DialStore.getSpringMode(props.panelId, props.path));
+    let unsub;
+    (0, import_vue14.onMounted)(() => {
+      unsub = DialStore.subscribe(props.panelId, () => {
+        mode.value = DialStore.getSpringMode(props.panelId, props.path);
+      });
+    });
+    (0, import_vue14.onUnmounted)(() => {
+      unsub?.();
+    });
+    const isSimpleMode = () => mode.value === "simple";
+    const cache2 = {
+      simple: props.spring.visualDuration !== void 0 ? { ...props.spring } : { type: "spring", visualDuration: 0.3, bounce: 0.2 },
+      advanced: props.spring.stiffness !== void 0 ? { ...props.spring } : { type: "spring", stiffness: 200, damping: 25, mass: 1 }
+    };
+    const handleModeChange = (nextMode) => {
+      if (isSimpleMode()) {
+        cache2.simple = { ...props.spring };
+      } else {
+        cache2.advanced = { ...props.spring };
+      }
+      DialStore.updateSpringMode(props.panelId, props.path, nextMode);
+      if (nextMode === "simple") {
+        emit("change", cache2.simple);
+      } else {
+        emit("change", cache2.advanced);
+      }
+    };
+    const handleUpdate = (key, value) => {
+      if (isSimpleMode()) {
+        const { stiffness, damping, mass, ...rest } = props.spring;
+        emit("change", { ...rest, [key]: value });
+      } else {
+        const { visualDuration, bounce, ...rest } = props.spring;
+        emit("change", { ...rest, [key]: value });
+      }
+    };
+    return () => (0, import_vue14.h)(Folder, { title: props.label, defaultOpen: true }, {
+      default: () => [
+        (0, import_vue14.h)("div", { style: { display: "flex", flexDirection: "column", gap: "6px" } }, [
+          (0, import_vue14.h)(SpringVisualization, { spring: props.spring, isSimpleMode: isSimpleMode() }),
+          (0, import_vue14.h)("div", { class: "dialkit-labeled-control" }, [
+            (0, import_vue14.h)("span", { class: "dialkit-labeled-control-label" }, "Type"),
+            (0, import_vue14.h)(SegmentedControl, {
+              options: [
+                { value: "simple", label: "Time" },
+                { value: "advanced", label: "Physics" }
+              ],
+              value: mode.value,
+              onChange: handleModeChange
+            })
+          ]),
+          ...isSimpleMode() ? [
+            (0, import_vue14.h)(Slider, {
+              label: "Duration",
+              value: props.spring.visualDuration ?? 0.3,
+              min: 0.1,
+              max: 1,
+              step: 0.05,
+              unit: "s",
+              onChange: (next) => handleUpdate("visualDuration", next)
+            }),
+            (0, import_vue14.h)(Slider, {
+              label: "Bounce",
+              value: props.spring.bounce ?? 0.2,
+              min: 0,
+              max: 1,
+              step: 0.05,
+              onChange: (next) => handleUpdate("bounce", next)
+            })
+          ] : [
+            (0, import_vue14.h)(Slider, {
+              label: "Stiffness",
+              value: props.spring.stiffness ?? 400,
+              min: 1,
+              max: 1e3,
+              step: 10,
+              onChange: (next) => handleUpdate("stiffness", next)
+            }),
+            (0, import_vue14.h)(Slider, {
+              label: "Damping",
+              value: props.spring.damping ?? 17,
+              min: 1,
+              max: 100,
+              step: 1,
+              onChange: (next) => handleUpdate("damping", next)
+            }),
+            (0, import_vue14.h)(Slider, {
+              label: "Mass",
+              value: props.spring.mass ?? 1,
+              min: 0.1,
+              max: 10,
+              step: 0.1,
+              onChange: (next) => handleUpdate("mass", next)
+            })
+          ]
+        ])
+      ]
+    });
+  }
+});
+
+// src/vue/components/TextControl.ts
+var import_vue15 = require("vue");
+var textControlInstance = 0;
+var TextControl = (0, import_vue15.defineComponent)({
+  name: "DialKitTextControl",
+  props: {
+    label: { type: String, required: true },
+    value: { type: String, required: true },
+    placeholder: { type: String, required: false }
+  },
+  emits: ["change"],
+  setup(props, { emit }) {
+    const inputId = (0, import_vue15.ref)(`dialkit-text-${++textControlInstance}`);
+    return () => (0, import_vue15.h)("div", { class: "dialkit-text-control" }, [
+      (0, import_vue15.h)("label", { class: "dialkit-text-label", for: inputId.value }, props.label),
+      (0, import_vue15.h)("input", {
+        id: inputId.value,
+        type: "text",
+        class: "dialkit-text-input",
+        value: props.value,
+        placeholder: props.placeholder,
+        onInput: (event) => emit("change", event.target.value)
+      })
+    ]);
+  }
+});
+
+// src/vue/components/Toggle.ts
+var import_vue16 = require("vue");
+var Toggle = (0, import_vue16.defineComponent)({
+  name: "DialKitToggle",
+  props: {
+    label: { type: String, required: true },
+    checked: { type: Boolean, required: true },
+    shortcut: { type: Object, default: void 0 },
+    shortcutActive: { type: Boolean, default: false }
+  },
+  emits: ["change"],
+  setup(props, { emit }) {
+    return () => (0, import_vue16.h)("div", { class: "dialkit-labeled-control" }, [
+      (0, import_vue16.h)("span", { class: "dialkit-labeled-control-label" }, [
+        props.label,
+        props.shortcut ? (0, import_vue16.h)("span", {
+          class: `dialkit-shortcut-pill${props.shortcutActive ? " dialkit-shortcut-pill-active" : ""}`
+        }, formatToggleShortcut(props.shortcut)) : null
+      ]),
+      (0, import_vue16.h)(SegmentedControl, {
+        options: [
+          { value: "off", label: "Off" },
+          { value: "on", label: "On" }
+        ],
+        value: props.checked ? "on" : "off",
+        onChange: (value) => emit("change", value === "on")
+      })
+    ]);
+  }
+});
+
+// src/vue/components/TransitionControl.ts
+var import_vue18 = require("vue");
+
+// src/vue/components/EasingVisualization.ts
+var import_vue17 = require("vue");
+var EasingVisualization = (0, import_vue17.defineComponent)({
+  name: "DialKitEasingVisualization",
+  props: {
+    easing: {
+      type: Object,
+      required: true
+    }
+  },
+  setup(props) {
+    const size = 200;
+    const pad = 10;
+    const inner = size - pad * 2;
+    const unit = inner / 2;
+    const curve = (0, import_vue17.computed)(() => {
+      const [x1, y1, x2, y2] = props.easing.ease;
+      const toSvg = (nx, ny) => ({
+        x: pad + (nx + 0.5) * unit,
+        y: pad + (1.5 - ny) * unit
+      });
+      const start = toSvg(0, 0);
+      const end = toSvg(1, 1);
+      const p1 = toSvg(x1, y1);
+      const p2 = toSvg(x2, y2);
+      return `M ${start.x} ${start.y} C ${p1.x} ${p1.y}, ${p2.x} ${p2.y}, ${end.x} ${end.y}`;
+    });
+    return () => (0, import_vue17.h)("svg", {
+      viewBox: `0 0 ${size} ${size}`,
+      preserveAspectRatio: "xMidYMid slice",
+      class: "dialkit-spring-viz dialkit-easing-viz"
+    }, [
+      (0, import_vue17.h)("line", {
+        x1: pad + (0 + 0.5) * unit,
+        y1: pad + (1.5 - 0) * unit,
+        x2: pad + (1 + 0.5) * unit,
+        y2: pad + (1.5 - 1) * unit,
+        stroke: "rgba(255, 255, 255, 0.15)",
+        "stroke-width": 1,
+        "stroke-dasharray": "4,4"
+      }),
+      (0, import_vue17.h)("path", {
+        d: curve.value,
+        fill: "none",
+        stroke: "rgba(255, 255, 255, 0.6)",
+        "stroke-width": 2,
+        "stroke-linecap": "round"
+      })
+    ]);
+  }
+});
+
+// src/vue/components/TransitionControl.ts
+function formatEase(ease) {
+  return ease.map((value) => Number(value.toFixed(2))).join(", ");
+}
+function parseEase(value) {
+  const parts = value.split(",").map((part) => Number.parseFloat(part.trim()));
+  if (parts.length === 4 && parts.every((part) => Number.isFinite(part))) {
+    return parts;
+  }
+  return null;
+}
+var EaseTextInput = (0, import_vue18.defineComponent)({
+  name: "DialKitEaseTextInput",
+  props: {
+    ease: {
+      type: Array,
+      required: true
+    },
+    onChange: {
+      type: Function,
+      required: true
+    }
+  },
+  setup(props) {
+    const editing = (0, import_vue18.ref)(false);
+    const draft = (0, import_vue18.ref)("");
+    const handleFocus = () => {
+      draft.value = formatEase(props.ease);
+      editing.value = true;
+    };
+    const handleBlur = () => {
+      const parsed = parseEase(draft.value);
+      if (parsed) props.onChange(parsed);
+      editing.value = false;
+    };
+    const handleKeydown = (event) => {
+      if (event.key === "Enter") {
+        event.target.blur();
+      }
+    };
+    return () => (0, import_vue18.h)("div", { class: "dialkit-labeled-control" }, [
+      (0, import_vue18.h)("span", { class: "dialkit-labeled-control-label" }, "Ease"),
+      (0, import_vue18.h)("input", {
+        type: "text",
+        class: "dialkit-text-input",
+        value: editing.value ? draft.value : formatEase(props.ease),
+        spellcheck: false,
+        onInput: (event) => {
+          draft.value = event.target.value;
+        },
+        onFocus: handleFocus,
+        onBlur: handleBlur,
+        onKeydown: handleKeydown
+      })
+    ]);
+  }
+});
+var TransitionControl = (0, import_vue18.defineComponent)({
+  name: "DialKitTransitionControl",
+  props: {
+    panelId: { type: String, required: true },
+    path: { type: String, required: true },
+    label: { type: String, required: true },
+    value: {
+      type: Object,
+      required: true
+    },
+    hideDuration: { type: Boolean, default: false },
+    durationControl: Object
+  },
+  emits: ["change"],
+  setup(props, { emit }) {
+    const mode = (0, import_vue18.ref)(DialStore.getTransitionMode(props.panelId, props.path));
+    let unsub;
+    (0, import_vue18.onMounted)(() => {
+      unsub = DialStore.subscribe(props.panelId, () => {
+        mode.value = DialStore.getTransitionMode(props.panelId, props.path);
+      });
+    });
+    (0, import_vue18.onUnmounted)(() => unsub?.());
+    const cache2 = {
+      easing: props.value.type === "easing" ? { ...props.value } : { type: "easing", duration: 0.3, ease: [1, -0.4, 0.5, 1] },
+      simple: props.value.type === "spring" && props.value.visualDuration !== void 0 ? { ...props.value } : { type: "spring", visualDuration: 0.3, bounce: 0.2 },
+      advanced: props.value.type === "spring" && props.value.stiffness !== void 0 ? { ...props.value } : { type: "spring", stiffness: 200, damping: 25, mass: 1 }
+    };
+    const spring = () => {
+      if (props.value.type === "spring") {
+        if (mode.value === "simple") cache2.simple = props.value;
+        else if (mode.value === "advanced") cache2.advanced = props.value;
+        return props.value;
+      }
+      return cache2.simple;
+    };
+    const easing = () => {
+      if (props.value.type === "easing") {
+        cache2.easing = props.value;
+        return props.value;
+      }
+      return cache2.easing;
+    };
+    const handleModeChange = (nextMode) => {
+      DialStore.updateTransitionMode(props.panelId, props.path, nextMode);
+      if (nextMode === "easing") {
+        emit("change", cache2.easing);
+      } else if (nextMode === "simple") {
+        emit("change", cache2.simple);
+      } else {
+        emit("change", cache2.advanced);
+      }
+    };
+    const updateEase = (index, value) => {
+      const current = easing();
+      const next = [...current.ease];
+      next[index] = value;
+      emit("change", { ...current, ease: next });
+    };
+    const handleSpringUpdate = (key, value) => {
+      const current = spring();
+      if (mode.value === "simple") {
+        const { stiffness, damping, mass, ...rest } = current;
+        emit("change", { ...rest, [key]: value });
+      } else {
+        const { visualDuration, bounce, ...rest } = current;
+        emit("change", { ...rest, [key]: value });
+      }
+    };
+    return () => {
+      const isEasing = mode.value === "easing";
+      const isSimpleSpring = mode.value === "simple";
+      const currentSpring = spring();
+      const currentEasing = easing();
+      const durationSlider = !props.hideDuration && (isEasing || isSimpleSpring) ? (0, import_vue18.h)(Slider, {
+        label: "Duration",
+        value: props.durationControl?.value ?? (isEasing ? currentEasing.duration : currentSpring.visualDuration ?? 0.3),
+        min: props.durationControl?.min ?? 0.1,
+        max: props.durationControl?.max ?? (isEasing ? 2 : 1),
+        step: props.durationControl?.step ?? 0.05,
+        unit: "s",
+        onChange: props.durationControl?.onChange ?? ((next) => {
+          if (isEasing) emit("change", { ...currentEasing, duration: next });
+          else handleSpringUpdate("visualDuration", next);
+        })
+      }) : null;
+      return (0, import_vue18.h)(Folder, { title: props.label, defaultOpen: true }, {
+        default: () => [
+          (0, import_vue18.h)("div", { style: { display: "flex", flexDirection: "column", gap: "6px" } }, [
+            isEasing ? (0, import_vue18.h)(EasingVisualization, { easing: currentEasing }) : (0, import_vue18.h)(SpringVisualization, { spring: currentSpring, isSimpleMode: isSimpleSpring }),
+            (0, import_vue18.h)("div", { class: "dialkit-labeled-control" }, [
+              (0, import_vue18.h)("span", { class: "dialkit-labeled-control-label" }, "Type"),
+              (0, import_vue18.h)(SegmentedControl, {
+                options: [
+                  { value: "easing", label: "Easing" },
+                  { value: "simple", label: "Time" },
+                  { value: "advanced", label: "Physics" }
+                ],
+                value: mode.value,
+                onChange: handleModeChange
+              })
+            ]),
+            ...isEasing ? [
+              (0, import_vue18.h)(Slider, { label: "x1", value: currentEasing.ease[0], min: 0, max: 1, step: 0.01, onChange: (next) => updateEase(0, next) }),
+              (0, import_vue18.h)(Slider, { label: "y1", value: currentEasing.ease[1], min: -1, max: 2, step: 0.01, onChange: (next) => updateEase(1, next) }),
+              (0, import_vue18.h)(Slider, { label: "x2", value: currentEasing.ease[2], min: 0, max: 1, step: 0.01, onChange: (next) => updateEase(2, next) }),
+              (0, import_vue18.h)(Slider, { label: "y2", value: currentEasing.ease[3], min: -1, max: 2, step: 0.01, onChange: (next) => updateEase(3, next) }),
+              (0, import_vue18.h)(EaseTextInput, {
+                ease: currentEasing.ease,
+                onChange: (next) => emit("change", { ...currentEasing, ease: next })
+              })
+            ] : isSimpleSpring ? [
+              (0, import_vue18.h)(Slider, {
+                label: "Bounce",
+                value: currentSpring.bounce ?? 0.2,
+                min: 0,
+                max: 1,
+                step: 0.05,
+                onChange: (next) => handleSpringUpdate("bounce", next)
+              })
+            ] : [
+              (0, import_vue18.h)(Slider, {
+                label: "Stiffness",
+                value: currentSpring.stiffness ?? 400,
+                min: 1,
+                max: 1e3,
+                step: 10,
+                onChange: (next) => handleSpringUpdate("stiffness", next)
+              }),
+              (0, import_vue18.h)(Slider, {
+                label: "Damping",
+                value: currentSpring.damping ?? 17,
+                min: 1,
+                max: 100,
+                step: 1,
+                onChange: (next) => handleSpringUpdate("damping", next)
+              }),
+              (0, import_vue18.h)(Slider, {
+                label: "Mass",
+                value: currentSpring.mass ?? 1,
+                min: 0.1,
+                max: 10,
+                step: 0.1,
+                onChange: (next) => handleSpringUpdate("mass", next)
+              })
+            ],
+            durationSlider
+          ])
+        ]
+      });
+    };
+  }
+});
+
+// src/vue/components/XYControl.ts
+var import_vue20 = require("vue");
+
+// src/vue/components/XYPad.ts
+var import_vue19 = require("vue");
+var DEFAULT_GRID_X = 5;
+var DEFAULT_GRID_Y = 5;
+var FINE_DRAG = 0.15;
+function decimalsForStep3(step) {
+  const s = step.toString();
+  const dot = s.indexOf(".");
+  return dot === -1 ? 0 : s.length - dot - 1;
+}
+function formatComponent(v, axis) {
+  return (v + 0).toFixed(decimalsForStep3(axis.step));
+}
+var XYPad = (0, import_vue19.defineComponent)({
+  name: "DialKitXYPad",
+  props: {
+    label: { type: String, required: true },
+    value: { type: Object, required: true },
+    /** Horizontal axis (defaults: min 0, max 1, step 0.01). */
+    x: { type: Object, default: void 0 },
+    /** Vertical axis, Cartesian (top = max). Same defaults as x. */
+    y: { type: Object, default: void 0 },
+    /** Height of the pad in px; the pad grows to fill the container width (it is not forced square). Default 160. */
+    size: { type: Number, default: 160 },
+    /**
+     * Grid overlay — on by default as a 5×5 grid (5 columns on X, 5 rows on Y),
+     * faint at rest and stronger on interaction. Pass `false` to hide it, or a
+     * number for a uniform N×N count. `density` multiplies whichever grid applies.
+     */
+    grid: { type: [Boolean, Number], default: void 0 },
+    /** Multiplies both axis subdivision counts (default 1). E.g. 2 on the 5×5 default → 10×10. */
+    density: { type: Number, default: 1 },
+    /** Snap the emitted value to each axis's step. Default false (continuous). */
+    snap: { type: Boolean, default: false },
+    /** Spring back to centre on release (joystick). Default false = hold. */
+    returnToCenter: { type: Boolean, default: false },
+    /** Show the live value next to each axis label (default false = label only). */
+    showValues: { type: Boolean, default: false },
+    disabled: { type: Boolean, default: false },
+    /** Override the readout / aria-valuetext text. Owns the full string. */
+    formatValue: { type: Function, default: void 0 },
+    shortcut: { type: Object, default: void 0 },
+    shortcutActive: { type: Boolean, default: false }
+  },
+  emits: ["change"],
+  setup(props, { emit }) {
+    const xAxis = (0, import_vue19.computed)(() => resolveAxis(props.x));
+    const yAxis = (0, import_vue19.computed)(() => resolveAxis(props.y));
+    const areaRef = (0, import_vue19.ref)(null);
+    let dragging = false;
+    const active = (0, import_vue19.ref)(false);
+    const draggingState = (0, import_vue19.ref)(false);
+    const pointToValue = (clientX, clientY, fine) => {
+      const el = areaRef.value;
+      if (!el) return props.value;
+      const rect = el.getBoundingClientRect();
+      const xa = xAxis.value;
+      const ya = yAxis.value;
+      let px = (clientX - rect.left) / rect.width;
+      let py = (clientY - rect.top) / rect.height;
+      if (fine) {
+        const cur = pointFromValue(props.value, xa, ya);
+        px = cur.x + (px - cur.x) * FINE_DRAG;
+        py = cur.y + (py - cur.y) * FINE_DRAG;
+      }
+      px = Math.min(1, Math.max(0, px));
+      py = Math.min(1, Math.max(0, py));
+      const next = valueFromPoint({ x: px, y: py }, xa, ya, props.snap);
+      const originPoint = pointFromValue({ x: xa.origin, y: ya.origin }, xa, ya);
+      const dxPx = Math.abs(px - originPoint.x) * rect.width;
+      const dyPx = Math.abs(py - originPoint.y) * rect.height;
+      return {
+        x: applyDetentAxis(next.x, xa, dxPx),
+        y: applyDetentAxis(next.y, ya, dyPx)
+      };
+    };
+    const emitValue = (next) => {
+      emit("change", next);
+    };
+    const handlePointerDown = (e) => {
+      if (props.disabled) return;
+      if (e.button !== 0 || !e.isPrimary) return;
+      if (e.altKey) return;
+      e.preventDefault();
+      try {
+        areaRef.value?.setPointerCapture(e.pointerId);
+      } catch {
+      }
+      areaRef.value?.focus();
+      dragging = true;
+      active.value = true;
+      draggingState.value = true;
+      emitValue(pointToValue(e.clientX, e.clientY, e.shiftKey));
+    };
+    const handlePointerMove = (e) => {
+      if (!dragging) return;
+      if (e.buttons === 0) {
+        finishDrag(e);
+        return;
+      }
+      emitValue(pointToValue(e.clientX, e.clientY, e.shiftKey));
+    };
+    const finishDrag = (e) => {
+      if (!dragging) return;
+      dragging = false;
+      draggingState.value = false;
+      try {
+        areaRef.value?.releasePointerCapture(e.pointerId);
+      } catch {
+      }
+      const el = areaRef.value;
+      const stillActive = (el?.matches(":hover") ?? false) || el === (el?.ownerDocument ?? document).activeElement;
+      if (!stillActive) active.value = false;
+      if (props.returnToCenter) {
+        emitValue(normalizeValue(centerValue(xAxis.value, yAxis.value), xAxis.value, yAxis.value, props.snap));
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (props.disabled) return;
+      const mode = e.shiftKey ? "coarse" : e.altKey ? "fine" : "normal";
+      const cur = props.value;
+      const xa = xAxis.value;
+      const ya = yAxis.value;
+      const ctrl = e.ctrlKey || e.metaKey;
+      let next = null;
+      switch (e.key) {
+        case "ArrowUp":
+          next = nudge(cur, "y", 1, xa, ya, mode);
+          break;
+        case "ArrowDown":
+          next = nudge(cur, "y", -1, xa, ya, mode);
+          break;
+        case "ArrowRight":
+          next = nudge(cur, "x", 1, xa, ya, mode);
+          break;
+        case "ArrowLeft":
+          next = nudge(cur, "x", -1, xa, ya, mode);
+          break;
+        case "PageUp":
+          next = nudge(cur, "y", 1, xa, ya, "coarse");
+          break;
+        case "PageDown":
+          next = nudge(cur, "y", -1, xa, ya, "coarse");
+          break;
+        case "Home":
+          next = ctrl ? { x: xa.min, y: ya.min } : { x: xa.min, y: cur.y };
+          break;
+        case "End":
+          next = ctrl ? { x: xa.max, y: ya.max } : { x: xa.max, y: cur.y };
+          break;
+        default:
+          return;
+      }
+      e.preventDefault();
+      emitValue(next);
+    };
+    const reset = () => {
+      if (props.disabled) return;
+      emitValue(normalizeValue(centerValue(xAxis.value, yAxis.value), xAxis.value, yAxis.value, props.snap));
+    };
+    return () => {
+      const xa = xAxis.value;
+      const ya = yAxis.value;
+      const value = props.value;
+      const xLabel = props.x?.label ?? "X";
+      const yLabel = props.y?.label ?? "Y";
+      const xText = `${xLabel} ${formatComponent(value.x, xa)}`;
+      const yText = `${yLabel} ${formatComponent(value.y, ya)}`;
+      const xVisual = props.showValues ? xText : xLabel;
+      const yVisual = props.showValues ? yText : yLabel;
+      const readout = props.formatValue ? props.formatValue(value) : `${xText}  ${yText}`;
+      const dens = typeof props.density === "number" && props.density > 0 ? props.density : 1;
+      let baseX, baseY;
+      if (props.grid === false) {
+        baseX = 0;
+        baseY = 0;
+      } else if (typeof props.grid === "number") {
+        baseX = props.grid;
+        baseY = props.grid;
+      } else {
+        baseX = DEFAULT_GRID_X;
+        baseY = DEFAULT_GRID_Y;
+      }
+      const gridX = baseX > 0 ? Math.round(baseX * dens) : 0;
+      const gridY = baseY > 0 ? Math.round(baseY * dens) : 0;
+      const showGrid = gridX > 0 && gridY > 0;
+      const point = pointFromValue(value, xa, ya);
+      const leftPct = `${point.x * 100}%`;
+      const topPct = `${point.y * 100}%`;
+      return (0, import_vue19.h)("div", {
+        class: "dialkit-xy",
+        "data-active": String(active.value),
+        "data-disabled": String(props.disabled)
+      }, [
+        (0, import_vue19.h)("div", { class: "dialkit-xy-header" }, [
+          (0, import_vue19.h)("span", { class: "dialkit-xy-label" }, [
+            props.label,
+            props.shortcut ? (0, import_vue19.h)("span", {
+              class: `dialkit-shortcut-pill${props.shortcutActive ? " dialkit-shortcut-pill-active" : ""}`
+            }, formatSliderShortcut(props.shortcut)) : null
+          ])
+        ]),
+        (0, import_vue19.h)("div", {
+          ref: areaRef,
+          class: "dialkit-xy-area",
+          // Only the height is fixed (from `size`); width is fluid (CSS width:100%),
+          // so the pad grows to fill the container and is no longer forced square.
+          style: { height: `${props.size}px` },
+          role: "application",
+          "aria-roledescription": "2D pad",
+          "aria-label": props.label,
+          "aria-valuetext": readout,
+          "aria-valuemin": xa.min,
+          "aria-valuemax": xa.max,
+          "aria-valuenow": value.x,
+          "aria-disabled": props.disabled || void 0,
+          tabindex: props.disabled ? -1 : 0,
+          "data-active": String(active.value),
+          "data-dragging": String(draggingState.value),
+          "data-disabled": String(props.disabled),
+          onPointerdown: handlePointerDown,
+          onPointermove: handlePointerMove,
+          onPointerup: finishDrag,
+          onPointercancel: finishDrag,
+          onDblclick: reset,
+          onClick: (e) => {
+            if (e.altKey) reset();
+          },
+          onKeydown: handleKeyDown,
+          onFocus: () => {
+            active.value = true;
+          },
+          onBlur: () => {
+            active.value = false;
+          },
+          onPointerenter: () => {
+            active.value = true;
+          },
+          onPointerleave: () => {
+            if (!dragging) active.value = false;
+          }
+        }, [
+          showGrid ? (0, import_vue19.h)("div", {
+            class: "dialkit-xy-grid",
+            "aria-hidden": "true",
+            style: {
+              "--dial-xy-grid-step-x": `${100 / gridX}%`,
+              "--dial-xy-grid-step-y": `${100 / gridY}%`
+            }
+          }) : null,
+          // Live axis labels, decorative (aria-valuetext owns the accessible string):
+          // X along the bottom edge, Y up the left edge.
+          (0, import_vue19.h)("div", { class: "dialkit-xy-axis dialkit-xy-axis-x", "aria-hidden": "true" }, xVisual),
+          (0, import_vue19.h)("div", { class: "dialkit-xy-axis dialkit-xy-axis-y", "aria-hidden": "true" }, yVisual),
+          // Crosshair guides tracking the thumb, revealed on data-active.
+          (0, import_vue19.h)("div", { class: "dialkit-xy-guide dialkit-xy-guide-v", "aria-hidden": "true", style: { left: leftPct } }),
+          (0, import_vue19.h)("div", { class: "dialkit-xy-guide dialkit-xy-guide-h", "aria-hidden": "true", style: { top: topPct } }),
+          (0, import_vue19.h)("div", { class: "dialkit-xy-thumb", "aria-hidden": "true", style: { left: leftPct, top: topPct } })
+        ])
+      ]);
+    };
+  }
+});
+
+// src/vue/components/XYControl.ts
+var XYControl = (0, import_vue20.defineComponent)({
+  name: "DialKitXYControl",
+  props: {
+    label: { type: String, required: true },
+    value: { type: Object, required: true },
+    x: { type: Object, default: void 0 },
+    y: { type: Object, default: void 0 },
+    grid: { type: [Boolean, Number], default: void 0 },
+    density: { type: Number, default: void 0 },
+    snap: { type: Boolean, default: void 0 },
+    returnToCenter: { type: Boolean, default: void 0 },
+    showValues: { type: Boolean, default: void 0 },
+    shortcut: { type: Object, default: void 0 },
+    shortcutActive: { type: Boolean, default: false }
+  },
+  emits: ["change"],
+  setup(props, { emit }) {
+    return () => (0, import_vue20.h)(XYPad, {
+      label: props.label,
+      value: props.value,
+      x: props.x,
+      y: props.y,
+      grid: props.grid,
+      density: props.density,
+      snap: props.snap,
+      returnToCenter: props.returnToCenter,
+      showValues: props.showValues,
+      shortcut: props.shortcut,
+      shortcutActive: props.shortcutActive,
+      onChange: (next) => emit("change", next)
+    });
+  }
+});
+
+// src/vue/components/ControlRenderer.ts
+var ControlRenderer = (0, import_vue21.defineComponent)({
+  name: "DialKitControlRenderer",
+  props: {
+    panelId: { type: String, required: true },
+    controls: { type: Array, required: true },
+    values: { type: Object, required: true },
+    transitionDuration: Object
+  },
+  setup(props) {
+    const shortcut = (0, import_vue21.inject)(ShortcutKey, void 0);
+    const isShortcutActive = (path) => shortcut?.activePanelId.value === props.panelId && shortcut.activePath.value === path;
+    const renderControl = (control) => {
+      const value = props.values[control.path];
+      switch (control.type) {
+        case "slider":
+          return (0, import_vue21.h)(Slider, {
+            key: control.path,
+            label: control.label,
+            value,
+            min: control.min,
+            max: control.max,
+            step: control.step,
+            shortcut: control.shortcut,
+            shortcutActive: isShortcutActive(control.path),
+            onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
+          });
+        case "range":
+          return (0, import_vue21.h)(RangeSlider, {
+            key: control.path,
+            label: control.label,
+            value,
+            min: control.min ?? 0,
+            max: control.max ?? 1,
+            step: control.step,
+            defaultValue: control.rangeDefault,
+            onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
+          });
+        case "toggle":
+          return (0, import_vue21.h)(Toggle, {
+            key: control.path,
+            label: control.label,
+            checked: value,
+            shortcut: control.shortcut,
+            shortcutActive: isShortcutActive(control.path),
+            onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
+          });
+        case "spring":
+          return (0, import_vue21.h)(SpringControl, {
+            key: control.path,
+            panelId: props.panelId,
+            path: control.path,
+            label: control.label,
+            spring: value,
+            onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
+          });
+        case "transition":
+          return (0, import_vue21.h)(TransitionControl, {
+            key: control.path,
+            panelId: props.panelId,
+            path: control.path,
+            label: control.label,
+            value,
+            durationControl: props.transitionDuration,
+            onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
+          });
+        case "folder":
+          return (0, import_vue21.h)(Folder, {
+            key: control.path,
+            title: control.label,
+            defaultOpen: control.defaultOpen ?? true
+          }, { default: () => (control.children ?? []).map(renderControl) });
+        case "text":
+          return (0, import_vue21.h)(TextControl, {
+            key: control.path,
+            label: control.label,
+            value,
+            placeholder: control.placeholder,
+            onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
+          });
+        case "select":
+          return (0, import_vue21.h)(SelectControl, {
+            key: control.path,
+            label: control.label,
+            value,
+            options: control.options ?? [],
+            onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
+          });
+        case "color":
+          return (0, import_vue21.h)(ColorControl, {
+            key: control.path,
+            label: control.label,
+            value,
+            alpha: control.alpha,
+            palette: control.palette,
+            onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
+          });
+        case "gradient":
+          return (0, import_vue21.h)(GradientControl, {
+            key: control.path,
+            label: control.label,
+            value,
+            onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
+          });
+        case "xy":
+          return (0, import_vue21.h)(XYControl, {
+            key: control.path,
+            label: control.label,
+            value,
+            x: control.xAxis,
+            y: control.yAxis,
+            grid: control.grid,
+            density: control.density,
+            snap: control.snap,
+            returnToCenter: control.returnToCenter,
+            showValues: control.showValues,
+            shortcut: control.shortcut,
+            shortcutActive: isShortcutActive(control.path),
+            onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
+          });
+        case "action":
+          return (0, import_vue21.h)("button", {
+            key: control.path,
+            class: "dialkit-button",
+            onClick: () => DialStore.triggerAction(props.panelId, control.path)
+          }, control.label);
+        default:
+          return null;
+      }
+    };
+    return () => (0, import_vue21.h)(import_vue21.Fragment, null, props.controls.map(renderControl));
+  }
+});
+
+// src/vue/components/PresetManager.ts
+var import_vue22 = require("vue");
+var import_motion_v7 = require("motion-v");
+var PresetManager = (0, import_vue22.defineComponent)({
+  name: "DialKitPresetManager",
+  props: {
+    panelId: { type: String, required: true },
+    presets: {
+      type: Array,
+      required: true
+    },
+    activePresetId: {
+      type: String,
+      required: false,
+      default: null
+    }
+  },
+  setup(props) {
+    const isOpen = (0, import_vue22.ref)(false);
+    const pos = (0, import_vue22.ref)({ top: 0, left: 0, width: 0 });
+    const triggerRef = (0, import_vue22.ref)(null);
+    const dropdownRef = (0, import_vue22.ref)(null);
+    const hasPresets = () => props.presets.length > 0;
+    const activePreset = () => props.presets.find((preset) => preset.id === props.activePresetId);
+    const open = () => {
+      if (!hasPresets()) return;
+      const rect = triggerRef.value?.getBoundingClientRect();
+      if (rect) {
+        pos.value = { top: rect.bottom + 4, left: rect.left, width: rect.width };
+      }
+      isOpen.value = true;
+    };
+    const close = () => {
+      isOpen.value = false;
+    };
+    const setDropdownRef = (node) => {
+      if (node instanceof HTMLElement) {
+        dropdownRef.value = node;
+        return;
+      }
+      if (node && typeof node === "object" && "$el" in node) {
+        const el = node.$el;
+        dropdownRef.value = el instanceof HTMLElement ? el : null;
+        return;
+      }
+      dropdownRef.value = null;
+    };
+    const toggle = () => {
+      if (isOpen.value) close();
+      else open();
+    };
+    (0, import_vue22.watch)(isOpen, (open2, _, onCleanup) => {
+      if (!open2) return;
+      const handler = (event) => {
+        const target = event.target;
+        if (triggerRef.value?.contains(target) || dropdownRef.value?.contains(target)) return;
+        close();
+      };
+      document.addEventListener("mousedown", handler);
+      onCleanup(() => {
+        document.removeEventListener("mousedown", handler);
+      });
+    });
+    const handleSelect = (presetId) => {
+      if (presetId) {
+        DialStore.loadPreset(props.panelId, presetId);
+      } else {
+        DialStore.clearActivePreset(props.panelId);
+      }
+      close();
+    };
+    const handleDelete = (event, presetId) => {
+      event.stopPropagation();
+      DialStore.deletePreset(props.panelId, presetId);
+    };
+    return () => (0, import_vue22.h)("div", { class: "dialkit-preset-manager" }, [
+      (0, import_vue22.h)("button", {
+        ref: triggerRef,
+        class: "dialkit-preset-trigger",
+        onClick: toggle,
+        "data-open": String(isOpen.value),
+        "data-has-preset": String(!!activePreset()),
+        "data-disabled": String(!hasPresets())
+      }, [
+        (0, import_vue22.h)("span", { class: "dialkit-preset-label" }, activePreset()?.name ?? "Version 1"),
+        (0, import_vue22.h)(import_motion_v7.motion.svg, {
+          class: "dialkit-select-chevron",
+          viewBox: "0 0 24 24",
+          fill: "none",
+          stroke: "currentColor",
+          "stroke-width": "2.5",
+          "stroke-linecap": "round",
+          "stroke-linejoin": "round",
+          animate: { rotate: isOpen.value ? 180 : 0, opacity: hasPresets() ? 0.6 : 0.25 },
+          transition: { type: "spring", visualDuration: 0.2, bounce: 0.15 }
+        }, [(0, import_vue22.h)("path", { d: ICON_CHEVRON })])
+      ]),
+      (0, import_vue22.h)(import_vue22.Teleport, { to: "body" }, [
+        (0, import_vue22.h)(import_motion_v7.AnimatePresence, null, {
+          default: () => isOpen.value ? [(0, import_vue22.h)(import_motion_v7.motion.div, {
+            key: "dialkit-preset-dropdown",
+            ref: setDropdownRef,
+            class: "dialkit-root dialkit-preset-dropdown",
+            style: {
+              position: "fixed",
+              top: `${pos.value.top}px`,
+              left: `${pos.value.left}px`,
+              minWidth: `${pos.value.width}px`
+            },
+            initial: { opacity: 0, y: 4, scale: 0.97 },
+            animate: { opacity: 1, y: 0, scale: 1 },
+            exit: { opacity: 0, y: 4, scale: 0.97, pointerEvents: "none" },
+            transition: { type: "spring", visualDuration: 0.15, bounce: 0 }
+          }, [
+            (0, import_vue22.h)("div", {
+              class: "dialkit-preset-item",
+              "data-active": String(!props.activePresetId),
+              onClick: () => handleSelect(null)
+            }, [(0, import_vue22.h)("span", { class: "dialkit-preset-name" }, "Version 1")]),
+            ...props.presets.map((preset) => (0, import_vue22.h)("div", {
+              key: preset.id,
+              class: "dialkit-preset-item",
+              "data-active": String(preset.id === props.activePresetId),
+              onClick: () => handleSelect(preset.id)
+            }, [
+              (0, import_vue22.h)("span", { class: "dialkit-preset-name" }, preset.name),
+              (0, import_vue22.h)("button", {
+                class: "dialkit-preset-delete",
+                onClick: (event) => handleDelete(event, preset.id),
+                title: "Delete preset"
+              }, [
+                (0, import_vue22.h)("svg", {
+                  viewBox: "0 0 24 24",
+                  fill: "none",
+                  stroke: "currentColor",
+                  "stroke-width": "2",
+                  "stroke-linecap": "round",
+                  "stroke-linejoin": "round"
+                }, ICON_TRASH.map((d) => (0, import_vue22.h)("path", { d })))
+              ])
+            ]))
+          ])] : []
+        })
+      ])
+    ]);
+  }
+});
+
 // src/vue/components/Panel.ts
-var Panel = (0, import_vue22.defineComponent)({
+var Panel = (0, import_vue23.defineComponent)({
   name: "DialKitPanel",
   props: {
     panel: {
@@ -5161,25 +5640,26 @@ var Panel = (0, import_vue22.defineComponent)({
     inline: {
       type: Boolean,
       default: false
-    }
+    },
+    // Extra toolbar node injected after the built-in preset/copy controls —
+    // used to surface the timeline visibility toggle in the panel header.
+    toolbarExtra: Function
   },
   setup(props) {
-    const shortcutCtx = useShortcutContext();
-    const values = (0, import_vue22.ref)(DialStore.getValues(props.panel.id));
-    const presets = (0, import_vue22.ref)(DialStore.getPresets(props.panel.id));
-    const activePresetId = (0, import_vue22.ref)(DialStore.getActivePresetId(props.panel.id));
-    const copied = (0, import_vue22.ref)(false);
-    const hasShortcuts = () => Object.keys(DialStore.getPanel(props.panel.id)?.shortcuts ?? {}).length > 0;
+    const values = (0, import_vue23.ref)(DialStore.getValues(props.panel.id));
+    const presets = (0, import_vue23.ref)(DialStore.getPresets(props.panel.id));
+    const activePresetId = (0, import_vue23.ref)(DialStore.getActivePresetId(props.panel.id));
+    const copied = (0, import_vue23.ref)(false);
     let unsubscribe;
     let copiedTimeout = null;
-    (0, import_vue22.onMounted)(() => {
+    (0, import_vue23.onMounted)(() => {
       unsubscribe = DialStore.subscribe(props.panel.id, () => {
         values.value = DialStore.getValues(props.panel.id);
         presets.value = DialStore.getPresets(props.panel.id);
         activePresetId.value = DialStore.getActivePresetId(props.panel.id);
       });
     });
-    (0, import_vue22.onUnmounted)(() => {
+    (0, import_vue23.onUnmounted)(() => {
       unsubscribe?.();
       if (copiedTimeout) {
         window.clearTimeout(copiedTimeout);
@@ -5212,177 +5692,58 @@ Apply these values as the new defaults in the useDialKit call.`;
         copied.value = false;
       }, 1500);
     };
-    const renderControl = (control) => {
-      const value = values.value[control.path];
-      switch (control.type) {
-        case "slider":
-          return (0, import_vue22.h)(Slider, {
-            key: control.path,
-            label: control.label,
-            value,
-            min: control.min,
-            max: control.max,
-            step: control.step,
-            shortcut: control.shortcut,
-            shortcutActive: shortcutCtx.activePanelId.value === props.panel.id && shortcutCtx.activePath.value === control.path,
-            onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
-          });
-        case "range":
-          return (0, import_vue22.h)(RangeSlider, {
-            key: control.path,
-            label: control.label,
-            value,
-            min: control.min ?? 0,
-            max: control.max ?? 1,
-            step: control.step,
-            defaultValue: control.rangeDefault,
-            onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
-          });
-        case "toggle":
-          return (0, import_vue22.h)(Toggle, {
-            key: control.path,
-            label: control.label,
-            checked: value,
-            shortcut: control.shortcut,
-            shortcutActive: shortcutCtx.activePanelId.value === props.panel.id && shortcutCtx.activePath.value === control.path,
-            onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
-          });
-        case "spring":
-          return (0, import_vue22.h)(SpringControl, {
-            key: control.path,
-            panelId: props.panel.id,
-            path: control.path,
-            label: control.label,
-            spring: value,
-            onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
-          });
-        case "transition":
-          return (0, import_vue22.h)(TransitionControl, {
-            key: control.path,
-            panelId: props.panel.id,
-            path: control.path,
-            label: control.label,
-            value,
-            onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
-          });
-        case "folder":
-          return (0, import_vue22.h)(Folder, {
-            key: control.path,
-            title: control.label,
-            defaultOpen: control.defaultOpen ?? true
-          }, {
-            default: () => (control.children ?? []).map(renderControl)
-          });
-        case "text":
-          return (0, import_vue22.h)(TextControl, {
-            key: control.path,
-            label: control.label,
-            value,
-            placeholder: control.placeholder,
-            onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
-          });
-        case "select":
-          return (0, import_vue22.h)(SelectControl, {
-            key: control.path,
-            label: control.label,
-            value,
-            options: control.options ?? [],
-            onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
-          });
-        case "color":
-          return (0, import_vue22.h)(ColorControl, {
-            key: control.path,
-            label: control.label,
-            value,
-            alpha: control.alpha,
-            palette: control.palette,
-            onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
-          });
-        case "gradient":
-          return (0, import_vue22.h)(GradientControl, {
-            key: control.path,
-            label: control.label,
-            value,
-            onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
-          });
-        case "xy":
-          return (0, import_vue22.h)(XYControl, {
-            key: control.path,
-            label: control.label,
-            value,
-            x: control.xAxis,
-            y: control.yAxis,
-            grid: control.grid,
-            density: control.density,
-            snap: control.snap,
-            returnToCenter: control.returnToCenter,
-            showValues: control.showValues,
-            shortcut: control.shortcut,
-            shortcutActive: shortcutCtx.activePanelId.value === props.panel.id && shortcutCtx.activePath.value === control.path,
-            onChange: (next) => DialStore.updateValue(props.panel.id, control.path, next)
-          });
-        case "action":
-          return (0, import_vue22.h)("button", {
-            key: control.path,
-            class: "dialkit-button",
-            onClick: () => DialStore.triggerAction(props.panel.id, control.path)
-          }, control.label);
-        default:
-          return null;
-      }
-    };
     return () => {
-      const toolbarNode = (0, import_vue22.h)(import_vue22.Fragment, null, [
-        (0, import_vue22.h)(import_motion_v8.motion.button, {
+      const toolbarNode = (0, import_vue23.h)(import_vue23.Fragment, null, [
+        (0, import_vue23.h)(import_motion_v8.motion.button, {
           class: "dialkit-toolbar-add",
           onClick: handleAddPreset,
           title: "Add preset",
           whilePress: { scale: 0.9 },
           transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 }
         }, [
-          (0, import_vue22.h)("svg", {
+          (0, import_vue23.h)("svg", {
             viewBox: "0 0 24 24",
             fill: "none",
             stroke: "currentColor",
             "stroke-width": "2.5",
             "stroke-linecap": "round",
             "stroke-linejoin": "round"
-          }, ICON_ADD_PRESET.map((d) => (0, import_vue22.h)("path", { d })))
+          }, ICON_ADD_PRESET.map((d) => (0, import_vue23.h)("path", { d })))
         ]),
-        (0, import_vue22.h)(PresetManager, {
+        (0, import_vue23.h)(PresetManager, {
           panelId: props.panel.id,
           presets: presets.value,
           activePresetId: activePresetId.value
         }),
-        (0, import_vue22.h)(import_motion_v8.motion.button, {
+        (0, import_vue23.h)(import_motion_v8.motion.button, {
           class: "dialkit-toolbar-copy",
           onClick: handleCopy,
           title: "Copy parameters",
           whilePress: { scale: 0.95 },
           transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 }
         }, [
-          (0, import_vue22.h)("span", { class: "dialkit-toolbar-copy-icon-wrap" }, [
-            (0, import_vue22.h)("span", {
+          (0, import_vue23.h)("span", { class: "dialkit-toolbar-copy-icon-wrap" }, [
+            (0, import_vue23.h)("span", {
               class: "dialkit-toolbar-copy-icon",
               style: { opacity: copied.value ? 0 : 1, transition: "opacity 120ms ease" }
             }, [
-              (0, import_vue22.h)("svg", {
+              (0, import_vue23.h)("svg", {
                 viewBox: "0 0 24 24",
                 fill: "none",
                 width: 16,
                 height: 16
               }, [
-                (0, import_vue22.h)("path", {
+                (0, import_vue23.h)("path", {
                   d: ICON_CLIPBOARD.board,
                   stroke: "currentColor",
                   "stroke-width": 2,
                   "stroke-linejoin": "round"
                 }),
-                (0, import_vue22.h)("path", {
+                (0, import_vue23.h)("path", {
                   d: ICON_CLIPBOARD.sparkle,
                   fill: "currentColor"
                 }),
-                (0, import_vue22.h)("path", {
+                (0, import_vue23.h)("path", {
                   d: ICON_CLIPBOARD.body,
                   stroke: "currentColor",
                   "stroke-width": 2,
@@ -5391,8 +5752,8 @@ Apply these values as the new defaults in the useDialKit call.`;
                 })
               ])
             ]),
-            (0, import_vue22.h)(import_motion_v8.AnimatePresence, { initial: false, mode: "popLayout" }, {
-              default: () => copied.value ? [(0, import_vue22.h)(import_motion_v8.motion.span, {
+            (0, import_vue23.h)(import_motion_v8.AnimatePresence, { initial: false, mode: "popLayout" }, {
+              default: () => copied.value ? [(0, import_vue23.h)(import_motion_v8.motion.span, {
                 key: "check",
                 class: "dialkit-toolbar-copy-icon",
                 initial: { scale: 0.5, opacity: 0 },
@@ -5400,7 +5761,7 @@ Apply these values as the new defaults in the useDialKit call.`;
                 exit: { scale: 0.5, opacity: 0 },
                 transition: { type: "spring", visualDuration: 0.3, bounce: 0.2 }
               }, [
-                (0, import_vue22.h)("svg", {
+                (0, import_vue23.h)("svg", {
                   viewBox: "0 0 24 24",
                   fill: "none",
                   stroke: "currentColor",
@@ -5409,23 +5770,127 @@ Apply these values as the new defaults in the useDialKit call.`;
                   "stroke-linejoin": "round",
                   width: 16,
                   height: 16
-                }, [(0, import_vue22.h)("path", { d: ICON_CHECK })])
+                }, [(0, import_vue23.h)("path", { d: ICON_CHECK })])
               ])] : []
             })
           ]),
           "Copy"
-        ])
+        ]),
+        props.toolbarExtra?.()
       ]);
-      return (0, import_vue22.h)("div", { class: "dialkit-panel-wrapper" }, [
-        (0, import_vue22.h)(Folder, {
+      return (0, import_vue23.h)("div", { class: "dialkit-panel-wrapper" }, [
+        (0, import_vue23.h)(Folder, {
           title: props.panel.name,
           defaultOpen: props.defaultOpen,
           isRoot: true,
           inline: props.inline,
           toolbar: () => toolbarNode
         }, {
-          default: () => props.panel.controls.map(renderControl)
+          default: () => [
+            (0, import_vue23.h)(ControlRenderer, {
+              panelId: props.panel.id,
+              controls: props.panel.controls,
+              values: values.value
+            })
+          ]
         })
+      ]);
+    };
+  }
+});
+
+// src/vue/components/Timeline/TimelineToggleButton.ts
+var import_vue24 = require("vue");
+
+// src/store/TimelineUiStore.ts
+var TimelineUiStoreClass = class {
+  constructor() {
+    this.visible = true;
+    this.initialized = false;
+    this.controllers = /* @__PURE__ */ new Map();
+    this.listeners = /* @__PURE__ */ new Set();
+  }
+  getVisible() {
+    for (const controller of this.controllers.values()) {
+      if (controller.visible !== void 0) return controller.visible;
+    }
+    return this.visible;
+  }
+  registerController(id, controller) {
+    const previous = this.getVisible();
+    if (!this.initialized) {
+      this.visible = controller.defaultVisible;
+      this.initialized = true;
+    }
+    this.controllers.set(id, controller);
+    if (previous !== this.getVisible()) this.notify();
+    return () => {
+      const before = this.getVisible();
+      this.controllers.delete(id);
+      if (this.controllers.size === 0) this.initialized = false;
+      if (before !== this.getVisible()) this.notify();
+    };
+  }
+  updateController(id, controller) {
+    if (!this.controllers.has(id)) return;
+    const previous = this.getVisible();
+    this.controllers.set(id, controller);
+    if (previous !== this.getVisible()) this.notify();
+  }
+  requestVisible(visible) {
+    const current = this.getVisible();
+    if (current === visible) return;
+    const controlled = Array.from(this.controllers.values()).filter(
+      (controller) => controller.visible !== void 0
+    );
+    if (controlled.length > 0) {
+      controlled.forEach((controller) => controller.onVisibilityChange?.(visible));
+      return;
+    }
+    this.visible = visible;
+    this.controllers.forEach((controller) => controller.onVisibilityChange?.(visible));
+    this.notify();
+  }
+  toggle() {
+    this.requestVisible(!this.getVisible());
+  }
+  subscribe(listener) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+  notify() {
+    this.listeners.forEach((listener) => listener());
+  }
+};
+var TimelineUiStore = /* @__PURE__ */ new TimelineUiStoreClass();
+
+// src/vue/components/Timeline/TimelineToggleButton.ts
+var TimelineToggleButton = (0, import_vue24.defineComponent)({
+  name: "DialKitTimelineToggleButton",
+  setup() {
+    const visible = (0, import_vue24.ref)(TimelineUiStore.getVisible());
+    let unsubscribe;
+    (0, import_vue24.onMounted)(() => {
+      unsubscribe = TimelineUiStore.subscribe(() => {
+        visible.value = TimelineUiStore.getVisible();
+      });
+    });
+    (0, import_vue24.onUnmounted)(() => unsubscribe?.());
+    return () => {
+      const label = visible.value ? "Hide timeline" : "Show timeline";
+      return (0, import_vue24.h)("button", {
+        class: "dialkit-toolbar-add dialkit-timeline-toolbar-toggle",
+        "data-active": visible.value || void 0,
+        "aria-pressed": visible.value,
+        "aria-label": label,
+        title: label,
+        onClick: () => TimelineUiStore.toggle()
+      }, [
+        (0, import_vue24.h)(
+          "svg",
+          { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true" },
+          ICON_TIMELINE.map((path) => (0, import_vue24.h)("path", { d: path, fill: "currentColor" }))
+        )
       ]);
     };
   }
@@ -5434,7 +5899,7 @@ Apply these values as the new defaults in the useDialKit call.`;
 // src/vue/components/DialRoot.ts
 var import_meta = {};
 var isDevDefault = typeof process !== "undefined" && process?.env?.NODE_ENV ? process.env.NODE_ENV !== "production" : typeof import_meta !== "undefined" && import_meta.env?.MODE ? import_meta.env.MODE !== "production" : true;
-var DialRoot = (0, import_vue23.defineComponent)({
+var DialRoot = (0, import_vue25.defineComponent)({
   name: "DialKitDialRoot",
   props: {
     position: {
@@ -5459,41 +5924,64 @@ var DialRoot = (0, import_vue23.defineComponent)({
     }
   },
   setup(props) {
-    const panels = (0, import_vue23.ref)([]);
-    const mounted = (0, import_vue23.ref)(false);
-    let unsubscribe;
-    (0, import_vue23.onMounted)(() => {
+    const panels = (0, import_vue25.ref)([]);
+    const timelines = (0, import_vue25.ref)([]);
+    const mounted = (0, import_vue25.ref)(false);
+    let unsubscribePanels;
+    let unsubscribeTimelines;
+    (0, import_vue25.onMounted)(() => {
       mounted.value = true;
-      panels.value = DialStore.getPanels();
-      unsubscribe = DialStore.subscribeGlobal(() => {
-        panels.value = DialStore.getPanels();
+      panels.value = DialStore.getPanels("panel");
+      timelines.value = TimelineStore.getTimelines();
+      unsubscribePanels = DialStore.subscribeGlobal(() => {
+        panels.value = DialStore.getPanels("panel");
+      });
+      unsubscribeTimelines = TimelineStore.subscribeGlobal(() => {
+        timelines.value = TimelineStore.getTimelines();
       });
     });
-    (0, import_vue23.onUnmounted)(() => {
-      unsubscribe?.();
+    (0, import_vue25.onUnmounted)(() => {
+      unsubscribePanels?.();
+      unsubscribeTimelines?.();
     });
-    const renderContent = () => (0, import_vue23.h)(ShortcutListener, null, {
-      default: () => (0, import_vue23.h)("div", { class: "dialkit-root", "data-mode": props.mode, "data-theme": props.theme }, [
-        (0, import_vue23.h)("div", {
+    const timelineToggle = () => timelines.value.length > 0 ? (0, import_vue25.h)(TimelineToggleButton) : null;
+    const renderPanels = () => {
+      if (panels.value.length === 0) {
+        return [(0, import_vue25.h)("div", { class: "dialkit-panel-wrapper" }, [
+          (0, import_vue25.h)(Folder, {
+            title: "DialKit",
+            defaultOpen: props.mode === "inline" || props.defaultOpen,
+            isRoot: true,
+            inline: props.mode === "inline",
+            toolbar: () => (0, import_vue25.h)(TimelineToggleButton)
+          }, { default: () => [(0, import_vue25.h)("div", { class: "dialkit-timeline-toolkit-only" }, "Timeline")] })
+        ])];
+      }
+      return panels.value.map((panel) => (0, import_vue25.h)(Panel, {
+        key: panel.id,
+        panel,
+        defaultOpen: props.mode === "inline" || props.defaultOpen,
+        inline: props.mode === "inline",
+        toolbarExtra: timelineToggle
+      }));
+    };
+    const renderContent = () => (0, import_vue25.h)(ShortcutListener, null, {
+      default: () => (0, import_vue25.h)("div", { class: "dialkit-root", "data-mode": props.mode, "data-theme": props.theme }, [
+        (0, import_vue25.h)("div", {
           class: "dialkit-panel",
           "data-position": props.mode === "inline" ? void 0 : props.position,
           "data-mode": props.mode
-        }, panels.value.map((panel) => (0, import_vue23.h)(Panel, {
-          key: panel.id,
-          panel,
-          defaultOpen: props.mode === "inline" || props.defaultOpen,
-          inline: props.mode === "inline"
-        })))
+        }, renderPanels())
       ])
     });
     return () => {
-      if (!props.productionEnabled || !mounted.value || typeof window === "undefined" || panels.value.length === 0) {
+      if (!props.productionEnabled || !mounted.value || typeof window === "undefined" || panels.value.length === 0 && timelines.value.length === 0) {
         return null;
       }
       if (props.mode === "inline") {
         return renderContent();
       }
-      return (0, import_vue23.h)(import_vue23.Teleport, { to: "body" }, renderContent());
+      return (0, import_vue25.h)(import_vue25.Teleport, { to: "body" }, renderContent());
     };
   }
 });
@@ -5511,14 +5999,14 @@ function mountDialRoot(el, value) {
   if (typeof window === "undefined") return;
   const host = document.createElement("div");
   el.appendChild(host);
-  const props = (0, import_vue24.shallowRef)(normalizeDirectiveValue(value));
-  const RootHost = (0, import_vue24.defineComponent)({
+  const props = (0, import_vue26.shallowRef)(normalizeDirectiveValue(value));
+  const RootHost = (0, import_vue26.defineComponent)({
     name: "DialKitDirectiveHost",
     setup() {
-      return () => (0, import_vue24.h)(DialRoot, props.value);
+      return () => (0, import_vue26.h)(DialRoot, props.value);
     }
   });
-  const app = (0, import_vue24.createApp)(RootHost);
+  const app = (0, import_vue26.createApp)(RootHost);
   app.mount(host);
   states.set(el, { app, host, props });
 }
@@ -5546,8 +6034,2199 @@ var vDialKit = {
   }
 };
 
+// src/vue/useDialTimeline.ts
+var import_vue27 = require("vue");
+
+// src/transition-math.ts
+function round22(value) {
+  return Math.round(value * 100) / 100;
+}
+function clamp5(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+function isTransitionConfig(value) {
+  return isSpringConfigValue(value) || isEasingConfigValue(value);
+}
+function isPhysicsSpring(transition) {
+  return transition.type === "spring" && (transition.stiffness !== void 0 || transition.damping !== void 0 || transition.mass !== void 0);
+}
+function springParams(spring) {
+  if (isPhysicsSpring(spring)) {
+    return { stiffness: spring.stiffness ?? 200, damping: spring.damping ?? 25, mass: spring.mass ?? 1 };
+  }
+  const visualDuration = Math.max(0.05, spring.visualDuration ?? 0.3);
+  const bounce = spring.bounce ?? 0.3;
+  const root = 2 * Math.PI / (visualDuration * 1.2);
+  const stiffness = root * root;
+  const damping = 2 * Math.min(1, Math.max(0.05, 1 - bounce)) * Math.sqrt(stiffness);
+  return { stiffness, damping, mass: 1 };
+}
+function springProgress(t, { stiffness, damping, mass }) {
+  if (t <= 0) return 0;
+  const w0 = Math.sqrt(stiffness / mass);
+  const zeta = damping / (2 * Math.sqrt(stiffness * mass));
+  if (zeta < 0.9999) {
+    const wd2 = w0 * Math.sqrt(1 - zeta * zeta);
+    return 1 - Math.exp(-zeta * w0 * t) * (Math.cos(wd2 * t) + zeta * w0 / wd2 * Math.sin(wd2 * t));
+  }
+  if (zeta < 1.0001) {
+    return 1 - Math.exp(-w0 * t) * (1 + w0 * t);
+  }
+  const wd = w0 * Math.sqrt(zeta * zeta - 1);
+  const r1 = -zeta * w0 + wd;
+  const r2 = -zeta * w0 - wd;
+  return 1 + (r2 * Math.exp(r1 * t) - r1 * Math.exp(r2 * t)) / (r1 - r2);
+}
+function springSettleDuration(params) {
+  const w0 = Math.sqrt(params.stiffness / params.mass);
+  const zeta = params.damping / (2 * Math.sqrt(params.stiffness * params.mass));
+  const decay = zeta >= 1 ? zeta * w0 - w0 * Math.sqrt(Math.max(0, zeta * zeta - 1)) : zeta * w0;
+  const duration = Math.log(200) / Math.max(decay, 1e-6);
+  return round22(clamp5(duration, 0.05, 10));
+}
+function cubicBezierProgress(p, [x1, y1, x2, y2]) {
+  if (p <= 0) return 0;
+  if (p >= 1) return 1;
+  const sampleX = (t2) => bezierAxis(t2, x1, x2);
+  const sampleY = (t2) => bezierAxis(t2, y1, y2);
+  let t = p;
+  for (let i = 0; i < 8; i++) {
+    const x = sampleX(t) - p;
+    if (Math.abs(x) < 1e-5) return sampleY(t);
+    const dx = bezierAxisDerivative(t, x1, x2);
+    if (Math.abs(dx) < 1e-6) break;
+    t -= x / dx;
+  }
+  let lo = 0;
+  let hi = 1;
+  t = p;
+  while (hi - lo > 1e-5) {
+    if (sampleX(t) < p) lo = t;
+    else hi = t;
+    t = (lo + hi) / 2;
+  }
+  return sampleY(t);
+}
+function bezierAxis(t, a1, a2) {
+  return (1 - 3 * a2 + 3 * a1) * t * t * t + (3 * a2 - 6 * a1) * t * t + 3 * a1 * t;
+}
+function bezierAxisDerivative(t, a1, a2) {
+  return 3 * (1 - 3 * a2 + 3 * a1) * t * t + 2 * (3 * a2 - 6 * a1) * t + 3 * a1;
+}
+function resolveClipTransition(raw, clipDuration) {
+  const safeDuration = Math.max(0.05, clipDuration);
+  if (raw.type === "easing") {
+    return {
+      transition: { ...raw, duration: safeDuration },
+      duration: safeDuration,
+      isPhysics: false
+    };
+  }
+  if (isPhysicsSpring(raw)) {
+    return {
+      transition: raw,
+      duration: springSettleDuration(springParams(raw)),
+      isPhysics: true
+    };
+  }
+  return {
+    transition: { type: "spring", bounce: raw.bounce ?? 0.2, visualDuration: safeDuration },
+    duration: safeDuration,
+    isPhysics: false
+  };
+}
+
+// src/timeline-core.ts
+var CLIP_VALUE_STEP = 0.01;
+var TIMELINE_MIN_CLIP_DURATION = 0.05;
+var DEFAULT_STEP_DURATION = 0.3;
+var DEFAULT_CLIP_TRANSITION = { type: "spring", bounce: 0.2 };
+var RESERVED_KEYS = /* @__PURE__ */ new Set(["time", "playing", "duration", "play", "pause", "replay", "seek"]);
+function isClipConfig(value) {
+  return isPlainObject(value) && Number.isFinite(value.at);
+}
+function isGroupConfig(value) {
+  if (!isPlainObject(value) || "at" in value) return false;
+  const entries = Object.values(value);
+  return entries.length > 0 && entries.some(isClipConfig);
+}
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function nonNegativeFinite(value, fallback = 0) {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : fallback;
+}
+function animatedDuration(value, fallback = DEFAULT_STEP_DURATION) {
+  return Math.max(TIMELINE_MIN_CLIP_DURATION, nonNegativeFinite(value, fallback));
+}
+function transitionDefaultDuration(transition) {
+  if (transition.type === "easing") return animatedDuration(transition.duration);
+  if (isPhysicsSpring(transition)) {
+    return animatedDuration(springSettleDuration(springParams(transition)));
+  }
+  if (transition.visualDuration !== void 0) return animatedDuration(transition.visualDuration);
+  return animatedDuration(springSettleDuration(springParams(transition)));
+}
+function defaultStepDuration(step, inheritedTransition) {
+  const curve = step.transition ?? inheritedTransition;
+  if (curve && isPhysicsSpring(curve)) return transitionDefaultDuration(curve);
+  if (step.duration !== void 0) return animatedDuration(step.duration);
+  if (step.transition) return transitionDefaultDuration(step.transition);
+  return DEFAULT_STEP_DURATION;
+}
+function defaultTrackDuration(track, inheritedTransition) {
+  const curve = track.transition ?? inheritedTransition;
+  if (track.steps?.length) {
+    return track.steps.reduce((sum, step) => sum + defaultStepDuration(step, curve), 0);
+  }
+  if (curve && isPhysicsSpring(curve)) return transitionDefaultDuration(curve);
+  if (track.duration !== void 0) return animatedDuration(track.duration);
+  if (track.transition) return transitionDefaultDuration(track.transition);
+  return DEFAULT_STEP_DURATION;
+}
+function defaultClipDuration(clip) {
+  const defaultCurve = isTransitionConfig(clip.transition) ? clip.transition : DEFAULT_CLIP_TRANSITION;
+  if (clip.props) {
+    return Object.values(clip.props).reduce(
+      (max, track) => Math.max(
+        max,
+        nonNegativeFinite(track.delay) + defaultTrackDuration(track, defaultCurve)
+      ),
+      0
+    );
+  }
+  if (clip.steps?.length) {
+    return clip.steps.reduce((sum, step) => sum + defaultStepDuration(step, defaultCurve), 0);
+  }
+  const animating = Boolean(clip.transition || clip.from || clip.to);
+  if (!animating) return nonNegativeFinite(clip.duration);
+  if (isPhysicsSpring(defaultCurve)) return transitionDefaultDuration(defaultCurve);
+  if (clip.duration !== void 0) return animatedDuration(clip.duration);
+  if (isTransitionConfig(clip.transition)) return transitionDefaultDuration(clip.transition);
+  return clip.from || clip.to ? transitionDefaultDuration(DEFAULT_CLIP_TRANSITION) : 0;
+}
+function normalizeLoopMode(value) {
+  if (value === true || value === "mirror" || value === "repeat") return "repeat";
+  return "off";
+}
+function normalizeStoredTransition(transition, clipDuration) {
+  if (transition.type === "easing") {
+    return { ...transition, duration: clipDuration };
+  }
+  if (isPhysicsSpring(transition)) {
+    return transition;
+  }
+  return { type: "spring", bounce: transition.bounce ?? 0.2 };
+}
+function collectClipEntries(config) {
+  const entries = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key === "duration") continue;
+    if (RESERVED_KEYS.has(key)) {
+      console.warn(`[dialkit] Timeline key "${key}" collides with a reserved key and was skipped.`);
+      continue;
+    }
+    if (isClipConfig(value)) {
+      entries.push({ path: key, childKey: key, clip: value });
+    } else if (isGroupConfig(value)) {
+      for (const [childKey, childClip] of Object.entries(value)) {
+        if (isClipConfig(childClip)) {
+          entries.push({ path: `${key}.${childKey}`, childKey, group: key, clip: childClip });
+        } else {
+          console.warn(
+            `[dialkit] Timeline clip "${key}.${childKey}" is missing a numeric "at" and was skipped.`
+          );
+        }
+      }
+    } else {
+      console.warn(
+        `[dialkit] Timeline entry "${key}" is neither a clip (needs a numeric "at") nor a group of clips and was skipped.`
+      );
+    }
+  }
+  return entries;
+}
+function definedValues(values) {
+  if (!values) return void 0;
+  const result = {};
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== void 0) result[key] = value;
+  }
+  return result;
+}
+function setDialPath(dialConfig, path, value) {
+  const segments = path.split(".");
+  let node = dialConfig;
+  for (const segment of segments.slice(0, -1)) {
+    node = node[segment] ?? (node[segment] = {});
+  }
+  node[segments[segments.length - 1]] = value;
+}
+function parseTimelineConfig(config) {
+  const entries = collectClipEntries(config);
+  let maxEnd = 0;
+  for (const { clip } of entries) {
+    maxEnd = Math.max(maxEnd, nonNegativeFinite(clip.at) + defaultClipDuration(clip));
+  }
+  const duration = typeof config.duration === "number" && Number.isFinite(config.duration) && config.duration > 0 ? config.duration : maxEnd > 0 ? Math.ceil(maxEnd * 100 - 1e-4) / 100 : 1;
+  const dialConfig = {};
+  const clips = [];
+  entries.forEach(({ path, childKey, group, clip }, index) => {
+    const raw = clip;
+    if (raw.props && (raw.steps?.length || raw.from || raw.to)) {
+      console.warn(
+        `[dialkit] Timeline clip "${path}": "props" is mutually exclusive with from/to/steps \u2014 using "props".`
+      );
+    } else if (raw.steps?.length && raw.to) {
+      console.warn(
+        `[dialkit] Timeline clip "${path}": "to" is ignored when "steps" is present \u2014 each leg's "to" defines its targets.`
+      );
+    }
+    const hasSteps = Boolean(clip.steps?.length) && !clip.props;
+    const hasProps = Boolean(clip.props);
+    const single = isTransitionConfig(clip.transition) ? clip.transition : void 0;
+    const total = defaultClipDuration(clip);
+    const defaultCurve = single ?? DEFAULT_CLIP_TRANSITION;
+    const clipAt = nonNegativeFinite(clip.at);
+    const clipDial = {
+      at: [clipAt, 0, duration, CLIP_VALUE_STEP]
+    };
+    if (!hasSteps && !hasProps) {
+      clipDial.duration = [total, 0, duration, CLIP_VALUE_STEP];
+    }
+    if (!hasSteps && !hasProps && (clip.transition || clip.from || clip.to)) {
+      clipDial.transition = normalizeStoredTransition(defaultCurve, total);
+    }
+    let tracks;
+    if (clip.props) {
+      tracks = [];
+      for (const [prop, track] of Object.entries(clip.props)) {
+        if (TRACK_RESERVED.has(prop) || /^step\d+$/.test(prop)) {
+          console.warn(`[dialkit] Timeline property "${prop}" collides with a clip field and was skipped.`);
+          continue;
+        }
+        const trackDuration = defaultTrackDuration(track, defaultCurve);
+        const trackCurve = track.transition ?? defaultCurve;
+        const hasTrackSteps = Boolean(track.steps?.length);
+        const trackDial = {
+          delay: [nonNegativeFinite(track.delay), 0, duration, CLIP_VALUE_STEP]
+        };
+        if (!hasTrackSteps) {
+          trackDial.duration = [trackDuration, 0, duration, CLIP_VALUE_STEP];
+          trackDial.transition = normalizeStoredTransition(trackCurve, trackDuration);
+        }
+        const fromValue = track.from ?? (hasTrackSteps ? void 0 : track.to);
+        if (hasTrackSteps && fromValue === void 0) {
+          console.warn(
+            `[dialkit] Timeline clip "${path}": track "${prop}" has steps but no "from" \u2014 declare its starting value.`
+          );
+        }
+        if (fromValue !== void 0) {
+          trackDial.from = scalarDial(prop, fromValue, hasTrackSteps ? track.steps[0]?.to : track.to);
+        }
+        if (!hasTrackSteps && track.to !== void 0) {
+          trackDial.to = scalarDial(prop, track.to, fromValue);
+        }
+        let trackStepKeys;
+        if (hasTrackSteps) {
+          trackStepKeys = [];
+          let previous = fromValue;
+          track.steps.forEach((step, stepIndex) => {
+            const stepKey = `step${stepIndex + 1}`;
+            trackStepKeys.push(stepKey);
+            const stepDuration = defaultStepDuration(step, trackCurve);
+            const stepDial = {
+              duration: [stepDuration, 0, duration, CLIP_VALUE_STEP],
+              transition: normalizeStoredTransition(step.transition ?? trackCurve, stepDuration)
+            };
+            if (step.to !== void 0) {
+              stepDial.to = scalarDial(prop, step.to, previous);
+              previous = step.to;
+            }
+            trackDial[stepKey] = stepDial;
+          });
+        }
+        clipDial[prop] = trackDial;
+        tracks.push({ prop, stepKeys: trackStepKeys });
+      }
+    }
+    if (clip.from && !hasProps) {
+      clipDial.from = withFromToRanges(
+        clip.from,
+        hasSteps ? definedValues(clip.steps[0]?.to) : clip.to
+      );
+    }
+    if (!hasSteps && !hasProps && clip.to) {
+      clipDial.to = withFromToRanges(clip.to, clip.from);
+    }
+    let stepKeys;
+    if (hasSteps) {
+      stepKeys = [];
+      let running = clip.from;
+      clip.steps.forEach((step, stepIndex) => {
+        const stepKey = `step${stepIndex + 1}`;
+        stepKeys.push(stepKey);
+        const stepDuration = defaultStepDuration(step, defaultCurve);
+        const stepDial = {
+          duration: [stepDuration, 0, duration, CLIP_VALUE_STEP],
+          transition: normalizeStoredTransition(step.transition ?? defaultCurve, stepDuration)
+        };
+        const stepTo = definedValues(step.to);
+        if (stepTo) {
+          for (const prop of Object.keys(stepTo)) {
+            if (!running || !(prop in running)) {
+              console.warn(
+                `[dialkit] Timeline clip "${path}": property "${prop}" first animates in step ${stepIndex + 1} with no starting value \u2014 declare it in "from".`
+              );
+            }
+          }
+          stepDial.to = withFromToRanges(stepTo, running);
+        }
+        clipDial[stepKey] = stepDial;
+        running = { ...running ?? {}, ...stepTo ?? {} };
+      });
+    }
+    setDialPath(dialConfig, path, clipDial);
+    clips.push({
+      key: path,
+      label: formatLabel(childKey),
+      color: TIMELINE_CLIP_COLORS[index % TIMELINE_CLIP_COLORS.length],
+      loop: normalizeLoopMode(clip.loop),
+      group,
+      stepKeys,
+      tracks
+    });
+  });
+  return { duration, dialConfig, clips };
+}
+var TRACK_RESERVED = /* @__PURE__ */ new Set(["at", "duration", "loop", "from", "to", "transition", "delay"]);
+function scalarDial(prop, value, counterpart) {
+  const record = withFromToRanges(
+    { [prop]: value },
+    counterpart === void 0 ? void 0 : { [prop]: counterpart }
+  );
+  return record[prop];
+}
+var FROM_TO_RANGE_PRESETS = [
+  [/^(x|y|z|tx|ty|offsetx|offsety|translatex|translatey)$/i, { min: -100, max: 100, step: 1 }],
+  [/rotat|angle|skew/i, { min: -180, max: 180, step: 1 }],
+  [/^scale/i, { min: 0, max: 2, step: 0.01 }],
+  [/opacity|alpha/i, { min: 0, max: 1, step: 0.01 }],
+  [/blur|radius|spread/i, { min: 0, max: 100, step: 1 }]
+];
+function inferFromToRange(key, value, counterpart) {
+  const lo = Math.min(value, counterpart ?? value);
+  const hi = Math.max(value, counterpart ?? value);
+  const preset = FROM_TO_RANGE_PRESETS.find(([pattern]) => pattern.test(key))?.[1];
+  if (preset) {
+    return [value, Math.min(preset.min, lo), Math.max(preset.max, hi), preset.step];
+  }
+  if (lo >= 0 && hi <= 1) {
+    return [value, 0, 1, 0.01];
+  }
+  const extent = Math.max(Math.abs(lo), Math.abs(hi), 1);
+  const min = lo < 0 ? -extent * 2 : 0;
+  const max = Math.max(extent * 2, hi);
+  return [value, min, max, inferStep(min, max)];
+}
+function withFromToRanges(config, counterpart) {
+  const result = {};
+  for (const [key, value] of Object.entries(config)) {
+    const other = counterpart?.[key];
+    if (typeof value === "number") {
+      result[key] = inferFromToRange(key, value, typeof other === "number" ? other : void 0);
+    } else if (isPlainObject(value) && !("type" in value)) {
+      result[key] = withFromToRanges(
+        value,
+        isPlainObject(other) && !("type" in other) ? other : void 0
+      );
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+function curveStatic(transition, duration) {
+  if (!transition) return { duration };
+  if (transition.type === "easing") return { duration, ease: transition.ease };
+  const spring = springParams(transition);
+  return { duration, spring, settle: springSettleDuration(spring) };
+}
+function sampleCurve(curve, elapsed) {
+  if (elapsed <= 0) return 0;
+  if (curve.spring) {
+    if (curve.settle !== void 0 && elapsed >= curve.settle) return 1;
+    return springProgress(elapsed, curve.spring);
+  }
+  if (curve.ease) {
+    return cubicBezierProgress(clamp5(curve.duration > 0 ? elapsed / curve.duration : 1, 0, 1), curve.ease);
+  }
+  return curve.duration > 0 ? Math.min(1, elapsed / curve.duration) : 1;
+}
+function resolvedAtPath(resolved, path) {
+  let node = resolved;
+  for (const segment of path.split(".")) {
+    node = isPlainObject(node) ? node[segment] : void 0;
+  }
+  return isPlainObject(node) ? node : {};
+}
+function computeStaticClips(parsed, flatValues) {
+  const resolved = resolveDialValues(parsed.dialConfig, flatValues);
+  return parsed.clips.map(
+    (clip) => buildClipStatic(resolvedAtPath(resolved, clip.key), clip, parsed.duration)
+  );
+}
+function computeStaticTimeline(parsed, flatValues) {
+  let clips = computeStaticClips(parsed, flatValues);
+  const maxEnd = clips.reduce(
+    (end, clip) => Math.max(end, clip.at + clip.duration),
+    parsed.duration
+  );
+  const duration = maxEnd > parsed.duration ? Math.ceil(maxEnd * 100 - 1e-4) / 100 : parsed.duration;
+  if (duration !== parsed.duration) {
+    clips = clips.map(
+      (clip) => clip.loop === "repeat" ? { ...clip, end: duration } : clip
+    );
+  }
+  return { duration, clips };
+}
+function computeClipStaticFromValues(values, clip, timelineDuration) {
+  return buildClipStatic(unflattenClipValues(values, clip.key), clip, timelineDuration);
+}
+function buildClipStatic(clipResolved, clip, timelineDuration) {
+  {
+    const at = typeof clipResolved.at === "number" ? clipResolved.at : 0;
+    const from = isPlainObject(clipResolved.from) ? clipResolved.from : void 0;
+    const single = isTransitionConfig(clipResolved.transition) ? clipResolved.transition : void 0;
+    const staticClip = {
+      key: clip.key,
+      childKey: clip.group ? clip.key.slice(clip.group.length + 1) : clip.key,
+      group: clip.group,
+      at,
+      duration: 0,
+      loop: "off",
+      end: 0,
+      isPhysics: false,
+      from,
+      tracks: [],
+      explicitSteps: Boolean(clip.stepKeys?.length)
+    };
+    if (clip.tracks?.length) {
+      const tracks = clip.tracks.map(({ prop, stepKeys }) => {
+        const trackResolved = isPlainObject(clipResolved[prop]) ? clipResolved[prop] : {};
+        const delay = typeof trackResolved.delay === "number" ? trackResolved.delay : 0;
+        const fromValue = trackResolved.from;
+        let steps;
+        let trackDuration = 0;
+        if (stepKeys?.length) {
+          let running = fromValue;
+          steps = stepKeys.map((stepKey) => {
+            const stepResolved = isPlainObject(trackResolved[stepKey]) ? trackResolved[stepKey] : {};
+            const storedDuration = typeof stepResolved.duration === "number" ? stepResolved.duration : 0;
+            const raw = isTransitionConfig(stepResolved.transition) ? stepResolved.transition : void 0;
+            const effective = raw ? resolveClipTransition(raw, storedDuration) : { transition: void 0, duration: storedDuration, isPhysics: false };
+            const toValue = stepResolved.to;
+            const step = {
+              key: stepKey,
+              offset: trackDuration,
+              duration: effective.duration,
+              isPhysics: effective.isPhysics,
+              start: running === void 0 ? {} : { [prop]: running },
+              to: toValue === void 0 ? {} : { [prop]: toValue },
+              curve: curveStatic(effective.transition, effective.duration)
+            };
+            if (toValue !== void 0) running = toValue;
+            trackDuration += effective.duration;
+            return step;
+          });
+        } else {
+          const storedDuration = typeof trackResolved.duration === "number" ? trackResolved.duration : 0;
+          const raw = isTransitionConfig(trackResolved.transition) ? trackResolved.transition : void 0;
+          const effective = raw ? resolveClipTransition(raw, storedDuration) : { transition: void 0, duration: storedDuration, isPhysics: false };
+          const toValue = trackResolved.to;
+          trackDuration = effective.duration;
+          steps = [
+            {
+              key: null,
+              offset: 0,
+              duration: effective.duration,
+              isPhysics: effective.isPhysics,
+              start: fromValue === void 0 ? {} : { [prop]: fromValue },
+              to: toValue === void 0 ? {} : { [prop]: toValue },
+              curve: curveStatic(effective.transition, effective.duration)
+            }
+          ];
+        }
+        return { prop, delay, duration: trackDuration, steps };
+      });
+      staticClip.tracks = tracks;
+      staticClip.props = tracks.map((track) => track.prop);
+      staticClip.duration = tracks.reduce((max, track) => Math.max(max, track.delay + track.duration), 0);
+      staticClip.from = Object.fromEntries(
+        tracks.map((track) => [track.prop, track.steps[0].start[track.prop]])
+      );
+      staticClip.to = Object.fromEntries(
+        tracks.map((track) => {
+          const last = track.steps[track.steps.length - 1];
+          return [track.prop, last.to[track.prop] ?? last.start[track.prop]];
+        })
+      );
+      staticClip.loop = staticClip.duration > 0 ? clip.loop : "off";
+      staticClip.end = staticClip.loop === "off" ? staticClip.at + staticClip.duration : timelineDuration;
+      return staticClip;
+    }
+    if (clip.stepKeys?.length) {
+      let running = { ...from ?? {} };
+      let offset = 0;
+      const steps = clip.stepKeys.map((stepKey) => {
+        const stepResolved = isPlainObject(clipResolved[stepKey]) ? clipResolved[stepKey] : {};
+        const storedDuration = typeof stepResolved.duration === "number" ? stepResolved.duration : 0;
+        const raw = isTransitionConfig(stepResolved.transition) ? stepResolved.transition : void 0;
+        const effective = raw ? resolveClipTransition(raw, storedDuration) : { transition: void 0, duration: storedDuration, isPhysics: false };
+        const to = isPlainObject(stepResolved.to) ? stepResolved.to : {};
+        const step = {
+          key: stepKey,
+          offset,
+          duration: effective.duration,
+          isPhysics: effective.isPhysics,
+          start: running,
+          to,
+          curve: curveStatic(effective.transition, effective.duration)
+        };
+        running = { ...running, ...to };
+        offset += effective.duration;
+        return step;
+      });
+      staticClip.tracks = [{ delay: 0, duration: offset, steps }];
+      staticClip.duration = offset;
+      staticClip.to = running;
+    } else {
+      const storedDuration = typeof clipResolved.duration === "number" ? clipResolved.duration : 0;
+      const to = isPlainObject(clipResolved.to) ? clipResolved.to : void 0;
+      if (single) {
+        const effective = resolveClipTransition(single, storedDuration);
+        staticClip.duration = effective.duration;
+        staticClip.isPhysics = effective.isPhysics;
+        staticClip.transition = effective.transition;
+        staticClip.css = transitionToCss(effective.transition);
+        staticClip.to = to;
+        if (from && to) {
+          staticClip.tracks = [
+            {
+              delay: 0,
+              duration: effective.duration,
+              steps: [
+                {
+                  key: null,
+                  offset: 0,
+                  duration: effective.duration,
+                  isPhysics: effective.isPhysics,
+                  start: from,
+                  to,
+                  curve: curveStatic(effective.transition, effective.duration)
+                }
+              ]
+            }
+          ];
+        }
+      } else {
+        staticClip.duration = storedDuration;
+        staticClip.to = to;
+        if (from && to) {
+          const base = resolveClipTransition(DEFAULT_CLIP_TRANSITION, storedDuration);
+          staticClip.duration = base.duration;
+          staticClip.tracks = [
+            {
+              delay: 0,
+              duration: base.duration,
+              steps: [
+                {
+                  key: null,
+                  offset: 0,
+                  duration: base.duration,
+                  isPhysics: false,
+                  start: from,
+                  to,
+                  curve: curveStatic(base.transition, base.duration)
+                }
+              ]
+            }
+          ];
+        }
+      }
+    }
+    if (staticClip.tracks.length) {
+      const props = new Set(Object.keys(from ?? {}));
+      for (const track of staticClip.tracks) {
+        for (const step of track.steps) {
+          for (const prop of Object.keys(step.to)) props.add(prop);
+        }
+      }
+      staticClip.props = Array.from(props);
+    }
+    staticClip.loop = staticClip.duration > 0 ? clip.loop : "off";
+    staticClip.end = staticClip.loop === "off" ? staticClip.at + staticClip.duration : timelineDuration;
+    return staticClip;
+  }
+}
+function stepAtPosition(steps, pos) {
+  for (const step of steps) {
+    if (pos < step.offset + step.duration) return step;
+  }
+  return steps[steps.length - 1];
+}
+function evalPropAtPos(steps, prop, pos) {
+  const step = stepAtPosition(steps, pos);
+  const within = Math.max(0, pos - step.offset);
+  if (prop in step.to) {
+    const eased = sampleCurve(step.curve, within);
+    return interpolateResolved(step.start[prop], step.to[prop], eased);
+  }
+  return step.start[prop];
+}
+function computeClipState(clip, time, cycleTime = time) {
+  const total = clip.duration;
+  const looping = clip.loop === "repeat" && total > 0;
+  const started = time >= clip.at || looping && cycleTime > time;
+  const done = time >= clip.end;
+  const elapsed = time - clip.at;
+  const phaseElapsed = looping ? cycleTime - clip.at : elapsed;
+  const fold = (e) => looping ? e % total : e;
+  const basePos = started ? fold(Math.max(0, phaseElapsed)) : 0;
+  const progress = total > 0 ? clamp5(basePos / total, 0, 1) : started ? 1 : 0;
+  let current;
+  let stepIndex = 0;
+  if (clip.tracks.length && clip.props?.length) {
+    current = {};
+    for (const track of clip.tracks) {
+      const props = track.prop !== void 0 ? [track.prop] : clip.props;
+      for (const prop of props) {
+        const startValue = track.steps[0]?.start[prop];
+        if (!started) {
+          if (startValue !== void 0) current[prop] = startValue;
+          continue;
+        }
+        const phase = phaseElapsed - track.delay;
+        if (phase <= 0) {
+          if (startValue !== void 0) current[prop] = startValue;
+          continue;
+        }
+        const pos = looping && track.duration > 0 ? phase % track.duration : phase;
+        const value = evalPropAtPos(track.steps, prop, pos);
+        if (value !== void 0) current[prop] = value;
+      }
+    }
+    const shared = clip.tracks[0];
+    if (started && clip.explicitSteps && shared.prop === void 0) {
+      stepIndex = shared.steps.indexOf(stepAtPosition(shared.steps, basePos));
+    }
+  }
+  return {
+    at: clip.at,
+    duration: clip.duration,
+    loop: clip.loop,
+    started,
+    active: started && !done,
+    done,
+    progress,
+    step: clip.explicitSteps ? stepIndex : void 0,
+    from: clip.from,
+    to: clip.to,
+    animate: started ? clip.to : clip.from,
+    transition: clip.transition,
+    css: clip.css,
+    current
+  };
+}
+function interpolateResolved(from, to, p) {
+  if (typeof from === "number" && typeof to === "number") {
+    return from + (to - from) * p;
+  }
+  if (typeof from === "string" && typeof to === "string") {
+    const mixed = mixHexColors(from, to, p);
+    if (mixed) return mixed;
+  }
+  if (isPlainObject(from) && isPlainObject(to)) {
+    const result = {};
+    for (const key of Object.keys(from)) {
+      result[key] = key in to ? interpolateResolved(from[key], to[key], p) : from[key];
+    }
+    for (const key of Object.keys(to)) {
+      if (!(key in from)) result[key] = to[key];
+    }
+    return result;
+  }
+  return p < 0.5 ? from : to;
+}
+function parseHex2(hex) {
+  if (!isHexColor(hex)) return null;
+  let h33 = hex.slice(1);
+  if (h33.length === 3) h33 = h33.split("").map((c) => c + c).join("");
+  return [
+    parseInt(h33.slice(0, 2), 16),
+    parseInt(h33.slice(2, 4), 16),
+    parseInt(h33.slice(4, 6), 16),
+    h33.length === 8 ? parseInt(h33.slice(6, 8), 16) : 255
+  ];
+}
+function mixHexColors(a, b, p) {
+  const ca = parseHex2(a);
+  const cb = parseHex2(b);
+  if (!ca || !cb) return null;
+  const t = clamp5(p, 0, 1);
+  const mixed = ca.map((v, i) => Math.round(v + (cb[i] - v) * t));
+  const hex = (n) => n.toString(16).padStart(2, "0");
+  const rgb = `#${hex(mixed[0])}${hex(mixed[1])}${hex(mixed[2])}`;
+  return mixed[3] === 255 ? rgb : `${rgb}${hex(mixed[3])}`;
+}
+function transitionToCss(transition) {
+  if (!transition) return void 0;
+  if (transition.type === "easing") {
+    return {
+      transitionDuration: `${round22(transition.duration)}s`,
+      transitionTimingFunction: `cubic-bezier(${transition.ease.map((v) => round22(v)).join(", ")})`
+    };
+  }
+  const params = springParams(transition);
+  const dampingRatio = params.damping / (2 * Math.sqrt(params.stiffness * params.mass));
+  const duration = transition.visualDuration ?? springSettleDuration(params);
+  const bounce = transition.bounce ?? Math.max(0, round22(1 - dampingRatio));
+  return {
+    transitionDuration: `${round22(duration)}s`,
+    transitionTimingFunction: bounce > 0.05 ? `cubic-bezier(0.34, ${round22(1.2 + bounce)}, 0.64, 1)` : "cubic-bezier(0.25, 0.6, 0.35, 1)"
+  };
+}
+function timelinePopoverDisplayValues(values, clipKey, stepKeys, stepKey) {
+  const display = { ...values };
+  const swap = (path, duration) => {
+    const raw = display[path];
+    if (isTransitionConfig(raw)) display[path] = resolveClipTransition(raw, duration).transition;
+  };
+  if (stepKey) {
+    swap(`${clipKey}.${stepKey}.transition`, numberValue(values[`${clipKey}.${stepKey}.duration`]));
+    return display;
+  }
+  const cycle = stepKeys?.length ? stepKeys.reduce((sum, sk) => sum + numberValue(values[`${clipKey}.${sk}.duration`]), 0) : numberValue(values[`${clipKey}.duration`]);
+  swap(`${clipKey}.transition`, cycle);
+  return display;
+}
+function numberValue(value) {
+  return typeof value === "number" ? value : 0;
+}
+function unflattenClipValues(values, clipKey) {
+  const prefix = `${clipKey}.`;
+  const result = {};
+  const entries = Object.entries(values).filter(([path]) => path.startsWith(prefix)).map(([path, value]) => ({ segments: path.slice(prefix.length).split("."), value })).sort((a, b) => a.segments.length - b.segments.length);
+  for (const { segments, value } of entries) {
+    let node = result;
+    for (let i = 0; i < segments.length - 1; i++) {
+      const existing = node[segments[i]];
+      node = isPlainObject(existing) ? existing : node[segments[i]] = {};
+    }
+    node[segments[segments.length - 1]] = cloneTimelineValue(value);
+  }
+  return result;
+}
+function cloneTimelineValue(value) {
+  if (Array.isArray(value)) return value.map(cloneTimelineValue);
+  if (!isPlainObject(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, nested]) => [key, cloneTimelineValue(nested)])
+  );
+}
+function clampTrackDelay(delay, at, trackDuration, timelineDuration) {
+  return clamp5(round22(delay), 0, Math.max(0, round22(timelineDuration - at - trackDuration)));
+}
+function clampClipMove(at, duration, timelineDuration) {
+  return clamp5(round22(at), 0, Math.max(0, timelineDuration - duration));
+}
+function clampClipResizeEnd(duration, at, timelineDuration) {
+  return clamp5(round22(duration), TIMELINE_MIN_CLIP_DURATION, timelineDuration - at);
+}
+function clampClipResizeStart(newAt, at, duration) {
+  const clampedAt = clamp5(round22(newAt), 0, at + duration - TIMELINE_MIN_CLIP_DURATION);
+  return { at: clampedAt, duration: round22(at + duration - clampedAt) };
+}
+function clampStepResize(duration, at, otherStepsTotal, timelineDuration) {
+  const max = Math.max(TIMELINE_MIN_CLIP_DURATION, timelineDuration - at - otherStepsTotal);
+  return clamp5(round22(duration), TIMELINE_MIN_CLIP_DURATION, max);
+}
+function normalizeTimelineValuesForCopy(values, clips) {
+  const normalized = { ...values };
+  for (const path of Object.keys(normalized)) {
+    if (path.endsWith(".__mode")) delete normalized[path];
+  }
+  const normalizeTransitionAt = (transitionPath, durationPath) => {
+    const raw = normalized[transitionPath];
+    if (!isTransitionConfig(raw)) return;
+    if (isPhysicsSpring(raw)) {
+      normalized[durationPath] = transitionDefaultDuration(raw);
+    }
+    normalized[transitionPath] = normalizeStoredTransition(
+      raw,
+      numberValue(normalized[durationPath])
+    );
+  };
+  for (const clip of clips) {
+    for (const stepKey of clip.stepKeys ?? []) {
+      normalizeTransitionAt(
+        `${clip.key}.${stepKey}.transition`,
+        `${clip.key}.${stepKey}.duration`
+      );
+    }
+    normalizeTransitionAt(`${clip.key}.transition`, `${clip.key}.duration`);
+    for (const track of clip.tracks ?? []) {
+      const trackKey = `${clip.key}.${track.prop}`;
+      for (const stepKey of track.stepKeys ?? []) {
+        normalizeTransitionAt(
+          `${trackKey}.${stepKey}.transition`,
+          `${trackKey}.${stepKey}.duration`
+        );
+      }
+      normalizeTransitionAt(`${trackKey}.transition`, `${trackKey}.duration`);
+      if (normalized[`${trackKey}.delay`] === 0) {
+        delete normalized[`${trackKey}.delay`];
+      }
+    }
+    delete normalized[`${clip.key}.loop`];
+  }
+  return normalized;
+}
+function formatClock(time, tenths = false) {
+  const safe = Math.max(0, time);
+  const minutes = Math.floor(safe / 60);
+  const seconds = safe - minutes * 60;
+  const secondsText = tenths ? seconds.toFixed(1).padStart(4, "0") : String(Math.floor(seconds)).padStart(2, "0");
+  return `${String(minutes).padStart(2, "0")}:${secondsText}`;
+}
+function formatSeconds(value) {
+  return `${round22(value)}s`;
+}
+function formatStepLabel(stepKey) {
+  const match = /^step(\d+)$/.exec(stepKey);
+  return match ? `Step ${match[1]}` : formatLabel(stepKey);
+}
+
+// src/timeline/adapter.ts
+function resolveTimelineLoop(loop) {
+  if (typeof loop === "object" && loop !== null) {
+    return {
+      enabled: true,
+      start: Number.isFinite(loop.from) ? Math.max(0, loop.from) : 0
+    };
+  }
+  return { enabled: Boolean(loop), start: 0 };
+}
+function buildTimelineMeta(id, name, duration, parsed, loop) {
+  const resolvedLoop = resolveTimelineLoop(loop);
+  return {
+    id,
+    name,
+    duration,
+    loop: resolvedLoop.enabled,
+    loopStart: resolvedLoop.start,
+    clips: parsed.clips
+  };
+}
+function buildTimelineValues(staticClips, transport, timelineDuration, loopStart, loopEnd, actions) {
+  var _a;
+  const result = {
+    time: transport.time,
+    playing: transport.playing,
+    duration: timelineDuration,
+    ...actions
+  };
+  const span = loopSpan(transport.duration, loopStart, loopEnd);
+  const cycleTime = (span > 0 ? transport.wraps * span : 0) + transport.time;
+  for (const clip of staticClips) {
+    const state = computeClipState(clip, transport.time, cycleTime);
+    if (clip.group) {
+      const bucket = result[_a = clip.group] ?? (result[_a] = {});
+      bucket[clip.childKey] = state;
+    } else {
+      result[clip.key] = state;
+    }
+  }
+  return result;
+}
+
+// src/copy-instruction.ts
+function buildCopyInstruction(hookName, panelName, values) {
+  const jsonStr = JSON.stringify(values, null, 2);
+  if (hookName === "useDialTimeline" || hookName === "createDialTimeline") {
+    return `Update the ${hookName} configuration for "${panelName}" with these values:
+
+\`\`\`json
+${jsonStr}
+\`\`\`
+
+Apply these values as the new defaults in the ${hookName} call. Keep the existing \`clip.current\` bindings while this timeline is being authored; do not convert the animation or remove DialKit yet.
+
+Add this comment immediately above the ${hookName} call as a production handoff note:
+
+\`\`\`tsx
+// TODO(production): DialKit's clip.current values are the scrubbable authoring preview.
+// Replace them with equivalent real Motion animations using the tuned timeline
+// timings and transitions, then remove ${hookName} and <DialTimeline />.
+\`\`\``;
+  }
+  return `Update the ${hookName} configuration for "${panelName}" with these values:
+
+\`\`\`json
+${jsonStr}
+\`\`\`
+
+Apply these values as the new defaults in the ${hookName} call.`;
+}
+
+// src/env.ts
+var import_meta2 = {};
+var isDevDefault2 = typeof process !== "undefined" && process?.env?.NODE_ENV ? process.env.NODE_ENV !== "production" : typeof import_meta2 !== "undefined" && import_meta2.env?.MODE ? import_meta2.env.MODE !== "production" : true;
+
+// src/vue/useDialTimeline.ts
+var timelineInstance = 0;
+function useDialTimeline(name, config, options) {
+  const hasStableId = options?.id !== void 0;
+  const panelId = options?.id ?? `${name}-${++timelineInstance}`;
+  const serializedConfig = (0, import_vue27.computed)(() => JSON.stringify(config));
+  const serializedPersist = (0, import_vue27.computed)(() => JSON.stringify(options?.persist));
+  const serializedLoop = (0, import_vue27.computed)(() => JSON.stringify(options?.loop));
+  const parsed = (0, import_vue27.computed)(() => {
+    serializedConfig.value;
+    return parseTimelineConfig(config);
+  });
+  const flatValues = (0, import_vue27.shallowRef)(DialStore.getValues(panelId));
+  const transport = (0, import_vue27.shallowRef)(TimelineStore.getTransport(panelId));
+  const loopRegion = (0, import_vue27.shallowRef)(TimelineStore.getLoopRegion(panelId));
+  const staticTimeline = (0, import_vue27.computed)(() => computeStaticTimeline(parsed.value, flatValues.value));
+  const meta = (0, import_vue27.computed)(() => {
+    serializedLoop.value;
+    return buildTimelineMeta(
+      panelId,
+      name,
+      staticTimeline.value.duration,
+      parsed.value,
+      options?.loop
+    );
+  });
+  let mounted = false;
+  let unsubscribeValues;
+  let unsubscribeTransport;
+  const play = () => TimelineStore.play(panelId);
+  const pause = () => TimelineStore.pause(panelId);
+  const replay = () => TimelineStore.replay(panelId);
+  const seek = (time) => TimelineStore.seek(panelId, time);
+  (0, import_vue27.watch)([serializedConfig, serializedPersist], () => {
+    if (!mounted) return;
+    DialStore.updatePanel(panelId, name, parsed.value.dialConfig, void 0, {
+      retainOnUnmount: hasStableId,
+      persist: options?.persist,
+      kind: "timeline"
+    });
+    flatValues.value = DialStore.getValues(panelId);
+  });
+  (0, import_vue27.watch)(meta, (nextMeta) => {
+    if (mounted) TimelineStore.update(nextMeta);
+  });
+  (0, import_vue27.onMounted)(() => {
+    unsubscribeValues = DialStore.subscribe(panelId, () => {
+      flatValues.value = DialStore.getValues(panelId);
+    });
+    unsubscribeTransport = TimelineStore.subscribe(panelId, () => {
+      transport.value = TimelineStore.getTransport(panelId);
+      loopRegion.value = TimelineStore.getLoopRegion(panelId);
+    });
+    DialStore.registerPanel(panelId, name, parsed.value.dialConfig, void 0, {
+      retainOnUnmount: hasStableId,
+      persist: options?.persist,
+      kind: "timeline"
+    });
+    flatValues.value = DialStore.getValues(panelId);
+    TimelineStore.register(meta.value, { autoplay: options?.autoplay ?? true, persist: options?.persist });
+    transport.value = TimelineStore.getTransport(panelId);
+    loopRegion.value = TimelineStore.getLoopRegion(panelId);
+    mounted = true;
+  });
+  (0, import_vue27.onUnmounted)(() => {
+    mounted = false;
+    unsubscribeValues?.();
+    unsubscribeTransport?.();
+    TimelineStore.unregister(panelId);
+    DialStore.unregisterPanel(panelId);
+  });
+  return (0, import_vue27.computed)(() => {
+    const currentStatic = staticTimeline.value;
+    const region = loopRegion.value;
+    const loopStart = region ? region.start : 0;
+    const loopEnd = region ? region.end : currentStatic.duration;
+    return buildTimelineValues(
+      currentStatic.clips,
+      transport.value,
+      currentStatic.duration,
+      loopStart,
+      loopEnd,
+      { play, pause, replay, seek }
+    );
+  });
+}
+
+// src/vue/components/Timeline/DialTimeline.ts
+var import_vue28 = require("vue");
+var DRAG_THRESHOLD_PX = 3;
+var LOOP_DRAG_THRESHOLD_PX = 4;
+var MAJOR_TICK_TARGET_PX = 140;
+var MILLISECOND_STEP = 1e-3;
+var SECOND_TICK_STEPS = [
+  1e-3,
+  2e-3,
+  5e-3,
+  0.01,
+  0.02,
+  0.05,
+  0.1,
+  0.2,
+  0.5,
+  1,
+  2,
+  5,
+  10,
+  15,
+  30,
+  60,
+  120,
+  300,
+  600
+];
+var MIN_TIMELINE_MAX_ZOOM = 8;
+var PLAYHEAD_FLAG_WIDTH = 52;
+var PLAYHEAD_FLAG_EDGE_OVERHANG = 1;
+var POPOVER_WIDTH = 280;
+var ZOOM_DRAG_DISTANCE = 180;
+var DEFAULT_DOCK_MAX_HEIGHT = 400;
+var MIN_DOCK_MAX_HEIGHT = 120;
+var DialTimeline = (0, import_vue28.defineComponent)({
+  name: "DialKitTimeline",
+  props: {
+    theme: { type: String, default: "system" },
+    defaultVisible: { type: Boolean, default: true },
+    visible: {
+      type: Boolean,
+      default: void 0
+    },
+    onVisibilityChange: Function,
+    defaultOpen: { type: Boolean, default: true },
+    productionEnabled: { type: Boolean, default: isDevDefault2 }
+  },
+  setup(props) {
+    const timelines = (0, import_vue28.ref)(TimelineStore.getTimelines());
+    const dockVisible = (0, import_vue28.ref)(TimelineUiStore.getVisible());
+    const mounted = (0, import_vue28.ref)(false);
+    const dockMaxHeight = (0, import_vue28.ref)(DEFAULT_DOCK_MAX_HEIGHT);
+    const dockRef = (0, import_vue28.ref)(null);
+    const controllerId = /* @__PURE__ */ Symbol("dialkit-timeline-visibility");
+    let unsubscribeTimelines;
+    let unsubscribeVisibility;
+    let unregisterController;
+    let resizeCleanup = null;
+    const handleResizePointerDown = (event) => {
+      if (!dockRef.value) return;
+      event.preventDefault();
+      event.stopPropagation();
+      resizeCleanup?.();
+      const pointerY = event.clientY;
+      const startHeight = dockRef.value.getBoundingClientRect().height;
+      const move = (next) => {
+        next.preventDefault();
+        const viewportMax = Math.max(MIN_DOCK_MAX_HEIGHT, window.innerHeight - 24);
+        dockMaxHeight.value = clamp5(startHeight + pointerY - next.clientY, MIN_DOCK_MAX_HEIGHT, viewportMax);
+      };
+      const finish = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", finish);
+        window.removeEventListener("pointercancel", finish);
+        resizeCleanup = null;
+      };
+      window.addEventListener("pointermove", move, { passive: false });
+      window.addEventListener("pointerup", finish);
+      window.addEventListener("pointercancel", finish);
+      resizeCleanup = finish;
+    };
+    (0, import_vue28.onMounted)(() => {
+      mounted.value = true;
+      unsubscribeVisibility = TimelineUiStore.subscribe(() => {
+        dockVisible.value = TimelineUiStore.getVisible();
+      });
+      unregisterController = TimelineUiStore.registerController(controllerId, {
+        visible: props.visible,
+        defaultVisible: props.defaultVisible,
+        onVisibilityChange: props.onVisibilityChange
+      });
+      dockVisible.value = TimelineUiStore.getVisible();
+      unsubscribeTimelines = TimelineStore.subscribeGlobal(() => {
+        timelines.value = TimelineStore.getTimelines();
+      });
+    });
+    (0, import_vue28.watch)(() => [props.visible, props.defaultVisible, props.onVisibilityChange], () => {
+      TimelineUiStore.updateController(controllerId, {
+        visible: props.visible,
+        defaultVisible: props.defaultVisible,
+        onVisibilityChange: props.onVisibilityChange
+      });
+    });
+    (0, import_vue28.onUnmounted)(() => {
+      unregisterController?.();
+      unsubscribeTimelines?.();
+      unsubscribeVisibility?.();
+      resizeCleanup?.();
+    });
+    return () => {
+      if (!props.productionEnabled || !mounted.value || timelines.value.length === 0) return null;
+      return (0, import_vue28.h)(import_vue28.Teleport, { to: "body" }, [
+        (0, import_vue28.h)("div", {
+          class: "dialkit-root dialkit-timeline",
+          "data-theme": props.theme,
+          hidden: !dockVisible.value
+        }, [
+          (0, import_vue28.h)("div", {
+            class: "dialkit-timeline-resize-handle",
+            role: "separator",
+            "aria-label": "Resize timeline height",
+            "aria-orientation": "horizontal",
+            title: "Drag to resize timeline",
+            onPointerdown: handleResizePointerDown
+          }),
+          (0, import_vue28.h)("div", {
+            ref: dockRef,
+            class: "dialkit-timeline-dock",
+            style: { maxHeight: `min(${dockMaxHeight.value}px, calc(100vh - 24px))` }
+          }, timelines.value.map((meta) => (0, import_vue28.h)(TimelineSection, {
+            key: meta.id,
+            meta,
+            defaultOpen: props.defaultOpen,
+            theme: props.theme,
+            dockVisible: dockVisible.value
+          })))
+        ])
+      ]);
+    };
+  }
+});
+var PlayPauseButton = (0, import_vue28.defineComponent)({
+  props: { id: { type: String, required: true } },
+  setup(props) {
+    const playing = (0, import_vue28.ref)(TimelineStore.getTransport(props.id).playing);
+    let unsubscribe;
+    (0, import_vue28.onMounted)(() => {
+      unsubscribe = TimelineStore.subscribe(props.id, () => {
+        playing.value = TimelineStore.getTransport(props.id).playing;
+      });
+    });
+    (0, import_vue28.onUnmounted)(() => unsubscribe?.());
+    return () => {
+      const label = playing.value ? "Pause" : "Play";
+      const icon = playing.value ? (0, import_vue28.h)(
+        "svg",
+        { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", style: iconStyle },
+        ICON_PAUSE.map((path) => (0, import_vue28.h)("path", { d: path, fill: "currentColor" }))
+      ) : (0, import_vue28.h)("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", style: iconStyle }, [
+        (0, import_vue28.h)("path", { d: ICON_PLAY, fill: "currentColor" })
+      ]);
+      return (0, import_vue28.h)("button", {
+        class: "dialkit-toolbar-add",
+        title: label,
+        "aria-label": label,
+        onClick: () => playing.value ? TimelineStore.pause(props.id) : TimelineStore.play(props.id)
+      }, [(0, import_vue28.h)("span", { style: { position: "relative", width: "16px", height: "16px" } }, [icon])]);
+    };
+  }
+});
+var ReplayButton = (0, import_vue28.defineComponent)({
+  props: { onReplay: { type: Function, required: true } },
+  setup(props) {
+    return () => (0, import_vue28.h)("button", {
+      class: "dialkit-toolbar-add",
+      title: "Replay",
+      "aria-label": "Replay",
+      onClick: props.onReplay
+    }, [
+      (0, import_vue28.h)(
+        "svg",
+        { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true" },
+        ICON_REPLAY.map((path) => (0, import_vue28.h)("path", { d: path, fill: "currentColor" }))
+      )
+    ]);
+  }
+});
+var iconStyle = {
+  position: "absolute",
+  inset: 0,
+  width: "16px",
+  height: "16px",
+  color: "var(--dial-text-label)"
+};
+var TimelineOverview = (0, import_vue28.defineComponent)({
+  props: {
+    id: { type: String, required: true },
+    duration: { type: Number, required: true },
+    viewStart: { type: Number, required: true },
+    viewEnd: { type: Number, required: true },
+    onNavigate: { type: Function, required: true }
+  },
+  setup(props) {
+    const time = (0, import_vue28.ref)(TimelineStore.getTransport(props.id).time);
+    let scrub = null;
+    let unsubscribe;
+    (0, import_vue28.onMounted)(() => {
+      unsubscribe = TimelineStore.subscribe(props.id, () => {
+        time.value = TimelineStore.getTransport(props.id).time;
+      });
+    });
+    (0, import_vue28.onUnmounted)(() => unsubscribe?.());
+    const seek = (clientX) => {
+      if (!scrub || scrub.rect.width <= 0 || props.duration <= 0) return;
+      const next = clamp5((clientX - scrub.rect.left) / scrub.rect.width * props.duration, 0, props.duration);
+      TimelineStore.seek(props.id, next);
+      props.onNavigate(next);
+    };
+    const finish = () => {
+      if (scrub?.wasPlaying) TimelineStore.play(props.id);
+      scrub = null;
+    };
+    return () => {
+      const viewportWidth = props.duration > 0 ? (props.viewEnd - props.viewStart) / props.duration * 100 : 100;
+      const playhead = props.duration > 0 ? time.value / props.duration * 100 : 0;
+      return (0, import_vue28.h)("div", {
+        class: "dialkit-timeline-overview",
+        title: "Drag to scrub the full timeline",
+        onPointerdown: (event) => {
+          event.preventDefault();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          scrub = {
+            wasPlaying: TimelineStore.getTransport(props.id).playing,
+            rect: event.currentTarget.getBoundingClientRect()
+          };
+          TimelineStore.pause(props.id);
+          seek(event.clientX);
+        },
+        onPointermove: (event) => scrub && seek(event.clientX),
+        onPointerup: finish,
+        onPointercancel: finish,
+        onLostpointercapture: finish
+      }, [
+        (0, import_vue28.h)("div", {
+          class: "dialkit-timeline-overview-viewport",
+          "data-zoomed": viewportWidth < 99.999 || void 0,
+          style: { left: `${props.duration > 0 ? props.viewStart / props.duration * 100 : 0}%`, width: `${viewportWidth}%` }
+        }),
+        (0, import_vue28.h)("div", { class: "dialkit-timeline-overview-progress", style: { width: `${playhead}%` } }),
+        (0, import_vue28.h)("div", { class: "dialkit-timeline-overview-playhead", style: { left: `${playhead}%` } })
+      ]);
+    };
+  }
+});
+var TimelinePlayheadFlag = (0, import_vue28.defineComponent)({
+  props: {
+    id: { type: String, required: true },
+    duration: { type: Number, required: true },
+    pxPerSecond: { type: Number, required: true },
+    viewStart: { type: Number, required: true },
+    viewEnd: { type: Number, required: true },
+    laneWidth: { type: Number, required: true },
+    ruler: Object,
+    onResetView: { type: Function, required: true }
+  },
+  setup(props) {
+    const time = (0, import_vue28.ref)(TimelineStore.getTransport(props.id).time);
+    let unsubscribe;
+    let scrub = null;
+    let cleanup = null;
+    (0, import_vue28.onMounted)(() => {
+      unsubscribe = TimelineStore.subscribe(props.id, () => {
+        time.value = TimelineStore.getTransport(props.id).time;
+      });
+    });
+    (0, import_vue28.onUnmounted)(() => {
+      unsubscribe?.();
+      cleanup?.();
+    });
+    const seek = (clientX) => {
+      if (!scrub || scrub.rect.width <= 0) return;
+      TimelineStore.seek(props.id, clamp5(
+        scrub.viewStart + (clientX - scrub.rect.left) / scrub.rect.width * (scrub.viewEnd - scrub.viewStart),
+        scrub.viewStart,
+        scrub.viewEnd
+      ));
+    };
+    return () => {
+      if (time.value < props.viewStart || time.value > props.viewEnd || props.laneWidth <= 0) return null;
+      const x = clamp5((time.value - props.viewStart) * props.pxPerSecond, 0, props.laneWidth);
+      const flagCenter = clamp5(
+        x,
+        PLAYHEAD_FLAG_WIDTH / 2 - PLAYHEAD_FLAG_EDGE_OVERHANG,
+        props.laneWidth - PLAYHEAD_FLAG_WIDTH / 2 + PLAYHEAD_FLAG_EDGE_OVERHANG
+      );
+      const flagOffset = flagCenter - x;
+      const edge = flagOffset > 0.5 ? "start" : flagOffset < -0.5 ? "end" : "center";
+      return (0, import_vue28.h)("div", {
+        class: "dialkit-timeline-playhead-control",
+        "data-edge": edge,
+        style: {
+          left: `calc(var(--dial-timeline-label-w) + ${x}px)`,
+          "--dial-timeline-playhead-flag-offset": `${flagOffset}px`
+        },
+        role: "slider",
+        "aria-label": "Timeline current time",
+        "aria-valuemin": 0,
+        "aria-valuemax": props.duration,
+        "aria-valuenow": time.value,
+        title: "Drag to scrub the timeline",
+        onPointerdown: (event) => {
+          const rect = props.ruler?.getBoundingClientRect();
+          if (!rect) return;
+          event.preventDefault();
+          event.stopPropagation();
+          cleanup?.();
+          const reset = event.shiftKey;
+          scrub = {
+            wasPlaying: TimelineStore.getTransport(props.id).playing,
+            rect,
+            viewStart: reset ? 0 : props.viewStart,
+            viewEnd: reset ? props.duration : props.viewEnd
+          };
+          if (reset) props.onResetView();
+          TimelineStore.pause(props.id);
+          seek(event.clientX);
+          const move = (next) => {
+            next.preventDefault();
+            seek(next.clientX);
+          };
+          const finish = () => {
+            window.removeEventListener("pointermove", move);
+            window.removeEventListener("pointerup", finish);
+            window.removeEventListener("pointercancel", finish);
+            if (scrub?.wasPlaying) TimelineStore.play(props.id);
+            scrub = null;
+            cleanup = null;
+          };
+          window.addEventListener("pointermove", move, { passive: false });
+          window.addEventListener("pointerup", finish);
+          window.addEventListener("pointercancel", finish);
+          cleanup = finish;
+        }
+      }, [
+        (0, import_vue28.h)("div", { class: "dialkit-timeline-playhead-stem" }),
+        (0, import_vue28.h)("div", { class: "dialkit-timeline-playhead-anchor" }, [
+          (0, import_vue28.h)("div", { class: "dialkit-timeline-playhead-flag" }, time.value.toFixed(2))
+        ])
+      ]);
+    };
+  }
+});
+function clampViewStart(start, duration, visibleDuration) {
+  return clamp5(start, 0, Math.max(0, duration - visibleDuration));
+}
+function formatRulerSeconds(time, step) {
+  if (step >= 1 && Number.isInteger(time)) return formatClock(time);
+  const decimals = Math.min(3, Math.max(1, Math.ceil(-Math.log10(step))));
+  return `${time.toFixed(decimals)}s`;
+}
+var TimelineSection = (0, import_vue28.defineComponent)({
+  props: {
+    meta: { type: Object, required: true },
+    defaultOpen: { type: Boolean, required: true },
+    theme: { type: String, required: true },
+    dockVisible: { type: Boolean, required: true }
+  },
+  setup(props) {
+    const open = (0, import_vue28.ref)(props.defaultOpen);
+    const copied = (0, import_vue28.ref)(false);
+    const popover = (0, import_vue28.ref)(null);
+    const collapsedGroups = (0, import_vue28.ref)(/* @__PURE__ */ new Set());
+    const expandedTracks = (0, import_vue28.ref)(/* @__PURE__ */ new Set());
+    const zoom = (0, import_vue28.ref)(1);
+    const viewStart = (0, import_vue28.ref)(0);
+    const values = (0, import_vue28.ref)(DialStore.getValues(props.meta.id));
+    const presets = (0, import_vue28.ref)(DialStore.getPresets(props.meta.id));
+    const activePresetId = (0, import_vue28.ref)(DialStore.getActivePresetId(props.meta.id));
+    const loopRegion = (0, import_vue28.ref)(TimelineStore.getLoopRegion(props.meta.id));
+    const loopDrag = (0, import_vue28.ref)(null);
+    const laneAreaRef = (0, import_vue28.ref)(null);
+    const horizontalScrollRef = (0, import_vue28.ref)(null);
+    const laneWidth = (0, import_vue28.ref)(0);
+    let unsubscribeValues;
+    let unsubscribeLoop;
+    let resizeObserver;
+    const measure = () => {
+      if (laneAreaRef.value) laneWidth.value = laneAreaRef.value.getBoundingClientRect().width;
+    };
+    const connectMeasure = async () => {
+      resizeObserver?.disconnect();
+      if (!open.value) return;
+      await (0, import_vue28.nextTick)();
+      if (!laneAreaRef.value) return;
+      measure();
+      resizeObserver = new ResizeObserver(measure);
+      resizeObserver.observe(laneAreaRef.value);
+    };
+    (0, import_vue28.onMounted)(() => {
+      unsubscribeValues = DialStore.subscribe(props.meta.id, () => {
+        values.value = DialStore.getValues(props.meta.id);
+        presets.value = DialStore.getPresets(props.meta.id);
+        activePresetId.value = DialStore.getActivePresetId(props.meta.id);
+      });
+      unsubscribeLoop = TimelineStore.subscribe(props.meta.id, () => {
+        loopRegion.value = TimelineStore.getLoopRegion(props.meta.id);
+      });
+      loopRegion.value = TimelineStore.getLoopRegion(props.meta.id);
+      void connectMeasure();
+    });
+    (0, import_vue28.onUnmounted)(() => {
+      unsubscribeValues?.();
+      unsubscribeLoop?.();
+      resizeObserver?.disconnect();
+    });
+    (0, import_vue28.watch)(open, connectMeasure);
+    (0, import_vue28.watch)(() => props.dockVisible, (visible) => {
+      if (!visible) popover.value = null;
+    });
+    const visibleDuration = (0, import_vue28.computed)(() => props.meta.duration > 0 ? props.meta.duration / zoom.value : props.meta.duration);
+    const safeViewStart = (0, import_vue28.computed)(() => clampViewStart(viewStart.value, props.meta.duration, visibleDuration.value));
+    const viewEnd = (0, import_vue28.computed)(() => safeViewStart.value + visibleDuration.value);
+    const pxPerSecond = (0, import_vue28.computed)(() => visibleDuration.value > 0 && laneWidth.value > 0 ? laneWidth.value / visibleDuration.value : 0);
+    const maxZoom = (0, import_vue28.computed)(() => Math.max(
+      MIN_TIMELINE_MAX_ZOOM,
+      laneWidth.value > 0 && props.meta.duration > 0 ? MAJOR_TICK_TARGET_PX * props.meta.duration / (MILLISECOND_STEP * 10 * laneWidth.value) : MIN_TIMELINE_MAX_ZOOM
+    ));
+    (0, import_vue28.watch)(maxZoom, (next) => {
+      zoom.value = clamp5(zoom.value, 1, next);
+    }, { immediate: true });
+    (0, import_vue28.watch)([() => props.meta.duration, zoom], () => {
+      viewStart.value = clampViewStart(viewStart.value, props.meta.duration, props.meta.duration / zoom.value);
+    });
+    (0, import_vue28.watch)([open, pxPerSecond, safeViewStart], async () => {
+      await (0, import_vue28.nextTick)();
+      const scroller = horizontalScrollRef.value;
+      if (!scroller || pxPerSecond.value <= 0) return;
+      const next = safeViewStart.value * pxPerSecond.value;
+      if (Math.abs(scroller.scrollLeft - next) > 0.5) scroller.scrollLeft = next;
+    });
+    const centerViewAt = (time) => {
+      if (zoom.value <= 1 || props.meta.duration <= 0) return;
+      const duration = props.meta.duration / zoom.value;
+      viewStart.value = clampViewStart(time - duration / 2, props.meta.duration, duration);
+    };
+    const resetView = () => {
+      zoom.value = 1;
+      viewStart.value = 0;
+    };
+    const handleReplay = () => {
+      viewStart.value = 0;
+      TimelineStore.replay(props.meta.id);
+    };
+    const handleHorizontalScroll = (event) => {
+      if (pxPerSecond.value <= 0) return;
+      viewStart.value = clampViewStart(
+        event.currentTarget.scrollLeft / pxPerSecond.value,
+        props.meta.duration,
+        visibleDuration.value
+      );
+    };
+    const handleTimelineWheel = (event) => {
+      const scroller = horizontalScrollRef.value;
+      if (!scroller || zoom.value <= 1) return;
+      const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.shiftKey ? event.deltaY : 0;
+      if (delta === 0) return;
+      event.preventDefault();
+      scroller.scrollLeft += delta;
+    };
+    let zoomDrag = null;
+    let rulerGesture = null;
+    let trackScrub = null;
+    const rulerTimeFromClientX = (clientX, rect, viewStartAt, visibleAt) => clamp5(
+      viewStartAt + (clientX - rect.left) / rect.width * visibleAt,
+      viewStartAt,
+      viewStartAt + visibleAt
+    );
+    const seekTrack = (clientX) => {
+      if (!trackScrub || trackScrub.rect.width <= 0) return;
+      TimelineStore.seek(props.meta.id, clamp5(
+        trackScrub.viewStart + (clientX - trackScrub.rect.left) / trackScrub.rect.width * trackScrub.visibleDuration,
+        trackScrub.viewStart,
+        trackScrub.viewStart + trackScrub.visibleDuration
+      ));
+    };
+    const finishRuler = () => {
+      const gesture = rulerGesture;
+      rulerGesture = null;
+      zoomDrag = null;
+      if (gesture) {
+        if (gesture.moved && loopDrag.value) {
+          TimelineStore.setLoopRegion(props.meta.id, loopDrag.value.start, loopDrag.value.end);
+        } else {
+          TimelineStore.seek(props.meta.id, gesture.downTime);
+        }
+        loopDrag.value = null;
+      }
+    };
+    const cancelRuler = () => {
+      rulerGesture = null;
+      zoomDrag = null;
+      loopDrag.value = null;
+    };
+    const handleClearLoopRegion = () => TimelineStore.clearLoopRegion(props.meta.id);
+    const finishTrack = () => {
+      if (trackScrub?.wasPlaying) TimelineStore.play(props.meta.id);
+      trackScrub = null;
+    };
+    const handleCopy = () => {
+      const normalized = normalizeTimelineValuesForCopy(DialStore.getValues(props.meta.id), props.meta.clips);
+      void navigator.clipboard.writeText(buildCopyInstruction("useDialTimeline", props.meta.name, normalized));
+      copied.value = true;
+      window.setTimeout(() => {
+        copied.value = false;
+      }, 1500);
+    };
+    const handleAddPreset = () => DialStore.savePreset(props.meta.id, `Version ${presets.value.length + 2}`);
+    const closePopover = () => {
+      popover.value = null;
+    };
+    const openClipPopover = (clip, rect, stepKey) => {
+      const target = stepKey ? `${clip.key}.${stepKey}` : clip.key;
+      if (getClipControls(props.meta.id, target, stepKey ? void 0 : clipPopoverExclusions(clip)).length === 0) return;
+      popover.value = popover.value?.clip.key === clip.key && popover.value.stepKey === stepKey ? null : {
+        clip,
+        stepKey,
+        anchor: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }
+      };
+    };
+    const toggleSet = (state, key) => {
+      const next = new Set(state.value);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      state.value = next;
+    };
+    const toggleTracks = (key) => toggleSet(expandedTracks, key);
+    const toggleGroup = (key) => toggleSet(collapsedGroups, key);
+    const handleBarClick = (clip, rect, stepKey) => {
+      if (!stepKey && clip.tracks?.length) toggleTracks(clip.key);
+      else openClipPopover(clip, rect, stepKey);
+    };
+    const ticks = (0, import_vue28.computed)(() => {
+      const raw = pxPerSecond.value > 0 ? MAJOR_TICK_TARGET_PX / pxPerSecond.value : 1;
+      const adaptive = SECOND_TICK_STEPS.find((step) => step >= raw) ?? SECOND_TICK_STEPS[SECOND_TICK_STEPS.length - 1];
+      const majorStep = zoom.value < 1.5 && props.meta.duration >= 1 ? Math.max(1, adaptive) : adaptive;
+      const fineStep = majorStep / 10;
+      const major = [];
+      const medium = [];
+      const fine = [];
+      for (let time = Math.ceil((safeViewStart.value - 1e-6) / majorStep) * majorStep; time <= viewEnd.value + 1e-6; time += majorStep) {
+        major.push(Number(time.toFixed(4)));
+      }
+      const first = Math.ceil((safeViewStart.value - 1e-6) / fineStep);
+      const last = Math.floor((viewEnd.value + 1e-6) / fineStep);
+      for (let index = first; index <= last; index++) {
+        if (index % 10 === 0) continue;
+        const tick = Number((index * fineStep).toFixed(6));
+        if (index % 5 === 0) medium.push(tick);
+        else fine.push(tick);
+      }
+      return { major, medium, fine, majorStep };
+    });
+    const renderRows = () => {
+      const rows = [];
+      let lastGroup;
+      for (const clip of props.meta.clips) {
+        if (clip.group !== lastGroup) {
+          lastGroup = clip.group;
+          if (clip.group) {
+            const group = clip.group;
+            const collapsed = collapsedGroups.value.has(group);
+            rows.push((0, import_vue28.h)("div", { key: `group:${group}`, class: "dialkit-timeline-row dialkit-timeline-group-row" }, [
+              (0, import_vue28.h)("div", { class: "dialkit-timeline-label" }, [
+                (0, import_vue28.h)("button", {
+                  class: "dialkit-timeline-group-toggle",
+                  "data-open": !collapsed,
+                  title: collapsed ? "Expand layer" : "Collapse layer",
+                  onClick: () => toggleGroup(group)
+                }, [chevronIcon()]),
+                (0, import_vue28.h)("span", formatLabel(group))
+              ]),
+              (0, import_vue28.h)("div", { class: "dialkit-timeline-lane" })
+            ]));
+          }
+        }
+        if (clip.group && collapsedGroups.value.has(clip.group)) continue;
+        const isProps = Boolean(clip.tracks?.length);
+        const tracksOpen = isProps && expandedTracks.value.has(clip.key);
+        const stat = computeClipStaticFromValues(values.value, clip, props.meta.duration);
+        const selected = popover.value?.clip.key === clip.key;
+        rows.push((0, import_vue28.h)("div", { key: clip.key, class: "dialkit-timeline-row", "data-grouped": clip.group ? "" : void 0 }, [
+          (0, import_vue28.h)("div", { class: "dialkit-timeline-label" }, [
+            isProps ? (0, import_vue28.h)("button", {
+              class: "dialkit-timeline-group-toggle",
+              "data-open": tracksOpen,
+              title: tracksOpen ? "Collapse properties" : "Expand properties",
+              onClick: (event) => {
+                event.stopPropagation();
+                toggleTracks(clip.key);
+              }
+            }, [chevronIcon()]) : null,
+            clip.label
+          ]),
+          (0, import_vue28.h)("div", { class: "dialkit-timeline-lane" }, [(0, import_vue28.h)(TimelineClip, {
+            timelineId: props.meta.id,
+            clip,
+            at: stat.at,
+            duration: stat.duration,
+            loop: stat.loop,
+            steps: clip.stepKeys?.length ? stat.tracks[0]?.steps : void 0,
+            fixedDuration: isProps ? true : stat.isPhysics,
+            composite: isProps,
+            pxPerSecond: pxPerSecond.value,
+            viewStart: safeViewStart.value,
+            timelineDuration: props.meta.duration,
+            selected,
+            selectedStepKey: selected ? popover.value?.stepKey : void 0,
+            onClick: handleBarClick,
+            onDrag: closePopover
+          })])
+        ]));
+        if (!tracksOpen) continue;
+        for (const trackRef of clip.tracks ?? []) {
+          const track = stat.tracks.find((candidate) => candidate.prop === trackRef.prop);
+          if (!track) continue;
+          const trackKey = `${clip.key}.${trackRef.prop}`;
+          const trackMeta = {
+            key: trackKey,
+            label: `${clip.label} \xB7 ${formatLabel(trackRef.prop)}`,
+            color: clip.color,
+            loop: clip.loop,
+            group: clip.group,
+            stepKeys: trackRef.stepKeys
+          };
+          const trackSelected = popover.value?.clip.key === trackKey;
+          rows.push((0, import_vue28.h)("div", { key: trackKey, class: "dialkit-timeline-row dialkit-timeline-track-row", "data-grouped": clip.group ? "" : void 0 }, [
+            (0, import_vue28.h)("div", { class: "dialkit-timeline-label" }, formatLabel(trackRef.prop)),
+            (0, import_vue28.h)("div", { class: "dialkit-timeline-lane" }, [(0, import_vue28.h)(TimelineClip, {
+              timelineId: props.meta.id,
+              clip: trackMeta,
+              at: stat.at + track.delay,
+              duration: track.duration,
+              loop: stat.loop,
+              steps: trackRef.stepKeys?.length ? track.steps : void 0,
+              fixedDuration: !trackRef.stepKeys?.length && track.steps[0]?.isPhysics === true,
+              baseAt: stat.at,
+              delayMode: true,
+              pxPerSecond: pxPerSecond.value,
+              viewStart: safeViewStart.value,
+              timelineDuration: props.meta.duration,
+              selected: trackSelected,
+              selectedStepKey: trackSelected ? popover.value?.stepKey : void 0,
+              onClick: openClipPopover,
+              onDrag: closePopover
+            })])
+          ]));
+        }
+      }
+      return rows;
+    };
+    return () => (0, import_vue28.h)("div", { class: "dialkit-timeline-section" }, [
+      (0, import_vue28.h)("div", { class: "dialkit-timeline-header", "data-open": open.value || void 0 }, [
+        (0, import_vue28.h)("div", { class: "dialkit-timeline-identity" }, [
+          (0, import_vue28.h)("span", { class: "dialkit-timeline-title" }, props.meta.name)
+        ]),
+        !open.value ? (0, import_vue28.h)(TimelineOverview, {
+          id: props.meta.id,
+          duration: props.meta.duration,
+          viewStart: safeViewStart.value,
+          viewEnd: viewEnd.value,
+          onNavigate: centerViewAt
+        }) : null,
+        (0, import_vue28.h)("div", { class: "dialkit-timeline-actions" }, [
+          (0, import_vue28.h)("button", {
+            class: "dialkit-timeline-loop-toggle",
+            "data-active": loopRegion.value ? "true" : void 0,
+            disabled: !loopRegion.value,
+            title: loopRegion.value ? "Looping a region \xB7 click to loop the whole timeline" : "Looping the whole timeline \xB7 drag the ruler to set a loop region",
+            "aria-label": loopRegion.value ? "Clear loop region" : "Looping whole timeline",
+            "aria-pressed": loopRegion.value ? "true" : "false",
+            onClick: handleClearLoopRegion
+          }, [
+            (0, import_vue28.h)(
+              "svg",
+              { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true" },
+              ICON_LOOP.map((d) => (0, import_vue28.h)("path", { d }))
+            )
+          ]),
+          (0, import_vue28.h)(PlayPauseButton, { id: props.meta.id }),
+          (0, import_vue28.h)(ReplayButton, { onReplay: handleReplay }),
+          (0, import_vue28.h)("button", { class: "dialkit-toolbar-add", title: "Add timeline version", "aria-label": "Add timeline version", onClick: handleAddPreset }, [
+            (0, import_vue28.h)(
+              "svg",
+              { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2.5", "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true" },
+              ICON_ADD_PRESET.map((path) => (0, import_vue28.h)("path", { d: path }))
+            )
+          ]),
+          (0, import_vue28.h)(PresetManager, { panelId: props.meta.id, presets: presets.value, activePresetId: activePresetId.value }),
+          (0, import_vue28.h)("button", {
+            class: "dialkit-toolbar-add",
+            title: "Copy parameters",
+            "aria-label": copied.value ? "Copied parameters" : "Copy parameters",
+            onClick: handleCopy
+          }, [(0, import_vue28.h)("span", { style: { position: "relative", width: "16px", height: "16px" } }, [
+            copied.value ? (0, import_vue28.h)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", style: iconStyle }, [(0, import_vue28.h)("path", { d: ICON_CHECK })]) : (0, import_vue28.h)("svg", { viewBox: "0 0 24 24", fill: "none", style: iconStyle }, [
+              (0, import_vue28.h)("path", { d: ICON_CLIPBOARD.board, stroke: "currentColor", "stroke-width": "2", "stroke-linejoin": "round" }),
+              (0, import_vue28.h)("path", { d: ICON_CLIPBOARD.sparkle, fill: "currentColor" }),
+              (0, import_vue28.h)("path", { d: ICON_CLIPBOARD.body, stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round" })
+            ])
+          ])]),
+          (0, import_vue28.h)("button", {
+            class: "dialkit-timeline-chevron",
+            "data-open": open.value,
+            "aria-expanded": open.value,
+            title: open.value ? "Collapse timeline" : "Expand timeline",
+            onClick: () => {
+              open.value = !open.value;
+            }
+          }, [chevronIcon()])
+        ])
+      ]),
+      open.value ? (0, import_vue28.h)("div", {
+        class: "dialkit-timeline-body",
+        onWheel: handleTimelineWheel,
+        onPointerdown: (event) => {
+          const target = event.target;
+          if (target.closest(".dialkit-timeline-label, button")) return;
+          if (!event.shiftKey && target.closest(".dialkit-timeline-clip")) return;
+          const rect = laneAreaRef.value?.getBoundingClientRect();
+          if (!rect) return;
+          event.preventDefault();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          const reset = event.shiftKey;
+          trackScrub = {
+            wasPlaying: TimelineStore.getTransport(props.meta.id).playing,
+            rect,
+            viewStart: reset ? 0 : safeViewStart.value,
+            visibleDuration: reset ? props.meta.duration : visibleDuration.value
+          };
+          if (reset) resetView();
+          popover.value = null;
+          TimelineStore.pause(props.meta.id);
+          seekTrack(event.clientX);
+        },
+        onPointermove: (event) => trackScrub && seekTrack(event.clientX),
+        onPointerup: finishTrack,
+        onPointercancel: finishTrack,
+        onLostpointercapture: finishTrack
+      }, [(0, import_vue28.h)("div", { class: "dialkit-timeline-grid" }, [
+        (0, import_vue28.h)("div", { class: "dialkit-timeline-row dialkit-timeline-ruler-row" }, [
+          (0, import_vue28.h)("div", { class: "dialkit-timeline-label" }),
+          (0, import_vue28.h)("div", {
+            ref: laneAreaRef,
+            class: "dialkit-timeline-ruler",
+            title: "Click to seek \xB7 drag to set a loop region \xB7 Option-drag to zoom \xB7 Shift-drag to reset zoom",
+            onPointerdown: (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              const rect = event.currentTarget.getBoundingClientRect();
+              if (rect.width <= 0) return;
+              event.currentTarget.setPointerCapture(event.pointerId);
+              if (!event.altKey) {
+                const reset = event.shiftKey;
+                const gestureViewStart = reset ? 0 : safeViewStart.value;
+                const gestureVisible = reset ? props.meta.duration : visibleDuration.value;
+                if (reset) resetView();
+                rulerGesture = {
+                  downClientX: event.clientX,
+                  downTime: rulerTimeFromClientX(event.clientX, rect, gestureViewStart, gestureVisible),
+                  rect,
+                  viewStart: gestureViewStart,
+                  visibleDuration: gestureVisible,
+                  moved: false
+                };
+                return;
+              }
+              const ratio = clamp5((event.clientX - rect.left) / rect.width, 0, 1);
+              zoomDrag = {
+                pointerX: event.clientX,
+                zoom: zoom.value,
+                anchorRatio: ratio,
+                anchorTime: safeViewStart.value + ratio * visibleDuration.value,
+                moved: false
+              };
+            },
+            onPointermove: (event) => {
+              const gesture = rulerGesture;
+              if (gesture) {
+                const dx2 = event.clientX - gesture.downClientX;
+                if (!gesture.moved && Math.abs(dx2) <= LOOP_DRAG_THRESHOLD_PX) return;
+                gesture.moved = true;
+                const current = rulerTimeFromClientX(event.clientX, gesture.rect, gesture.viewStart, gesture.visibleDuration);
+                loopDrag.value = {
+                  start: Math.min(gesture.downTime, current),
+                  end: Math.max(gesture.downTime, current)
+                };
+                return;
+              }
+              if (!zoomDrag || props.meta.duration <= 0) return;
+              const dx = event.clientX - zoomDrag.pointerX;
+              if (!zoomDrag.moved && Math.abs(dx) <= DRAG_THRESHOLD_PX) return;
+              zoomDrag.moved = true;
+              const nextZoom = clamp5(zoomDrag.zoom * Math.exp(dx / ZOOM_DRAG_DISTANCE), 1, maxZoom.value);
+              const duration = props.meta.duration / nextZoom;
+              zoom.value = nextZoom;
+              viewStart.value = clampViewStart(zoomDrag.anchorTime - zoomDrag.anchorRatio * duration, props.meta.duration, duration);
+            },
+            onPointerup: finishRuler,
+            onPointercancel: cancelRuler,
+            onLostpointercapture: cancelRuler
+          }, [
+            ...(() => {
+              const activeLoop = loopDrag.value ?? loopRegion.value;
+              if (!activeLoop || pxPerSecond.value <= 0) return [];
+              const left = (activeLoop.start - safeViewStart.value) * pxPerSecond.value;
+              const width = Math.max(0, (activeLoop.end - activeLoop.start) * pxPerSecond.value);
+              return [
+                (0, import_vue28.h)("div", { key: "loop-dim-before", class: "dialkit-timeline-loop-dim", style: { left: "0px", width: `${Math.max(0, left)}px` } }),
+                (0, import_vue28.h)("div", { key: "loop-dim-after", class: "dialkit-timeline-loop-dim", style: { left: `${left + width}px`, right: "0px" } }),
+                (0, import_vue28.h)("div", { key: "loop-band", class: "dialkit-timeline-loop-band", "data-live": loopDrag.value ? "true" : void 0, style: { left: `${left}px`, width: `${width}px` } })
+              ];
+            })(),
+            ...ticks.value.fine.map((time) => (0, import_vue28.h)("div", { key: `fine:${time}`, class: "dialkit-timeline-tick dialkit-timeline-tick-fine", style: { left: `${(time - safeViewStart.value) * pxPerSecond.value}px` } })),
+            ...ticks.value.medium.map((time) => (0, import_vue28.h)("div", { key: `medium:${time}`, class: "dialkit-timeline-tick dialkit-timeline-tick-medium", style: { left: `${(time - safeViewStart.value) * pxPerSecond.value}px` } })),
+            ...ticks.value.major.map((time) => (0, import_vue28.h)("div", { key: time, class: "dialkit-timeline-tick", style: { left: `${(time - safeViewStart.value) * pxPerSecond.value}px` } }, [
+              (0, import_vue28.h)("span", { class: "dialkit-timeline-tick-label" }, formatRulerSeconds(time, ticks.value.majorStep))
+            ]))
+          ])
+        ]),
+        ...renderRows(),
+        pxPerSecond.value > 0 ? (0, import_vue28.h)(TimelinePlayheadFlag, {
+          id: props.meta.id,
+          duration: props.meta.duration,
+          pxPerSecond: pxPerSecond.value,
+          viewStart: safeViewStart.value,
+          viewEnd: viewEnd.value,
+          laneWidth: laneWidth.value,
+          ruler: laneAreaRef.value ?? void 0,
+          onResetView: resetView
+        }) : null
+      ]), zoom.value > 1 ? (0, import_vue28.h)("div", { class: "dialkit-timeline-scroll-row" }, [
+        (0, import_vue28.h)("div", { class: "dialkit-timeline-label" }),
+        (0, import_vue28.h)("div", {
+          ref: horizontalScrollRef,
+          class: "dialkit-timeline-horizontal-scroll",
+          "aria-label": "Timeline horizontal scroll",
+          onScroll: handleHorizontalScroll
+        }, [(0, import_vue28.h)("div", { style: { width: `${laneWidth.value * zoom.value}px` } })])
+      ]) : null]) : null,
+      popover.value ? (0, import_vue28.h)(ClipPopover, {
+        panelId: props.meta.id,
+        popover: popover.value,
+        values: values.value,
+        theme: props.theme,
+        onClose: closePopover
+      }) : null
+    ]);
+  }
+});
+function chevronIcon() {
+  return (0, import_vue28.h)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2.5", "stroke-linecap": "round", "stroke-linejoin": "round" }, [
+    (0, import_vue28.h)("path", { d: ICON_CHEVRON })
+  ]);
+}
+var ClipPopover = (0, import_vue28.defineComponent)({
+  props: {
+    panelId: { type: String, required: true },
+    popover: { type: Object, required: true },
+    values: { type: Object, required: true },
+    theme: { type: String, required: true },
+    onClose: { type: Function, required: true }
+  },
+  setup(props) {
+    const element = (0, import_vue28.ref)(null);
+    const naturalHeight = (0, import_vue28.ref)(0);
+    const viewport = (0, import_vue28.ref)(readViewport());
+    let observer;
+    const measure = () => {
+      if (element.value) naturalHeight.value = element.value.scrollHeight + 2;
+    };
+    const updateViewport = () => {
+      viewport.value = readViewport();
+    };
+    const outside = (event) => {
+      const target = event.target;
+      if (element.value?.contains(target) || target.closest?.(".dialkit-timeline-clip") || target.closest?.(".dialkit-timeline-label")) return;
+      props.onClose();
+    };
+    const keydown = (event) => {
+      if (event.key === "Escape") props.onClose();
+    };
+    (0, import_vue28.onMounted)(() => {
+      measure();
+      observer = new ResizeObserver(measure);
+      if (element.value) observer.observe(element.value.querySelector(".dialkit-timeline-popover-body") ?? element.value);
+      window.addEventListener("resize", updateViewport);
+      window.visualViewport?.addEventListener("resize", updateViewport);
+      window.visualViewport?.addEventListener("scroll", updateViewport);
+      document.addEventListener("pointerdown", outside, true);
+      document.addEventListener("keydown", keydown);
+    });
+    (0, import_vue28.onUnmounted)(() => {
+      observer?.disconnect();
+      window.removeEventListener("resize", updateViewport);
+      window.visualViewport?.removeEventListener("resize", updateViewport);
+      window.visualViewport?.removeEventListener("scroll", updateViewport);
+      document.removeEventListener("pointerdown", outside, true);
+      document.removeEventListener("keydown", keydown);
+    });
+    return () => {
+      const { clip, stepKey } = props.popover;
+      let controls;
+      let title;
+      if (stepKey) {
+        controls = getClipControls(props.panelId, `${clip.key}.${stepKey}`);
+        if (stepKey === clip.stepKeys?.[0]) {
+          const from = getControlAt(props.panelId, `${clip.key}.from`);
+          if (from) {
+            const index = controls.findIndex((control) => control.path === `${clip.key}.${stepKey}.to`);
+            controls = index >= 0 ? [...controls.slice(0, index), from, ...controls.slice(index)] : [...controls, from];
+          }
+        }
+        title = `${clip.label} \xB7 ${formatStepLabel(stepKey)}`;
+      } else {
+        controls = getClipControls(props.panelId, clip.key, clipPopoverExclusions(clip));
+        title = clip.label;
+      }
+      if (controls.length === 0) return null;
+      const target = stepKey ? `${clip.key}.${stepKey}` : clip.key;
+      const durationMeta = getControlAt(props.panelId, `${target}.duration`);
+      const durationValue = durationMeta ? props.values[durationMeta.path] : void 0;
+      const transitionDuration = durationMeta?.type === "slider" && typeof durationValue === "number" ? {
+        value: durationValue,
+        onChange: (next) => DialStore.updateValue(props.panelId, durationMeta.path, next),
+        min: Math.max(TIMELINE_MIN_CLIP_DURATION, durationMeta.min ?? 0),
+        max: durationMeta.max,
+        step: durationMeta.step
+      } : void 0;
+      const current = viewport.value;
+      const right = current.offsetLeft + current.width;
+      const bottom = current.offsetTop + current.height;
+      const width = Math.min(POPOVER_WIDTH, Math.max(220, current.width - 24));
+      const left = clamp5(props.popover.anchor.left + props.popover.anchor.width / 2 - width / 2, current.offsetLeft + 12, Math.max(current.offsetLeft + 12, right - width - 12));
+      const above = Math.max(0, props.popover.anchor.top - current.offsetTop - 22);
+      const below = Math.max(0, bottom - props.popover.anchor.bottom - 22);
+      const placeAbove = naturalHeight.value === 0 ? above >= below : naturalHeight.value <= above || naturalHeight.value > below && above >= below;
+      const availableHeight = placeAbove ? above : below;
+      const renderedHeight = Math.min(naturalHeight.value || availableHeight, availableHeight);
+      const rawTop = placeAbove ? props.popover.anchor.top - 10 - renderedHeight : props.popover.anchor.bottom + 10;
+      const top = clamp5(rawTop, current.offsetTop + 12, Math.max(current.offsetTop + 12, bottom - renderedHeight - 12));
+      return (0, import_vue28.h)(import_vue28.Teleport, { to: "body" }, [(0, import_vue28.h)("div", { class: "dialkit-root", "data-theme": props.theme }, [
+        (0, import_vue28.h)("div", {
+          ref: element,
+          class: "dialkit-timeline-popover",
+          "data-placement": placeAbove ? "above" : "below",
+          style: { left: `${left}px`, top: `${top}px`, width: `${width}px`, maxHeight: `${availableHeight}px`, visibility: naturalHeight.value > 0 ? "visible" : "hidden" },
+          role: "dialog",
+          "aria-label": `Edit ${title}`
+        }, [
+          (0, import_vue28.h)("div", { class: "dialkit-timeline-popover-header" }, [
+            (0, import_vue28.h)("span", { class: "dialkit-timeline-popover-title" }, title),
+            (0, import_vue28.h)("button", { class: "dialkit-timeline-popover-close", title: "Close editor", "aria-label": "Close editor", onClick: props.onClose }, [
+              (0, import_vue28.h)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round" }, [(0, import_vue28.h)("path", { d: "M6 6L18 18M18 6L6 18" })])
+            ])
+          ]),
+          (0, import_vue28.h)("div", { class: "dialkit-timeline-popover-body" }, [(0, import_vue28.h)(ControlRenderer, {
+            panelId: props.panelId,
+            controls,
+            values: timelinePopoverDisplayValues(props.values, clip.key, clip.stepKeys, stepKey),
+            transitionDuration
+          })])
+        ])
+      ])]);
+    };
+  }
+});
+function readViewport() {
+  return {
+    width: window.visualViewport?.width ?? window.innerWidth,
+    height: window.visualViewport?.height ?? window.innerHeight,
+    offsetLeft: window.visualViewport?.offsetLeft ?? 0,
+    offsetTop: window.visualViewport?.offsetTop ?? 0
+  };
+}
+function clipPopoverExclusions(clip) {
+  return /* @__PURE__ */ new Set([...clip.stepKeys ?? [], ...clip.tracks?.map((track) => track.prop) ?? []]);
+}
+function getClipControls(panelId, path, exclusions) {
+  const panel = DialStore.getPanel(panelId);
+  const folder = panel ? findControl(panel.controls, path) : null;
+  if (!folder?.children) return [];
+  return folder.children.filter((control) => {
+    const key = control.path.slice(path.length + 1);
+    return key !== "at" && key !== "duration" && !exclusions?.has(key);
+  });
+}
+function getControlAt(panelId, path) {
+  const panel = DialStore.getPanel(panelId);
+  return panel ? findControl(panel.controls, path) : null;
+}
+var TimelineClip = (0, import_vue28.defineComponent)({
+  props: {
+    timelineId: { type: String, required: true },
+    clip: { type: Object, required: true },
+    at: { type: Number, required: true },
+    duration: { type: Number, required: true },
+    loop: { type: String, required: true },
+    steps: Array,
+    fixedDuration: { type: Boolean, required: true },
+    composite: Boolean,
+    baseAt: { type: Number, default: 0 },
+    delayMode: Boolean,
+    pxPerSecond: { type: Number, required: true },
+    viewStart: { type: Number, required: true },
+    timelineDuration: { type: Number, required: true },
+    selected: { type: Boolean, required: true },
+    selectedStepKey: String,
+    onClick: { type: Function, required: true },
+    onDrag: { type: Function, required: true }
+  },
+  setup(props) {
+    const dragging = (0, import_vue28.ref)(false);
+    let drag = null;
+    const finish = (event) => {
+      const previous = drag;
+      drag = null;
+      dragging.value = false;
+      if (previous && !previous.moved && event) {
+        const anchor = previous.clickEl ?? event.currentTarget;
+        props.onClick(props.clip, anchor.getBoundingClientRect(), previous.clickEl?.dataset.step);
+      }
+    };
+    return () => {
+      const width = Math.max(props.duration * props.pxPerSecond, 14);
+      const isSteps = Boolean(props.steps?.length);
+      const looping = props.loop === "repeat" && props.duration > 0;
+      const resizable = props.duration > 0 && !props.fixedDuration && !props.composite;
+      const durationText = `${props.fixedDuration && !props.composite ? "~" : ""}${formatSeconds(props.duration)}`;
+      const ghosts = [];
+      if (looping) {
+        const first = Math.max(1, Math.floor((props.viewStart - props.at) / props.duration));
+        for (let offset = 0; offset < 256; offset++) {
+          const index = first + offset;
+          const start = props.at + props.duration * index;
+          if (start >= props.timelineDuration - 1e-6) break;
+          const duration = Math.min(props.duration, props.timelineDuration - start);
+          ghosts.push((0, import_vue28.h)("div", {
+            key: `ghost:${index}`,
+            class: "dialkit-timeline-clip-ghost",
+            "data-steps": isSteps || void 0,
+            "aria-hidden": "true",
+            style: { left: `${(start - props.viewStart) * props.pxPerSecond + 1}px`, width: `${Math.max(1, duration * props.pxPerSecond - 2)}px`, background: props.clip.color }
+          }, props.steps?.map((step) => (0, import_vue28.h)("span", { class: "dialkit-timeline-clip-ghost-segment", style: { width: `${step.duration * props.pxPerSecond}px` } }))));
+        }
+      }
+      let cumulative = 0;
+      const boundaries2 = props.steps?.map((step) => cumulative += step.duration) ?? [];
+      const children = [];
+      if (props.composite) {
+        if (width > 56) children.push((0, import_vue28.h)("span", { class: "dialkit-timeline-clip-duration" }, durationText));
+      } else if (isSteps) {
+        for (const step of props.steps ?? []) {
+          const segmentWidth = step.duration * props.pxPerSecond;
+          children.push((0, import_vue28.h)("div", {
+            key: step.key ?? "step",
+            class: "dialkit-timeline-clip-segment",
+            "data-step": step.key,
+            "data-selected": props.selectedStepKey === step.key || void 0,
+            style: { width: `${segmentWidth}px` }
+          }, segmentWidth > 52 ? [(0, import_vue28.h)("span", { class: "dialkit-timeline-clip-duration" }, formatSeconds(step.duration))] : []));
+        }
+        (props.steps ?? []).forEach((step, index) => {
+          if (!step.isPhysics) children.push((0, import_vue28.h)("div", { key: `boundary:${step.key}`, class: "dialkit-timeline-clip-handle", "data-boundary": index, style: { left: `${boundaries2[index] * props.pxPerSecond - 4}px` } }));
+        });
+        if (!props.steps?.[0]?.isPhysics) children.push((0, import_vue28.h)("div", { class: "dialkit-timeline-clip-handle", "data-edge": "start" }));
+      } else {
+        if (resizable) children.push((0, import_vue28.h)("div", { class: "dialkit-timeline-clip-handle", "data-edge": "start" }));
+        if (width > 56) children.push((0, import_vue28.h)("span", { class: "dialkit-timeline-clip-duration" }, durationText));
+        if (resizable) children.push((0, import_vue28.h)("div", { class: "dialkit-timeline-clip-handle", "data-edge": "end" }));
+      }
+      const title = props.composite ? `${props.clip.label} \u2014 composite of its property tracks${looping ? " \xB7 repeats through timeline" : ""} \xB7 click to expand` : `${props.clip.label} \u2014 ${formatSeconds(props.at)} for ${durationText}${props.fixedDuration ? " (duration set by spring physics)" : ""}${looping ? " \xB7 repeats through timeline" : ""}${props.delayMode ? " \xB7 drag to phase-shift" : ""}`;
+      return [...ghosts, (0, import_vue28.h)("div", {
+        class: "dialkit-timeline-clip",
+        "data-steps": isSteps || void 0,
+        "data-composite": props.composite || void 0,
+        "data-selected": props.selected || void 0,
+        "data-dragging": dragging.value || void 0,
+        style: { left: `${(props.at - props.viewStart) * props.pxPerSecond}px`, width: `${width}px`, background: props.composite ? `${props.clip.color}80` : props.clip.color },
+        title,
+        onPointerdown: (event) => {
+          if (event.shiftKey) return;
+          event.stopPropagation();
+          const target = event.target;
+          let mode = "move";
+          let boundaryIndex;
+          if (target.dataset.boundary !== void 0) {
+            mode = "boundary";
+            boundaryIndex = Number(target.dataset.boundary);
+          } else if (!props.fixedDuration) {
+            const edge = target.dataset.edge;
+            if (edge) mode = edge;
+          }
+          drag = {
+            mode,
+            boundaryIndex,
+            pointerX: event.clientX,
+            at: props.at,
+            duration: props.duration,
+            stepDurations: props.steps?.map((step) => step.duration),
+            clickEl: target.closest?.("[data-step]"),
+            moved: false
+          };
+          event.currentTarget.setPointerCapture(event.pointerId);
+        },
+        onPointermove: (event) => {
+          if (!drag || props.pxPerSecond <= 0) return;
+          const dx = event.clientX - drag.pointerX;
+          if (!drag.moved) {
+            if (Math.abs(dx) <= DRAG_THRESHOLD_PX) return;
+            drag.moved = true;
+            dragging.value = true;
+            props.onDrag();
+          }
+          const dt = dx / props.pxPerSecond;
+          if (drag.mode === "boundary" && props.steps && drag.stepDurations) {
+            const index = drag.boundaryIndex ?? 0;
+            const others = drag.stepDurations.reduce((sum, duration, stepIndex) => stepIndex === index ? sum : sum + duration, 0);
+            DialStore.updateValue(props.timelineId, `${props.clip.key}.${props.steps[index].key ?? ""}.duration`, clampStepResize(drag.stepDurations[index] + dt, drag.at, others, props.timelineDuration));
+          } else if (drag.mode === "move") {
+            if (props.delayMode) DialStore.updateValue(props.timelineId, `${props.clip.key}.delay`, clampTrackDelay(drag.at + dt - props.baseAt, props.baseAt, drag.duration, props.timelineDuration));
+            else DialStore.updateValue(props.timelineId, `${props.clip.key}.at`, clampClipMove(drag.at + dt, drag.duration, props.timelineDuration));
+          } else if (drag.mode === "end") {
+            DialStore.updateValue(props.timelineId, `${props.clip.key}.duration`, clampClipResizeEnd(drag.duration + dt, drag.at, props.timelineDuration));
+          } else if (props.steps && drag.stepDurations) {
+            const next = clampClipResizeStart(Math.max(drag.at + dt, Math.max(props.baseAt, 0)), drag.at, drag.stepDurations[0]);
+            DialStore.updateValues(props.timelineId, {
+              [props.delayMode ? `${props.clip.key}.delay` : `${props.clip.key}.at`]: props.delayMode ? Math.max(0, next.at - props.baseAt) : next.at,
+              [`${props.clip.key}.${props.steps[0].key ?? ""}.duration`]: next.duration
+            });
+          } else {
+            const next = clampClipResizeStart(Math.max(drag.at + dt, Math.max(props.baseAt, 0)), drag.at, drag.duration);
+            DialStore.updateValues(props.timelineId, {
+              [props.delayMode ? `${props.clip.key}.delay` : `${props.clip.key}.at`]: props.delayMode ? Math.max(0, next.at - props.baseAt) : next.at,
+              [`${props.clip.key}.duration`]: next.duration
+            });
+          }
+        },
+        onPointerup: finish,
+        onPointercancel: () => finish(),
+        onLostpointercapture: () => finish()
+      }, children), looping ? (0, import_vue28.h)("span", { class: "dialkit-timeline-loop-infinity", "aria-hidden": "true", title: "Repeats indefinitely" }, "\u221E") : null];
+    };
+  }
+});
+
 // src/vue/components/ShortcutsMenu.ts
-var import_vue25 = require("vue");
+var import_vue29 = require("vue");
 function formatShortcutKey(sc) {
   if (!sc.key) return "\u2014";
   const mod = sc.modifier === "alt" ? "\u2325" : sc.modifier === "shift" ? "\u21E7" : sc.modifier === "meta" ? "\u2318" : "";
@@ -5566,7 +8245,7 @@ function formatInteraction(sc) {
       return "scroll";
   }
 }
-var ShortcutsMenu = (0, import_vue25.defineComponent)({
+var ShortcutsMenu = (0, import_vue29.defineComponent)({
   name: "DialKitShortcutsMenu",
   props: {
     panelId: {
@@ -5575,10 +8254,10 @@ var ShortcutsMenu = (0, import_vue25.defineComponent)({
     }
   },
   setup(props) {
-    const isOpen = (0, import_vue25.ref)(false);
-    const triggerRef = (0, import_vue25.ref)(null);
-    const dropdownRef = (0, import_vue25.ref)(null);
-    const pos = (0, import_vue25.ref)({ top: 0, right: 0 });
+    const isOpen = (0, import_vue29.ref)(false);
+    const triggerRef = (0, import_vue29.ref)(null);
+    const dropdownRef = (0, import_vue29.ref)(null);
+    const pos = (0, import_vue29.ref)({ top: 0, right: 0 });
     const open = () => {
       const rect = triggerRef.value?.getBoundingClientRect();
       if (rect) {
@@ -5608,7 +8287,7 @@ var ShortcutsMenu = (0, import_vue25.defineComponent)({
         mousedownHandler = null;
       }
     };
-    (0, import_vue25.onUnmounted)(() => {
+    (0, import_vue29.onUnmounted)(() => {
       removeOutsideClickListener();
     });
     return () => {
@@ -5637,13 +8316,13 @@ var ShortcutsMenu = (0, import_vue25.defineComponent)({
         removeOutsideClickListener();
       }
       return [
-        (0, import_vue25.h)("button", {
+        (0, import_vue29.h)("button", {
           ref: triggerRef,
           class: "dialkit-shortcuts-trigger",
           onClick: toggle,
           title: "Keyboard shortcuts"
         }, [
-          (0, import_vue25.h)("svg", {
+          (0, import_vue29.h)("svg", {
             viewBox: "0 0 24 24",
             fill: "none",
             stroke: "currentColor",
@@ -5651,16 +8330,16 @@ var ShortcutsMenu = (0, import_vue25.defineComponent)({
             "stroke-linecap": "round",
             "stroke-linejoin": "round"
           }, [
-            (0, import_vue25.h)("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
-            (0, import_vue25.h)("path", { d: "M6 10H6.01" }),
-            (0, import_vue25.h)("path", { d: "M10 10H10.01" }),
-            (0, import_vue25.h)("path", { d: "M14 10H14.01" }),
-            (0, import_vue25.h)("path", { d: "M18 10H18.01" }),
-            (0, import_vue25.h)("path", { d: "M8 14H16" })
+            (0, import_vue29.h)("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
+            (0, import_vue29.h)("path", { d: "M6 10H6.01" }),
+            (0, import_vue29.h)("path", { d: "M10 10H10.01" }),
+            (0, import_vue29.h)("path", { d: "M14 10H14.01" }),
+            (0, import_vue29.h)("path", { d: "M18 10H18.01" }),
+            (0, import_vue29.h)("path", { d: "M8 14H16" })
           ])
         ]),
-        isOpen.value ? (0, import_vue25.h)(import_vue25.Teleport, { to: "body" }, [
-          (0, import_vue25.h)("div", {
+        isOpen.value ? (0, import_vue29.h)(import_vue29.Teleport, { to: "body" }, [
+          (0, import_vue29.h)("div", {
             ref: dropdownRef,
             class: "dialkit-root dialkit-shortcuts-dropdown",
             style: {
@@ -5669,19 +8348,19 @@ var ShortcutsMenu = (0, import_vue25.defineComponent)({
               right: `${pos.value.right}px`
             }
           }, [
-            (0, import_vue25.h)("div", { class: "dialkit-shortcuts-title" }, "Keyboard Shortcuts"),
-            (0, import_vue25.h)(
+            (0, import_vue29.h)("div", { class: "dialkit-shortcuts-title" }, "Keyboard Shortcuts"),
+            (0, import_vue29.h)(
               "div",
               { class: "dialkit-shortcuts-list" },
               rows.map(
-                (row) => (0, import_vue25.h)("div", { key: row.path, class: "dialkit-shortcuts-row" }, [
-                  (0, import_vue25.h)("span", { class: "dialkit-shortcuts-row-key" }, formatShortcutKey(row.shortcut)),
-                  (0, import_vue25.h)("span", { class: "dialkit-shortcuts-row-label" }, row.label),
-                  (0, import_vue25.h)("span", { class: "dialkit-shortcuts-row-mode" }, formatInteraction(row.shortcut))
+                (row) => (0, import_vue29.h)("div", { key: row.path, class: "dialkit-shortcuts-row" }, [
+                  (0, import_vue29.h)("span", { class: "dialkit-shortcuts-row-key" }, formatShortcutKey(row.shortcut)),
+                  (0, import_vue29.h)("span", { class: "dialkit-shortcuts-row-label" }, row.label),
+                  (0, import_vue29.h)("span", { class: "dialkit-shortcuts-row-mode" }, formatInteraction(row.shortcut))
                 ])
               )
             ),
-            (0, import_vue25.h)("div", { class: "dialkit-shortcuts-hint" }, "See pill badges on controls for keys")
+            (0, import_vue29.h)("div", { class: "dialkit-shortcuts-hint" }, "See pill badges on controls for keys")
           ])
         ]) : null
       ];
@@ -5690,8 +8369,8 @@ var ShortcutsMenu = (0, import_vue25.defineComponent)({
 });
 
 // src/vue/components/Module.ts
-var import_vue26 = require("vue");
-var Module = (0, import_vue26.defineComponent)({
+var import_vue30 = require("vue");
+var Module = (0, import_vue30.defineComponent)({
   name: "DialKitModule",
   props: {
     title: { type: String, required: true },
@@ -5704,11 +8383,11 @@ var Module = (0, import_vue26.defineComponent)({
       props.onEnabledChange?.(enabled);
       emit("enabledChange", enabled);
     };
-    return () => (0, import_vue26.h)("div", { class: "dialkit-module" }, [
-      (0, import_vue26.h)("div", { class: "dialkit-module-header" }, [
-        (0, import_vue26.h)("span", { class: "dialkit-module-title" }, props.title),
-        (0, import_vue26.h)("div", { class: "dialkit-module-switch" }, [
-          (0, import_vue26.h)(SegmentedControl, {
+    return () => (0, import_vue30.h)("div", { class: "dialkit-module" }, [
+      (0, import_vue30.h)("div", { class: "dialkit-module-header" }, [
+        (0, import_vue30.h)("span", { class: "dialkit-module-title" }, props.title),
+        (0, import_vue30.h)("div", { class: "dialkit-module-switch" }, [
+          (0, import_vue30.h)(SegmentedControl, {
             options: [
               { value: "off", label: "Off" },
               { value: "on", label: "On" }
@@ -5718,9 +8397,9 @@ var Module = (0, import_vue26.defineComponent)({
           })
         ])
       ]),
-      (0, import_vue26.h)("div", { class: "dialkit-module-collapse", "data-open": props.enabled }, [
-        (0, import_vue26.h)("div", { class: "dialkit-module-collapse-clip" }, [
-          (0, import_vue26.h)("div", { class: "dialkit-module-inner" }, slots.default ? slots.default() : [])
+      (0, import_vue30.h)("div", { class: "dialkit-module-collapse", "data-open": props.enabled }, [
+        (0, import_vue30.h)("div", { class: "dialkit-module-collapse-clip" }, [
+          (0, import_vue30.h)("div", { class: "dialkit-module-inner" }, slots.default ? slots.default() : [])
         ])
       ])
     ]);
@@ -5728,8 +8407,8 @@ var Module = (0, import_vue26.defineComponent)({
 });
 
 // src/vue/components/ButtonGroup.ts
-var import_vue27 = require("vue");
-var ButtonGroup = (0, import_vue27.defineComponent)({
+var import_vue31 = require("vue");
+var ButtonGroup = (0, import_vue31.defineComponent)({
   name: "DialKitButtonGroup",
   props: {
     buttons: {
@@ -5738,18 +8417,18 @@ var ButtonGroup = (0, import_vue27.defineComponent)({
     }
   },
   setup(props) {
-    return () => (0, import_vue27.h)(
+    return () => (0, import_vue31.h)(
       "div",
       { class: "dialkit-button-group" },
       props.buttons.map(
-        (button) => (0, import_vue27.h)("button", { class: "dialkit-button", onClick: button.onClick }, button.label)
+        (button) => (0, import_vue31.h)("button", { class: "dialkit-button", onClick: button.onClick }, button.label)
       )
     );
   }
 });
 
 // src/vue/components/WaveformVisualization.ts
-var import_vue28 = require("vue");
+var import_vue32 = require("vue");
 
 // src/waveform-dsp.ts
 function mixToMono(buffer) {
@@ -6142,7 +8821,7 @@ function createWaveformEngine(canvas, get) {
 }
 
 // src/vue/components/WaveformVisualization.ts
-var WaveformVisualization = (0, import_vue28.defineComponent)({
+var WaveformVisualization = (0, import_vue32.defineComponent)({
   name: "DialKitWaveformVisualization",
   props: {
     buffer: { type: Object, default: null },
@@ -6164,10 +8843,10 @@ var WaveformVisualization = (0, import_vue28.defineComponent)({
     height: { type: Number, default: 140 }
   },
   setup(props) {
-    const canvasRef = (0, import_vue28.ref)(null);
-    const zoom = (0, import_vue28.ref)(1);
+    const canvasRef = (0, import_vue32.ref)(null);
+    const zoom = (0, import_vue32.ref)(1);
     let engine = null;
-    (0, import_vue28.onMounted)(() => {
+    (0, import_vue32.onMounted)(() => {
       if (!canvasRef.value) return;
       engine = createWaveformEngine(
         canvasRef.value,
@@ -6193,17 +8872,17 @@ var WaveformVisualization = (0, import_vue28.defineComponent)({
         })
       );
     });
-    (0, import_vue28.onBeforeUnmount)(() => engine?.destroy());
-    const minusIcon = () => (0, import_vue28.h)("svg", { viewBox: "0 0 16 16", fill: "none" }, [
-      (0, import_vue28.h)("path", { d: "M3.5 8h9", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" })
+    (0, import_vue32.onBeforeUnmount)(() => engine?.destroy());
+    const minusIcon = () => (0, import_vue32.h)("svg", { viewBox: "0 0 16 16", fill: "none" }, [
+      (0, import_vue32.h)("path", { d: "M3.5 8h9", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" })
     ]);
-    const plusIcon = () => (0, import_vue28.h)("svg", { viewBox: "0 0 16 16", fill: "none" }, [
-      (0, import_vue28.h)("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" })
+    const plusIcon = () => (0, import_vue32.h)("svg", { viewBox: "0 0 16 16", fill: "none" }, [
+      (0, import_vue32.h)("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" })
     ]);
     return () => {
       const framingLoop = props.autoZoomOnLoop && !!props.loop;
       const children = [
-        (0, import_vue28.h)("canvas", {
+        (0, import_vue32.h)("canvas", {
           ref: canvasRef,
           class: "dialkit-waveform-viz",
           style: { width: `${props.width}px`, height: `${props.height}px` }
@@ -6213,7 +8892,7 @@ var WaveformVisualization = (0, import_vue28.defineComponent)({
         const buttons = [];
         if (zoom.value > 1) {
           buttons.push(
-            (0, import_vue28.h)(
+            (0, import_vue32.h)(
               "button",
               {
                 type: "button",
@@ -6227,7 +8906,7 @@ var WaveformVisualization = (0, import_vue28.defineComponent)({
           );
         }
         buttons.push(
-          (0, import_vue28.h)(
+          (0, import_vue32.h)(
             "button",
             {
               type: "button",
@@ -6240,15 +8919,15 @@ var WaveformVisualization = (0, import_vue28.defineComponent)({
             [plusIcon()]
           )
         );
-        children.push((0, import_vue28.h)("div", { class: "dialkit-waveform-zoom" }, buttons));
+        children.push((0, import_vue32.h)("div", { class: "dialkit-waveform-zoom" }, buttons));
       }
-      return (0, import_vue28.h)("div", { class: "dialkit-waveform-viz-wrap", style: { width: `${props.width}px` } }, children);
+      return (0, import_vue32.h)("div", { class: "dialkit-waveform-viz-wrap", style: { width: `${props.width}px` } }, children);
     };
   }
 });
 
 // src/vue/components/AnalyserVisualization.ts
-var import_vue29 = require("vue");
+var import_vue33 = require("vue");
 
 // src/analyser-core.ts
 function byteFreqToUnit(v) {
@@ -6317,12 +8996,12 @@ var SPRING_MAX_STEP = 1 / 240;
 function stepSprings(pos, vel, targets, stiffness, damping, dt) {
   let remaining = dt;
   while (remaining > 0) {
-    const h30 = Math.min(remaining, SPRING_MAX_STEP);
-    remaining -= h30;
+    const h33 = Math.min(remaining, SPRING_MAX_STEP);
+    remaining -= h33;
     for (let i = 0; i < pos.length; i++) {
       const accel = -stiffness * (pos[i] - targets[i]) - damping * vel[i];
-      vel[i] += accel * h30;
-      pos[i] += vel[i] * h30;
+      vel[i] += accel * h33;
+      pos[i] += vel[i] * h33;
     }
   }
 }
@@ -6585,7 +9264,7 @@ function createAnalyserEngine(canvas, get) {
 }
 
 // src/vue/components/AnalyserVisualization.ts
-var AnalyserVisualization = (0, import_vue29.defineComponent)({
+var AnalyserVisualization = (0, import_vue33.defineComponent)({
   name: "DialKitAnalyserVisualization",
   props: {
     analyser: { type: Object, default: null },
@@ -6607,9 +9286,9 @@ var AnalyserVisualization = (0, import_vue29.defineComponent)({
     height: { type: Number, default: 140 }
   },
   setup(props) {
-    const canvasRef = (0, import_vue29.ref)(null);
+    const canvasRef = (0, import_vue33.ref)(null);
     let engine = null;
-    (0, import_vue29.onMounted)(() => {
+    (0, import_vue33.onMounted)(() => {
       if (!canvasRef.value) return;
       engine = createAnalyserEngine(
         canvasRef.value,
@@ -6631,10 +9310,10 @@ var AnalyserVisualization = (0, import_vue29.defineComponent)({
         })
       );
     });
-    (0, import_vue29.onBeforeUnmount)(() => engine?.destroy());
+    (0, import_vue33.onBeforeUnmount)(() => engine?.destroy());
     return () => {
       const children = [
-        (0, import_vue29.h)("canvas", {
+        (0, import_vue33.h)("canvas", {
           ref: canvasRef,
           class: "dialkit-analyser-viz",
           style: { width: `${props.width}px`, height: `${props.height}px` }
@@ -6644,7 +9323,7 @@ var AnalyserVisualization = (0, import_vue29.defineComponent)({
         const buttons = [];
         if (props.onMuteChange) {
           buttons.push(
-            (0, import_vue29.h)(
+            (0, import_vue33.h)(
               "button",
               {
                 type: "button",
@@ -6658,7 +9337,7 @@ var AnalyserVisualization = (0, import_vue29.defineComponent)({
         }
         if (props.onSoloChange) {
           buttons.push(
-            (0, import_vue29.h)(
+            (0, import_vue33.h)(
               "button",
               {
                 type: "button",
@@ -6670,15 +9349,15 @@ var AnalyserVisualization = (0, import_vue29.defineComponent)({
             )
           );
         }
-        children.push((0, import_vue29.h)("div", { class: "dialkit-analyser-actions" }, buttons));
+        children.push((0, import_vue33.h)("div", { class: "dialkit-analyser-actions" }, buttons));
       }
-      return (0, import_vue29.h)("div", { class: "dialkit-analyser-viz-wrap", style: { width: `${props.width}px` } }, children);
+      return (0, import_vue33.h)("div", { class: "dialkit-analyser-viz-wrap", style: { width: `${props.width}px` } }, children);
     };
   }
 });
 
 // src/vue/components/CurveComposer.ts
-var import_vue30 = require("vue");
+var import_vue34 = require("vue");
 
 // src/curve-composer-core.ts
 var CURVE_CYCLE = ["linear", "easeIn", "easeOut", "easeInOut", "spring"];
@@ -6721,7 +9400,7 @@ function deriveEase(type, curvature, steepness = 0, overshoot = 0, anticipate = 
   y1 -= clamp013(anticipate) * BACK_MAX;
   return [x1, y1, x2, y2];
 }
-function bezierAxis(p1, p2, s) {
+function bezierAxis2(p1, p2, s) {
   const u = 1 - s;
   return 3 * u * u * s * p1 + 3 * u * s * s * p2 + s * s * s;
 }
@@ -6733,13 +9412,13 @@ function bezierY(ease, x) {
   const tx = clamp013(x);
   let s = tx;
   for (let i = 0; i < 6; i++) {
-    const xs = bezierAxis(ease[0], ease[2], s) - tx;
+    const xs = bezierAxis2(ease[0], ease[2], s) - tx;
     if (Math.abs(xs) < 1e-5) break;
     const d = bezierAxisDeriv(ease[0], ease[2], s);
     if (Math.abs(d) < 1e-6) break;
     s = clamp013(s - xs / d);
   }
-  return bezierAxis(ease[1], ease[3], s);
+  return bezierAxis2(ease[1], ease[3], s);
 }
 var SPRING_SAMPLES = 72;
 function springPoints(curvature, steepness = 0) {
@@ -7067,7 +9746,7 @@ function triggersCrossed(prevValue, curValue, steps) {
 }
 
 // src/vue/components/CurveComposer.ts
-var CurveComposer = (0, import_vue30.defineComponent)({
+var CurveComposer = (0, import_vue34.defineComponent)({
   name: "DialKitCurveComposer",
   props: {
     /** The curve series (controlled). */
@@ -7108,24 +9787,24 @@ var CurveComposer = (0, import_vue30.defineComponent)({
     height: { type: Number, default: 140 }
   },
   setup(props) {
-    const svgRef = (0, import_vue30.ref)(null);
-    const seriesPlayheadRef = (0, import_vue30.ref)(null);
-    const seriesDotRef = (0, import_vue30.ref)(null);
-    const driverPlayheadRef = (0, import_vue30.ref)(null);
-    const drag = (0, import_vue30.ref)(null);
-    const hover = (0, import_vue30.ref)(null);
-    const layout = (0, import_vue30.computed)(() => composerLayout(props.width, props.height, props.driver != null));
-    const W = (0, import_vue30.computed)(() => layout.value.W);
-    const totalH = (0, import_vue30.computed)(() => layout.value.totalH);
-    const mainRect = (0, import_vue30.computed)(() => layout.value.mainRect);
-    const driverRect = (0, import_vue30.computed)(() => layout.value.driverRect);
-    const composition = (0, import_vue30.computed)(() => ({
+    const svgRef = (0, import_vue34.ref)(null);
+    const seriesPlayheadRef = (0, import_vue34.ref)(null);
+    const seriesDotRef = (0, import_vue34.ref)(null);
+    const driverPlayheadRef = (0, import_vue34.ref)(null);
+    const drag = (0, import_vue34.ref)(null);
+    const hover = (0, import_vue34.ref)(null);
+    const layout = (0, import_vue34.computed)(() => composerLayout(props.width, props.height, props.driver != null));
+    const W = (0, import_vue34.computed)(() => layout.value.W);
+    const totalH = (0, import_vue34.computed)(() => layout.value.totalH);
+    const mainRect = (0, import_vue34.computed)(() => layout.value.mainRect);
+    const driverRect = (0, import_vue34.computed)(() => layout.value.driverRect);
+    const composition = (0, import_vue34.computed)(() => ({
       segments: props.segments,
       driver: props.driver,
       direction: props.direction,
       gap: props.gap
     }));
-    const samplers = (0, import_vue30.computed)(() => buildSamplers(composition.value));
+    const samplers = (0, import_vue34.computed)(() => buildSamplers(composition.value));
     let raf = 0;
     let prevTrigValue = Number.NaN;
     let armW = Number.NaN;
@@ -7164,10 +9843,10 @@ var CurveComposer = (0, import_vue30.defineComponent)({
         prevTrigValue = Number.NaN;
       }
     };
-    (0, import_vue30.onMounted)(() => {
+    (0, import_vue34.onMounted)(() => {
       raf = requestAnimationFrame(tick);
     });
-    (0, import_vue30.onBeforeUnmount)(() => cancelAnimationFrame(raf));
+    (0, import_vue34.onBeforeUnmount)(() => cancelAnimationFrame(raf));
     const hitLayout = () => ({ totalH: totalH.value, driverY: driverRect.value ? driverRect.value.y : null, gap: props.gap });
     const localCoords = (clientX, clientY) => {
       const rect = svgRef.value.getBoundingClientRect();
@@ -7293,15 +9972,15 @@ var CurveComposer = (0, import_vue30.defineComponent)({
       for (let i = 1; i < n; i++) {
         const gx = i / n * W.value;
         lines.push(
-          (0, import_vue30.h)("line", { key: `g-${rect.y}-${i}`, class: "dialkit-cc-grid", x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h })
+          (0, import_vue34.h)("line", { key: `g-${rect.y}-${i}`, class: "dialkit-cc-grid", x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h })
         );
       }
       return lines;
     };
-    const renderLaneBg = (rect, key) => (0, import_vue30.h)("rect", { key, class: "dialkit-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 });
+    const renderLaneBg = (rect, key) => (0, import_vue34.h)("rect", { key, class: "dialkit-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 });
     const diagonal = (rect, span, key) => {
       const d = diagonalLine(rect, span, W.value);
-      return (0, import_vue30.h)("line", { key, class: "dialkit-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 });
+      return (0, import_vue34.h)("line", { key, class: "dialkit-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 });
     };
     return () => {
       const main = mainRect.value;
@@ -7315,7 +9994,7 @@ var CurveComposer = (0, import_vue30.defineComponent)({
       if (props.selectedIndex != null && props.selectedIndex >= 0 && props.selectedIndex < props.segments.length) {
         const span = segmentSpan(props.segments, props.selectedIndex, props.gap);
         children.push(
-          (0, import_vue30.h)("rect", {
+          (0, import_vue34.h)("rect", {
             class: "dialkit-cc-seg-selected",
             x: span[0] * W.value,
             y: main.y,
@@ -7328,7 +10007,7 @@ var CurveComposer = (0, import_vue30.defineComponent)({
       if (hover.value?.kind === "segment" && !drag.value) {
         const span = segmentSpan(props.segments, hover.value.index, props.gap);
         children.push(
-          (0, import_vue30.h)("rect", {
+          (0, import_vue34.h)("rect", {
             class: "dialkit-cc-seg-hover",
             x: span[0] * W.value,
             y: main.y,
@@ -7341,10 +10020,10 @@ var CurveComposer = (0, import_vue30.defineComponent)({
       children.push(
         props.segments.map((seg, i) => {
           const span = segmentSpan(props.segments, i, props.gap);
-          return (0, import_vue30.h)("g", { key: `seg-${i}` }, [
+          return (0, import_vue34.h)("g", { key: `seg-${i}` }, [
             diagonal(main, span, `diag-${i}`),
-            (0, import_vue30.h)("path", { class: "dialkit-cc-curve", d: curvePath(seg, main, span, W.value) }),
-            (0, import_vue30.h)(
+            (0, import_vue34.h)("path", { class: "dialkit-cc-curve", d: curvePath(seg, main, span, W.value) }),
+            (0, import_vue34.h)(
               "text",
               { class: "dialkit-cc-label", x: (span[0] + span[1]) * 0.5 * W.value, y: main.y + 13 },
               seg.type
@@ -7355,7 +10034,7 @@ var CurveComposer = (0, import_vue30.defineComponent)({
       if (props.gap > 0) {
         children.push(
           timelineSlots(props.segments, props.gap).filter((slot) => slot.kind === "gap" && slot.b > slot.a).map(
-            (slot) => (0, import_vue30.h)("path", {
+            (slot) => (0, import_vue34.h)("path", {
               key: `conn-${slot.index}`,
               class: "dialkit-cc-connector",
               d: connectorPath(slot, samplers.value, props.segments.length, main, W.value)
@@ -7365,7 +10044,7 @@ var CurveComposer = (0, import_vue30.defineComponent)({
       }
       children.push(
         interior.map(
-          (bx, i) => (0, import_vue30.h)("line", {
+          (bx, i) => (0, import_vue34.h)("line", {
             key: `b-${i}`,
             class: "dialkit-cc-boundary",
             "data-active": String(
@@ -7379,7 +10058,7 @@ var CurveComposer = (0, import_vue30.defineComponent)({
         )
       );
       children.push(
-        (0, import_vue30.h)("line", {
+        (0, import_vue34.h)("line", {
           ref: seriesPlayheadRef,
           class: "dialkit-cc-playhead",
           x1: 0,
@@ -7390,7 +10069,7 @@ var CurveComposer = (0, import_vue30.defineComponent)({
         })
       );
       children.push(
-        (0, import_vue30.h)("circle", {
+        (0, import_vue34.h)("circle", {
           ref: seriesDotRef,
           class: "dialkit-cc-dot",
           cx: 0,
@@ -7404,18 +10083,18 @@ var CurveComposer = (0, import_vue30.defineComponent)({
         children.push(renderLaneGrid(dr));
         if (hover.value?.kind === "driver" && !drag.value) {
           children.push(
-            (0, import_vue30.h)("rect", { class: "dialkit-cc-seg-hover", x: 0, y: dr.y, width: W.value, height: dr.h, rx: 8 })
+            (0, import_vue34.h)("rect", { class: "dialkit-cc-seg-hover", x: 0, y: dr.y, width: W.value, height: dr.h, rx: 8 })
           );
         }
         children.push(diagonal(dr, [0, 1], "driver-diag"));
         children.push(
-          (0, import_vue30.h)("path", { class: "dialkit-cc-curve dialkit-cc-curve-driver", d: curvePath(props.driver, dr, [0, 1], W.value) })
+          (0, import_vue34.h)("path", { class: "dialkit-cc-curve dialkit-cc-curve-driver", d: curvePath(props.driver, dr, [0, 1], W.value) })
         );
         children.push(
-          (0, import_vue30.h)("text", { class: "dialkit-cc-label", x: W.value * 0.5, y: dr.y + 13 }, `driver \xB7 ${props.driver.type}`)
+          (0, import_vue34.h)("text", { class: "dialkit-cc-label", x: W.value * 0.5, y: dr.y + 13 }, `driver \xB7 ${props.driver.type}`)
         );
         children.push(
-          (0, import_vue30.h)("line", {
+          (0, import_vue34.h)("line", {
             ref: driverPlayheadRef,
             class: "dialkit-cc-playhead",
             x1: 0,
@@ -7426,8 +10105,8 @@ var CurveComposer = (0, import_vue30.defineComponent)({
           })
         );
       }
-      return (0, import_vue30.h)("div", { class: "dialkit-cc-wrap", style: { width: `${W.value}px` } }, [
-        (0, import_vue30.h)(
+      return (0, import_vue34.h)("div", { class: "dialkit-cc-wrap", style: { width: `${W.value}px` } }, [
+        (0, import_vue34.h)(
           "svg",
           {
             ref: svgRef,
@@ -7455,10 +10134,12 @@ var CurveComposer = (0, import_vue30.defineComponent)({
   ButtonGroup,
   ColorControl,
   ColorPickerPanel,
+  ControlRenderer,
   CurveComposer,
   DEFAULT_GRADIENT,
   DialRoot,
   DialStore,
+  DialTimeline,
   EasingVisualization,
   Folder,
   GradientControl,
@@ -7476,6 +10157,8 @@ var CurveComposer = (0, import_vue30.defineComponent)({
   SpringControl,
   SpringVisualization,
   TextControl,
+  TimelineStore,
+  TimelineToggleButton,
   Toggle,
   TransitionControl,
   WaveformVisualization,
@@ -7491,6 +10174,7 @@ var CurveComposer = (0, import_vue30.defineComponent)({
   setGradientType,
   setStopColor,
   useDialKit,
+  useDialTimeline,
   useShortcutContext,
   vDialKit
 });
