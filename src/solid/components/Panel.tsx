@@ -1,34 +1,22 @@
-import { createSignal, createEffect, onMount, onCleanup, Show, For, JSX } from 'solid-js';
+import { createSignal, createEffect, onMount, onCleanup, JSX } from 'solid-js';
 import { animate } from 'motion';
 import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../../icons';
 import { DialStore } from '../../store/DialStore';
-import type { ControlMeta, PanelConfig, SpringConfig, DialValue, XYValue, RangeValue } from '../../store/DialStore';
-import { useShortcutContext } from './ShortcutListener';
-import { ShortcutsMenu } from './ShortcutsMenu';
+import type { PanelConfig, DialValue } from '../../store/DialStore';
 import { Folder } from './Folder';
-import { Slider } from './Slider';
-import { RangeSlider } from './RangeSlider';
-import { Toggle } from './Toggle';
-import { SpringControl } from './SpringControl';
-import { TextControl } from './TextControl';
-import { SelectControl } from './SelectControl';
-import { ColorControl } from './ColorControl';
-import { GradientControl } from './GradientControl';
-import { XYControl } from './XYControl';
+import { ControlRenderer } from './ControlRenderer';
 import { PresetManager } from './PresetManager';
-import type { GradientValue } from '../../gradient-core';
 
 interface PanelProps {
   panel: PanelConfig;
   defaultOpen?: boolean;
   inline?: boolean;
+  toolbarExtra?: JSX.Element;
 }
 
 export function Panel(props: PanelProps) {
   const [copied, setCopied] = createSignal(false);
   const [isPanelOpen, setIsPanelOpen] = createSignal(props.defaultOpen ?? true);
-  const shortcutCtx = useShortcutContext();
-  const hasShortcuts = () => Object.keys(props.panel.shortcuts).length > 0;
   const [values, setValues] = createSignal<Record<string, DialValue>>(
     DialStore.getValues(props.panel.id)
   );
@@ -138,151 +126,9 @@ export function Panel(props: PanelProps) {
     copyTapAnim = animate(copyButtonRef, { scale: 1 }, tapTransition);
   };
 
-  const renderControl = (control: ControlMeta) => {
-    const value = () => values()[control.path];
-
-    switch (control.type) {
-      case 'slider':
-        return (
-          <Slider
-            label={control.label}
-            value={value() as number}
-            onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
-            min={control.min}
-            max={control.max}
-            step={control.step}
-            shortcut={control.shortcut}
-            shortcutActive={shortcutCtx().activePanelId === props.panel.id && shortcutCtx().activePath === control.path}
-          />
-        );
-
-      case 'toggle':
-        return (
-          <Toggle
-            label={control.label}
-            checked={value() as boolean}
-            onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
-            shortcut={control.shortcut}
-            shortcutActive={shortcutCtx().activePanelId === props.panel.id && shortcutCtx().activePath === control.path}
-          />
-        );
-
-      case 'spring':
-        return (
-          <SpringControl
-            panelId={props.panel.id}
-            path={control.path}
-            label={control.label}
-            spring={value() as SpringConfig}
-            onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
-          />
-        );
-
-      case 'folder':
-        return (
-          <Folder title={control.label} defaultOpen={control.defaultOpen ?? true}>
-            <For each={control.children ?? []}>
-              {(child) => <>{renderControl(child)}</>}
-            </For>
-          </Folder>
-        );
-
-      case 'text':
-        return (
-          <TextControl
-            label={control.label}
-            value={value() as string}
-            onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
-            placeholder={control.placeholder}
-          />
-        );
-
-      case 'select':
-        return (
-          <SelectControl
-            label={control.label}
-            value={value() as string}
-            options={control.options ?? []}
-            onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
-          />
-        );
-
-      case 'color':
-        return (
-          <ColorControl
-            label={control.label}
-            value={value() as string}
-            onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
-            alpha={control.alpha}
-            palette={control.palette}
-          />
-        );
-
-      case 'gradient':
-        return (
-          <GradientControl
-            label={control.label}
-            value={value() as GradientValue}
-            onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
-          />
-        );
-
-      case 'xy':
-        return (
-          <XYControl
-            label={control.label}
-            value={value() as XYValue}
-            onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
-            x={control.xAxis}
-            y={control.yAxis}
-            grid={control.grid}
-            density={control.density}
-            snap={control.snap}
-            returnToCenter={control.returnToCenter}
-            showValues={control.showValues}
-            shortcut={control.shortcut}
-            shortcutActive={shortcutCtx().activePanelId === props.panel.id && shortcutCtx().activePath === control.path}
-          />
-        );
-
-      case 'range':
-        return (
-          <RangeSlider
-            label={control.label}
-            value={value() as RangeValue}
-            min={control.min ?? 0}
-            max={control.max ?? 1}
-            step={control.step}
-            defaultValue={control.rangeDefault}
-            onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
-          />
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  const renderControls = () => {
-    return (
-      <For each={props.panel.controls}>
-        {(control) => (
-          <>
-            {control.type === 'action' ? (
-              <button
-                class="dialkit-button"
-                onClick={() => DialStore.triggerAction(props.panel.id, control.path)}
-              >
-                {control.label}
-              </button>
-            ) : (
-              renderControl(control)
-            )}
-          </>
-        )}
-      </For>
-    );
-  };
+  const renderControls = () => (
+    <ControlRenderer panelId={props.panel.id} controls={props.panel.controls} values={values()} />
+  );
 
   const toolbar = (
     <>
@@ -347,6 +193,7 @@ export function Panel(props: PanelProps) {
         Copy
       </button>
 
+      {props.toolbarExtra}
     </>
   );
 
