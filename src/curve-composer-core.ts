@@ -47,6 +47,24 @@ export interface CurveSegment {
    * 0 = none. Independent of `overshoot`. Optional; treated as 0 when absent. No-op for spring.
    */
   anticipate?: number;
+  /**
+   * Mirror the curve in TIME (t → 1−t): the shape plays back to front, so a slow start
+   * becomes a slow finish. Optional; false when absent.
+   *
+   * This is an orientation applied on top of the shape, not another preset, which is why it
+   * works for every type. `easeInOut` and `spring` have no parameter that can express a
+   * mirror — swapping the preset only ever gets you easeIn↔easeOut — so without this they
+   * cannot be flipped at all.
+   */
+  flipX?: boolean;
+  /**
+   * Mirror the curve in VALUE (v → 1−v): the segment falls from its ceiling to its floor
+   * instead of rising. Optional; false when absent.
+   *
+   * Set both flips together and the two mirrors cancel back to a rising curve — that
+   * combination is the classic easing reverse, and is what {@link flipSegment} applies.
+   */
+  flipY?: boolean;
 }
 
 /** The stacked driver curve (a single curve, no internal splits). */
@@ -60,6 +78,10 @@ export interface CurveDriver {
   overshoot?: number;
   /** 0..1 anticipation — see CurveSegment.anticipate. */
   anticipate?: number;
+  /** Mirror in time — see CurveSegment.flipX. */
+  flipX?: boolean;
+  /** Mirror in value — see CurveSegment.flipY. */
+  flipY?: boolean;
 }
 
 export type DriverDirection = 'forward' | 'mirror' | 'reverse';
@@ -216,12 +238,21 @@ function interp(points: number[], t: number): number {
 
 /** Build a reusable sampler for a segment/driver (precomputes spring points once). */
 export function buildSampler(curve: CurveSegment | CurveDriver): Sampler {
+  let base: Sampler;
   if (curve.type === 'spring') {
     const pts = springPoints(curve.curvature, curve.steepness);
-    return (t) => interp(pts, t);
+    base = (t) => interp(pts, t);
+  } else {
+    const ease = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot, curve.anticipate);
+    base = (t) => bezierY(ease, t);
   }
-  const ease = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot, curve.anticipate);
-  return (t) => bezierY(ease, t);
+  // Orientation wraps the shape, so it applies uniformly to springs and beziers alike.
+  const { flipX, flipY } = curve;
+  if (!flipX && !flipY) return base;
+  return (t) => {
+    const v = base(flipX ? 1 - t : t);
+    return flipY ? 1 - v : v;
+  };
 }
 
 // --- geometry / layout ---
@@ -387,6 +418,41 @@ export function flipSegment(comp: CurveComposition, index: number): CurveComposi
 export function flipDriver(comp: CurveComposition): CurveComposition {
   if (!comp.driver) return comp;
   return { ...comp, driver: flipCurve(comp.driver) };
+}
+
+/**
+ * Mirror a curve in time — the shape plays back to front.
+ *
+ * Unlike {@link flipSegment}, which rewrites the preset and so can only ever turn easeIn
+ * into easeOut, this is an orientation laid over whatever shape is there. It therefore does
+ * something visible for every type, including `easeInOut` and `spring`, which have no
+ * preset to swap to.
+ */
+export function flipSegmentX(comp: CurveComposition, index: number): CurveComposition {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const next = comp.segments.slice();
+  next[index] = { ...src, flipX: !src.flipX };
+  return cloneSegments(comp, next);
+}
+
+/** Mirror a curve in value — the segment falls from its ceiling instead of rising. */
+export function flipSegmentY(comp: CurveComposition, index: number): CurveComposition {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const next = comp.segments.slice();
+  next[index] = { ...src, flipY: !src.flipY };
+  return cloneSegments(comp, next);
+}
+
+export function flipDriverX(comp: CurveComposition): CurveComposition {
+  if (!comp.driver) return comp;
+  return { ...comp, driver: { ...comp.driver, flipX: !comp.driver.flipX } };
+}
+
+export function flipDriverY(comp: CurveComposition): CurveComposition {
+  if (!comp.driver) return comp;
+  return { ...comp, driver: { ...comp.driver, flipY: !comp.driver.flipY } };
 }
 
 export function setSegmentCurvature(comp: CurveComposition, index: number, curvature: number): CurveComposition {
@@ -726,6 +792,7 @@ export function curvePath(
   const x = (nx: number) => spanX(span, nx, W);
   const y = (ny: number) => mapY(rect, ny);
   if (curve.type === 'spring') {
+    // The sampler already carries the orientation, so the polyline needs no further work.
     const sampler = buildSampler(curve);
     let d = `M ${x(0)} ${y(sampler(0))}`;
     for (let i = 1; i <= samples; i++) {
@@ -735,7 +802,17 @@ export function curvePath(
     return d;
   }
   const e = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot, curve.anticipate);
-  return `M ${x(0)} ${y(0)} C ${x(e[0])} ${y(e[1])}, ${x(e[2])} ${y(e[3])}, ${x(1)} ${y(1)}`;
+  // Mirroring a cubic is a mirror of its four points. Reflecting in x also reverses the
+  // order they are drawn in, which is what turns the start of the shape into its end.
+  let pts: [number, number][] = [
+    [0, 0],
+    [e[0], e[1]],
+    [e[2], e[3]],
+    [1, 1],
+  ];
+  if (curve.flipX) pts = pts.map(([px, py]): [number, number] => [1 - px, py]).reverse();
+  if (curve.flipY) pts = pts.map(([px, py]): [number, number] => [px, 1 - py]);
+  return `M ${x(pts[0][0])} ${y(pts[0][1])} C ${x(pts[1][0])} ${y(pts[1][1])}, ${x(pts[2][0])} ${y(pts[2][1])}, ${x(pts[3][0])} ${y(pts[3][1])}`;
 }
 
 /**

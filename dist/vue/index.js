@@ -6604,12 +6604,20 @@ function interp(points, t) {
   return lerp(points[i], points[i + 1], x - i);
 }
 function buildSampler(curve) {
+  let base;
   if (curve.type === "spring") {
     const pts = springPoints(curve.curvature, curve.steepness);
-    return (t) => interp(pts, t);
+    base = (t) => interp(pts, t);
+  } else {
+    const ease = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot, curve.anticipate);
+    base = (t) => bezierY(ease, t);
   }
-  const ease = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot, curve.anticipate);
-  return (t) => bezierY(ease, t);
+  const { flipX, flipY } = curve;
+  if (!flipX && !flipY) return base;
+  return (t) => {
+    const v = base(flipX ? 1 - t : t);
+    return flipY ? 1 - v : v;
+  };
 }
 function totalWeight(segments) {
   let t = 0;
@@ -6848,7 +6856,15 @@ function curvePath(curve, rect, span, W, samples = 40) {
     return d;
   }
   const e = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot, curve.anticipate);
-  return `M ${x(0)} ${y(0)} C ${x(e[0])} ${y(e[1])}, ${x(e[2])} ${y(e[3])}, ${x(1)} ${y(1)}`;
+  let pts = [
+    [0, 0],
+    [e[0], e[1]],
+    [e[2], e[3]],
+    [1, 1]
+  ];
+  if (curve.flipX) pts = pts.map(([px, py]) => [1 - px, py]).reverse();
+  if (curve.flipY) pts = pts.map(([px, py]) => [px, 1 - py]);
+  return `M ${x(pts[0][0])} ${y(pts[0][1])} C ${x(pts[1][0])} ${y(pts[1][1])}, ${x(pts[2][0])} ${y(pts[2][1])}, ${x(pts[3][0])} ${y(pts[3][1])}`;
 }
 function connectorPath(slot, samplers, segCount, rect, W, samples = 24) {
   const endVal = samplers.segments[slot.index] ? samplers.segments[slot.index](1) : 0;

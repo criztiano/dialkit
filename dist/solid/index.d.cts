@@ -677,6 +677,24 @@ interface CurveSegment {
      * 0 = none. Independent of `overshoot`. Optional; treated as 0 when absent. No-op for spring.
      */
     anticipate?: number;
+    /**
+     * Mirror the curve in TIME (t → 1−t): the shape plays back to front, so a slow start
+     * becomes a slow finish. Optional; false when absent.
+     *
+     * This is an orientation applied on top of the shape, not another preset, which is why it
+     * works for every type. `easeInOut` and `spring` have no parameter that can express a
+     * mirror — swapping the preset only ever gets you easeIn↔easeOut — so without this they
+     * cannot be flipped at all.
+     */
+    flipX?: boolean;
+    /**
+     * Mirror the curve in VALUE (v → 1−v): the segment falls from its ceiling to its floor
+     * instead of rising. Optional; false when absent.
+     *
+     * Set both flips together and the two mirrors cancel back to a rising curve — that
+     * combination is the classic easing reverse, and is what {@link flipSegment} applies.
+     */
+    flipY?: boolean;
 }
 /** The stacked driver curve (a single curve, no internal splits). */
 interface CurveDriver {
@@ -689,6 +707,10 @@ interface CurveDriver {
     overshoot?: number;
     /** 0..1 anticipation — see CurveSegment.anticipate. */
     anticipate?: number;
+    /** Mirror in time — see CurveSegment.flipX. */
+    flipX?: boolean;
+    /** Mirror in value — see CurveSegment.flipY. */
+    flipY?: boolean;
 }
 type DriverDirection = 'forward' | 'mirror' | 'reverse';
 interface CurveComposition {
