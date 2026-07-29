@@ -7,6 +7,9 @@ type $$ComponentProps = {
     onOpenChange?: (isOpen: boolean) => void;
     toolbar?: Snippet;
     children?: Snippet;
+    /** One line of help for the section, revealed on hover over the header. */
+    hint?: string;
+    hintId?: string;
 };
 declare const Folder: import("svelte").Component<$$ComponentProps, {}, "">;
 type Folder = ReturnType<typeof Folder>;

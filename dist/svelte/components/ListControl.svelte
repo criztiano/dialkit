@@ -1,12 +1,14 @@
 <script lang="ts">
   import { ICON_GRIP, ICON_PLUS, ICON_TRASH } from '../../icons';
-  import { parseListItemSchema, defaultListItemParams } from 'dialkit/store';
-  import type { ListItemValue, ListItemType, DialEvent } from 'dialkit/store';
+  import { parseListItemSchema, groupListFields, defaultListItemParams, hintDomId } from 'dialkit/store';
+  import type { ListItemValue, ListItemType, ListField, DialEvent } from 'dialkit/store';
   import Folder from './Folder.svelte';
+  import ControlShell from './ControlShell.svelte';
   import Slider from './Slider.svelte';
   import Toggle from './Toggle.svelte';
   import SelectControl from './SelectControl.svelte';
   import ColorControl from './ColorControl.svelte';
+  import SwatchControl from './SwatchControl.svelte';
   import TextControl from './TextControl.svelte';
 
   let { label, value, itemTypes, addLabel, maxItems, onChange, onEvent } = $props<{
@@ -20,6 +22,8 @@
   }>();
 
   let picking = $state(false);
+  // Index of the row whose title is being renamed in place, if any.
+  let editing = $state<number | null>(null);
 
   // Drag-to-reorder. `armed` is set on handle mousedown and checked at dragstart
   // so dragging a slider never starts a reorder.
@@ -48,6 +52,29 @@
     next.splice(to, 0, moved);
     onChange(next);
     onEvent({ kind: 'list', op: 'move', from, to });
+  }
+
+  // A blank title is stored as absent, not as '', so clearing the field reverts
+  // the row to its item type's label.
+  function commitTitle(index: number, raw: string) {
+    editing = null;
+    const next = raw.trim();
+    if ((value[index]?.title ?? '') === next) return;
+    onChange(
+      value.map((item: ListItemValue, i: number) => {
+        if (i !== index) return item;
+        const row: ListItemValue = { type: item.type, params: item.params };
+        if (next) row.title = next;
+        return row;
+      })
+    );
+    onEvent({ kind: 'list', op: 'rename', index });
+  }
+
+  /** Focus and select a freshly-revealed title field. */
+  function focusSelect(node: HTMLInputElement) {
+    node.focus();
+    node.select();
   }
 
   function setParam(index: number, key: string, v: number | boolean | string) {
@@ -101,15 +128,74 @@
 
 <svelte:window onmouseup={() => (armed = -1)} />
 
+{#snippet fieldList(fields: ListField[], params: Record<string, number | boolean | string>, rowId: string, index: number)}
+  <div class="dialkit-list-item-fields">
+    {#each fields as field (field.key)}
+      <ControlShell hint={field.hint} id={hintDomId(rowId, field.key)}>
+        {#if field.kind === 'slider'}
+          <Slider
+            label={field.label}
+            value={params[field.key] as number}
+            min={field.min}
+            max={field.max}
+            step={field.step}
+            onChange={(v) => setParam(index, field.key, v)}
+          />
+        {:else if field.kind === 'toggle'}
+          <Toggle
+            label={field.label}
+            checked={params[field.key] as boolean}
+            onChange={(v) => setParam(index, field.key, v)}
+          />
+        {:else if field.kind === 'select'}
+          <SelectControl
+            label={field.label}
+            value={params[field.key] as string}
+            options={field.options ?? []}
+            onChange={(v) => setParam(index, field.key, v)}
+          />
+        {:else if field.kind === 'color'}
+          <ColorControl
+            label={field.label}
+            value={params[field.key] as string}
+            palette={field.palette}
+            onChange={(v) => setParam(index, field.key, v)}
+          />
+        {:else if field.kind === 'swatch'}
+          <SwatchControl
+            label={field.label}
+            value={params[field.key] as string}
+            options={field.swatchOptions ?? []}
+            onChange={(v) => setParam(index, field.key, v)}
+          />
+        {:else if field.kind === 'text'}
+          <TextControl
+            label={field.label}
+            value={params[field.key] as string}
+            placeholder={field.placeholder}
+            onChange={(v) => setParam(index, field.key, v)}
+          />
+        {/if}
+      </ControlShell>
+    {/each}
+  </div>
+{/snippet}
+
+
 <Folder title={label} defaultOpen>
   <div class="dialkit-list-items" ondragover={(e) => e.preventDefault()} ondrop={onDrop} role="list">
     {#each value as item, index (index)}
       {@const type = itemTypes[item.type]}
       {#if type}
-        {@const fields = parseListItemSchema(type.schema)}
+        {@const grouped = groupListFields(parseListItemSchema(type.schema, type.hints, type.groups))}
+        {@const flat = grouped.flat}
+        {@const groups = grouped.groups}
+        {@const rowTitle = item.title ?? type.label}
+        <!-- A draggable ancestor swallows text selection, so the row stops being
+             draggable while its title is being edited. -->
         <div
           class="dialkit-list-item"
-          draggable="true"
+          draggable={editing === index ? 'false' : 'true'}
           role="listitem"
           data-dragging={dragIndex === index ? 'true' : undefined}
           data-over={over?.index === index ? (over.after ? 'after' : 'before') : undefined}
@@ -118,25 +204,51 @@
           ondragend={onDragEnd}
         >
           <div class="dialkit-list-item-head">
-            <span class="dialkit-list-item-title">{type.label}</span>
-            <div class="dialkit-list-item-actions">
+            <button
+              type="button"
+              class="dialkit-list-drag"
+              aria-label="Drag to reorder"
+              onmousedown={() => (armed = index)}
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                {#each ICON_GRIP as c}
+                  <circle cx={c.cx} cy={c.cy} r="1.5" />
+                {/each}
+              </svg>
+            </button>
+            {#if editing === index}
+              <!-- Unbound: the field owns the draft, so Escape can restore the
+                   original and let the shared blur path no-op it away. -->
+              <input
+                class="dialkit-list-item-title"
+                value={item.title ?? ''}
+                placeholder={type.label}
+                use:focusSelect
+                onblur={(e) => commitTitle(index, e.currentTarget.value)}
+                onkeydown={(e) => {
+                  if (e.key === 'Enter') e.currentTarget.blur();
+                  else if (e.key === 'Escape') {
+                    e.currentTarget.value = item.title ?? '';
+                    e.currentTarget.blur();
+                  }
+                }}
+              />
+            {:else}
               <button
                 type="button"
-                class="dialkit-list-drag"
-                aria-label="Drag to reorder"
-                onmousedown={() => (armed = index)}
+                class="dialkit-list-item-title"
+                aria-label={`Rename ${rowTitle}`}
+                onclick={() => (editing = index)}
               >
-                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  {#each ICON_GRIP as c}
-                    <circle cx={c.cx} cy={c.cy} r="1.5" />
-                  {/each}
-                </svg>
+                {rowTitle}
               </button>
+            {/if}
+            <div class="dialkit-list-item-actions">
               <button
                 type="button"
                 class="dialkit-list-icon-btn dialkit-list-remove"
                 onclick={() => removeItem(index)}
-                aria-label={`Remove ${type.label}`}
+                aria-label={`Remove ${rowTitle}`}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                   {#each ICON_TRASH as d}
@@ -147,48 +259,17 @@
             </div>
           </div>
 
-          {#if fields.length > 0}
-            <div class="dialkit-list-item-fields">
-              {#each fields as field (field.key)}
-                {#if field.kind === 'slider'}
-                  <Slider
-                    label={field.label}
-                    value={item.params[field.key] as number}
-                    min={field.min}
-                    max={field.max}
-                    step={field.step}
-                    onChange={(v) => setParam(index, field.key, v)}
-                  />
-                {:else if field.kind === 'toggle'}
-                  <Toggle
-                    label={field.label}
-                    checked={item.params[field.key] as boolean}
-                    onChange={(v) => setParam(index, field.key, v)}
-                  />
-                {:else if field.kind === 'select'}
-                  <SelectControl
-                    label={field.label}
-                    value={item.params[field.key] as string}
-                    options={field.options ?? []}
-                    onChange={(v) => setParam(index, field.key, v)}
-                  />
-                {:else if field.kind === 'color'}
-                  <ColorControl
-                    label={field.label}
-                    value={item.params[field.key] as string}
-                    onChange={(v) => setParam(index, field.key, v)}
-                  />
-                {:else if field.kind === 'text'}
-                  <TextControl
-                    label={field.label}
-                    value={item.params[field.key] as string}
-                    placeholder={field.placeholder}
-                    onChange={(v) => setParam(index, field.key, v)}
-                  />
-                {/if}
-              {/each}
-            </div>
+          {#if flat.length > 0}
+            {@render fieldList(flat, item.params, `${label}-${index}`, index)}
           {/if}
+
+          <!-- Only the first section starts open: the point of grouping is to
+               stop a six-control row reading as a wall. -->
+          {#each groups as group, groupIndex (group.label)}
+            <Folder title={group.label} defaultOpen={groupIndex === 0}>
+              {@render fieldList(group.fields, item.params, `${label}-${index}`, index)}
+            </Folder>
+          {/each}
         </div>
       {/if}
     {/each}

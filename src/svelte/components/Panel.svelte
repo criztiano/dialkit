@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import { Spring } from 'svelte/motion';
   import { DialStore } from 'dialkit/store';
   import type { DialValue, PanelConfig, Preset } from 'dialkit/store';
@@ -8,7 +9,12 @@
   import ShortcutsMenu from './ShortcutsMenu.svelte';
   import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../../icons';
 
-  let { panel, defaultOpen = true, inline = false } = $props<{ panel: PanelConfig; defaultOpen?: boolean; inline?: boolean }>();
+  let { panel, defaultOpen = true, inline = false, toolbarExtra } = $props<{
+    panel: PanelConfig;
+    defaultOpen?: boolean;
+    inline?: boolean;
+    toolbarExtra?: Snippet;
+  }>();
 
   const hasShortcuts = $derived(Object.keys(panel.shortcuts).length > 0);
 
@@ -140,6 +146,7 @@
         Copy
       </button>
 
+      {@render toolbarExtra?.()}
     {/snippet}
 
     {#each panel.controls as control (control.path)}

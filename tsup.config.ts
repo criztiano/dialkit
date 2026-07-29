@@ -1,6 +1,19 @@
 import { defineConfig } from 'tsup';
 import { solidPlugin } from 'esbuild-plugin-solid';
 
+// Rewrite the shared DialStore import to the `dialkit/store` package subpath so
+// framework-neutral bundles reference the single shared store instead of
+// inlining a second, desynced copy.
+const externalizeDialStore = {
+  name: 'externalize-dialstore',
+  setup(build: { onResolve: (o: { filter: RegExp }, cb: () => { path: string; external: boolean }) => void }) {
+    build.onResolve({ filter: /store\/DialStore$/ }, () => ({
+      path: 'dialkit/store',
+      external: true,
+    }));
+  },
+};
+
 export default defineConfig([
   // Store build (shared across all framework entries)
   {
@@ -10,6 +23,17 @@ export default defineConfig([
     dts: true,
     splitting: false,
     sourcemap: true,
+  },
+  // Framework-neutral timeline runtime, consumed via the `dialkit/timeline`
+  // subpath. Externalizes the shared store; bundles the timeline-only modules.
+  {
+    entry: { index: 'src/timeline/index.ts' },
+    outDir: 'dist/timeline',
+    format: ['esm', 'cjs'],
+    dts: true,
+    splitting: false,
+    sourcemap: true,
+    esbuildPlugins: [externalizeDialStore],
   },
   // React build
   {
@@ -60,6 +84,12 @@ export default defineConfig([
   // React/Solid/Vue bundle them inline, so this standalone emission is for Svelte.
   // shortcut-utils references the DialStore singleton — externalize it to the shared
   // dist/store rather than inlining a second, desynced store instance.
+  //
+  // THIS LIST MUST COVER EVERY `../../x` SPECIFIER IN src/svelte. It does not
+  // update itself, and a missing entry fails only in a downstream consumer that
+  // bundles dialkit/svelte — never in this repo's own build or example app. Any
+  // new leaf module a Svelte component imports has to be added here in the same
+  // change, or that consumer's build breaks with "Could not resolve ../../x".
   {
     entry: {
       icons: 'src/icons.ts',
@@ -71,6 +101,8 @@ export default defineConfig([
       'color-core': 'src/color-core.ts',
       'color-palette-store': 'src/color-palette-store.ts',
       'gradient-core': 'src/gradient-core.ts',
+      'xy-pad-core': 'src/xy-pad-core.ts',
+      'affordance-core': 'src/affordance-core.ts',
     },
     outDir: 'dist',
     format: ['esm'],

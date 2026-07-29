@@ -1,11 +1,17 @@
 import { createSignal, createMemo, onMount, onCleanup, createUniqueId, type Accessor } from 'solid-js';
 import { DialStore } from '../store/DialStore';
-import type { DialConfig, ResolvedValues, DialValue, SpringConfig, SelectConfig, ColorConfig, GradientConfig, TextConfig, ActionConfig, ShortcutConfig } from '../store/DialStore';
+import type { DialConfig, ResolvedValues, DialValue, SpringConfig, SelectConfig, ColorConfig, GradientConfig, TextConfig, ActionConfig, ShortcutConfig, AffordanceConfig } from '../store/DialStore';
 import { normalizeGradient, DEFAULT_GRADIENT } from '../gradient-core';
 
 export interface CreateDialOptions {
   onAction?: (action: string) => void;
   shortcuts?: Record<string, ShortcutConfig>;
+  /** One line of help per control path, revealed on hover or keyboard focus. */
+  hints?: Record<string, string>;
+  /** Companion controls per control path, opened from a dot in the corner. */
+  affordances?: Record<string, AffordanceConfig>;
+  /** Display label by control path, overriding the key-derived name. */
+  labels?: Record<string, string>;
 }
 
 export function createDialKit<T extends DialConfig>(
@@ -21,7 +27,8 @@ export function createDialKit<T extends DialConfig>(
   );
 
   onMount(() => {
-    DialStore.registerPanel(panelId, name, config, options?.shortcuts);
+    DialStore.registerPanel(panelId, name, config, options?.shortcuts, { hints: options?.hints, affordances: options?.affordances,
+      labels: options?.labels });
     setValues(DialStore.getValues(panelId));
 
     const unsubValues = DialStore.subscribe(panelId, () => {

@@ -6,6 +6,7 @@ import type {
   ColorConfig,
   DialConfig,
   DialEvent,
+  DialKitPersistOptions,
   DialValue,
   EasingConfig,
   FileConfig,
@@ -17,6 +18,7 @@ import type {
   SpringConfig,
   SwatchConfig,
   TextConfig,
+  AffordanceConfig,
 } from 'dialkit/store';
 
 export interface CreateDialOptions {
@@ -24,6 +26,16 @@ export interface CreateDialOptions {
   /** Non-value events: file picked, chip removed, list mutated. */
   onEvent?: (path: string, event: DialEvent) => void;
   shortcuts?: Record<string, ShortcutConfig>;
+  /** One line of help per control path, revealed on hover or keyboard focus. */
+  hints?: Record<string, string>;
+  /** Companion controls per control path, opened from a dot in the corner. */
+  affordances?: Record<string, AffordanceConfig>;
+  /** Display label by control path, overriding the key-derived name. */
+  labels?: Record<string, string>;
+  /** Stable id shares one panel/persistence target across mounts. */
+  id?: string;
+  /** Persist values per machine (see DialKitPersistOptions). */
+  persist?: DialKitPersistOptions;
 }
 
 export type DialKitValues<T> = T;
@@ -35,13 +47,20 @@ export function createDialKit<T extends DialConfig>(
   config: T,
   options?: CreateDialOptions
 ): DialKitValues<ResolvedValues<T>> {
-  const panelId = `${name}-${++dialKitInstance}`;
+  const hasStableId = options?.id !== undefined;
+  const panelId = options?.id ?? `${name}-${++dialKitInstance}`;
   const resolve = () => buildResolvedValues(config, DialStore.getValues(panelId), '') as ResolvedValues<T>;
 
   let values = $state<ResolvedValues<T>>(resolve());
 
   $effect(() => {
-    DialStore.registerPanel(panelId, name, config, options?.shortcuts);
+    DialStore.registerPanel(panelId, name, config, options?.shortcuts, {
+      retainOnUnmount: hasStableId,
+      persist: options?.persist,
+      hints: options?.hints,
+      affordances: options?.affordances,
+      labels: options?.labels,
+    });
     values = resolve();
 
     const unsubValues = DialStore.subscribe(panelId, () => {

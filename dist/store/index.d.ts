@@ -181,17 +181,35 @@ type GalleryConfig = {
 type ListItemValue = {
     type: string;
     params: Record<string, number | boolean | string>;
+    /**
+     * Row-level name, shown in place of the item type's label and renamable in
+     * place. Absent (never empty) when the row has no name of its own.
+     */
+    title?: string;
 };
 /**
  * A sub-control field inside a list item type's schema. Uses the same shorthand
  * as a panel config, but scalar-only (no nested folders or non-value controls).
  */
-type ListItemField = [number, number, number, number?] | number | boolean | string | SelectConfig | ColorConfig | TextConfig;
+type ListItemField = [number, number, number, number?] | number | boolean | string | SelectConfig | ColorConfig | SwatchConfig | TextConfig;
 type ListItemType = {
-    /** Shown in the add menu and as the row's title. */
+    /** Shown in the add menu, and as a row's title when the row has none of its own. */
     label: string;
     /** Sub-controls for this item type, keyed by param name. */
     schema: Record<string, ListItemField>;
+    /**
+     * Help text per field, keyed by the same param name. Keyed rather than inline
+     * because a schema field is often bare shorthand (`mass: [1, 0, 10]`) with
+     * nowhere to hang a property.
+     */
+    hints?: Record<string, string>;
+    /**
+     * Section per field, keyed by param name, for rows too deep to read flat.
+     * Ungrouped fields stay at the top of the row; each named section becomes a
+     * collapsible folder below them, in the order its first field is declared.
+     * Keyed for the same reason as `hints`.
+     */
+    groups?: Record<string, string>;
 };
 type ListConfig = {
     type: 'list';
@@ -205,11 +223,18 @@ type ListConfig = {
     addLabel?: string;
 };
 /** A resolved sub-control descriptor for one list-item field. */
-type ListFieldKind = 'slider' | 'toggle' | 'select' | 'color' | 'text';
+type ListFieldKind = 'slider' | 'toggle' | 'select' | 'color' | 'swatch' | 'text';
 type ListField = {
     key: string;
     label: string;
     kind: ListFieldKind;
+    hint?: string;
+    /** Section this field belongs to, or absent for the row's flat top area. */
+    group?: string;
+    /** Colour fields only: show the shared saved-swatches row, as at top level. */
+    palette?: boolean;
+    /** Swatch fields only: the named palettes to choose between. */
+    swatchOptions?: SwatchOption[];
     min?: number;
     max?: number;
     step?: number;
@@ -235,10 +260,44 @@ type ShortcutConfig = {
     mode?: ShortcutMode;
     interaction?: ShortcutInteraction;
 };
+/**
+ * How lit the affordance dot is. The app pushes this — dialkit owns only how
+ * each state looks, never when it applies.
+ */
+type AffordanceStatus = 'off' | 'armed' | 'active';
+/** What dialkit hands a popover so it doesn't have to resolve any of it itself. */
+type AffordanceContext = {
+    panelId: string;
+    path: string;
+    status: AffordanceStatus;
+    /** Shorthand for `DialStore.setAffordanceStatus(panelId, path, …)`. */
+    setStatus: (status: AffordanceStatus) => void;
+};
+/**
+ * A companion control hung off a control's corner: a barely-there dot that opens
+ * a popover the host app fills.
+ *
+ * `content` is a component — a React/Solid/Vue component or a Svelte snippet —
+ * receiving the context as its props/argument. Not a pre-built node: it is
+ * captured once at registration and would never see current state. Not called
+ * directly by the renderer either, so a stateful popover keeps its own identity
+ * and its own hooks. This is also why affordances travel as a panel option
+ * rather than in the config: the config is JSON-serialized on every render to
+ * detect structure changes, and view code would not survive that.
+ */
+type AffordanceConfig = {
+    content: (ctx: AffordanceContext) => unknown;
+    /** Accessible name for the dot and its popover. Defaults to 'Options'. */
+    label?: string;
+};
 type ControlMeta = {
     type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
     path: string;
     label: string;
+    /** One line of help, revealed on hover or when focus lands inside the control. */
+    hint?: string;
+    /** Companion control reachable from a dot in the control's bottom-right corner. */
+    affordance?: AffordanceConfig;
     min?: number;
     max?: number;
     step?: number;
@@ -278,6 +337,13 @@ type PanelConfig = {
     controls: ControlMeta[];
     values: Record<string, DialValue>;
     shortcuts: Record<string, ShortcutConfig>;
+    /** Help text by control path, retained so a later updatePanel can restate it. */
+    hints?: Record<string, string>;
+    /** Affordances by control path, retained on the same terms as `hints`. */
+    affordances?: Record<string, AffordanceConfig>;
+    /** Label overrides by control path, retained on the same terms as `hints`. */
+    labels?: Record<string, string>;
+    kind?: 'timeline';
 };
 type Listener = () => void;
 type ActionListener = (action: string) => void;
@@ -294,7 +360,7 @@ type DialEvent = {
     value: string;
 } | {
     kind: 'list';
-    op: 'add' | 'remove' | 'move' | 'set';
+    op: 'add' | 'remove' | 'move' | 'set' | 'rename';
     index?: number;
     from?: number;
     to?: number;
@@ -306,6 +372,58 @@ type Preset = {
     name: string;
     values: Record<string, DialValue>;
 };
+type DialKitPersistOptions = boolean | {
+    key?: string;
+    storage?: 'localStorage' | 'sessionStorage';
+    presets?: boolean;
+};
+type DialStorePanelOptions = {
+    retainOnUnmount?: boolean;
+    persist?: DialKitPersistOptions;
+    /**
+     * Help text by control path — the same keying as `shortcuts`. Keyed rather
+     * than declared inline because most controls are bare shorthand
+     * (`gravity: [9.8, 0, 20]`) with nowhere to hang a property.
+     */
+    hints?: Record<string, string>;
+    /**
+     * Companion controls by control path. Holds framework view nodes, so — unlike
+     * the config — this is never serialized.
+     */
+    affordances?: Record<string, AffordanceConfig>;
+    /**
+     * Display label by control path, overriding the name derived from the config
+     * key. Keyed for the same reason as `hints`: the controls that most need a
+     * label the key can't express are bare shorthand (`a: [0, 0, 1]` relabelled
+     * per mode) with nowhere to hang a property. Applies to folders too.
+     *
+     * Without this, changing a control's visible text means changing its config
+     * key — which silently changes its identity, so it loses its value, its
+     * persisted entry and its shortcut binding.
+     */
+    labels?: Record<string, string>;
+    /** Timeline panels render in DialTimeline and are filtered out of the panel dock. */
+    kind?: 'timeline';
+};
+/** camelCase → Title Case, the label rule used everywhere a key becomes UI text. */
+declare function formatLabel(key: string): string;
+/**
+ * DOM id for a control's hint tooltip. `aria-describedby` holds a space-separated
+ * list of ids, so any whitespace — panel names and list labels are free text —
+ * would silently split one reference into two dangling ones.
+ */
+declare function hintDomId(scope: string, path: string): string;
+/** Default slider step for a numeric range. */
+declare function inferStep(min: number, max: number): number;
+declare function isHexColor(value: string): boolean;
+declare function isSpringConfigValue(value: unknown): value is SpringConfig;
+declare function isEasingConfigValue(value: unknown): value is EasingConfig;
+/**
+ * Resolve a flat value snapshot back into the nested shape declared by a config.
+ * Shared by the timeline core (timing-only configs). Handles the primitive,
+ * spring/easing, select, color, and text config kinds a timeline emits.
+ */
+declare function resolveDialValues<T extends DialConfig>(config: T, flatValues: Record<string, DialValue>): ResolvedValues<T>;
 declare class DialStoreClass {
     private panels;
     private listeners;
@@ -313,20 +431,27 @@ declare class DialStoreClass {
     private snapshots;
     private actionListeners;
     private eventListeners;
+    private affordanceStatus;
+    private disabledPaths;
+    private controlStateListeners;
     private presets;
     private activePreset;
     private baseValues;
-    registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>): void;
-    updatePanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>): void;
+    private persistTargets;
+    registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, options?: DialStorePanelOptions): void;
+    updatePanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, options?: DialStorePanelOptions): void;
     unregisterPanel(id: string): void;
+    private overlayPersistedValues;
+    private savePanelValues;
     updateValue(panelId: string, path: string, value: DialValue): void;
+    updateValues(panelId: string, updates: Record<string, DialValue>): void;
     updateSpringMode(panelId: string, path: string, mode: 'simple' | 'advanced'): void;
     getSpringMode(panelId: string, path: string): 'simple' | 'advanced';
     updateTransitionMode(panelId: string, path: string, mode: 'easing' | 'simple' | 'advanced'): void;
     getTransitionMode(panelId: string, path: string): 'easing' | 'simple' | 'advanced';
     getValue(panelId: string, path: string): DialValue | undefined;
     getValues(panelId: string): Record<string, DialValue>;
-    getPanels(): PanelConfig[];
+    getPanels(kind?: 'panel' | 'timeline'): PanelConfig[];
     getPanel(id: string): PanelConfig | undefined;
     subscribe(panelId: string, listener: Listener): () => void;
     subscribeGlobal(listener: Listener): () => void;
@@ -334,6 +459,23 @@ declare class DialStoreClass {
     triggerAction(panelId: string, path: string): void;
     subscribeEvents(panelId: string, listener: EventListener): () => void;
     emitEvent(panelId: string, path: string, event: DialEvent): void;
+    /**
+     * How lit a control's affordance dot is. Callers may push this as often as
+     * they like — an unchanged status is dropped without notifying, so driving it
+     * from an audio callback costs nothing.
+     */
+    setAffordanceStatus(panelId: string, path: string, status: AffordanceStatus): void;
+    getAffordanceStatus(panelId: string, path: string): AffordanceStatus;
+    /**
+     * Greys a control out and stops it responding. Runtime-only by design: a
+     * config default plus a runtime override would be two sources of truth, and
+     * calling this once covers the static case.
+     */
+    setDisabled(panelId: string, path: string, disabled: boolean): void;
+    isDisabled(panelId: string, path: string): boolean;
+    /** One channel for every app-pushed presentation change on a panel. */
+    subscribeControlState(panelId: string, listener: Listener): () => void;
+    private notifyControlState;
     savePreset(panelId: string, name: string): string;
     loadPreset(panelId: string, presetId: string): void;
     deletePreset(panelId: string, presetId: string): void;
@@ -379,14 +521,31 @@ declare class DialStoreClass {
     private normalizePreservedValue;
     private roundToStep;
     private stepPrecision;
+    private applyControlExtras;
     private mapControlsByPath;
 }
 /** Resolve a list item type's schema shorthand into renderable field descriptors. */
-declare function parseListItemSchema(schema: Record<string, ListItemField>): ListField[];
+declare function parseListItemSchema(schema: Record<string, ListItemField>, hints?: Record<string, string>, groups?: Record<string, string>): ListField[];
+/** A named, collapsible section of a list row. */
+type ListFieldGroup = {
+    label: string;
+    fields: ListField[];
+};
+/**
+ * Split a row's fields into the flat top area and its named sections.
+ *
+ * Ungrouped fields stay flat so a row's primary control is always visible;
+ * groups follow in the order their first field is declared, which is what the
+ * renderer opens the first of and collapses the rest.
+ */
+declare function groupListFields(fields: ListField[]): {
+    flat: ListField[];
+    groups: ListFieldGroup[];
+};
 /** The default params object for a freshly-added item of the given schema. */
 declare function defaultListItemParams(schema: Record<string, ListItemField>): Record<string, number | boolean | string>;
 /** Materialize a list config's initial rows: drop unknown types, backfill params. */
 declare function normalizeListItems(config: ListConfig): ListItemValue[];
 declare const DialStore: DialStoreClass;
 
-export { type ActionConfig, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type DialConfig, type DialEvent, DialStore, type DialValue, type EasingConfig, type FileConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type PanelConfig, type Preset, type RangeConfig, type RangeValue, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SpringConfig, type SwatchConfig, type SwatchOption, type TextConfig, type TransitionConfig, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, normalizeListItems, parseListItemSchema };
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type DialConfig, type DialEvent, type DialKitPersistOptions, DialStore, type DialStorePanelOptions, type DialValue, type EasingConfig, type FileConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type PanelConfig, type Preset, type RangeConfig, type RangeValue, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SpringConfig, type SwatchConfig, type SwatchOption, type TextConfig, type TransitionConfig, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, formatLabel, groupListFields, hintDomId, inferStep, isEasingConfigValue, isHexColor, isSpringConfigValue, normalizeListItems, parseListItemSchema, resolveDialValues };

@@ -2,11 +2,18 @@ import { DialStore, normalizeListItems } from 'dialkit/store';
 import { normalizeGradient, DEFAULT_GRADIENT } from '../gradient-core';
 let dialKitInstance = 0;
 export function createDialKit(name, config, options) {
-    const panelId = `${name}-${++dialKitInstance}`;
+    const hasStableId = options?.id !== undefined;
+    const panelId = options?.id ?? `${name}-${++dialKitInstance}`;
     const resolve = () => buildResolvedValues(config, DialStore.getValues(panelId), '');
     let values = $state(resolve());
     $effect(() => {
-        DialStore.registerPanel(panelId, name, config, options?.shortcuts);
+        DialStore.registerPanel(panelId, name, config, options?.shortcuts, {
+            retainOnUnmount: hasStableId,
+            persist: options?.persist,
+            hints: options?.hints,
+            affordances: options?.affordances,
+            labels: options?.labels,
+        });
         values = resolve();
         const unsubValues = DialStore.subscribe(panelId, () => {
             values = resolve();

@@ -2,6 +2,10 @@
 export { createDialKit } from './createDialKit.svelte';
 // Root component
 export { default as DialRoot } from './components/DialRoot.svelte';
+// Timeline (prototype)
+export { createDialTimeline } from './createDialTimeline.svelte';
+export { default as DialTimeline } from './components/Timeline/DialTimeline.svelte';
+export { formatClock, TimelineStore } from 'dialkit/timeline';
 // Shortcut components
 export { default as ShortcutListener } from './components/ShortcutListener.svelte';
 export { SHORTCUT_CTX } from './components/ShortcutListener.svelte';
@@ -11,6 +15,7 @@ export { default as Slider } from './components/Slider.svelte';
 export { default as RangeSlider } from './components/RangeSlider.svelte';
 export { default as Toggle } from './components/Toggle.svelte';
 export { default as Folder } from './components/Folder.svelte';
+export { default as ControlShell } from './components/ControlShell.svelte';
 export { default as Module } from './components/Module.svelte';
 export { default as SegmentedControl } from './components/SegmentedControl.svelte';
 export { default as ButtonGroup } from './components/ButtonGroup.svelte';
@@ -36,4 +41,4 @@ export { default as ChipsControl } from './components/ChipsControl.svelte';
 export { default as ListControl } from './components/ListControl.svelte';
 export { default as PresetManager } from './components/PresetManager.svelte';
 // Store exports (via dialkit/store subpath — svelte-package doesn't bundle, so relative paths to src/store would break in dist)
-export { DialStore, parseListItemSchema, defaultListItemParams, normalizeListItems } from 'dialkit/store';
+export { DialStore, parseListItemSchema, groupListFields, defaultListItemParams, normalizeListItems, hintDomId } from 'dialkit/store';

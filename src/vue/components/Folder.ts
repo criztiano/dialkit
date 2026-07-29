@@ -14,6 +14,9 @@ export const Folder = defineComponent({
       required: false,
       default: null,
     },
+    /** One line of help for the section, revealed on hover over the header. */
+    hint: { type: String, default: undefined },
+    hintId: { type: String, default: undefined },
   },
   emits: ['openChange'],
   setup(props, { emit, slots }) {
@@ -71,6 +74,8 @@ export const Folder = defineComponent({
     const renderHeader = () => h('div', {
       class: `dialkit-folder-header ${props.isRoot ? 'dialkit-panel-header' : ''}`,
       onClick: handleToggle,
+      'data-hint': props.hint ? 'true' : undefined,
+      'aria-describedby': props.hint ? props.hintId : undefined,
     }, [
       h('div', { class: 'dialkit-folder-header-top' }, [
         props.isRoot
@@ -109,6 +114,9 @@ export const Folder = defineComponent({
       ]),
       props.isRoot && props.toolbar && isOpen.value
         ? h('div', { class: 'dialkit-panel-toolbar', onClick: (event: Event) => event.stopPropagation() }, [props.toolbar()])
+        : null,
+      props.hint
+        ? h('span', { class: 'dialkit-hint', id: props.hintId, role: 'tooltip' }, props.hint)
         : null,
     ]);
 

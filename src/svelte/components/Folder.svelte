@@ -13,6 +13,8 @@
     onOpenChange,
     toolbar,
     children,
+    hint,
+    hintId,
   } = $props<{
     title: string;
     defaultOpen?: boolean;
@@ -21,6 +23,9 @@
     onOpenChange?: (isOpen: boolean) => void;
     toolbar?: Snippet;
     children?: Snippet;
+    /** One line of help for the section, revealed on hover over the header. */
+    hint?: string;
+    hintId?: string;
   }>();
 
   let isOpen = $state(defaultOpen);
@@ -181,7 +186,12 @@
   </div>
 {:else}
   <div class="dialkit-folder">
-    <div class="dialkit-folder-header" onclick={handleToggle}>
+    <div
+      class="dialkit-folder-header"
+      onclick={handleToggle}
+      data-hint={hint ? 'true' : undefined}
+      aria-describedby={hint ? hintId : undefined}
+    >
       <div class="dialkit-folder-header-top">
         <div class="dialkit-folder-title-row">
           <span class="dialkit-folder-title">{title}</span>
@@ -200,6 +210,10 @@
           <path d={ICON_CHEVRON} />
         </svg>
       </div>
+
+      {#if hint}
+        <span class="dialkit-hint" id={hintId} role="tooltip">{hint}</span>
+      {/if}
     </div>
 
     {#if isOpen}

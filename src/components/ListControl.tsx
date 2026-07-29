@@ -1,14 +1,18 @@
 import { useRef, useState, useEffect } from 'react';
 import { ICON_GRIP, ICON_PLUS, ICON_TRASH } from '../icons';
 import { Folder } from './Folder';
+import { ControlShell } from './ControlShell';
 import { Slider } from './Slider';
 import { Toggle } from './Toggle';
 import { SelectControl } from './SelectControl';
 import { ColorControl } from './ColorControl';
+import { SwatchControl } from './SwatchControl';
 import { TextControl } from './TextControl';
 import {
   parseListItemSchema,
+  groupListFields,
   defaultListItemParams,
+  hintDomId,
   type ListItemValue,
   type ListItemType,
   type ListField,
@@ -38,12 +42,41 @@ function FieldControl({ field, value, onChange }: { field: ListField; value: Sca
     case 'select':
       return <SelectControl label={field.label} value={value as string} options={field.options ?? []} onChange={onChange} />;
     case 'color':
-      return <ColorControl label={field.label} value={value as string} onChange={onChange} />;
+      return <ColorControl label={field.label} value={value as string} palette={field.palette} onChange={onChange} />;
+    case 'swatch':
+      return <SwatchControl label={field.label} value={value as string} options={field.swatchOptions ?? []} onChange={onChange} />;
     case 'text':
       return <TextControl label={field.label} value={value as string} onChange={onChange} placeholder={field.placeholder} />;
     default:
       return null;
   }
+}
+
+/** A run of fields — the row's flat top area, or the body of one group. */
+function FieldList({
+  fields,
+  params,
+  rowId,
+  onChange,
+}: {
+  fields: ListField[];
+  params: Record<string, Scalar>;
+  rowId: string;
+  onChange: (key: string, value: Scalar) => void;
+}) {
+  return (
+    <div className="dialkit-list-item-fields">
+      {fields.map((field) => (
+        <ControlShell key={field.key} hint={field.hint} id={hintDomId(rowId, field.key)}>
+          <FieldControl
+            field={field}
+            value={params[field.key]}
+            onChange={(v) => onChange(field.key, v)}
+          />
+        </ControlShell>
+      ))}
+    </div>
+  );
 }
 
 export function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, onEvent }: ListControlProps) {
@@ -53,6 +86,8 @@ export function ListControl({ label, value, itemTypes, addLabel, maxItems, onCha
   // reorder. Handlers keep `ids` in lockstep with `value`.
   const [ids, setIds] = useState<string[]>(() => value.map(mkId));
   const [picking, setPicking] = useState(false);
+  // Index of the row whose title is being renamed in place, if any.
+  const [editing, setEditing] = useState<number | null>(null);
 
   // Drag-to-reorder. The row is only draggable once a drag starts from the
   // handle (armedRef), so dragging a slider never reorders the list.
@@ -103,6 +138,23 @@ export function ListControl({ label, value, itemTypes, addLabel, maxItems, onCha
     onEvent({ kind: 'list', op: 'move', from, to });
   };
 
+  // A blank title is stored as absent, not as '', so clearing the field reverts
+  // the row to its item type's label.
+  const commitTitle = (index: number, raw: string) => {
+    setEditing(null);
+    const next = raw.trim();
+    if ((value[index]?.title ?? '') === next) return;
+    onChange(
+      value.map((item, i) => {
+        if (i !== index) return item;
+        const row: ListItemValue = { type: item.type, params: item.params };
+        if (next) row.title = next;
+        return row;
+      })
+    );
+    onEvent({ kind: 'list', op: 'rename', index });
+  };
+
   const setParam = (index: number, key: string, v: Scalar) => {
     onChange(value.map((item, i) => (i === index ? { ...item, params: { ...item.params, [key]: v } } : item)));
     onEvent({ kind: 'list', op: 'set', index });
@@ -130,13 +182,16 @@ export function ListControl({ label, value, itemTypes, addLabel, maxItems, onCha
         {value.map((item, index) => {
           const type = itemTypes[item.type];
           if (!type) return null;
-          const fields = parseListItemSchema(type.schema);
+          const { flat, groups } = groupListFields(parseListItemSchema(type.schema, type.hints, type.groups));
           const overState = over?.index === index ? (over.after ? 'after' : 'before') : undefined;
+          const rowTitle = item.title ?? type.label;
           return (
             <div
               key={ids[index]}
               className="dialkit-list-item"
-              draggable
+              // A draggable ancestor swallows text selection, so the row stops
+              // being draggable while its title is being edited.
+              draggable={editing !== index}
               data-dragging={dragIndex === index ? 'true' : undefined}
               data-over={overState}
               onDragStart={(e) => {
@@ -155,23 +210,50 @@ export function ListControl({ label, value, itemTypes, addLabel, maxItems, onCha
               onDragEnd={() => { armedRef.current = null; setDragIndex(null); setOver(null); }}
             >
               <div className="dialkit-list-item-head">
-                <span className="dialkit-list-item-title">{type.label}</span>
-                <div className="dialkit-list-item-actions">
+                <button
+                  type="button"
+                  className="dialkit-list-drag"
+                  aria-label="Drag to reorder"
+                  onMouseDown={() => { armedRef.current = index; }}
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    {ICON_GRIP.map((c, i) => <circle key={i} cx={c.cx} cy={c.cy} r="1.5" />)}
+                  </svg>
+                </button>
+                {editing === index ? (
+                  // Uncontrolled: the field owns the draft, so Escape can restore
+                  // the original and let the shared blur path no-op it away.
+                  <input
+                    className="dialkit-list-item-title"
+                    defaultValue={item.title ?? ''}
+                    placeholder={type.label}
+                    autoFocus
+                    onFocus={(e) => e.currentTarget.select()}
+                    onBlur={(e) => commitTitle(index, e.currentTarget.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur();
+                      else if (e.key === 'Escape') {
+                        e.currentTarget.value = item.title ?? '';
+                        e.currentTarget.blur();
+                      }
+                    }}
+                  />
+                ) : (
                   <button
                     type="button"
-                    className="dialkit-list-drag"
-                    aria-label="Drag to reorder"
-                    onMouseDown={() => { armedRef.current = index; }}
+                    className="dialkit-list-item-title"
+                    aria-label={`Rename ${rowTitle}`}
+                    onClick={() => setEditing(index)}
                   >
-                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                      {ICON_GRIP.map((c, i) => <circle key={i} cx={c.cx} cy={c.cy} r="1.5" />)}
-                    </svg>
+                    {rowTitle}
                   </button>
+                )}
+                <div className="dialkit-list-item-actions">
                   <button
                     type="button"
                     className="dialkit-list-icon-btn dialkit-list-remove"
                     onClick={() => removeItem(index)}
-                    aria-label={`Remove ${type.label}`}
+                    aria-label={`Remove ${rowTitle}`}
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                       {ICON_TRASH.map((d, i) => <path key={i} d={d} />)}
@@ -179,18 +261,27 @@ export function ListControl({ label, value, itemTypes, addLabel, maxItems, onCha
                   </button>
                 </div>
               </div>
-              {fields.length > 0 && (
-                <div className="dialkit-list-item-fields">
-                  {fields.map((field) => (
-                    <FieldControl
-                      key={field.key}
-                      field={field}
-                      value={item.params[field.key]}
-                      onChange={(v) => setParam(index, field.key, v)}
-                    />
-                  ))}
-                </div>
+              {flat.length > 0 && (
+                <FieldList
+                  fields={flat}
+                  params={item.params}
+                  rowId={ids[index]}
+                  onChange={(key, v) => setParam(index, key, v)}
+                />
               )}
+
+              {/* Only the first section starts open: the point of grouping is to
+                  stop a six-control row reading as a wall. */}
+              {groups.map((group, groupIndex) => (
+                <Folder key={group.label} title={group.label} defaultOpen={groupIndex === 0}>
+                  <FieldList
+                    fields={group.fields}
+                    params={item.params}
+                    rowId={ids[index]}
+                    onChange={(key, v) => setParam(index, key, v)}
+                  />
+                </Folder>
+              ))}
             </div>
           );
         })}

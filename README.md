@@ -74,8 +74,152 @@ const params = useDialKit(name, config, options?)
 | `config` | `DialConfig` | Parameter definitions (see Control Types below) |
 | `options.onAction` | `(path: string) => void` | Callback when action buttons are clicked |
 | `options.shortcuts` | `Record<string, ShortcutConfig>` | Keyboard shortcuts for controls (see [Keyboard Shortcuts](#keyboard-shortcuts)) |
+| `options.hints` | `Record<string, string>` | Help text for controls (see [Hints](#hints)) |
+| `options.affordances` | `Record<string, AffordanceConfig>` | Companion controls (see [Affordances](#affordances)) |
+| `options.labels` | `Record<string, string>` | Display labels overriding the key-derived name (see [Labels](#labels)) |
 
 Returns a fully typed object matching your config shape with live values. Updating a control in the UI immediately updates the returned values.
+
+---
+
+## Hints
+
+Any control or folder can carry one line of help, revealed on hover or when keyboard focus lands inside it. Hints are keyed by control path — the same keying as `shortcuts` — because most controls are bare shorthand (`gravity: [9.8, 0, 20]`) with nowhere to hang a property.
+
+```tsx
+const p = useDialKit('Plasticity', {
+  gravity: [9.8, 0, 20],
+  physics: {
+    elastic: [0.5, 0, 1],
+    frozen: false,
+  },
+}, {
+  hints: {
+    gravity: 'Downward pull on every body.',
+    physics: 'How bodies respond to force.',
+    'physics.elastic': 'Elastic bodies bounce back; clay bodies keep their dent.',
+  },
+});
+```
+
+A hint replaces the config-path tooltip that leaf controls otherwise show, so only one tooltip ever appears. The tooltip is always in the DOM and wired up with `aria-describedby`, so screen readers announce it when focus enters the control.
+
+Fields inside [list](#list) rows take hints from their item type instead, keyed by param name:
+
+```tsx
+body: {
+  label: 'Body',
+  schema: { mass: [1, 0, 10], frozen: false },
+  hints: { mass: 'Heavier bodies resist force.' },
+}
+```
+
+Two limits worth knowing: a folder header isn't focusable, so folder hints reveal on hover only; and the tooltip is positioned inside the panel's scroll container, so a hint on the very last visible row can sit below the fold until you scroll.
+
+---
+
+## Labels
+
+A control's label is derived from its config key (`maxBend` → "Max Bend"). Pass `labels` to override it, keyed by control path like `hints`:
+
+```tsx
+const p = useDialKit('Motion', {
+  paramA: [0.5, 0, 1],
+  paramB: [0.5, 0, 1],
+}, {
+  labels: mode === 'flow'
+    ? { paramA: 'Flow Scale', paramB: 'Flow Speed' }
+    : { paramA: 'Step Size', paramB: 'Turn Rate' },
+});
+```
+
+Keyed rather than declared inline for the same reason as hints: the controls that most need a label their key can't express are bare shorthand, with nowhere to hang a property.
+
+Without this, changing a control's visible text means changing its key — and the key **is** its identity, so it would lose its current value, its persisted entry and any shortcut bound to it. An override changes only the text.
+
+Applies to folders as well as leaf controls. An empty string is ignored rather than blanking the label, so a map built from optional data can't erase the derived name. `ActionConfig.label` still works; a keyed label wins over it.
+
+---
+
+## Affordances
+
+A control can carry a companion control: an 8px dot in its bottom-right corner, barely visible until something is bound to it, opening a popover your app fills. Like hints, affordances are keyed by control path.
+
+```tsx
+const p = useDialKit('Plasticity', {
+  gravity: [9.8, 0, 20],
+}, {
+  affordances: {
+    gravity: { label: 'Bind to music', content: MusicBind },
+  },
+});
+```
+
+`content` is a **component**, not a node — it's captured once when the panel registers, so a pre-built node could never see current state. dialkit renders it with its own instance, so it keeps its own state and hooks. It receives the context as props:
+
+```tsx
+function MusicBind({ setStatus }: AffordanceContext) {
+  const [bound, setBound] = useState(false);
+  return (
+    <Toggle
+      label="Bound"
+      checked={bound}
+      onChange={(next) => { setBound(next); setStatus(next ? 'active' : 'off'); }}
+    />
+  );
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `panelId` | `string` | The panel this control belongs to. |
+| `path` | `string` | The control's config path. |
+| `status` | `AffordanceStatus` | The dot's current state. |
+| `setStatus` | `(status) => void` | Shorthand for `DialStore.setAffordanceStatus`. |
+
+Affordances travel as an option rather than in the config because the config is JSON-serialized on every render to detect structure changes, and view code would not survive that.
+
+### Status
+
+The dot's appearance is pushed by your app — dialkit owns only how each state looks:
+
+| Status | Dot |
+|--------|-----|
+| `off` | Faint grey. The default. |
+| `armed` | Solid accent — something is bound. |
+| `active` | Accent, gently pulsing — the binding is currently driving the value. |
+
+```tsx
+DialStore.setAffordanceStatus(panelId, 'gravity', 'active');
+```
+
+Pushing the status it already has is dropped without notifying anything, so driving this from an audio callback costs nothing. Status is presentation, not a value: it never reaches the value map, so it isn't persisted or saved into presets.
+
+The popover is portalled out of the panel body — which scrolls — and flips above the dot when it would otherwise run off the bottom of the viewport. It closes on Escape or a click outside, moving focus into the popover on open and back to the dot on close.
+
+Any control type can take an affordance; sliders are the intended case, and what the dot's corner placement is designed around.
+
+---
+
+## Disabled controls
+
+Any control can be greyed out and made inert at runtime:
+
+```tsx
+DialStore.setDisabled(panelId, 'reset', true);
+```
+
+Runtime-only by design: a `disabled` flag in the config plus a runtime override would be two sources of truth for the same question, and calling this once covers the static case. Availability is app state — it changes as modes turn on and off — so it belongs where that state lives.
+
+A disabled control greys out and stops responding to the pointer, and gets `aria-disabled`. Action buttons additionally get the native `disabled` attribute, which takes them out of the tab order. Other control types stay focusable — a known limit of greying at the wrapper rather than reaching inside every control.
+
+A disabled control still shows its [hint](#hints) on hover, which is usually exactly when the explanation matters.
+
+Action button labels are set in the config and are independent of the key:
+
+```tsx
+reset: { type: 'action', label: 'Reset All' }
+```
 
 ---
 
@@ -285,6 +429,65 @@ const p = useDialKit('Controls', {
 
 Action buttons trigger callbacks without storing any value. The `label` defaults to the formatted key name (camelCase becomes Title Case). Multiple adjacent actions are grouped vertically.
 Action buttons can be placed at the root or nested inside folders.
+
+### List
+
+A reorderable list of rows. Each row picks one of the declared `itemTypes`, and that type's `schema` becomes the row's sub-controls. Schema fields use the same shorthand as a panel config, restricted to scalars: `[default, min, max, step?]`, a bare number, a boolean, a string, or a `select` / `color` / `text` config.
+
+```tsx
+effects: {
+  type: 'list',
+  addLabel: 'Add effect',
+  max: 8,
+  itemTypes: {
+    brightness: { label: 'Brightness', schema: { amount: [1, 0, 2] } },
+    saturate: { label: 'Saturate', schema: { amount: [1, 0, 3] } },
+  },
+  default: [
+    { type: 'brightness', params: { amount: 1.1 }, title: 'Lift shadows' },
+    { type: 'saturate', params: { amount: 1.5 } },
+  ],
+}
+```
+
+Rows can be dragged to reorder and removed. When more than one item type is declared, the add button opens a type picker. An item type can also carry `hints` for its fields (see [Hints](#hints)).
+
+Colour fields work exactly as they do at top level, including palette mode and the named-palette `swatch` control, so a row's colour looks like colour everywhere else in the app:
+
+```tsx
+schema: {
+  color: { type: 'color', default: '#ff5a3c', palette: true },
+  scheme: { type: 'swatch', options: PALETTES, default: 'sunset' },
+}
+```
+
+#### Sections
+
+Rows more than a few controls deep can fold into named sections. Sections are keyed by param name — the same reason as `hints`, since most schema fields are bare shorthand with nowhere to hang a property:
+
+```tsx
+body: {
+  label: 'Body',
+  schema: {
+    mass: [1, 0, 10],
+    friction: [0.5, 0, 1],
+    color: { type: 'color', palette: true },
+  },
+  groups: { mass: 'Physics', friction: 'Physics', color: 'Appearance' },
+}
+```
+
+Ungrouped fields stay flat at the top of the row, so its primary control is always visible. Each named section follows as a collapsible folder, in the order its first field is declared. **Only the first section starts open** — the point of grouping is to stop a deep row reading as a wall.
+
+#### Row titles
+
+A row shows its item type's `label` unless it carries a `title` of its own — set one to name a row after its subject (a loaded file, a layer) rather than declaring a separate item type per row. Titles are editable in place: click the title, then **Enter** to commit or **Escape** to cancel. Clearing the field reverts the row to its type label, and a blank title is stored as absent rather than `''`.
+
+Renaming reports through `onEvent` as `{ kind: 'list', op: 'rename', index }`, distinct from the `set` op a param change emits.
+
+**Returns:** `ListItemValue[]` — `{ type, params, title? }` per row
+
+> Available in React and Svelte. The `list` control is not yet implemented for Vue or Solid.
 
 ### Folder
 
@@ -726,6 +929,14 @@ import type {
   SelectConfig,
   ColorConfig,
   TextConfig,
+  ListConfig,
+  ListItemType,
+  ListItemValue,
+  ListField,
+  ListFieldGroup,
+  AffordanceConfig,
+  AffordanceContext,
+  AffordanceStatus,
   ShortcutConfig,
   ShortcutMode,
   DialConfig,

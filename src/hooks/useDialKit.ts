@@ -1,5 +1,6 @@
-import { useEffect, useId, useSyncExternalStore, useRef } from 'react';
-import { DialStore, DialConfig, DialValue, DialEvent, ResolvedValues, SpringConfig, EasingConfig, SelectConfig, ColorConfig, GradientConfig, TextConfig, GalleryConfig, FileConfig, SwatchConfig, ChipsConfig, ListConfig, ActionConfig, ShortcutConfig, normalizeListItems } from '../store/DialStore';
+import { useEffect, useRef } from 'react';
+import { DialStore, DialConfig, DialValue, DialEvent, ResolvedValues, SpringConfig, EasingConfig, SelectConfig, ColorConfig, GradientConfig, TextConfig, GalleryConfig, FileConfig, SwatchConfig, ChipsConfig, ListConfig, ActionConfig, ShortcutConfig, AffordanceConfig, normalizeListItems } from '../store/DialStore';
+import { useDialStorePanel } from './useDialStorePanel';
 import { normalizeGradient, DEFAULT_GRADIENT } from '../gradient-core';
 
 export interface UseDialOptions {
@@ -7,6 +8,12 @@ export interface UseDialOptions {
   /** Non-value events: file picked, chip removed, list mutated. */
   onEvent?: (path: string, event: DialEvent) => void;
   shortcuts?: Record<string, ShortcutConfig>;
+  /** One line of help per control path, revealed on hover or keyboard focus. */
+  hints?: Record<string, string>;
+  /** Companion controls per control path, opened from a dot in the corner. */
+  affordances?: Record<string, AffordanceConfig>;
+  /** Display label by control path, overriding the key-derived name. */
+  labels?: Record<string, string>;
 }
 
 export function useDialKit<T extends DialConfig>(
@@ -14,35 +21,19 @@ export function useDialKit<T extends DialConfig>(
   config: T,
   options?: UseDialOptions
 ): ResolvedValues<T> {
-  const instanceId = useId();
-  const panelId = `${name}-${instanceId}`;
-  const configRef = useRef(config);
-  const serializedConfig = JSON.stringify(config);
-  configRef.current = config;
   const onActionRef = useRef(options?.onAction);
   onActionRef.current = options?.onAction;
   const onEventRef = useRef(options?.onEvent);
   onEventRef.current = options?.onEvent;
-  const shortcutsRef = useRef(options?.shortcuts);
-  shortcutsRef.current = options?.shortcuts;
-  const serializedShortcuts = JSON.stringify(options?.shortcuts);
 
-  // Register panel on mount
-  useEffect(() => {
-    DialStore.registerPanel(panelId, name, configRef.current, shortcutsRef.current);
-    return () => DialStore.unregisterPanel(panelId);
-  }, [panelId, name]);
-
-  // Update panel when config structure or shortcuts change
-  const mountedRef = useRef(false);
-  useEffect(() => {
-    if (!mountedRef.current) {
-      mountedRef.current = true;
-      return;
-    }
-    DialStore.updatePanel(panelId, name, configRef.current, shortcutsRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panelId, name, serializedConfig, serializedShortcuts]);
+  // Shared panel lifecycle: stable id, register/update, and the flat value
+  // snapshot subscription. Keeps useDialKit and useDialTimeline in lockstep.
+  const { panelId, flatValues } = useDialStorePanel(name, config, {
+    shortcuts: options?.shortcuts,
+    hints: options?.hints,
+    affordances: options?.affordances,
+      labels: options?.labels,
+  });
 
   // Subscribe to action events
   useEffect(() => {
@@ -58,16 +49,8 @@ export function useDialKit<T extends DialConfig>(
     });
   }, [panelId]);
 
-  // Subscribe to changes
-  // DialStore.getValues returns a stable empty object when panel not registered
-  const values = useSyncExternalStore(
-    (callback) => DialStore.subscribe(panelId, callback),
-    () => DialStore.getValues(panelId),
-    () => DialStore.getValues(panelId)
-  );
-
   // Build resolved values object
-  return buildResolvedValues(config, values, '') as ResolvedValues<T>;
+  return buildResolvedValues(config, flatValues, '') as ResolvedValues<T>;
 }
 
 function buildResolvedValues(

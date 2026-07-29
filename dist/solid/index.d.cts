@@ -280,17 +280,35 @@ type GalleryConfig = {
 type ListItemValue = {
     type: string;
     params: Record<string, number | boolean | string>;
+    /**
+     * Row-level name, shown in place of the item type's label and renamable in
+     * place. Absent (never empty) when the row has no name of its own.
+     */
+    title?: string;
 };
 /**
  * A sub-control field inside a list item type's schema. Uses the same shorthand
  * as a panel config, but scalar-only (no nested folders or non-value controls).
  */
-type ListItemField = [number, number, number, number?] | number | boolean | string | SelectConfig | ColorConfig | TextConfig;
+type ListItemField = [number, number, number, number?] | number | boolean | string | SelectConfig | ColorConfig | SwatchConfig | TextConfig;
 type ListItemType = {
-    /** Shown in the add menu and as the row's title. */
+    /** Shown in the add menu, and as a row's title when the row has none of its own. */
     label: string;
     /** Sub-controls for this item type, keyed by param name. */
     schema: Record<string, ListItemField>;
+    /**
+     * Help text per field, keyed by the same param name. Keyed rather than inline
+     * because a schema field is often bare shorthand (`mass: [1, 0, 10]`) with
+     * nowhere to hang a property.
+     */
+    hints?: Record<string, string>;
+    /**
+     * Section per field, keyed by param name, for rows too deep to read flat.
+     * Ungrouped fields stay at the top of the row; each named section becomes a
+     * collapsible folder below them, in the order its first field is declared.
+     * Keyed for the same reason as `hints`.
+     */
+    groups?: Record<string, string>;
 };
 type ListConfig = {
     type: 'list';
@@ -318,10 +336,44 @@ type ShortcutConfig = {
     mode?: ShortcutMode;
     interaction?: ShortcutInteraction;
 };
+/**
+ * How lit the affordance dot is. The app pushes this — dialkit owns only how
+ * each state looks, never when it applies.
+ */
+type AffordanceStatus = 'off' | 'armed' | 'active';
+/** What dialkit hands a popover so it doesn't have to resolve any of it itself. */
+type AffordanceContext = {
+    panelId: string;
+    path: string;
+    status: AffordanceStatus;
+    /** Shorthand for `DialStore.setAffordanceStatus(panelId, path, …)`. */
+    setStatus: (status: AffordanceStatus) => void;
+};
+/**
+ * A companion control hung off a control's corner: a barely-there dot that opens
+ * a popover the host app fills.
+ *
+ * `content` is a component — a React/Solid/Vue component or a Svelte snippet —
+ * receiving the context as its props/argument. Not a pre-built node: it is
+ * captured once at registration and would never see current state. Not called
+ * directly by the renderer either, so a stateful popover keeps its own identity
+ * and its own hooks. This is also why affordances travel as a panel option
+ * rather than in the config: the config is JSON-serialized on every render to
+ * detect structure changes, and view code would not survive that.
+ */
+type AffordanceConfig = {
+    content: (ctx: AffordanceContext) => unknown;
+    /** Accessible name for the dot and its popover. Defaults to 'Options'. */
+    label?: string;
+};
 type ControlMeta = {
     type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
     path: string;
     label: string;
+    /** One line of help, revealed on hover or when focus lands inside the control. */
+    hint?: string;
+    /** Companion control reachable from a dot in the control's bottom-right corner. */
+    affordance?: AffordanceConfig;
     min?: number;
     max?: number;
     step?: number;
@@ -361,6 +413,13 @@ type PanelConfig = {
     controls: ControlMeta[];
     values: Record<string, DialValue>;
     shortcuts: Record<string, ShortcutConfig>;
+    /** Help text by control path, retained so a later updatePanel can restate it. */
+    hints?: Record<string, string>;
+    /** Affordances by control path, retained on the same terms as `hints`. */
+    affordances?: Record<string, AffordanceConfig>;
+    /** Label overrides by control path, retained on the same terms as `hints`. */
+    labels?: Record<string, string>;
+    kind?: 'timeline';
 };
 type Listener = () => void;
 type ActionListener = (action: string) => void;
@@ -377,7 +436,7 @@ type DialEvent = {
     value: string;
 } | {
     kind: 'list';
-    op: 'add' | 'remove' | 'move' | 'set';
+    op: 'add' | 'remove' | 'move' | 'set' | 'rename';
     index?: number;
     from?: number;
     to?: number;
@@ -389,6 +448,39 @@ type Preset = {
     name: string;
     values: Record<string, DialValue>;
 };
+type DialKitPersistOptions = boolean | {
+    key?: string;
+    storage?: 'localStorage' | 'sessionStorage';
+    presets?: boolean;
+};
+type DialStorePanelOptions = {
+    retainOnUnmount?: boolean;
+    persist?: DialKitPersistOptions;
+    /**
+     * Help text by control path — the same keying as `shortcuts`. Keyed rather
+     * than declared inline because most controls are bare shorthand
+     * (`gravity: [9.8, 0, 20]`) with nowhere to hang a property.
+     */
+    hints?: Record<string, string>;
+    /**
+     * Companion controls by control path. Holds framework view nodes, so — unlike
+     * the config — this is never serialized.
+     */
+    affordances?: Record<string, AffordanceConfig>;
+    /**
+     * Display label by control path, overriding the name derived from the config
+     * key. Keyed for the same reason as `hints`: the controls that most need a
+     * label the key can't express are bare shorthand (`a: [0, 0, 1]` relabelled
+     * per mode) with nowhere to hang a property. Applies to folders too.
+     *
+     * Without this, changing a control's visible text means changing its config
+     * key — which silently changes its identity, so it loses its value, its
+     * persisted entry and its shortcut binding.
+     */
+    labels?: Record<string, string>;
+    /** Timeline panels render in DialTimeline and are filtered out of the panel dock. */
+    kind?: 'timeline';
+};
 declare class DialStoreClass {
     private panels;
     private listeners;
@@ -396,20 +488,27 @@ declare class DialStoreClass {
     private snapshots;
     private actionListeners;
     private eventListeners;
+    private affordanceStatus;
+    private disabledPaths;
+    private controlStateListeners;
     private presets;
     private activePreset;
     private baseValues;
-    registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>): void;
-    updatePanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>): void;
+    private persistTargets;
+    registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, options?: DialStorePanelOptions): void;
+    updatePanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, options?: DialStorePanelOptions): void;
     unregisterPanel(id: string): void;
+    private overlayPersistedValues;
+    private savePanelValues;
     updateValue(panelId: string, path: string, value: DialValue): void;
+    updateValues(panelId: string, updates: Record<string, DialValue>): void;
     updateSpringMode(panelId: string, path: string, mode: 'simple' | 'advanced'): void;
     getSpringMode(panelId: string, path: string): 'simple' | 'advanced';
     updateTransitionMode(panelId: string, path: string, mode: 'easing' | 'simple' | 'advanced'): void;
     getTransitionMode(panelId: string, path: string): 'easing' | 'simple' | 'advanced';
     getValue(panelId: string, path: string): DialValue | undefined;
     getValues(panelId: string): Record<string, DialValue>;
-    getPanels(): PanelConfig[];
+    getPanels(kind?: 'panel' | 'timeline'): PanelConfig[];
     getPanel(id: string): PanelConfig | undefined;
     subscribe(panelId: string, listener: Listener): () => void;
     subscribeGlobal(listener: Listener): () => void;
@@ -417,6 +516,23 @@ declare class DialStoreClass {
     triggerAction(panelId: string, path: string): void;
     subscribeEvents(panelId: string, listener: EventListener): () => void;
     emitEvent(panelId: string, path: string, event: DialEvent): void;
+    /**
+     * How lit a control's affordance dot is. Callers may push this as often as
+     * they like — an unchanged status is dropped without notifying, so driving it
+     * from an audio callback costs nothing.
+     */
+    setAffordanceStatus(panelId: string, path: string, status: AffordanceStatus): void;
+    getAffordanceStatus(panelId: string, path: string): AffordanceStatus;
+    /**
+     * Greys a control out and stops it responding. Runtime-only by design: a
+     * config default plus a runtime override would be two sources of truth, and
+     * calling this once covers the static case.
+     */
+    setDisabled(panelId: string, path: string, disabled: boolean): void;
+    isDisabled(panelId: string, path: string): boolean;
+    /** One channel for every app-pushed presentation change on a panel. */
+    subscribeControlState(panelId: string, listener: Listener): () => void;
+    private notifyControlState;
     savePreset(panelId: string, name: string): string;
     loadPreset(panelId: string, presetId: string): void;
     deletePreset(panelId: string, presetId: string): void;
@@ -462,6 +578,7 @@ declare class DialStoreClass {
     private normalizePreservedValue;
     private roundToStep;
     private stepPrecision;
+    private applyControlExtras;
     private mapControlsByPath;
 }
 declare const DialStore: DialStoreClass;
@@ -469,8 +586,170 @@ declare const DialStore: DialStoreClass;
 interface CreateDialOptions {
     onAction?: (action: string) => void;
     shortcuts?: Record<string, ShortcutConfig>;
+    /** One line of help per control path, revealed on hover or keyboard focus. */
+    hints?: Record<string, string>;
+    /** Companion controls per control path, opened from a dot in the corner. */
+    affordances?: Record<string, AffordanceConfig>;
+    /** Display label by control path, overriding the key-derived name. */
+    labels?: Record<string, string>;
 }
 declare function createDialKit<T extends DialConfig>(name: string, config: T, options?: CreateDialOptions): Accessor<ResolvedValues<T>>;
+
+type TimelineClipLoop = 'off' | 'repeat';
+type TimelineStepValues = {
+    [key: string]: DialConfig[string] | undefined;
+};
+type TimelineStepConfig = {
+    duration?: number;
+    to?: TimelineStepValues;
+    transition?: TransitionConfig;
+};
+type TimelinePropStepConfig = {
+    duration?: number;
+    to?: number | string;
+    transition?: TransitionConfig;
+};
+type TimelinePropConfig = {
+    from?: number | string;
+    to?: number | string;
+    duration?: number;
+    /** Offset from the clip's `at` in seconds. */
+    delay?: number;
+    transition?: TransitionConfig;
+    steps?: TimelinePropStepConfig[];
+};
+type TimelineClipBase = {
+    at: number;
+    duration?: number;
+    transition?: TransitionConfig;
+    loop?: boolean | TimelineClipLoop;
+};
+type TimelineClipConfig = TimelineClipBase & ({
+    from?: DialConfig;
+    to?: DialConfig;
+    steps?: never;
+    props?: never;
+} | {
+    from?: DialConfig;
+    to?: never;
+    /** Sequential legs on one row — a segmented bar; boundaries retime legs. */
+    steps: TimelineStepConfig[];
+    props?: never;
+} | {
+    from?: never;
+    to?: never;
+    steps?: never;
+    /** Independent per-property tracks — mutually exclusive with from/to/steps. */
+    props: {
+        [prop: string]: TimelinePropConfig;
+    };
+});
+/** Nested keys group clips into a collapsible layer — purely presentational. */
+type TimelineGroupConfig = {
+    [key: string]: TimelineClipConfig;
+};
+type TimelineConfig = {
+    /** Total timeline length in seconds. Inferred from the last clip when omitted. */
+    duration?: number;
+} & {
+    [key: string]: TimelineClipConfig | TimelineGroupConfig | number | undefined;
+};
+/** CSS-friendly output for consumers not using Motion — spread into a style. */
+type TimelineClipCss = {
+    transitionDuration: string;
+    transitionTimingFunction: string;
+};
+type TimelineClipValues<C extends TimelineClipConfig = TimelineClipConfig> = {
+    at: number;
+    duration: number;
+    /** Effective code-defined loop mode. */
+    loop: TimelineClipLoop;
+    /** Playhead is at or past the clip start. */
+    started: boolean;
+    /** Playhead is inside the clip — for looping clips, inside any cycle. */
+    active: boolean;
+    /** Playhead is past the clip end (for looping clips, past the timeline end). */
+    done: boolean;
+    /**
+     * 0–1 position of the playhead within the clip — cycle progress (a
+     * sawtooth) for looping clips, sequence progress for steps clips.
+     */
+    progress: number;
+    /** Index of the leg under the playhead, for sequence clips. */
+    step: C['steps'] extends TimelineStepConfig[] ? number : undefined;
+    from: C['props'] extends Record<string, TimelinePropConfig> ? {
+        [K in keyof C['props']]: number | string;
+    } : C['from'] extends DialConfig ? ResolvedValues<C['from']> : undefined;
+    to: C['props'] extends Record<string, TimelinePropConfig> ? {
+        [K in keyof C['props']]: number | string;
+    } : C['steps'] extends TimelineStepConfig[] ? C['from'] extends DialConfig ? ResolvedValues<C['from']> : Record<string, number | string> : C['to'] extends DialConfig ? ResolvedValues<C['to']> : undefined;
+    /** `to` once the clip has started, `from` before — hand it to Motion's animate.
+     * For sequences this is the final merged state; for props clips, per-track
+     * endpoint records. */
+    animate: C['props'] extends Record<string, TimelinePropConfig> ? {
+        [K in keyof C['props']]: number | string;
+    } : C['steps'] extends TimelineStepConfig[] ? C['from'] extends DialConfig ? ResolvedValues<C['from']> : Record<string, number | string> | undefined : C['to'] extends DialConfig ? C['from'] extends DialConfig ? ResolvedValues<C['from']> | ResolvedValues<C['to']> : ResolvedValues<C['to']> | undefined : undefined;
+    /** The clip's editable curve — single-curve clips only. */
+    transition: C['props'] extends Record<string, TimelinePropConfig> ? undefined : C['steps'] extends TimelineStepConfig[] ? undefined : C extends {
+        transition: TransitionConfig;
+    } | {
+        from: DialConfig;
+    } | {
+        to: DialConfig;
+    } ? TransitionConfig : undefined;
+    /** Duration + timing-function for native CSS transitions — single-curve clips only. */
+    css: C['props'] extends Record<string, TimelinePropConfig> ? undefined : C['steps'] extends TimelineStepConfig[] ? undefined : C extends {
+        transition: TransitionConfig;
+    } | {
+        from: DialConfig;
+    } | {
+        to: DialConfig;
+    } ? TimelineClipCss : undefined;
+    /**
+     * Values interpolated through the clip's curves at the current playhead —
+     * bind to style for true scrubbing: the element is exactly at this point
+     * in time whether playing, paused, or scrubbing. Sequence clips report the
+     * merged state of all legs (declare every animated property in `from`);
+     * props clips report every track's value.
+     */
+    current: C['props'] extends Record<string, TimelinePropConfig> ? {
+        [K in keyof C['props']]: number | string;
+    } : C['steps'] extends TimelineStepConfig[] ? C['from'] extends DialConfig ? ResolvedValues<C['from']> : Record<string, number | string> : C['to'] extends DialConfig ? C['from'] extends DialConfig ? ResolvedValues<C['from']> | ResolvedValues<C['to']> : undefined : undefined;
+};
+type TimelineGroupValues<G extends TimelineGroupConfig> = {
+    [K in keyof G as G[K] extends TimelineClipConfig ? K : never]: TimelineClipValues<Extract<G[K], TimelineClipConfig>>;
+};
+type DialTimelineValues<T extends TimelineConfig> = {
+    time: number;
+    playing: boolean;
+    duration: number;
+    play: () => void;
+    pause: () => void;
+    replay: () => void;
+    seek: (time: number) => void;
+} & {
+    [K in keyof T as T[K] extends TimelineClipConfig ? K : never]: TimelineClipValues<Extract<T[K], TimelineClipConfig>>;
+} & {
+    [K in keyof T as T[K] extends TimelineClipConfig ? never : T[K] extends TimelineGroupConfig ? K : never]: TimelineGroupValues<Extract<T[K], TimelineGroupConfig>>;
+};
+
+interface DialTimelineOptions {
+    id?: string;
+    persist?: DialKitPersistOptions;
+    /** Start playing on mount. Defaults to true. */
+    autoplay?: boolean;
+    /**
+     * Loop when the playhead reaches the end. `true` restarts the whole
+     * timeline; `{ from }` wraps back to that time instead, so clips before it
+     * play once and looping clips keep cycling forever. Defaults to false.
+     */
+    loop?: boolean | {
+        from: number;
+    };
+}
+
+type CreateDialTimelineOptions = DialTimelineOptions;
+declare function createDialTimeline<T extends TimelineConfig>(name: string, config: T, options?: CreateDialTimelineOptions): Accessor<DialTimelineValues<T>>;
 
 type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 type DialMode = 'popover' | 'inline';
@@ -483,6 +762,18 @@ interface DialRootProps {
     productionEnabled?: boolean;
 }
 declare function DialRoot(props: DialRootProps): solid_js.JSX.Element;
+
+interface DialTimelineProps {
+    theme?: DialTheme;
+    defaultVisible?: boolean;
+    visible?: boolean;
+    onVisibilityChange?: (visible: boolean) => void;
+    defaultOpen?: boolean;
+    productionEnabled?: boolean;
+}
+declare function DialTimeline(props: DialTimelineProps): JSX.Element;
+
+declare function TimelineToggleButton(): solid_js.JSX.Element;
 
 interface SliderProps {
     label: string;
@@ -537,8 +828,32 @@ interface FolderProps {
     inline?: boolean;
     onOpenChange?: (isOpen: boolean) => void;
     toolbar?: JSX.Element;
+    /** One line of help for the section, revealed on hover over the header. */
+    hint?: string;
+    hintId?: string;
 }
 declare function Folder(props: FolderProps): JSX.Element;
+
+interface ControlShellProps {
+    /** Help text for this control. Without one the tooltip is not rendered. */
+    hint?: string;
+    /** Native-tooltip fallback used only when there's no hint (the config path). */
+    title?: string;
+    /** Stable, unique id for the tooltip so `aria-describedby` can point at it. */
+    id: string;
+    /** Companion control reachable from a dot in the bottom-right corner. */
+    affordance?: AffordanceConfig;
+    /** Required alongside `affordance` — together they address the status slice. */
+    panelId?: string;
+    path?: string;
+    children: JSX.Element;
+}
+/**
+ * The chrome around one leaf control: a hint tooltip and an affordance dot.
+ * Both are optional, and a control with neither renders just the wrapper plus
+ * the config-path tooltip.
+ */
+declare function ControlShell(props: ControlShellProps): JSX.Element;
 
 interface ModuleProps {
     title: string;
@@ -900,4 +1215,35 @@ interface PresetManagerProps {
 }
 declare function PresetManager(props: PresetManagerProps): solid_js.JSX.Element;
 
-export { type ActionConfig, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, type AxisSpec, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, type CreateDialOptions, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, type DialConfig, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type DriverDirection, Folder, GradientControl, GradientPanel, type GradientStop, type GradientType, type GradientValue, Module, type PanelConfig, type Point, type Preset, PresetManager, RangeSlider, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, applyDetentAxis, centerValue, clamp, createDialKit, gradientToCss, invertY, normToValue, normalizeValue, nudge, pointFromValue, resolveAxis, snapToStep, valueFromPoint, valueToNorm };
+interface TransitionDurationControl {
+    value: number;
+    onChange: (value: number) => void;
+    min?: number;
+    max?: number;
+    step?: number;
+}
+interface TransitionControlProps {
+    panelId: string;
+    path: string;
+    label: string;
+    value: TransitionConfig;
+    onChange: (value: TransitionConfig) => void;
+    hideDuration?: boolean;
+    durationControl?: TransitionDurationControl;
+}
+declare function TransitionControl(props: TransitionControlProps): solid_js.JSX.Element;
+
+interface ControlRendererProps {
+    panelId: string;
+    controls: ControlMeta[];
+    values: Record<string, DialValue>;
+    /** Optional timeline-owned duration rendered inside the transition editor. */
+    transitionDuration?: TransitionDurationControl;
+}
+declare function ControlRenderer(props: ControlRendererProps): solid_js.JSX.Element;
+
+declare function EasingVisualization(props: {
+    easing: EasingConfig;
+}): solid_js.JSX.Element;
+
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, type AxisSpec, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, ControlRenderer, ControlShell, type CreateDialOptions, type CreateDialTimelineOptions, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, type DialConfig, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, DialTimeline, type DialTimelineProps, type DialTimelineValues, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, Folder, GradientControl, GradientPanel, type GradientStop, type GradientType, type GradientValue, Module, type PanelConfig, type Point, type Preset, PresetManager, RangeSlider, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineToggleButton, Toggle, type TransitionConfig, TransitionControl, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, applyDetentAxis, centerValue, clamp, createDialKit, createDialTimeline, gradientToCss, invertY, normToValue, normalizeValue, nudge, pointFromValue, resolveAxis, snapToStep, valueFromPoint, valueToNorm };
