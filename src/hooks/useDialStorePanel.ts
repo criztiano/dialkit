@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useId, useRef, useSyncExternalStore } from 'react';
 import { DialStore } from '../store/DialStore';
-import type { DialConfig, DialKitPersistOptions, DialValue, ShortcutConfig } from '../store/DialStore';
+import type { AffordanceConfig, DialConfig, DialKitPersistOptions, DialValue, ShortcutConfig } from '../store/DialStore';
 
 export interface UseDialStorePanelOptions {
   id?: string;
   persist?: DialKitPersistOptions;
   shortcuts?: Record<string, ShortcutConfig>;
+  hints?: Record<string, string>;
+  affordances?: Record<string, AffordanceConfig>;
   kind?: 'timeline';
 }
 
@@ -42,12 +44,15 @@ export function useDialStorePanel(
   const serializedConfig = useSerialized(config);
   const serializedShortcuts = useSerialized(options.shortcuts);
   const serializedPersist = useSerialized(options.persist);
+  const serializedHints = useSerialized(options.hints);
 
   // Register on mount
   useEffect(() => {
     DialStore.registerPanel(panelId, name, configRef.current, optionsRef.current.shortcuts, {
       retainOnUnmount: hasStableId,
       persist: optionsRef.current.persist,
+      hints: optionsRef.current.hints,
+      affordances: optionsRef.current.affordances,
       kind: optionsRef.current.kind,
     });
     return () => DialStore.unregisterPanel(panelId);
@@ -63,10 +68,12 @@ export function useDialStorePanel(
     DialStore.updatePanel(panelId, name, configRef.current, optionsRef.current.shortcuts, {
       retainOnUnmount: hasStableId,
       persist: optionsRef.current.persist,
+      hints: optionsRef.current.hints,
+      affordances: optionsRef.current.affordances,
       kind: optionsRef.current.kind,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasStableId, panelId, name, serializedConfig, serializedShortcuts, serializedPersist]);
+  }, [hasStableId, panelId, name, serializedConfig, serializedShortcuts, serializedPersist, serializedHints]);
 
   const subscribe = useCallback(
     (callback: () => void) => DialStore.subscribe(panelId, callback),

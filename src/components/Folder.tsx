@@ -10,9 +10,12 @@ interface FolderProps {
   inline?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
   toolbar?: ReactNode;
+  /** One line of help for the section, revealed on hover over the header. */
+  hint?: string;
+  hintId?: string;
 }
 
-export function Folder({ title, children, defaultOpen = true, isRoot = false, inline = false, onOpenChange, toolbar }: FolderProps) {
+export function Folder({ title, children, defaultOpen = true, isRoot = false, inline = false, onOpenChange, toolbar, hint, hintId }: FolderProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [isCollapsed, setIsCollapsed] = useState(!defaultOpen);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -54,7 +57,12 @@ export function Folder({ title, children, defaultOpen = true, isRoot = false, in
 
   const folderContent = (
     <div ref={isRoot ? contentRef : undefined} className={`dialkit-folder ${isRoot ? 'dialkit-folder-root' : ''}`}>
-      <div className={`dialkit-folder-header ${isRoot ? 'dialkit-panel-header' : ''}`} onClick={handleToggle}>
+      <div
+        className={`dialkit-folder-header ${isRoot ? 'dialkit-panel-header' : ''}`}
+        onClick={handleToggle}
+        data-hint={hint ? 'true' : undefined}
+        aria-describedby={hint ? hintId : undefined}
+      >
         <div className="dialkit-folder-header-top">
           {isRoot ? (
             isOpen && (
@@ -105,6 +113,12 @@ export function Folder({ title, children, defaultOpen = true, isRoot = false, in
           <div className="dialkit-panel-toolbar" onClick={(e) => e.stopPropagation()}>
             {toolbar}
           </div>
+        )}
+
+        {hint && (
+          <span className="dialkit-hint" id={hintId} role="tooltip">
+            {hint}
+          </span>
         )}
       </div>
 

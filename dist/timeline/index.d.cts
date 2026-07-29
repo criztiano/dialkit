@@ -181,17 +181,35 @@ type GalleryConfig = {
 type ListItemValue = {
     type: string;
     params: Record<string, number | boolean | string>;
+    /**
+     * Row-level name, shown in place of the item type's label and renamable in
+     * place. Absent (never empty) when the row has no name of its own.
+     */
+    title?: string;
 };
 /**
  * A sub-control field inside a list item type's schema. Uses the same shorthand
  * as a panel config, but scalar-only (no nested folders or non-value controls).
  */
-type ListItemField = [number, number, number, number?] | number | boolean | string | SelectConfig | ColorConfig | TextConfig;
+type ListItemField = [number, number, number, number?] | number | boolean | string | SelectConfig | ColorConfig | SwatchConfig | TextConfig;
 type ListItemType = {
-    /** Shown in the add menu and as the row's title. */
+    /** Shown in the add menu, and as a row's title when the row has none of its own. */
     label: string;
     /** Sub-controls for this item type, keyed by param name. */
     schema: Record<string, ListItemField>;
+    /**
+     * Help text per field, keyed by the same param name. Keyed rather than inline
+     * because a schema field is often bare shorthand (`mass: [1, 0, 10]`) with
+     * nowhere to hang a property.
+     */
+    hints?: Record<string, string>;
+    /**
+     * Section per field, keyed by param name, for rows too deep to read flat.
+     * Ungrouped fields stay at the top of the row; each named section becomes a
+     * collapsible folder below them, in the order its first field is declared.
+     * Keyed for the same reason as `hints`.
+     */
+    groups?: Record<string, string>;
 };
 type ListConfig = {
     type: 'list';

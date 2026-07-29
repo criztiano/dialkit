@@ -10,6 +10,8 @@ export function createDialKit(name, config, options) {
         DialStore.registerPanel(panelId, name, config, options?.shortcuts, {
             retainOnUnmount: hasStableId,
             persist: options?.persist,
+            hints: options?.hints,
+            affordances: options?.affordances,
         });
         values = resolve();
         const unsubValues = DialStore.subscribe(panelId, () => {

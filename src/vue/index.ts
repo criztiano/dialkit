@@ -42,6 +42,7 @@ export { Slider } from './components/Slider';
 export { RangeSlider } from './components/RangeSlider';
 export { Toggle } from './components/Toggle';
 export { Folder } from './components/Folder';
+export { ControlShell } from './components/ControlShell';
 export { Module } from './components/Module';
 export { SegmentedControl } from './components/SegmentedControl';
 export { ButtonGroup } from './components/ButtonGroup';
@@ -98,5 +99,8 @@ export type {
   ResolvedValues,
   ControlMeta,
   PanelConfig,
+  AffordanceConfig,
+  AffordanceContext,
+  AffordanceStatus,
   ShortcutConfig,
 } from '../store/DialStore';

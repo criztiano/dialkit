@@ -12,12 +12,17 @@ import type {
   ShortcutConfig,
   SpringConfig,
   TextConfig,
+  AffordanceConfig,
 } from '../store/DialStore';
 import { normalizeGradient, DEFAULT_GRADIENT } from '../gradient-core';
 
 export interface UseDialOptions {
   onAction?: (action: string) => void;
   shortcuts?: Record<string, ShortcutConfig>;
+  /** One line of help per control path, revealed on hover or keyboard focus. */
+  hints?: Record<string, string>;
+  /** Companion controls per control path, opened from a dot in the corner. */
+  affordances?: Record<string, AffordanceConfig>;
 }
 
 let dialKitInstance = 0;
@@ -40,7 +45,7 @@ export function useDialKit<T extends DialConfig>(
   let unsubscribeActions: (() => void) | undefined;
 
   const register = () => {
-    DialStore.registerPanel(panelId, name, configRef.value, shortcutsRef.value);
+    DialStore.registerPanel(panelId, name, configRef.value, shortcutsRef.value, { hints: options?.hints, affordances: options?.affordances });
     values.value = DialStore.getValues(panelId);
 
     unsubscribeValues = DialStore.subscribe(panelId, () => {
@@ -64,7 +69,7 @@ export function useDialKit<T extends DialConfig>(
     configRef.value = config;
     shortcutsRef.value = options?.shortcuts;
     if (mounted.value) {
-      DialStore.updatePanel(panelId, name, configRef.value, shortcutsRef.value);
+      DialStore.updatePanel(panelId, name, configRef.value, shortcutsRef.value, { hints: options?.hints, affordances: options?.affordances });
       values.value = DialStore.getValues(panelId);
     }
   });

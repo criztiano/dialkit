@@ -1,5 +1,5 @@
 import { Fragment, defineComponent, h, inject, type PropType } from 'vue';
-import { DialStore } from '../../store/DialStore';
+import { DialStore, hintDomId } from '../../store/DialStore';
 import type {
   ControlMeta,
   DialValue,
@@ -11,6 +11,7 @@ import type {
 import type { GradientValue } from '../../gradient-core';
 import { ColorControl } from './ColorControl';
 import { Folder } from './Folder';
+import { ControlShell } from './ControlShell';
 import { GradientControl } from './GradientControl';
 import { RangeSlider } from './RangeSlider';
 import { SelectControl } from './SelectControl';
@@ -36,7 +37,9 @@ export const ControlRenderer = defineComponent({
     const shortcut = inject(ShortcutKey, undefined);
     const isShortcutActive = (path: string) =>
       shortcut?.activePanelId.value === props.panelId && shortcut.activePath.value === path;
-    const renderControl = (control: ControlMeta): ReturnType<typeof h> | null => {
+    // Panel id and path are both stable and unique, so no id generator is needed.
+    const hintId = (control: ControlMeta) => hintDomId(props.panelId, control.path);
+    const renderControlNode = (control: ControlMeta): ReturnType<typeof h> | null => {
       const value = props.values[control.path];
       switch (control.type) {
         case 'slider':
@@ -95,6 +98,8 @@ export const ControlRenderer = defineComponent({
             key: control.path,
             title: control.label,
             defaultOpen: control.defaultOpen ?? true,
+            hint: control.hint,
+            hintId: hintId(control),
           }, { default: () => (control.children ?? []).map(renderControl) });
         case 'text':
           return h(TextControl, {
@@ -148,12 +153,33 @@ export const ControlRenderer = defineComponent({
           return h('button', {
             key: control.path,
             class: 'dialkit-button',
+            // The wrapper greys every control out, but only a real `disabled`
+            // takes a button out of the tab order too.
+            disabled: DialStore.isDisabled(props.panelId, control.path),
             onClick: () => DialStore.triggerAction(props.panelId, control.path),
           }, control.label);
         default:
           return null;
       }
     };
+
+    // Wrap leaf controls so they can carry a hint. Without one the wrapper falls
+    // back to a native tooltip showing the config path — a quick dev reference
+    // for which key a control maps to. Folders manage their own rows.
+    const renderControl = (control: ControlMeta): ReturnType<typeof h> | null => {
+      const node = renderControlNode(control);
+      if (control.type === 'folder') return node;
+      return h(ControlShell, {
+        key: control.path,
+        hint: control.hint,
+        title: control.path,
+        id: hintId(control),
+        affordance: control.affordance,
+        panelId: props.panelId,
+        path: control.path,
+      }, { default: () => node });
+    };
+
     return () => h(Fragment, null, props.controls.map(renderControl));
   },
 });

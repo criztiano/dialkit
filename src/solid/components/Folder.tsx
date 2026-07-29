@@ -10,6 +10,9 @@ interface FolderProps {
   inline?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
   toolbar?: JSX.Element;
+  /** One line of help for the section, revealed on hover over the header. */
+  hint?: string;
+  hintId?: string;
 }
 
 export function Folder(props: FolderProps) {
@@ -132,6 +135,8 @@ export function Folder(props: FolderProps) {
       <div
         class={`dialkit-folder-header ${props.isRoot ? 'dialkit-panel-header' : ''}`}
         onClick={handleToggle}
+        data-hint={props.hint ? 'true' : undefined}
+        aria-describedby={props.hint ? props.hintId : undefined}
       >
         <div class="dialkit-folder-header-top">
           {props.isRoot ? (
@@ -180,6 +185,12 @@ export function Folder(props: FolderProps) {
           <div class="dialkit-panel-toolbar" onClick={(e) => e.stopPropagation()}>
             {props.toolbar}
           </div>
+        </Show>
+
+        <Show when={props.hint}>
+          <span class="dialkit-hint" id={props.hintId} role="tooltip">
+            {props.hint}
+          </span>
         </Show>
       </div>
 

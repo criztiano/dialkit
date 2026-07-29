@@ -32,6 +32,11 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
   --dial-timeline-loop-bg: rgba(129, 140, 248, 0.20);
   --dial-timeline-loop-border: rgba(129, 140, 248, 0.75);
 
+  /* Affordance dot — barely there at rest, accent once something is bound. */
+  --dial-affordance-idle: rgba(255, 255, 255, 0.22);
+  --dial-affordance-armed: #818cf8;
+  --dial-affordance-active: #a5b4fc;
+
   /* Glassmorphic panel */
   --dial-glass-bg: #212121;
   --dial-dropdown-bg: #2a2a2a;
@@ -215,6 +220,168 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
   flex: 1;
   white-space: nowrap;
   overflow: hidden;
+}
+
+/* Hint tooltip — one line of help for a control or folder. Reveal is pure CSS
+   (:hover for pointer, :focus-within for keyboard) so all four frameworks get
+   identical behaviour with no per-framework state. The tooltip is always in the
+   DOM so \`aria-describedby\` on the host always resolves. */
+.dialkit-control-tip[data-hint],
+.dialkit-folder-header[data-hint] {
+  position: relative;
+}
+
+.dialkit-hint {
+  position: absolute;
+  top: calc(100% + 4px);
+  /* Panel-width, never wider: the panel body scrolls, so anything spilling
+     sideways would be clipped or push a horizontal scrollbar. */
+  left: 0;
+  right: 0;
+  z-index: 20;
+  padding: 6px 8px;
+  border: 1px solid var(--dial-border);
+  border-radius: 7px;
+  background: var(--dial-dropdown-bg);
+  box-shadow: var(--dial-shadow-dropdown);
+  color: var(--dial-text-secondary);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.35;
+  letter-spacing: 0;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-2px);
+  /* Longhand, not the shorthand: the reveal delay below has to survive the
+     reduced-motion override, which only resets duration. */
+  transition-property: opacity, transform, visibility;
+  transition-duration: 0.12s;
+  transition-timing-function: ease;
+  pointer-events: none;
+}
+
+/* Dwell before revealing, so sweeping a pointer — or tabbing — across a dense
+   panel doesn't flash a row of tooltips. Hiding stays immediate: the delay
+   lives only here, so leaving falls back to the base rule's zero delay. */
+.dialkit-control-tip[data-hint]:hover > .dialkit-hint,
+.dialkit-control-tip[data-hint]:focus-within > .dialkit-hint,
+.dialkit-folder-header[data-hint]:hover > .dialkit-hint {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition-delay: 1.5s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialkit-hint {
+    transition-duration: 0s;
+    transform: none;
+  }
+}
+
+/* An open popover owns the space under the row; a hint tooltip would land on
+   top of it. */
+.dialkit-control-tip[data-affordance-open] > .dialkit-hint {
+  display: none;
+}
+
+/* ── Disabled ────────────────────────────────────────────────────────────
+   Greyed and inert. Pointer events are blocked on the control itself but not
+   the wrapper, so a disabled control's hint still reveals on hover — which is
+   exactly when the explanation matters most. */
+.dialkit-control-tip[data-disabled] > *:not(.dialkit-hint) {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* ── Affordance ──────────────────────────────────────────────────────────
+   An 8px dot in the control's bottom-right corner opening a host-filled
+   popover. Idle it is barely visible; the app pushes \`status\` to light it. */
+.dialkit-control-tip[data-affordance] {
+  position: relative;
+}
+
+.dialkit-affordance-dot {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--dial-affordance-idle);
+  cursor: pointer;
+  /* The visual is 8px but the hit area is not — a 8px target is unclickable. */
+  box-shadow: 0 0 0 5px transparent;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.dialkit-affordance-dot:hover,
+.dialkit-affordance-dot:focus-visible {
+  transform: scale(1.35);
+}
+
+.dialkit-affordance-dot:focus-visible {
+  outline: 2px solid var(--dial-affordance-armed);
+  outline-offset: 2px;
+}
+
+.dialkit-affordance-dot[data-status="armed"] {
+  background: var(--dial-affordance-armed);
+}
+
+.dialkit-affordance-dot[data-status="active"] {
+  background: var(--dial-affordance-active);
+  animation: dialkit-affordance-pulse 1.4s ease-in-out infinite;
+}
+
+.dialkit-affordance-dot[data-open="true"] {
+  transform: scale(1.35);
+}
+
+/* Fades rather than glows: a box-shadow pulse would need color-mix to derive a
+   translucent ring from the theme token, and opacity reads the same at 8px. */
+@keyframes dialkit-affordance-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Fixed + portalled into .dialkit-root, like the select dropdown: the panel
+   body scrolls, and an interactive popover must not be clipped by it. */
+.dialkit-affordance-popover {
+  position: fixed;
+  z-index: 10000;
+  /* The measured width is the real width, so the popover's right edge lines up
+     with the dot instead of overhanging the panel by its padding. */
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid var(--dial-border);
+  border-radius: 10px;
+  background: var(--dial-dropdown-bg);
+  box-shadow: var(--dial-shadow-dropdown);
+}
+
+.dialkit-affordance-popover-title {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--dial-text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialkit-affordance-dot {
+    transition-duration: 0s;
+  }
+
+  .dialkit-affordance-dot[data-status="active"] {
+    animation: none;
+  }
 }
 
 .dialkit-folder-copy {
@@ -1422,12 +1589,44 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
   min-height: 24px;
 }
 
+/* Shared box for both title states so swapping button↔input doesn't shift the
+   row. The 1px transparent border on the button matches the input's border. */
 .dialkit-list-item-title {
+  flex: 1;
+  min-width: 0;
+  font-family: inherit;
   font-size: 12.5px;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--dial-text-root);
-  padding-left: 4px;
+  text-align: left;
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.dialkit-list-item-title {
+  background: transparent;
+  cursor: text;
+  transition: background 0.15s;
+}
+
+button.dialkit-list-item-title:hover,
+button.dialkit-list-item-title:focus-visible {
+  background: var(--dial-surface-hover);
+}
+
+input.dialkit-list-item-title {
+  background: var(--dial-surface-active);
+  border-color: var(--dial-border);
+  outline: none;
+}
+
+input.dialkit-list-item-title:focus {
+  border-color: var(--dial-border-hover);
 }
 
 .dialkit-list-item-actions {
@@ -2739,6 +2938,11 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
   --dial-timeline-loop-bg: rgba(79, 70, 229, 0.16);
   --dial-timeline-loop-border: rgba(79, 70, 229, 0.65);
 
+  /* Affordance dot — barely there at rest, accent once something is bound. */
+  --dial-affordance-idle: rgba(0, 0, 0, 0.2);
+  --dial-affordance-armed: #4f46e5;
+  --dial-affordance-active: #4338ca;
+
   --dial-glass-bg: #fafafa;
   --dial-dropdown-bg: #ffffff;
   --dial-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
@@ -2787,6 +2991,11 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
     --dial-timeline-clip-overlay: rgba(0, 0, 0, 0.28);
     --dial-timeline-loop-bg: rgba(79, 70, 229, 0.16);
     --dial-timeline-loop-border: rgba(79, 70, 229, 0.65);
+
+    /* Affordance dot — barely there at rest, accent once something is bound. */
+    --dial-affordance-idle: rgba(0, 0, 0, 0.2);
+    --dial-affordance-armed: #4f46e5;
+    --dial-affordance-active: #4338ca;
 
     --dial-glass-bg: #fafafa;
     --dial-dropdown-bg: #ffffff;

@@ -18,6 +18,7 @@ import type {
   SpringConfig,
   SwatchConfig,
   TextConfig,
+  AffordanceConfig,
 } from 'dialkit/store';
 
 export interface CreateDialOptions {
@@ -25,6 +26,10 @@ export interface CreateDialOptions {
   /** Non-value events: file picked, chip removed, list mutated. */
   onEvent?: (path: string, event: DialEvent) => void;
   shortcuts?: Record<string, ShortcutConfig>;
+  /** One line of help per control path, revealed on hover or keyboard focus. */
+  hints?: Record<string, string>;
+  /** Companion controls per control path, opened from a dot in the corner. */
+  affordances?: Record<string, AffordanceConfig>;
   /** Stable id shares one panel/persistence target across mounts. */
   id?: string;
   /** Persist values per machine (see DialKitPersistOptions). */
@@ -50,6 +55,8 @@ export function createDialKit<T extends DialConfig>(
     DialStore.registerPanel(panelId, name, config, options?.shortcuts, {
       retainOnUnmount: hasStableId,
       persist: options?.persist,
+      hints: options?.hints,
+      affordances: options?.affordances,
     });
     values = resolve();
 

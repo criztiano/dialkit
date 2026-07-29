@@ -1,9 +1,10 @@
 import { useContext } from 'react';
-import { DialStore, ControlMeta, DialValue, SpringConfig, TransitionConfig, ListItemValue, XYValue } from '../store/DialStore';
+import { DialStore, hintDomId, ControlMeta, DialValue, SpringConfig, TransitionConfig, ListItemValue, XYValue } from '../store/DialStore';
 import type { RangeValue } from '../store/DialStore';
 import type { GradientValue } from '../gradient-core';
 import { ShortcutContext } from './ShortcutListener';
 import { Folder } from './Folder';
+import { ControlShell } from './ControlShell';
 import { Slider } from './Slider';
 import { RangeSlider } from './RangeSlider';
 import { Toggle } from './Toggle';
@@ -113,7 +114,13 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
 
       case 'folder':
         return (
-          <Folder key={control.path} title={control.label} defaultOpen={control.defaultOpen ?? true}>
+          <Folder
+            key={control.path}
+            title={control.label}
+            defaultOpen={control.defaultOpen ?? true}
+            hint={control.hint}
+            hintId={hintDomId(panelId, control.path)}
+          >
             {control.children?.map(renderControl)}
           </Folder>
         );
@@ -248,6 +255,9 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
           <button
             key={control.path}
             className="dialkit-button"
+            // The wrapper greys every control out, but only a real `disabled`
+            // takes a button out of the tab order too.
+            disabled={DialStore.isDisabled(panelId, control.path)}
             onClick={() => DialStore.triggerAction(panelId, control.path)}
           >
             {control.label}
@@ -259,15 +269,24 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
     }
   };
 
-  // Wrap leaf controls with a native tooltip showing their config path — a quick
-  // dev reference for which key a control maps to. Folders manage their own rows.
+  // Wrap leaf controls so they can carry a hint. Without one the wrapper falls
+  // back to a native tooltip showing the config path — a quick dev reference for
+  // which key a control maps to. Folders manage their own rows.
   const renderControl = (control: ControlMeta) => {
     const node = renderControlNode(control);
     if (control.type === 'folder') return node;
     return (
-      <div key={control.path} className="dialkit-control-tip" title={control.path}>
+      <ControlShell
+        key={control.path}
+        hint={control.hint}
+        title={control.path}
+        id={hintDomId(panelId, control.path)}
+        affordance={control.affordance}
+        panelId={panelId}
+        path={control.path}
+      >
         {node}
-      </div>
+      </ControlShell>
     );
   };
 
