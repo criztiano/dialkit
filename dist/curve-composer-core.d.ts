@@ -32,6 +32,24 @@ interface CurveSegment {
      * 0 = none. Independent of `overshoot`. Optional; treated as 0 when absent. No-op for spring.
      */
     anticipate?: number;
+    /**
+     * Mirror the curve in TIME (t → 1−t): the shape plays back to front, so a slow start
+     * becomes a slow finish. Optional; false when absent.
+     *
+     * This is an orientation applied on top of the shape, not another preset, which is why it
+     * works for every type. `easeInOut` and `spring` have no parameter that can express a
+     * mirror — swapping the preset only ever gets you easeIn↔easeOut — so without this they
+     * cannot be flipped at all.
+     */
+    flipX?: boolean;
+    /**
+     * Mirror the curve in VALUE (v → 1−v): the segment falls from its ceiling to its floor
+     * instead of rising. Optional; false when absent.
+     *
+     * Set both flips together and the two mirrors cancel back to a rising curve — that
+     * combination is the classic easing reverse, and is what {@link flipSegment} applies.
+     */
+    flipY?: boolean;
 }
 /** The stacked driver curve (a single curve, no internal splits). */
 interface CurveDriver {
@@ -44,6 +62,10 @@ interface CurveDriver {
     overshoot?: number;
     /** 0..1 anticipation — see CurveSegment.anticipate. */
     anticipate?: number;
+    /** Mirror in time — see CurveSegment.flipX. */
+    flipX?: boolean;
+    /** Mirror in value — see CurveSegment.flipY. */
+    flipY?: boolean;
 }
 type DriverDirection = 'forward' | 'mirror' | 'reverse';
 interface CurveComposition {
@@ -116,6 +138,19 @@ declare function removeSegment(comp: CurveComposition, index: number): CurveComp
 declare function cycleSegmentType(comp: CurveComposition, index: number): CurveComposition;
 declare function flipSegment(comp: CurveComposition, index: number): CurveComposition;
 declare function flipDriver(comp: CurveComposition): CurveComposition;
+/**
+ * Mirror a curve in time — the shape plays back to front.
+ *
+ * Unlike {@link flipSegment}, which rewrites the preset and so can only ever turn easeIn
+ * into easeOut, this is an orientation laid over whatever shape is there. It therefore does
+ * something visible for every type, including `easeInOut` and `spring`, which have no
+ * preset to swap to.
+ */
+declare function flipSegmentX(comp: CurveComposition, index: number): CurveComposition;
+/** Mirror a curve in value — the segment falls from its ceiling instead of rising. */
+declare function flipSegmentY(comp: CurveComposition, index: number): CurveComposition;
+declare function flipDriverX(comp: CurveComposition): CurveComposition;
+declare function flipDriverY(comp: CurveComposition): CurveComposition;
 declare function setSegmentCurvature(comp: CurveComposition, index: number, curvature: number): CurveComposition;
 declare function setSegmentSteepness(comp: CurveComposition, index: number, steepness: number): CurveComposition;
 declare function setSegmentOvershoot(comp: CurveComposition, index: number, overshoot: number): CurveComposition;
@@ -297,4 +332,4 @@ declare function triggersCrossed(prevValue: number, curValue: number, steps: num
 /** A reasonable starting composition for demos / uncontrolled mounts. */
 declare function defaultComposition(): CurveComposition;
 
-export { COMPOSER_DRIVER_FRAC, COMPOSER_GAP, COMPOSER_HEADER_H, COMPOSER_PAD_FRAC, CURVE_CYCLE, CURVE_MIN_WEIGHT_FRAC, type ClientRectLike, type ComposerHitLayout, type ComposerLayout, type CompositionRead, type CompositionSamplers, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, DRAG_ENERGY_GAIN, DRAG_STEEP_GAIN, DRAG_THRESHOLD, type DriverDirection, EDGE_HIT, type PointerTarget, type Rect, type Sampler, type TimelineSlot, addDriver, applyDriverBodyDrag, applySegmentBodyDrag, boundaries, boundaryAt, buildSampler, buildSamplers, composerLayout, connectorPath, curvePath, cycleDriverType, cycleSegmentType, defaultComposition, deriveEase, diagonalLine, directionPhase, easingPresets, flipDriver, flipSegment, headerHit, mapY, playheadGeometry, pointerTarget, readComposition, redistributeWeight, removeDriver, removeSegment, segmentIndexAt, segmentSpan, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, smootherstep, splitSegment, timelineSlots, toLocalCoords, totalWeight, triggerLevels, triggersCrossed };
+export { COMPOSER_DRIVER_FRAC, COMPOSER_GAP, COMPOSER_HEADER_H, COMPOSER_PAD_FRAC, CURVE_CYCLE, CURVE_MIN_WEIGHT_FRAC, type ClientRectLike, type ComposerHitLayout, type ComposerLayout, type CompositionRead, type CompositionSamplers, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, DRAG_ENERGY_GAIN, DRAG_STEEP_GAIN, DRAG_THRESHOLD, type DriverDirection, EDGE_HIT, type PointerTarget, type Rect, type Sampler, type TimelineSlot, addDriver, applyDriverBodyDrag, applySegmentBodyDrag, boundaries, boundaryAt, buildSampler, buildSamplers, composerLayout, connectorPath, curvePath, cycleDriverType, cycleSegmentType, defaultComposition, deriveEase, diagonalLine, directionPhase, easingPresets, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, headerHit, mapY, playheadGeometry, pointerTarget, readComposition, redistributeWeight, removeDriver, removeSegment, segmentIndexAt, segmentSpan, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, smootherstep, splitSegment, timelineSlots, toLocalCoords, totalWeight, triggerLevels, triggersCrossed };

@@ -16,6 +16,8 @@ import {
   removeSegment,
   cycleSegmentType,
   flipSegment,
+  flipSegmentX,
+  flipSegmentY,
   setSegmentCurvature,
   setSegmentSteepness,
   setSegmentOvershoot,
@@ -619,5 +621,72 @@ describe('redistributeWeight', () => {
     };
     const next = redistributeWeight(comp, 0, 5); // absurd push
     expect(next.segments[1].weight).toBeGreaterThan(0); // segment 1 not annihilated
+  });
+});
+
+describe('flipSegmentX / flipSegmentY', () => {
+  const one = (patch: Partial<CurveSegment> = {}): CurveComposition => ({
+    segments: [{ type: 'easeInOut', weight: 1, curvature: 0, steepness: 0, ...patch }],
+    driver: null,
+    direction: 'forward',
+  });
+
+  it('mirrors easeInOut in time, which swapping the preset cannot do', () => {
+    // easeInOut is its own point-reflection, so the preset-rewriting flip is a no-op on it.
+    const plain = flipSegment(one(), 0).segments[0];
+    expect(plain.type).toBe('easeInOut');
+    expect(buildSampler(plain)(0.25)).toBeCloseTo(buildSampler(one().segments[0])(0.25), 9);
+
+    // Mirroring in time is a real change: t and 1−t swap.
+    const flipped = flipSegmentX(one(), 0).segments[0];
+    const base = buildSampler(one().segments[0]);
+    const s = buildSampler(flipped);
+    expect(s(0.25)).toBeCloseTo(base(0.75), 9);
+    expect(s(0.9)).toBeCloseTo(base(0.1), 9);
+  });
+
+  it('mirrors a spring too, which has no preset to swap', () => {
+    const spring = one({ type: 'spring', curvature: 0.6, steepness: 0.4 });
+    const base = buildSampler(spring.segments[0]);
+    const s = buildSampler(flipSegmentX(spring, 0).segments[0]);
+    expect(s(0.2)).toBeCloseTo(base(0.8), 9);
+  });
+
+  it('turns a rising curve into a falling one when mirrored in value', () => {
+    const s = buildSampler(flipSegmentY(one(), 0).segments[0]);
+    expect(s(0)).toBeCloseTo(1, 9);
+    expect(s(1)).toBeCloseTo(0, 9);
+  });
+
+  it('cancels back to a rising curve when both axes are mirrored', () => {
+    const both = flipSegmentY(flipSegmentX(one({ type: 'easeIn' }), 0), 0).segments[0];
+    const s = buildSampler(both);
+    expect(s(0)).toBeCloseTo(0, 9);
+    expect(s(1)).toBeCloseTo(1, 9);
+    // Both mirrors together are the classic easing reverse: easeIn reads as easeOut.
+    const easeOut = buildSampler({ type: 'easeOut', weight: 1, curvature: 0, steepness: 0 });
+    expect(s(0.3)).toBeCloseTo(easeOut(0.3), 9);
+  });
+
+  it('toggles off again', () => {
+    const on = flipSegmentX(one(), 0);
+    expect(on.segments[0].flipX).toBe(true);
+    expect(flipSegmentX(on, 0).segments[0].flipX).toBe(false);
+  });
+
+  it('leaves the path drawing consistent with the sampler', () => {
+    const rect = { x: 0, y: 0, w: 100, h: 100 };
+    const plain = curvePath(one().segments[0], rect, [0, 1], 100);
+    const flipped = curvePath(flipSegmentX(one(), 0).segments[0], rect, [0, 1], 100);
+    expect(flipped).not.toBe(plain);
+    // A value-mirrored curve starts at the top of the lane rather than the bottom.
+    const fell = curvePath(flipSegmentY(one(), 0).segments[0], rect, [0, 1], 100);
+    expect(fell.startsWith('M 0 ' + mapY(rect, 1))).toBe(true);
+  });
+
+  it('ignores an index that is not there', () => {
+    const comp = one();
+    expect(flipSegmentX(comp, 9)).toBe(comp);
+    expect(flipSegmentY(comp, -1)).toBe(comp);
   });
 });

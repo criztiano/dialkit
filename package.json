@@ -63,6 +63,10 @@
       "svelte": "./dist/svelte/index.js",
       "default": "./dist/svelte/index.js"
     },
+    "./curve-composer-core": {
+      "types": "./dist/curve-composer-core.d.ts",
+      "default": "./dist/curve-composer-core.js"
+    },
     "./styles.css": "./dist/styles.css"
   },
   "files": [

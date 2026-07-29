@@ -26,6 +26,11 @@ export { default as EasingVisualization } from './components/EasingVisualization
 export { default as WaveformVisualization } from './components/WaveformVisualization.svelte';
 export { default as AnalyserVisualization } from './components/AnalyserVisualization.svelte';
 export { default as CurveComposer } from './components/CurveComposer.svelte';
+// The editing + sampling helpers, mirroring what is re-exported for gradients
+// below: a host app driving its own composition state needs them, and they are
+// otherwise reachable only from the React entry. `dialkit/curve-composer-core`
+// serves the same functions to code that must stay framework-free.
+export { defaultComposition, buildSamplers, readComposition, directionPhase, splitSegment, removeSegment, cycleSegmentType, flipSegment, redistributeWeight, setSegmentCurvature, setSegmentSteepness, setSegmentOvershoot, setSegmentAnticipate, addDriver, removeDriver, cycleDriverType, flipDriver, setDriverCurvature, setDriverSteepness, setDriverOvershoot, setDriverAnticipate, } from '../curve-composer-core';
 export { default as TextControl } from './components/TextControl.svelte';
 export { default as SelectControl } from './components/SelectControl.svelte';
 export { default as ColorControl } from './components/ColorControl.svelte';
