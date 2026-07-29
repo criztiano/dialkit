@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useDialKit, DialStore } from 'dialkit';
-import type { ChipOption, ListItemType } from 'dialkit';
+import { useDialKit, DialStore, Slider, Toggle } from 'dialkit';
+import type { AffordanceContext, ChipOption, ListItemType } from 'dialkit';
 
 const PANEL_NAME = 'Photo Stack';
 
@@ -34,8 +34,44 @@ const EFFECT_TYPES: Record<string, ListItemType> = {
   brightness: { label: 'Brightness', schema: { amount: [1.15, 0.2, 2, 0.05] } },
   saturate: { label: 'Saturate', schema: { amount: [1.5, 0, 3, 0.05] } },
   hueRotate: { label: 'Hue Rotate', schema: { angle: [0, 0, 360, 1] } },
-  tint: { label: 'Tint', schema: { color: '#ff5a3c', strength: [0.35, 0, 1, 0.01] } },
+  tint: {
+    label: 'Tint',
+    schema: {
+      strength: [0.35, 0, 1, 0.01],
+      // Palette mode, so a row's colour looks like colour everywhere else.
+      color: { type: 'color' as const, default: '#ff5a3c', palette: true },
+      scheme: { type: 'swatch' as const, options: PALETTES, default: 'sunset' },
+    },
+    // Per-field help, keyed the same way as the schema.
+    hints: { strength: 'How far the tint pulls the photo toward that colour.' },
+    // Sections, also keyed by param name. Ungrouped fields stay flat on top.
+    groups: { color: 'Appearance', scheme: 'Appearance' },
+  },
 };
+
+/**
+ * What the host app puts inside an affordance popover — dialkit renders only the
+ * dot and the shell. This one stands in for Pixture's ♪ music binding: a toggle
+ * plus a depth amount, pushing status back so the dot lights up.
+ */
+function MusicBind({ setStatus }: AffordanceContext) {
+  const [bound, setBound] = useState(false);
+  const [depth, setDepth] = useState(0.5);
+
+  const bind = (next: boolean) => {
+    setBound(next);
+    // The dot reflects whatever the app says: lit while bound, pulsing once the
+    // binding is actually driving the value.
+    setStatus(next ? 'active' : 'off');
+  };
+
+  return (
+    <>
+      <Toggle label="Bound" checked={bound} onChange={bind} />
+      <Slider label="Depth" value={depth} min={0} max={1} step={0.01} onChange={setDepth} />
+    </>
+  );
+}
 
 export function PhotoStack() {
   const [step, setStep] = useState(0);
@@ -70,7 +106,8 @@ export function PhotoStack() {
       addLabel: 'Add effect',
       itemTypes: EFFECT_TYPES,
       default: [
-        { type: 'brightness', params: { amount: 1.1 } },
+        // A row can carry its own name; untitled rows fall back to the type label.
+        { type: 'brightness', params: { amount: 1.1 }, title: 'Lift shadows' },
         { type: 'saturate', params: { amount: 1.5 } },
       ],
     },
@@ -102,10 +139,25 @@ export function PhotoStack() {
     },
     darkMode: false,
     next: { type: 'action' as const },
+    reset: { type: 'action' as const, label: 'Reset (disabled)' },
   }, {
     shortcuts: {
       'backPhoto.offsetX': { key: 'x', mode: 'coarse' },
       'shadow.opacity': { key: 'o', mode: 'fine' },
+    },
+    // Help text is keyed by control path — most controls are bare shorthand
+    // (`scale: [0.7, 0.5, 0.95]`) with nowhere to hang a property.
+    // dialkit draws the dot and the popover shell; the app fills the inside.
+    affordances: {
+      'backPhoto.offsetX': { label: 'Bind to music', content: MusicBind },
+      'shadow.opacity': { label: 'Bind to music', content: MusicBind },
+    },
+    hints: {
+      shadowTint: 'Tints the drop shadow under the stack, not the photo itself.',
+      texture: 'Overlays a grain or paper image. Stays on your machine.',
+      backPhoto: 'The photo peeking out behind the top one.',
+      'backPhoto.overlayOpacity': 'Darkens the back photo so the front one reads first.',
+      'shadow.blur': 'Soft edges read as distance; tight edges sit the stack flat.',
     },
     onAction: (action) => {
       if (action === 'next') next();
@@ -135,6 +187,12 @@ export function PhotoStack() {
     sync();
     return DialStore.subscribeGlobal(sync);
   }, []);
+
+  // Availability is app state, so it's pushed at runtime rather than declared.
+  useEffect(() => {
+    if (!panelId) return;
+    DialStore.setDisabled(panelId, 'reset', true);
+  }, [panelId]);
 
   // Keep the "cover" gallery and the photo on top of the stack as one selection, so
   // the gallery's checkmark always matches the front photo — whichever drives it.

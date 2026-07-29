@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { DialStore, DialConfig, DialValue, DialEvent, ResolvedValues, SpringConfig, EasingConfig, SelectConfig, ColorConfig, GradientConfig, TextConfig, GalleryConfig, FileConfig, SwatchConfig, ChipsConfig, ListConfig, ActionConfig, ShortcutConfig, normalizeListItems } from '../store/DialStore';
+import { DialStore, DialConfig, DialValue, DialEvent, ResolvedValues, SpringConfig, EasingConfig, SelectConfig, ColorConfig, GradientConfig, TextConfig, GalleryConfig, FileConfig, SwatchConfig, ChipsConfig, ListConfig, ActionConfig, ShortcutConfig, AffordanceConfig, normalizeListItems } from '../store/DialStore';
 import { useDialStorePanel } from './useDialStorePanel';
 import { normalizeGradient, DEFAULT_GRADIENT } from '../gradient-core';
 
@@ -8,6 +8,10 @@ export interface UseDialOptions {
   /** Non-value events: file picked, chip removed, list mutated. */
   onEvent?: (path: string, event: DialEvent) => void;
   shortcuts?: Record<string, ShortcutConfig>;
+  /** One line of help per control path, revealed on hover or keyboard focus. */
+  hints?: Record<string, string>;
+  /** Companion controls per control path, opened from a dot in the corner. */
+  affordances?: Record<string, AffordanceConfig>;
 }
 
 export function useDialKit<T extends DialConfig>(
@@ -24,6 +28,8 @@ export function useDialKit<T extends DialConfig>(
   // snapshot subscription. Keeps useDialKit and useDialTimeline in lockstep.
   const { panelId, flatValues } = useDialStorePanel(name, config, {
     shortcuts: options?.shortcuts,
+    hints: options?.hints,
+    affordances: options?.affordances,
   });
 
   // Subscribe to action events

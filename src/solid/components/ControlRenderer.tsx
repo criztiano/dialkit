@@ -1,5 +1,5 @@
 import { For } from 'solid-js';
-import { DialStore } from '../../store/DialStore';
+import { DialStore, hintDomId } from '../../store/DialStore';
 import type {
   ControlMeta,
   DialValue,
@@ -11,6 +11,7 @@ import type {
 import type { GradientValue } from '../../gradient-core';
 import { useShortcutContext } from './ShortcutListener';
 import { Folder } from './Folder';
+import { ControlShell } from './ControlShell';
 import { Slider } from './Slider';
 import { RangeSlider } from './RangeSlider';
 import { Toggle } from './Toggle';
@@ -36,7 +37,10 @@ interface ControlRendererProps {
 export function ControlRenderer(props: ControlRendererProps) {
   const shortcut = useShortcutContext();
 
-  const renderControl = (control: ControlMeta) => {
+  // Panel id and path are both stable and unique, so no id generator is needed.
+  const hintId = (control: ControlMeta) => hintDomId(props.panelId, control.path);
+
+  const renderControlNode = (control: ControlMeta) => {
     const value = () => props.values[control.path];
     const active = () =>
       shortcut().activePanelId === props.panelId && shortcut().activePath === control.path;
@@ -105,7 +109,12 @@ export function ControlRenderer(props: ControlRendererProps) {
 
       case 'folder':
         return (
-          <Folder title={control.label} defaultOpen={control.defaultOpen ?? true}>
+          <Folder
+            title={control.label}
+            defaultOpen={control.defaultOpen ?? true}
+            hint={control.hint}
+            hintId={hintId(control)}
+          >
             <For each={control.children ?? []}>{renderControl}</For>
           </Folder>
         );
@@ -172,6 +181,9 @@ export function ControlRenderer(props: ControlRendererProps) {
         return (
           <button
             class="dialkit-button"
+            // The wrapper greys every control out, but only a real `disabled`
+            // takes a button out of the tab order too.
+            disabled={DialStore.isDisabled(props.panelId, control.path)}
             onClick={() => DialStore.triggerAction(props.panelId, control.path)}
           >
             {control.label}
@@ -181,6 +193,26 @@ export function ControlRenderer(props: ControlRendererProps) {
       default:
         return null;
     }
+  };
+
+  // Wrap leaf controls so they can carry a hint. Without one the wrapper falls
+  // back to a native tooltip showing the config path — a quick dev reference for
+  // which key a control maps to. Folders manage their own rows.
+  const renderControl = (control: ControlMeta) => {
+    const node = renderControlNode(control);
+    if (control.type === 'folder') return node;
+    return (
+      <ControlShell
+        hint={control.hint}
+        title={control.path}
+        id={hintId(control)}
+        affordance={control.affordance}
+        panelId={props.panelId}
+        path={control.path}
+      >
+        {node}
+      </ControlShell>
+    );
   };
 
   return <For each={props.controls}>{renderControl}</For>;

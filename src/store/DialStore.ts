@@ -160,6 +160,11 @@ export type GalleryConfig = {
 export type ListItemValue = {
   type: string;
   params: Record<string, number | boolean | string>;
+  /**
+   * Row-level name, shown in place of the item type's label and renamable in
+   * place. Absent (never empty) when the row has no name of its own.
+   */
+  title?: string;
 };
 
 /**
@@ -173,13 +178,27 @@ export type ListItemField =
   | string
   | SelectConfig
   | ColorConfig
+  | SwatchConfig
   | TextConfig;
 
 export type ListItemType = {
-  /** Shown in the add menu and as the row's title. */
+  /** Shown in the add menu, and as a row's title when the row has none of its own. */
   label: string;
   /** Sub-controls for this item type, keyed by param name. */
   schema: Record<string, ListItemField>;
+  /**
+   * Help text per field, keyed by the same param name. Keyed rather than inline
+   * because a schema field is often bare shorthand (`mass: [1, 0, 10]`) with
+   * nowhere to hang a property.
+   */
+  hints?: Record<string, string>;
+  /**
+   * Section per field, keyed by param name, for rows too deep to read flat.
+   * Ungrouped fields stay at the top of the row; each named section becomes a
+   * collapsible folder below them, in the order its first field is declared.
+   * Keyed for the same reason as `hints`.
+   */
+  groups?: Record<string, string>;
 };
 
 export type ListConfig = {
@@ -195,11 +214,18 @@ export type ListConfig = {
 };
 
 /** A resolved sub-control descriptor for one list-item field. */
-export type ListFieldKind = 'slider' | 'toggle' | 'select' | 'color' | 'text';
+export type ListFieldKind = 'slider' | 'toggle' | 'select' | 'color' | 'swatch' | 'text';
 export type ListField = {
   key: string;
   label: string;
   kind: ListFieldKind;
+  hint?: string;
+  /** Section this field belongs to, or absent for the row's flat top area. */
+  group?: string;
+  /** Colour fields only: show the shared saved-swatches row, as at top level. */
+  palette?: boolean;
+  /** Swatch fields only: the named palettes to choose between. */
+  swatchOptions?: SwatchOption[];
   min?: number;
   max?: number;
   step?: number;
@@ -258,10 +284,47 @@ export type ShortcutConfig = {
   interaction?: ShortcutInteraction;
 };
 
+/**
+ * How lit the affordance dot is. The app pushes this — dialkit owns only how
+ * each state looks, never when it applies.
+ */
+export type AffordanceStatus = 'off' | 'armed' | 'active';
+
+/** What dialkit hands a popover so it doesn't have to resolve any of it itself. */
+export type AffordanceContext = {
+  panelId: string;
+  path: string;
+  status: AffordanceStatus;
+  /** Shorthand for `DialStore.setAffordanceStatus(panelId, path, …)`. */
+  setStatus: (status: AffordanceStatus) => void;
+};
+
+/**
+ * A companion control hung off a control's corner: a barely-there dot that opens
+ * a popover the host app fills.
+ *
+ * `content` is a component — a React/Solid/Vue component or a Svelte snippet —
+ * receiving the context as its props/argument. Not a pre-built node: it is
+ * captured once at registration and would never see current state. Not called
+ * directly by the renderer either, so a stateful popover keeps its own identity
+ * and its own hooks. This is also why affordances travel as a panel option
+ * rather than in the config: the config is JSON-serialized on every render to
+ * detect structure changes, and view code would not survive that.
+ */
+export type AffordanceConfig = {
+  content: (ctx: AffordanceContext) => unknown;
+  /** Accessible name for the dot and its popover. Defaults to 'Options'. */
+  label?: string;
+};
+
 export type ControlMeta = {
   type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
   path: string;
   label: string;
+  /** One line of help, revealed on hover or when focus lands inside the control. */
+  hint?: string;
+  /** Companion control reachable from a dot in the control's bottom-right corner. */
+  affordance?: AffordanceConfig;
   min?: number;
   max?: number;
   step?: number;
@@ -299,6 +362,10 @@ export type PanelConfig = {
   controls: ControlMeta[];
   values: Record<string, DialValue>;
   shortcuts: Record<string, ShortcutConfig>;
+  /** Help text by control path, retained so a later updatePanel can restate it. */
+  hints?: Record<string, string>;
+  /** Affordances by control path, retained on the same terms as `hints`. */
+  affordances?: Record<string, AffordanceConfig>;
   kind?: 'timeline';
 };
 
@@ -313,7 +380,7 @@ type ActionListener = (action: string) => void;
 export type DialEvent =
   | { kind: 'file'; files: FileList }
   | { kind: 'remove'; value: string }
-  | { kind: 'list'; op: 'add' | 'remove' | 'move' | 'set'; index?: number; from?: number; to?: number; itemType?: string };
+  | { kind: 'list'; op: 'add' | 'remove' | 'move' | 'set' | 'rename'; index?: number; from?: number; to?: number; itemType?: string };
 
 type EventListener = (path: string, event: DialEvent) => void;
 
@@ -339,6 +406,17 @@ export type DialKitPersistOptions = boolean | {
 export type DialStorePanelOptions = {
   retainOnUnmount?: boolean;
   persist?: DialKitPersistOptions;
+  /**
+   * Help text by control path — the same keying as `shortcuts`. Keyed rather
+   * than declared inline because most controls are bare shorthand
+   * (`gravity: [9.8, 0, 20]`) with nowhere to hang a property.
+   */
+  hints?: Record<string, string>;
+  /**
+   * Companion controls by control path. Holds framework view nodes, so — unlike
+   * the config — this is never serialized.
+   */
+  affordances?: Record<string, AffordanceConfig>;
   /** Timeline panels render in DialTimeline and are filtered out of the panel dock. */
   kind?: 'timeline';
 };
@@ -349,6 +427,15 @@ export function formatLabel(key: string): string {
     .replace(/([A-Z])/g, ' $1')
     .replace(/^./, str => str.toUpperCase())
     .trim();
+}
+
+/**
+ * DOM id for a control's hint tooltip. `aria-describedby` holds a space-separated
+ * list of ids, so any whitespace — panel names and list labels are free text —
+ * would silently split one reference into two dangling ones.
+ */
+export function hintDomId(scope: string, path: string): string {
+  return `dialkit-hint-${scope}-${path}`.replace(/\s+/g, '-');
 }
 
 /** Default slider step for a numeric range. */
@@ -430,6 +517,13 @@ class DialStoreClass {
   private snapshots: Map<string, Record<string, DialValue>> = new Map();
   private actionListeners: Map<string, Set<ActionListener>> = new Map();
   private eventListeners: Map<string, Set<EventListener>> = new Map();
+  // Affordance status and disabled state are app-pushed presentation, not
+  // control values: they stay out of `values` so they are never persisted, saved
+  // into a preset, or diffed against the config. One listener set covers both, so
+  // a control's shell needs a single subscription.
+  private affordanceStatus: Map<string, Map<string, AffordanceStatus>> = new Map();
+  private disabledPaths: Map<string, Set<string>> = new Map();
+  private controlStateListeners: Map<string, Set<Listener>> = new Map();
   private presets: Map<string, Preset[]> = new Map();
   private activePreset: Map<string, string | null> = new Map();
   private baseValues: Map<string, Record<string, DialValue>> = new Map();
@@ -450,6 +544,7 @@ class DialStoreClass {
     this.persistTargets.set(id, target);
 
     const controls = this.parseConfig(config, '', shortcuts);
+    this.applyControlExtras(controls, options.hints, options.affordances);
     const values = this.flattenValues(config, '');
 
     // Set initial transition modes based on config types
@@ -460,7 +555,7 @@ class DialStoreClass {
     // stale saved value instead of resurrecting it.
     this.overlayPersistedValues(target, values);
 
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, kind: options.kind });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -473,7 +568,10 @@ class DialStoreClass {
       return;
     }
 
+    const hints = options.hints ?? existing.hints;
+    const affordances = options.affordances ?? existing.affordances;
     const controls = this.parseConfig(config, '', shortcuts);
+    this.applyControlExtras(controls, hints, affordances);
     const controlsByPath = this.mapControlsByPath(controls);
     const defaultValues = this.flattenValues(config, '');
     const nextValues: Record<string, DialValue> = {};
@@ -501,7 +599,7 @@ class DialStoreClass {
       }
     }
 
-    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, kind: options.kind ?? existing.kind };
+    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
 
@@ -536,6 +634,9 @@ class DialStoreClass {
     if (this.listeners.get(id)?.size === 0) this.listeners.delete(id);
     if (this.actionListeners.get(id)?.size === 0) this.actionListeners.delete(id);
     if (this.eventListeners.get(id)?.size === 0) this.eventListeners.delete(id);
+    if (this.controlStateListeners.get(id)?.size === 0) this.controlStateListeners.delete(id);
+    this.affordanceStatus.delete(id);
+    this.disabledPaths.delete(id);
     this.snapshots.delete(id);
     this.baseValues.delete(id);
     this.persistTargets.delete(id);
@@ -715,6 +816,78 @@ class DialStoreClass {
 
   emitEvent(panelId: string, path: string, event: DialEvent): void {
     this.eventListeners.get(panelId)?.forEach(fn => fn(path, event));
+  }
+
+  /**
+   * How lit a control's affordance dot is. Callers may push this as often as
+   * they like — an unchanged status is dropped without notifying, so driving it
+   * from an audio callback costs nothing.
+   */
+  setAffordanceStatus(panelId: string, path: string, status: AffordanceStatus): void {
+    let byPath = this.affordanceStatus.get(panelId);
+
+    if (status === 'off') {
+      if (!byPath?.delete(path)) return;
+    } else {
+      if (byPath?.get(path) === status) return;
+      if (!byPath) {
+        byPath = new Map();
+        this.affordanceStatus.set(panelId, byPath);
+      }
+      byPath.set(path, status);
+    }
+
+    this.notifyControlState(panelId);
+  }
+
+  getAffordanceStatus(panelId: string, path: string): AffordanceStatus {
+    return this.affordanceStatus.get(panelId)?.get(path) ?? 'off';
+  }
+
+  /**
+   * Greys a control out and stops it responding. Runtime-only by design: a
+   * config default plus a runtime override would be two sources of truth, and
+   * calling this once covers the static case.
+   */
+  setDisabled(panelId: string, path: string, disabled: boolean): void {
+    let paths = this.disabledPaths.get(panelId);
+
+    if (disabled) {
+      if (paths?.has(path)) return;
+      if (!paths) {
+        paths = new Set();
+        this.disabledPaths.set(panelId, paths);
+      }
+      paths.add(path);
+    } else if (!paths?.delete(path)) {
+      return;
+    }
+
+    this.notifyControlState(panelId);
+  }
+
+  isDisabled(panelId: string, path: string): boolean {
+    return this.disabledPaths.get(panelId)?.has(path) ?? false;
+  }
+
+  /** One channel for every app-pushed presentation change on a panel. */
+  subscribeControlState(panelId: string, listener: Listener): () => void {
+    if (!this.controlStateListeners.has(panelId)) {
+      this.controlStateListeners.set(panelId, new Set());
+    }
+    this.controlStateListeners.get(panelId)!.add(listener);
+
+    return () => {
+      const listeners = this.controlStateListeners.get(panelId);
+      listeners?.delete(listener);
+      if (listeners?.size === 0 && !this.panels.has(panelId)) {
+        this.controlStateListeners.delete(panelId);
+      }
+    };
+  }
+
+  private notifyControlState(panelId: string): void {
+    this.controlStateListeners.get(panelId)?.forEach(fn => fn());
   }
 
   savePreset(panelId: string, name: string): string {
@@ -1333,6 +1506,28 @@ class DialStoreClass {
     return decimalIndex === -1 ? 0 : text.length - decimalIndex - 1;
   }
 
+  // Stamp path-keyed extras onto the parsed tree. A post-pass rather than
+  // parseConfig parameters: these are cross-cutting metadata like shortcuts, and
+  // every control — including folders and bare-shorthand sliders — is reachable
+  // by path once the tree exists.
+  private applyControlExtras(
+    controls: ControlMeta[],
+    hints?: Record<string, string>,
+    affordances?: Record<string, AffordanceConfig>
+  ): void {
+    if (!hints && !affordances) return;
+
+    for (const control of controls) {
+      const hint = hints?.[control.path];
+      if (hint) control.hint = hint;
+
+      const affordance = affordances?.[control.path];
+      if (affordance) control.affordance = affordance;
+
+      if (control.children) this.applyControlExtras(control.children, hints, affordances);
+    }
+  }
+
   private mapControlsByPath(controls: ControlMeta[]): Map<string, ControlMeta> {
     const map = new Map<string, ControlMeta>();
 
@@ -1390,36 +1585,87 @@ function listInferRange(value: number): { min: number; max: number; step: number
 }
 
 /** Resolve a list item type's schema shorthand into renderable field descriptors. */
-export function parseListItemSchema(schema: Record<string, ListItemField>): ListField[] {
+export function parseListItemSchema(
+  schema: Record<string, ListItemField>,
+  hints?: Record<string, string>,
+  groups?: Record<string, string>
+): ListField[] {
   const fields: ListField[] = [];
 
   for (const [key, def] of Object.entries(schema)) {
     const label = listFormatLabel(key);
+    const hint = hints?.[key];
+    const group = groups?.[key];
 
     if (Array.isArray(def) && def.length <= 4 && typeof def[0] === 'number') {
       const [d, min, max, step] = def;
-      fields.push({ key, label, kind: 'slider', min, max, step: step ?? listInferStep(min, max), defaultValue: d });
+      fields.push({ key, label, hint, group, kind: 'slider', min, max, step: step ?? listInferStep(min, max), defaultValue: d });
     } else if (typeof def === 'number') {
       const { min, max, step } = listInferRange(def);
-      fields.push({ key, label, kind: 'slider', min, max, step, defaultValue: def });
+      fields.push({ key, label, hint, group, kind: 'slider', min, max, step, defaultValue: def });
     } else if (typeof def === 'boolean') {
-      fields.push({ key, label, kind: 'toggle', defaultValue: def });
+      fields.push({ key, label, hint, group, kind: 'toggle', defaultValue: def });
     } else if (listHasType(def, 'select') && Array.isArray((def as SelectConfig).options)) {
       const select = def as SelectConfig;
       const first = select.options[0];
       const firstValue = typeof first === 'string' ? first : first?.value ?? '';
-      fields.push({ key, label, kind: 'select', options: select.options, defaultValue: select.default ?? firstValue });
+      fields.push({ key, label, hint, group, kind: 'select', options: select.options, defaultValue: select.default ?? firstValue });
     } else if (listHasType(def, 'color')) {
-      fields.push({ key, label, kind: 'color', defaultValue: (def as ColorConfig).default ?? '#000000' });
+      const color = def as ColorConfig;
+      fields.push({ key, label, hint, group, kind: 'color', palette: color.palette, defaultValue: color.default ?? '#000000' });
+    } else if (listHasType(def, 'swatch') && Array.isArray((def as SwatchConfig).options)) {
+      const swatch = def as SwatchConfig;
+      fields.push({
+        key,
+        label,
+        hint,
+        group,
+        kind: 'swatch',
+        swatchOptions: swatch.options,
+        defaultValue: swatch.default ?? swatch.options[0]?.value ?? '',
+      });
     } else if (listHasType(def, 'text')) {
       const text = def as TextConfig;
-      fields.push({ key, label, kind: 'text', placeholder: text.placeholder, defaultValue: text.default ?? '' });
+      fields.push({ key, label, hint, group, kind: 'text', placeholder: text.placeholder, defaultValue: text.default ?? '' });
     } else if (typeof def === 'string') {
-      fields.push({ key, label, kind: listIsHexColor(def) ? 'color' : 'text', defaultValue: def });
+      fields.push({ key, label, hint, group, kind: listIsHexColor(def) ? 'color' : 'text', defaultValue: def });
     }
   }
 
   return fields;
+}
+
+/** A named, collapsible section of a list row. */
+export type ListFieldGroup = { label: string; fields: ListField[] };
+
+/**
+ * Split a row's fields into the flat top area and its named sections.
+ *
+ * Ungrouped fields stay flat so a row's primary control is always visible;
+ * groups follow in the order their first field is declared, which is what the
+ * renderer opens the first of and collapses the rest.
+ */
+export function groupListFields(fields: ListField[]): { flat: ListField[]; groups: ListFieldGroup[] } {
+  const flat: ListField[] = [];
+  const groups: ListFieldGroup[] = [];
+  const byLabel = new Map<string, ListFieldGroup>();
+
+  for (const field of fields) {
+    if (!field.group) {
+      flat.push(field);
+      continue;
+    }
+
+    let group = byLabel.get(field.group);
+    if (!group) {
+      group = { label: field.group, fields: [] };
+      byLabel.set(field.group, group);
+      groups.push(group);
+    }
+    group.fields.push(field);
+  }
+
+  return { flat, groups };
 }
 
 /** The default params object for a freshly-added item of the given schema. */
@@ -1436,10 +1682,17 @@ export function normalizeListItems(config: ListConfig): ListItemValue[] {
   const items = config.default ?? [];
   return items
     .filter((item) => item && typeof item.type === 'string' && config.itemTypes[item.type])
-    .map((item) => ({
-      type: item.type,
-      params: { ...defaultListItemParams(config.itemTypes[item.type].schema), ...(item.params ?? {}) },
-    }));
+    .map((item) => {
+      const row: ListItemValue = {
+        type: item.type,
+        params: { ...defaultListItemParams(config.itemTypes[item.type].schema), ...(item.params ?? {}) },
+      };
+      // Titles are free-form, so only a non-blank one is kept — an untitled row
+      // must stay absent so it falls back to its item type's label.
+      const title = typeof item.title === 'string' ? item.title.trim() : '';
+      if (title) row.title = title;
+      return row;
+    });
 }
 
 // Singleton instance

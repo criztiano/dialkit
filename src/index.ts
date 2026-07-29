@@ -40,6 +40,7 @@ export { Slider } from './components/Slider';
 export { RangeSlider } from './components/RangeSlider';
 export { Toggle } from './components/Toggle';
 export { Folder } from './components/Folder';
+export { ControlShell } from './components/ControlShell';
 export { Module } from './components/Module';
 export { SegmentedControl } from './components/SegmentedControl';
 export { ButtonGroup } from './components/ButtonGroup';
@@ -166,7 +167,7 @@ export { PresetManager } from './components/PresetManager';
 export { ShortcutsMenu } from './components/ShortcutsMenu';
 
 // Store (for advanced usage)
-export { DialStore, parseListItemSchema, defaultListItemParams, normalizeListItems } from './store/DialStore';
+export { DialStore, parseListItemSchema, groupListFields, defaultListItemParams, normalizeListItems, hintDomId } from './store/DialStore';
 export type {
   SpringConfig,
   EasingConfig,
@@ -189,10 +190,14 @@ export type {
   RangeValue,
   ListConfig,
   ListItemValue,
+  AffordanceConfig,
+  AffordanceContext,
+  AffordanceStatus,
   ListItemField,
   ListItemType,
   ListField,
   ListFieldKind,
+  ListFieldGroup,
   ShortcutConfig,
   ShortcutMode,
   ShortcutInteraction,
