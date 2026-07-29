@@ -10,6 +10,8 @@ export interface CreateDialOptions {
   hints?: Record<string, string>;
   /** Companion controls per control path, opened from a dot in the corner. */
   affordances?: Record<string, AffordanceConfig>;
+  /** Display label by control path, overriding the key-derived name. */
+  labels?: Record<string, string>;
 }
 
 export function createDialKit<T extends DialConfig>(
@@ -25,7 +27,8 @@ export function createDialKit<T extends DialConfig>(
   );
 
   onMount(() => {
-    DialStore.registerPanel(panelId, name, config, options?.shortcuts, { hints: options?.hints, affordances: options?.affordances });
+    DialStore.registerPanel(panelId, name, config, options?.shortcuts, { hints: options?.hints, affordances: options?.affordances,
+      labels: options?.labels });
     setValues(DialStore.getValues(panelId));
 
     const unsubValues = DialStore.subscribe(panelId, () => {

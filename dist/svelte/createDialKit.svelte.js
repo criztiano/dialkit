@@ -12,6 +12,7 @@ export function createDialKit(name, config, options) {
             persist: options?.persist,
             hints: options?.hints,
             affordances: options?.affordances,
+            labels: options?.labels,
         });
         values = resolve();
         const unsubValues = DialStore.subscribe(panelId, () => {

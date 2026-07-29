@@ -23,6 +23,8 @@ export interface UseDialOptions {
   hints?: Record<string, string>;
   /** Companion controls per control path, opened from a dot in the corner. */
   affordances?: Record<string, AffordanceConfig>;
+  /** Display label by control path, overriding the key-derived name. */
+  labels?: Record<string, string>;
 }
 
 let dialKitInstance = 0;
@@ -45,7 +47,8 @@ export function useDialKit<T extends DialConfig>(
   let unsubscribeActions: (() => void) | undefined;
 
   const register = () => {
-    DialStore.registerPanel(panelId, name, configRef.value, shortcutsRef.value, { hints: options?.hints, affordances: options?.affordances });
+    DialStore.registerPanel(panelId, name, configRef.value, shortcutsRef.value, { hints: options?.hints, affordances: options?.affordances,
+      labels: options?.labels });
     values.value = DialStore.getValues(panelId);
 
     unsubscribeValues = DialStore.subscribe(panelId, () => {
@@ -69,7 +72,8 @@ export function useDialKit<T extends DialConfig>(
     configRef.value = config;
     shortcutsRef.value = options?.shortcuts;
     if (mounted.value) {
-      DialStore.updatePanel(panelId, name, configRef.value, shortcutsRef.value, { hints: options?.hints, affordances: options?.affordances });
+      DialStore.updatePanel(panelId, name, configRef.value, shortcutsRef.value, { hints: options?.hints, affordances: options?.affordances,
+      labels: options?.labels });
       values.value = DialStore.getValues(panelId);
     }
   });

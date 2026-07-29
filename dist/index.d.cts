@@ -644,6 +644,8 @@ type PanelConfig = {
     hints?: Record<string, string>;
     /** Affordances by control path, retained on the same terms as `hints`. */
     affordances?: Record<string, AffordanceConfig>;
+    /** Label overrides by control path, retained on the same terms as `hints`. */
+    labels?: Record<string, string>;
     kind?: 'timeline';
 };
 type Listener$1 = () => void;
@@ -692,6 +694,17 @@ type DialStorePanelOptions = {
      * the config — this is never serialized.
      */
     affordances?: Record<string, AffordanceConfig>;
+    /**
+     * Display label by control path, overriding the name derived from the config
+     * key. Keyed for the same reason as `hints`: the controls that most need a
+     * label the key can't express are bare shorthand (`a: [0, 0, 1]` relabelled
+     * per mode) with nowhere to hang a property. Applies to folders too.
+     *
+     * Without this, changing a control's visible text means changing its config
+     * key — which silently changes its identity, so it loses its value, its
+     * persisted entry and its shortcut binding.
+     */
+    labels?: Record<string, string>;
     /** Timeline panels render in DialTimeline and are filtered out of the panel dock. */
     kind?: 'timeline';
 };
@@ -834,6 +847,8 @@ interface UseDialOptions {
     hints?: Record<string, string>;
     /** Companion controls per control path, opened from a dot in the corner. */
     affordances?: Record<string, AffordanceConfig>;
+    /** Display label by control path, overriding the key-derived name. */
+    labels?: Record<string, string>;
 }
 declare function useDialKit<T extends DialConfig>(name: string, config: T, options?: UseDialOptions): ResolvedValues<T>;
 

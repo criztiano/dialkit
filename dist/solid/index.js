@@ -687,11 +687,11 @@ var DialStoreClass = class {
     const target = resolvePersistTarget("panel", id, options.persist);
     this.persistTargets.set(id, target);
     const controls = this.parseConfig(config, "", shortcuts);
-    this.applyControlExtras(controls, options.hints, options.affordances);
+    this.applyControlExtras(controls, options.hints, options.affordances, options.labels);
     const values = this.flattenValues(config, "");
     this.initTransitionModes(config, "", values);
     this.overlayPersistedValues(target, values);
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, kind: options.kind });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -704,8 +704,9 @@ var DialStoreClass = class {
     }
     const hints = options.hints ?? existing.hints;
     const affordances = options.affordances ?? existing.affordances;
+    const labels = options.labels ?? existing.labels;
     const controls = this.parseConfig(config, "", shortcuts);
-    this.applyControlExtras(controls, hints, affordances);
+    this.applyControlExtras(controls, hints, affordances, labels);
     const controlsByPath = this.mapControlsByPath(controls);
     const defaultValues = this.flattenValues(config, "");
     const nextValues = {};
@@ -727,7 +728,7 @@ var DialStoreClass = class {
         nextValues[path] = mode;
       }
     }
-    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, kind: options.kind ?? existing.kind };
+    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
     const previousBaseValues = this.baseValues.get(id) ?? {};
@@ -1397,14 +1398,16 @@ var DialStoreClass = class {
   // parseConfig parameters: these are cross-cutting metadata like shortcuts, and
   // every control — including folders and bare-shorthand sliders — is reachable
   // by path once the tree exists.
-  applyControlExtras(controls, hints, affordances) {
-    if (!hints && !affordances) return;
+  applyControlExtras(controls, hints, affordances, labels) {
+    if (!hints && !affordances && !labels) return;
     for (const control of controls) {
       const hint = hints?.[control.path];
       if (hint) control.hint = hint;
       const affordance = affordances?.[control.path];
       if (affordance) control.affordance = affordance;
-      if (control.children) this.applyControlExtras(control.children, hints, affordances);
+      const label = labels?.[control.path];
+      if (label) control.label = label;
+      if (control.children) this.applyControlExtras(control.children, hints, affordances, labels);
     }
   }
   mapControlsByPath(controls) {
@@ -1516,7 +1519,11 @@ function createDialKit(name, config, options) {
     DialStore.getValues(panelId)
   );
   onMount(() => {
-    DialStore.registerPanel(panelId, name, config, options?.shortcuts, { hints: options?.hints, affordances: options?.affordances });
+    DialStore.registerPanel(panelId, name, config, options?.shortcuts, {
+      hints: options?.hints,
+      affordances: options?.affordances,
+      labels: options?.labels
+    });
     setValues(DialStore.getValues(panelId));
     const unsubValues = DialStore.subscribe(panelId, () => {
       setValues(DialStore.getValues(panelId));

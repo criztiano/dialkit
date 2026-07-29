@@ -8,6 +8,8 @@ export interface UseDialStorePanelOptions {
   shortcuts?: Record<string, ShortcutConfig>;
   hints?: Record<string, string>;
   affordances?: Record<string, AffordanceConfig>;
+  /** Display label by control path, overriding the key-derived name. */
+  labels?: Record<string, string>;
   kind?: 'timeline';
 }
 
@@ -45,6 +47,7 @@ export function useDialStorePanel(
   const serializedShortcuts = useSerialized(options.shortcuts);
   const serializedPersist = useSerialized(options.persist);
   const serializedHints = useSerialized(options.hints);
+  const serializedLabels = useSerialized(options.labels);
 
   // Register on mount
   useEffect(() => {
@@ -53,6 +56,7 @@ export function useDialStorePanel(
       persist: optionsRef.current.persist,
       hints: optionsRef.current.hints,
       affordances: optionsRef.current.affordances,
+      labels: optionsRef.current.labels,
       kind: optionsRef.current.kind,
     });
     return () => DialStore.unregisterPanel(panelId);
@@ -70,10 +74,11 @@ export function useDialStorePanel(
       persist: optionsRef.current.persist,
       hints: optionsRef.current.hints,
       affordances: optionsRef.current.affordances,
+      labels: optionsRef.current.labels,
       kind: optionsRef.current.kind,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasStableId, panelId, name, serializedConfig, serializedShortcuts, serializedPersist, serializedHints]);
+  }, [hasStableId, panelId, name, serializedConfig, serializedShortcuts, serializedPersist, serializedHints, serializedLabels]);
 
   const subscribe = useCallback(
     (callback: () => void) => DialStore.subscribe(panelId, callback),

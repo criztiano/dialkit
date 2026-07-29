@@ -366,6 +366,8 @@ export type PanelConfig = {
   hints?: Record<string, string>;
   /** Affordances by control path, retained on the same terms as `hints`. */
   affordances?: Record<string, AffordanceConfig>;
+  /** Label overrides by control path, retained on the same terms as `hints`. */
+  labels?: Record<string, string>;
   kind?: 'timeline';
 };
 
@@ -417,6 +419,17 @@ export type DialStorePanelOptions = {
    * the config — this is never serialized.
    */
   affordances?: Record<string, AffordanceConfig>;
+  /**
+   * Display label by control path, overriding the name derived from the config
+   * key. Keyed for the same reason as `hints`: the controls that most need a
+   * label the key can't express are bare shorthand (`a: [0, 0, 1]` relabelled
+   * per mode) with nowhere to hang a property. Applies to folders too.
+   *
+   * Without this, changing a control's visible text means changing its config
+   * key — which silently changes its identity, so it loses its value, its
+   * persisted entry and its shortcut binding.
+   */
+  labels?: Record<string, string>;
   /** Timeline panels render in DialTimeline and are filtered out of the panel dock. */
   kind?: 'timeline';
 };
@@ -544,7 +557,7 @@ class DialStoreClass {
     this.persistTargets.set(id, target);
 
     const controls = this.parseConfig(config, '', shortcuts);
-    this.applyControlExtras(controls, options.hints, options.affordances);
+    this.applyControlExtras(controls, options.hints, options.affordances, options.labels);
     const values = this.flattenValues(config, '');
 
     // Set initial transition modes based on config types
@@ -555,7 +568,7 @@ class DialStoreClass {
     // stale saved value instead of resurrecting it.
     this.overlayPersistedValues(target, values);
 
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, kind: options.kind });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -570,8 +583,9 @@ class DialStoreClass {
 
     const hints = options.hints ?? existing.hints;
     const affordances = options.affordances ?? existing.affordances;
+    const labels = options.labels ?? existing.labels;
     const controls = this.parseConfig(config, '', shortcuts);
-    this.applyControlExtras(controls, hints, affordances);
+    this.applyControlExtras(controls, hints, affordances, labels);
     const controlsByPath = this.mapControlsByPath(controls);
     const defaultValues = this.flattenValues(config, '');
     const nextValues: Record<string, DialValue> = {};
@@ -599,7 +613,7 @@ class DialStoreClass {
       }
     }
 
-    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, kind: options.kind ?? existing.kind };
+    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
 
@@ -1513,9 +1527,10 @@ class DialStoreClass {
   private applyControlExtras(
     controls: ControlMeta[],
     hints?: Record<string, string>,
-    affordances?: Record<string, AffordanceConfig>
+    affordances?: Record<string, AffordanceConfig>,
+    labels?: Record<string, string>
   ): void {
-    if (!hints && !affordances) return;
+    if (!hints && !affordances && !labels) return;
 
     for (const control of controls) {
       const hint = hints?.[control.path];
@@ -1524,7 +1539,13 @@ class DialStoreClass {
       const affordance = affordances?.[control.path];
       if (affordance) control.affordance = affordance;
 
-      if (control.children) this.applyControlExtras(control.children, hints, affordances);
+      // Empty strings are ignored rather than blanking the label: a caller
+      // building this map from optional data would otherwise erase the derived
+      // name whenever its source was missing.
+      const label = labels?.[control.path];
+      if (label) control.label = label;
+
+      if (control.children) this.applyControlExtras(control.children, hints, affordances, labels);
     }
   }
 

@@ -76,6 +76,7 @@ const params = useDialKit(name, config, options?)
 | `options.shortcuts` | `Record<string, ShortcutConfig>` | Keyboard shortcuts for controls (see [Keyboard Shortcuts](#keyboard-shortcuts)) |
 | `options.hints` | `Record<string, string>` | Help text for controls (see [Hints](#hints)) |
 | `options.affordances` | `Record<string, AffordanceConfig>` | Companion controls (see [Affordances](#affordances)) |
+| `options.labels` | `Record<string, string>` | Display labels overriding the key-derived name (see [Labels](#labels)) |
 
 Returns a fully typed object matching your config shape with live values. Updating a control in the UI immediately updates the returned values.
 
@@ -114,6 +115,29 @@ body: {
 ```
 
 Two limits worth knowing: a folder header isn't focusable, so folder hints reveal on hover only; and the tooltip is positioned inside the panel's scroll container, so a hint on the very last visible row can sit below the fold until you scroll.
+
+---
+
+## Labels
+
+A control's label is derived from its config key (`maxBend` → "Max Bend"). Pass `labels` to override it, keyed by control path like `hints`:
+
+```tsx
+const p = useDialKit('Motion', {
+  paramA: [0.5, 0, 1],
+  paramB: [0.5, 0, 1],
+}, {
+  labels: mode === 'flow'
+    ? { paramA: 'Flow Scale', paramB: 'Flow Speed' }
+    : { paramA: 'Step Size', paramB: 'Turn Rate' },
+});
+```
+
+Keyed rather than declared inline for the same reason as hints: the controls that most need a label their key can't express are bare shorthand, with nowhere to hang a property.
+
+Without this, changing a control's visible text means changing its key — and the key **is** its identity, so it would lose its current value, its persisted entry and any shortcut bound to it. An override changes only the text.
+
+Applies to folders as well as leaf controls. An empty string is ignored rather than blanking the label, so a map built from optional data can't erase the derived name. `ActionConfig.label` still works; a keyed label wins over it.
 
 ---
 

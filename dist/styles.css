@@ -296,49 +296,69 @@
 }
 
 /* ── Affordance ──────────────────────────────────────────────────────────
-   An 8px dot in the control's bottom-right corner opening a host-filled
-   popover. Idle it is barely visible; the app pushes `status` to light it. */
+   A 4px dot in the control's bottom-right corner opening a host-filled
+   popover. Idle it is barely visible; the app pushes `status` to light it.
+
+   The BUTTON is the hit area (16px, transparent) and the dot is drawn by its
+   ::after. They have to be separate elements: a transparent box-shadow ring
+   does not extend hit testing — shadows never take pointer events — so sizing
+   the button to the visual would leave a 4px target, which is unclickable and
+   fails the 24px minimum-target guidance by a mile. */
 .dialkit-control-tip[data-affordance] {
   position: relative;
 }
 
 .dialkit-affordance-dot {
   position: absolute;
-  right: 3px;
-  bottom: 3px;
-  width: 8px;
-  height: 8px;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
   padding: 0;
   border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.dialkit-affordance-dot::after {
+  content: '';
+  position: absolute;
+  /* Centred in the 16px hotspot, so growing on hover stays concentric. */
+  right: 6px;
+  bottom: 6px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
   background: var(--dial-affordance-idle);
-  cursor: pointer;
-  /* The visual is 8px but the hit area is not — a 8px target is unclickable. */
-  box-shadow: 0 0 0 5px transparent;
   transition: background 0.15s ease, transform 0.15s ease;
 }
 
-.dialkit-affordance-dot:hover,
-.dialkit-affordance-dot:focus-visible {
-  transform: scale(1.35);
+/* Scales harder than the old 8px dot did: 1.35x of 4px is nearly invisible as
+   a hover response, and the dot needs to acknowledge a pointer it can't move. */
+.dialkit-affordance-dot:hover::after,
+.dialkit-affordance-dot:focus-visible::after,
+.dialkit-affordance-dot[data-open="true"]::after {
+  transform: scale(1.75);
 }
 
+/* On the dot, not the button: outlining the 16px hotspot would read as a box
+   floating in the control's corner. */
 .dialkit-affordance-dot:focus-visible {
+  outline: none;
+}
+
+.dialkit-affordance-dot:focus-visible::after {
   outline: 2px solid var(--dial-affordance-armed);
   outline-offset: 2px;
 }
 
-.dialkit-affordance-dot[data-status="armed"] {
+.dialkit-affordance-dot[data-status="armed"]::after {
   background: var(--dial-affordance-armed);
 }
 
-.dialkit-affordance-dot[data-status="active"] {
+.dialkit-affordance-dot[data-status="active"]::after {
   background: var(--dial-affordance-active);
   animation: dialkit-affordance-pulse 1.4s ease-in-out infinite;
-}
-
-.dialkit-affordance-dot[data-open="true"] {
-  transform: scale(1.35);
 }
 
 /* Fades rather than glows: a box-shadow pulse would need color-mix to derive a
