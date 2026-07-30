@@ -683,7 +683,7 @@ var DialStoreClass = class {
         const hasPhysics = value.stiffness !== void 0 || value.damping !== void 0 || value.mass !== void 0;
         const hasTime = value.visualDuration !== void 0 || value.bounce !== void 0;
         values[`${path}.__mode`] = hasPhysics && !hasTime ? "advanced" : "simple";
-      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isListConfig(value)) {
+      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value)) {
         this.initTransitionModes(value, path, values);
       }
     }
@@ -709,6 +709,20 @@ var DialStoreClass = class {
       } else if (typeof value === "number") {
         const { min, max, step } = this.inferRange(value);
         controls.push({ type: "slider", path, label, min, max, step, shortcut });
+      } else if (this.isSliderConfig(value)) {
+        controls.push({
+          type: "slider",
+          path,
+          label,
+          min: value.min,
+          max: value.max,
+          step: value.step ?? this.inferStep(value.min, value.max),
+          unit: value.unit,
+          formatValue: value.formatValue,
+          origin: value.origin,
+          bipolar: value.bipolar,
+          shortcut
+        });
       } else if (typeof value === "boolean") {
         controls.push({ type: "toggle", path, label, shortcut });
       } else if (this.isSpringConfig(value) || this.isEasingConfig(value)) {
@@ -743,6 +757,8 @@ var DialStoreClass = class {
         controls.push({ type: "swatch", path, label, swatchOptions: value.options });
       } else if (this.isChipsConfig(value)) {
         controls.push({ type: "chips", path, label, chipOptions: value.options });
+      } else if (this.isMultiSelectConfig(value)) {
+        controls.push({ type: "multiselect", path, label, multiSelectOptions: value.options });
       } else if (this.isListConfig(value)) {
         controls.push({ type: "list", path, label, itemTypes: value.itemTypes, addLabel: value.addLabel, maxItems: value.max });
       } else if (typeof value === "string") {
@@ -773,6 +789,8 @@ var DialStoreClass = class {
       const path = prefix ? `${prefix}.${key}` : key;
       if (Array.isArray(value) && value.length <= 4 && typeof value[0] === "number") {
         values[path] = value[0];
+      } else if (this.isSliderConfig(value)) {
+        values[path] = value.default;
       } else if (typeof value === "number" || typeof value === "boolean" || typeof value === "string") {
         values[path] = value;
       } else if (this.isSpringConfig(value) || this.isEasingConfig(value)) {
@@ -803,6 +821,8 @@ var DialStoreClass = class {
         values[path] = value.default ?? value.options[0]?.value ?? "";
       } else if (this.isChipsConfig(value)) {
         values[path] = value.default ?? value.options[0]?.value ?? "";
+      } else if (this.isMultiSelectConfig(value)) {
+        values[path] = value.default ?? [];
       } else if (this.isListConfig(value)) {
         values[path] = normalizeListItems(value);
       } else if (typeof value === "object" && value !== null) {
@@ -856,6 +876,12 @@ var DialStoreClass = class {
   }
   isChipsConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "chips" && "options" in value && Array.isArray(value.options);
+  }
+  isMultiSelectConfig(value) {
+    return typeof value === "object" && value !== null && "type" in value && value.type === "multiselect" && "options" in value && Array.isArray(value.options);
+  }
+  isSliderConfig(value) {
+    return typeof value === "object" && value !== null && "type" in value && value.type === "slider" && typeof value.min === "number" && typeof value.max === "number";
   }
   isListConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "list" && "itemTypes" in value && typeof value.itemTypes === "object";
@@ -926,6 +952,13 @@ var DialStoreClass = class {
         }
         const validValues = new Set((control.chipOptions ?? []).map((option) => option.value));
         return validValues.has(existingValue) ? existingValue : defaultValue;
+      }
+      case "multiselect": {
+        if (!Array.isArray(existingValue) || existingValue.some((v) => typeof v !== "string")) {
+          return defaultValue;
+        }
+        const validValues = new Set((control.multiSelectOptions ?? []).map((option) => option.value));
+        return existingValue.filter((v) => validValues.has(v));
       }
       case "color": {
         if (typeof existingValue !== "string" || !this.isHexColor(existingValue)) {

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { DialStore, DialConfig, DialValue, DialEvent, ResolvedValues, SpringConfig, EasingConfig, SelectConfig, ColorConfig, GradientConfig, TextConfig, GalleryConfig, FileConfig, SwatchConfig, ChipsConfig, ListConfig, ActionConfig, ShortcutConfig, AffordanceConfig, normalizeListItems } from '../store/DialStore';
+import { DialStore, DialConfig, DialValue, DialEvent, ResolvedValues, SpringConfig, EasingConfig, SelectConfig, SliderConfig, ColorConfig, GradientConfig, TextConfig, GalleryConfig, FileConfig, SwatchConfig, ChipsConfig, MultiSelectConfig, ListConfig, ActionConfig, ShortcutConfig, AffordanceConfig, normalizeListItems } from '../store/DialStore';
 import { useDialStorePanel } from './useDialStorePanel';
 import { normalizeGradient, DEFAULT_GRADIENT } from '../gradient-core';
 
@@ -67,6 +67,9 @@ function buildResolvedValues(
     if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === 'number') {
       // Range tuple
       result[key] = flatValues[path] ?? configValue[0];
+    } else if (isSliderConfig(configValue)) {
+      // Explicit slider form resolves to its number
+      result[key] = flatValues[path] ?? configValue.default;
     } else if (typeof configValue === 'number' || typeof configValue === 'boolean' || typeof configValue === 'string') {
       result[key] = flatValues[path] ?? configValue;
     } else if (isSpringConfig(configValue) || isEasingConfig(configValue)) {
@@ -97,6 +100,9 @@ function buildResolvedValues(
       result[key] = flatValues[path] ?? configValue.default ?? configValue.options[0]?.value ?? '';
     } else if (isChipsConfig(configValue)) {
       result[key] = flatValues[path] ?? configValue.default ?? configValue.options[0]?.value ?? '';
+    } else if (isMultiSelectConfig(configValue)) {
+      // Resolves to the checked values; empty selection is a real state
+      result[key] = flatValues[path] ?? configValue.default ?? [];
     } else if (isListConfig(configValue)) {
       // List resolves to its array of {type, params} rows.
       result[key] = flatValues[path] ?? normalizeListItems(configValue);
@@ -155,6 +161,14 @@ function isSwatchConfig(value: unknown): value is SwatchConfig {
 
 function isChipsConfig(value: unknown): value is ChipsConfig {
   return hasType(value, 'chips') && 'options' in (value as object) && Array.isArray((value as ChipsConfig).options);
+}
+
+function isMultiSelectConfig(value: unknown): value is MultiSelectConfig {
+  return hasType(value, 'multiselect') && 'options' in (value as object) && Array.isArray((value as MultiSelectConfig).options);
+}
+
+function isSliderConfig(value: unknown): value is SliderConfig {
+  return hasType(value, 'slider') && typeof (value as SliderConfig).min === 'number' && typeof (value as SliderConfig).max === 'number';
 }
 
 function isListConfig(value: unknown): value is ListConfig {

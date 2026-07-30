@@ -132,6 +132,30 @@ type RangeConfig = {
     /** Falls back to inferStep(min, max) when omitted. */
     step?: number;
 };
+/**
+ * Explicit slider form for what the `[default, min, max, step?]` tuple can't
+ * express: a display unit, a custom value formatter, or a bipolar fill.
+ */
+type SliderConfig = {
+    type: 'slider';
+    default: number;
+    min: number;
+    max: number;
+    /** Falls back to inferStep(min, max) when omitted. */
+    step?: number;
+    /** Appended to the displayed value, e.g. ' dB', ' ms', '×'. */
+    unit?: string;
+    /**
+     * Override the displayed value text entirely; `unit` is not auto-appended.
+     * A function, so it is invisible to the JSON structure diff — changing only
+     * the formatter does not re-register the panel.
+     */
+    formatValue?: (value: number) => string;
+    /** Anchor the fill at this value instead of `min` (see Slider). */
+    origin?: number;
+    /** Convenience for `origin: 0` on a symmetric range. */
+    bipolar?: boolean;
+};
 type FileConfig = {
     type: 'file';
     /** Native input `accept` filter, e.g. 'image/*' or '.svg,image/svg+xml'. */
@@ -159,6 +183,20 @@ type ChipsConfig = {
     type: 'chips';
     options: ChipOption[];
     default?: string;
+};
+type MultiSelectOption = {
+    value: string;
+    label: string;
+    /** One quiet line under the label — e.g. what the option contains. */
+    hint?: string;
+    /** Tiny uppercase badge next to the label — e.g. 'local' / 'cloud'. */
+    tag?: string;
+};
+/** Checkbox rows resolving to the checked values, in option order. */
+type MultiSelectConfig = {
+    type: 'multiselect';
+    options: MultiSelectOption[];
+    default?: string[];
 };
 type GalleryItem = {
     id: string;
@@ -222,12 +260,12 @@ type ListConfig = {
     /** Label for the add affordance. Defaults to 'Add'. */
     addLabel?: string;
 };
-type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
+type DialValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 type DialConfig = {
     [key: string]: DialValue | [number, number, number, number?] | DialConfig;
 };
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type DialKitPersistOptions = boolean | {
     key?: string;

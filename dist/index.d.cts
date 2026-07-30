@@ -435,6 +435,30 @@ type RangeConfig = {
     /** Falls back to inferStep(min, max) when omitted. */
     step?: number;
 };
+/**
+ * Explicit slider form for what the `[default, min, max, step?]` tuple can't
+ * express: a display unit, a custom value formatter, or a bipolar fill.
+ */
+type SliderConfig = {
+    type: 'slider';
+    default: number;
+    min: number;
+    max: number;
+    /** Falls back to inferStep(min, max) when omitted. */
+    step?: number;
+    /** Appended to the displayed value, e.g. ' dB', ' ms', '×'. */
+    unit?: string;
+    /**
+     * Override the displayed value text entirely; `unit` is not auto-appended.
+     * A function, so it is invisible to the JSON structure diff — changing only
+     * the formatter does not re-register the panel.
+     */
+    formatValue?: (value: number) => string;
+    /** Anchor the fill at this value instead of `min` (see Slider). */
+    origin?: number;
+    /** Convenience for `origin: 0` on a symmetric range. */
+    bipolar?: boolean;
+};
 type FileConfig = {
     type: 'file';
     /** Native input `accept` filter, e.g. 'image/*' or '.svg,image/svg+xml'. */
@@ -462,6 +486,20 @@ type ChipsConfig = {
     type: 'chips';
     options: ChipOption[];
     default?: string;
+};
+type MultiSelectOption = {
+    value: string;
+    label: string;
+    /** One quiet line under the label — e.g. what the option contains. */
+    hint?: string;
+    /** Tiny uppercase badge next to the label — e.g. 'local' / 'cloud'. */
+    tag?: string;
+};
+/** Checkbox rows resolving to the checked values, in option order. */
+type MultiSelectConfig = {
+    type: 'multiselect';
+    options: MultiSelectOption[];
+    default?: string[];
 };
 type GalleryItem = {
     id: string;
@@ -548,12 +586,12 @@ type ListField = {
     placeholder?: string;
     defaultValue: number | boolean | string;
 };
-type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
+type DialValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 type DialConfig = {
     [key: string]: DialValue | [number, number, number, number?] | DialConfig;
 };
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -594,7 +632,7 @@ type AffordanceConfig = {
     label?: string;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list';
     path: string;
     label: string;
     /** One line of help, revealed on hover or when focus lands inside the control. */
@@ -619,6 +657,14 @@ type ControlMeta = {
     multiple?: boolean;
     swatchOptions?: SwatchOption[];
     chipOptions?: ChipOption[];
+    multiSelectOptions?: MultiSelectOption[];
+    /** Slider display unit, from the explicit SliderConfig form. */
+    unit?: string;
+    /** Slider display formatter, from the explicit SliderConfig form. */
+    formatValue?: (value: number) => string;
+    /** Slider fill anchor, from the explicit SliderConfig form. */
+    origin?: number;
+    bipolar?: boolean;
     itemTypes?: Record<string, ListItemType>;
     addLabel?: string;
     maxItems?: number;
@@ -803,6 +849,8 @@ declare class DialStoreClass {
     private isFileConfig;
     private isSwatchConfig;
     private isChipsConfig;
+    private isMultiSelectConfig;
+    private isSliderConfig;
     private isListConfig;
     private isHexColor;
     private formatLabel;
@@ -1829,6 +1877,14 @@ interface ChipsControlProps {
 }
 declare function ChipsControl({ label, value, options, onChange, onRemove }: ChipsControlProps): react_jsx_runtime.JSX.Element;
 
+interface MultiSelectControlProps {
+    label: string;
+    value: string[];
+    options: MultiSelectOption[];
+    onChange: (value: string[]) => void;
+}
+declare function MultiSelectControl({ label, value, options, onChange }: MultiSelectControlProps): react_jsx_runtime.JSX.Element;
+
 interface ListControlProps {
     label: string;
     value: ListItemValue[];
@@ -1854,4 +1910,4 @@ interface ShortcutsMenuProps {
 }
 declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react_jsx_runtime.JSX.Element | null;
 
-export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, DialTimeline, type DialTimelineProps, type DialTimelineValues, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, MIN_STOPS, Module, type OKLCH, type PanelConfig, type Point, type Preset, PresetManager, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type UseDialTimelineOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, buildSamplers, centerValue, clamp, clampOklchToSrgb, clampRange, colorAtPosition, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, moveStop, nearestHandle, normToValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeValue, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, pointFromValue, readComposition, redistributeWeight, removeDriver, removeSegment, removeStop, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, triggerLevels, triggersCrossed, useDialKit, useDialTimeline, valueFromPoint, valueToNorm, valueToPercent };
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, DialTimeline, type DialTimelineProps, type DialTimelineValues, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, MIN_STOPS, Module, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type OKLCH, type PanelConfig, type Point, type Preset, PresetManager, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpringConfig, SpringControl, SpringVisualization, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type UseDialTimelineOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, buildSamplers, centerValue, clamp, clampOklchToSrgb, clampRange, colorAtPosition, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, moveStop, nearestHandle, normToValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeValue, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, pointFromValue, readComposition, redistributeWeight, removeDriver, removeSegment, removeStop, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, triggerLevels, triggersCrossed, useDialKit, useDialTimeline, valueFromPoint, valueToNorm, valueToPercent };
