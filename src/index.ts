@@ -166,6 +166,7 @@ export { GalleryControl } from './components/GalleryControl';
 export { FileControl } from './components/FileControl';
 export { SwatchControl } from './components/SwatchControl';
 export { ChipsControl } from './components/ChipsControl';
+export { MultiSelectControl } from './components/MultiSelectControl';
 export { ListControl } from './components/ListControl';
 export { PresetManager } from './components/PresetManager';
 export { ShortcutsMenu } from './components/ShortcutsMenu';
@@ -190,6 +191,9 @@ export type {
   SwatchOption,
   ChipsConfig,
   ChipOption,
+  MultiSelectConfig,
+  MultiSelectOption,
+  SliderConfig,
   RangeConfig,
   RangeValue,
   ListConfig,

@@ -18,16 +18,20 @@ export function SegmentedControl<T extends string>({
 }: SegmentedControlProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const hasAnimated = useRef(false);
-  const [pillStyle, setPillStyle] = useState<{ left: number; width: number } | null>(null);
+  const [pillStyle, setPillStyle] = useState<{ left: number; width: number; top: number; height: number } | null>(null);
 
   const measure = useCallback(() => {
     const container = containerRef.current;
     if (!container) return;
     const activeButton = container.querySelector('[data-active="true"]') as HTMLElement | null;
     if (!activeButton) return;
+    // All four edges, not just left/width: a host can let the control wrap onto
+    // several rows, and the pill must hug the active button's row.
     setPillStyle({
       left: activeButton.offsetLeft,
       width: activeButton.offsetWidth,
+      top: activeButton.offsetTop,
+      height: activeButton.offsetHeight,
     });
   }, []);
 
@@ -47,8 +51,11 @@ export function SegmentedControl<T extends string>({
           style={{
             left: pillStyle.left,
             width: pillStyle.width,
+            top: pillStyle.top,
+            height: pillStyle.height,
+            bottom: 'auto',
             transition: shouldAnimate
-              ? 'left 0.2s cubic-bezier(0.25, 1, 0.5, 1), width 0.2s cubic-bezier(0.25, 1, 0.5, 1)'
+              ? 'left 0.2s cubic-bezier(0.25, 1, 0.5, 1), width 0.2s cubic-bezier(0.25, 1, 0.5, 1), top 0.2s cubic-bezier(0.25, 1, 0.5, 1), height 0.2s cubic-bezier(0.25, 1, 0.5, 1)'
               : 'none',
           }}
         />

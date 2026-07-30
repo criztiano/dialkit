@@ -167,6 +167,30 @@ type RangeConfig = {
     /** Falls back to inferStep(min, max) when omitted. */
     step?: number;
 };
+/**
+ * Explicit slider form for what the `[default, min, max, step?]` tuple can't
+ * express: a display unit, a custom value formatter, or a bipolar fill.
+ */
+type SliderConfig = {
+    type: 'slider';
+    default: number;
+    min: number;
+    max: number;
+    /** Falls back to inferStep(min, max) when omitted. */
+    step?: number;
+    /** Appended to the displayed value, e.g. ' dB', ' ms', '×'. */
+    unit?: string;
+    /**
+     * Override the displayed value text entirely; `unit` is not auto-appended.
+     * A function, so it is invisible to the JSON structure diff — changing only
+     * the formatter does not re-register the panel.
+     */
+    formatValue?: (value: number) => string;
+    /** Anchor the fill at this value instead of `min` (see Slider). */
+    origin?: number;
+    /** Convenience for `origin: 0` on a symmetric range. */
+    bipolar?: boolean;
+};
 type FileConfig = {
     type: 'file';
     /** Native input `accept` filter, e.g. 'image/*' or '.svg,image/svg+xml'. */
@@ -194,6 +218,20 @@ type ChipsConfig = {
     type: 'chips';
     options: ChipOption[];
     default?: string;
+};
+type MultiSelectOption = {
+    value: string;
+    label: string;
+    /** One quiet line under the label — e.g. what the option contains. */
+    hint?: string;
+    /** Tiny uppercase badge next to the label — e.g. 'local' / 'cloud'. */
+    tag?: string;
+};
+/** Checkbox rows resolving to the checked values, in option order. */
+type MultiSelectConfig = {
+    type: 'multiselect';
+    options: MultiSelectOption[];
+    default?: string[];
 };
 type GalleryItem = {
     id: string;
@@ -257,12 +295,12 @@ type ListConfig = {
     /** Label for the add affordance. Defaults to 'Add'. */
     addLabel?: string;
 };
-type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
+type DialValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 type DialConfig = {
     [key: string]: DialValue | [number, number, number, number?] | DialConfig;
 };
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -303,7 +341,7 @@ type AffordanceConfig = {
     label?: string;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list';
     path: string;
     label: string;
     /** One line of help, revealed on hover or when focus lands inside the control. */
@@ -328,6 +366,14 @@ type ControlMeta = {
     multiple?: boolean;
     swatchOptions?: SwatchOption[];
     chipOptions?: ChipOption[];
+    multiSelectOptions?: MultiSelectOption[];
+    /** Slider display unit, from the explicit SliderConfig form. */
+    unit?: string;
+    /** Slider display formatter, from the explicit SliderConfig form. */
+    formatValue?: (value: number) => string;
+    /** Slider fill anchor, from the explicit SliderConfig form. */
+    origin?: number;
+    bipolar?: boolean;
     itemTypes?: Record<string, ListItemType>;
     addLabel?: string;
     maxItems?: number;
@@ -506,6 +552,8 @@ declare class DialStoreClass {
     private isFileConfig;
     private isSwatchConfig;
     private isChipsConfig;
+    private isMultiSelectConfig;
+    private isSliderConfig;
     private isListConfig;
     private isHexColor;
     private formatLabel;
@@ -1711,11 +1759,11 @@ declare const WaveformVisualization: vue.DefineComponent<vue.ExtractPropTypes<{
     };
 }>> & Readonly<{}>, {
     mode: WaveformMode;
-    grid: boolean;
     progress: number;
     height: number;
     width: number;
     border: boolean;
+    grid: boolean;
     loop: WaveformLoop | null;
     buffer: AudioBuffer | null;
     getProgress: () => number;
@@ -1884,10 +1932,10 @@ declare const AnalyserVisualization: vue.DefineComponent<vue.ExtractPropTypes<{
     scale: AnalyserScale;
     spring: AnalyserSpring;
     mode: AnalyserMode;
-    grid: boolean;
     source: AnalyserSource;
     height: number;
     width: number;
+    grid: boolean;
     pixelSize: number;
     gridSubdivisions: number;
     waveColor: string;
@@ -2172,12 +2220,12 @@ declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
     };
 }>> & Readonly<{}>, {
     mode: "continuous" | "trigger";
-    grid: boolean;
     onSelect: (index: number) => void;
     height: number;
     width: number;
     direction: DriverDirection;
     gap: number;
+    grid: boolean;
     driver: CurveDriver | null;
     gridSubdivisions: number;
     playheadColor: string;
@@ -2539,12 +2587,12 @@ declare const XYPad: vue.DefineComponent<vue.ExtractPropTypes<{
     y: XYAxis;
     shortcut: ShortcutConfig;
     grid: number | boolean;
+    size: number;
+    shortcutActive: boolean;
     density: number;
     snap: boolean;
     returnToCenter: boolean;
     showValues: boolean;
-    size: number;
-    shortcutActive: boolean;
     disabled: boolean;
     formatValue: (value: XYValue) => string;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
@@ -2653,11 +2701,11 @@ declare const XYControl: vue.DefineComponent<vue.ExtractPropTypes<{
     y: XYAxis;
     shortcut: ShortcutConfig;
     grid: number | boolean;
+    shortcutActive: boolean;
     density: number;
     snap: boolean;
     returnToCenter: boolean;
     showValues: boolean;
-    shortcutActive: boolean;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 declare const PresetManager: vue.DefineComponent<vue.ExtractPropTypes<{

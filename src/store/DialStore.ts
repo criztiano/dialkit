@@ -102,6 +102,31 @@ export type RangeConfig = {
   step?: number;
 };
 
+/**
+ * Explicit slider form for what the `[default, min, max, step?]` tuple can't
+ * express: a display unit, a custom value formatter, or a bipolar fill.
+ */
+export type SliderConfig = {
+  type: 'slider';
+  default: number;
+  min: number;
+  max: number;
+  /** Falls back to inferStep(min, max) when omitted. */
+  step?: number;
+  /** Appended to the displayed value, e.g. ' dB', ' ms', '×'. */
+  unit?: string;
+  /**
+   * Override the displayed value text entirely; `unit` is not auto-appended.
+   * A function, so it is invisible to the JSON structure diff — changing only
+   * the formatter does not re-register the panel.
+   */
+  formatValue?: (value: number) => string;
+  /** Anchor the fill at this value instead of `min` (see Slider). */
+  origin?: number;
+  /** Convenience for `origin: 0` on a symmetric range. */
+  bipolar?: boolean;
+};
+
 export type FileConfig = {
   type: 'file';
   /** Native input `accept` filter, e.g. 'image/*' or '.svg,image/svg+xml'. */
@@ -133,6 +158,22 @@ export type ChipsConfig = {
   type: 'chips';
   options: ChipOption[];
   default?: string;
+};
+
+export type MultiSelectOption = {
+  value: string;
+  label: string;
+  /** One quiet line under the label — e.g. what the option contains. */
+  hint?: string;
+  /** Tiny uppercase badge next to the label — e.g. 'local' / 'cloud'. */
+  tag?: string;
+};
+
+/** Checkbox rows resolving to the checked values, in option order. */
+export type MultiSelectConfig = {
+  type: 'multiselect';
+  options: MultiSelectOption[];
+  default?: string[];
 };
 
 export type GalleryItem = {
@@ -234,7 +275,7 @@ export type ListField = {
   defaultValue: number | boolean | string;
 };
 
-export type DialValue = number | boolean | string | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
+export type DialValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 
 export type DialConfig = {
   [key: string]: DialValue | [number, number, number, number?] | DialConfig;
@@ -243,6 +284,10 @@ export type DialConfig = {
 export type ResolvedValues<T extends DialConfig> = {
   [K in keyof T]: T[K] extends [number, number, number, number?]
     ? number
+    : T[K] extends SliderConfig
+    ? number
+    : T[K] extends MultiSelectConfig
+    ? string[]
     : T[K] extends SpringConfig
       ? TransitionConfig
       : T[K] extends EasingConfig
@@ -318,7 +363,7 @@ export type AffordanceConfig = {
 };
 
 export type ControlMeta = {
-  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list';
   path: string;
   label: string;
   /** One line of help, revealed on hover or when focus lands inside the control. */
@@ -340,6 +385,14 @@ export type ControlMeta = {
   multiple?: boolean;
   swatchOptions?: SwatchOption[];
   chipOptions?: ChipOption[];
+  multiSelectOptions?: MultiSelectOption[];
+  /** Slider display unit, from the explicit SliderConfig form. */
+  unit?: string;
+  /** Slider display formatter, from the explicit SliderConfig form. */
+  formatValue?: (value: number) => string;
+  /** Slider fill anchor, from the explicit SliderConfig form. */
+  origin?: number;
+  bipolar?: boolean;
   itemTypes?: Record<string, ListItemType>;
   addLabel?: string;
   maxItems?: number;
@@ -1049,7 +1102,7 @@ class DialStoreClass {
         const hasPhysics = value.stiffness !== undefined || value.damping !== undefined || value.mass !== undefined;
         const hasTime = value.visualDuration !== undefined || value.bounce !== undefined;
         values[`${path}.__mode`] = hasPhysics && !hasTime ? 'advanced' : 'simple';
-      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isListConfig(value)) {
+      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value)) {
         this.initTransitionModes(value as DialConfig, path, values);
       }
     }
@@ -1081,6 +1134,20 @@ class DialStoreClass {
         // Single number - auto-infer range
         const { min, max, step } = this.inferRange(value);
         controls.push({ type: 'slider', path, label, min, max, step, shortcut });
+      } else if (this.isSliderConfig(value)) {
+        controls.push({
+          type: 'slider',
+          path,
+          label,
+          min: value.min,
+          max: value.max,
+          step: value.step ?? this.inferStep(value.min, value.max),
+          unit: value.unit,
+          formatValue: value.formatValue,
+          origin: value.origin,
+          bipolar: value.bipolar,
+          shortcut,
+        });
       } else if (typeof value === 'boolean') {
         controls.push({ type: 'toggle', path, label, shortcut });
       } else if (this.isSpringConfig(value) || this.isEasingConfig(value)) {
@@ -1111,6 +1178,8 @@ class DialStoreClass {
         controls.push({ type: 'swatch', path, label, swatchOptions: value.options });
       } else if (this.isChipsConfig(value)) {
         controls.push({ type: 'chips', path, label, chipOptions: value.options });
+      } else if (this.isMultiSelectConfig(value)) {
+        controls.push({ type: 'multiselect', path, label, multiSelectOptions: value.options });
       } else if (this.isListConfig(value)) {
         controls.push({ type: 'list', path, label, itemTypes: value.itemTypes, addLabel: value.addLabel, maxItems: value.max });
       } else if (typeof value === 'string') {
@@ -1148,6 +1217,8 @@ class DialStoreClass {
 
       if (Array.isArray(value) && value.length <= 4 && typeof value[0] === 'number') {
         values[path] = value[0]; // Default value
+      } else if (this.isSliderConfig(value)) {
+        values[path] = value.default;
       } else if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string') {
         values[path] = value;
       } else if (this.isSpringConfig(value) || this.isEasingConfig(value)) {
@@ -1184,6 +1255,10 @@ class DialStoreClass {
         values[path] = value.default ?? value.options[0]?.value ?? '';
       } else if (this.isChipsConfig(value)) {
         values[path] = value.default ?? value.options[0]?.value ?? '';
+      } else if (this.isMultiSelectConfig(value)) {
+        // Unlike single-value pickers there is no natural first choice; the
+        // empty selection is a legitimate state.
+        values[path] = value.default ?? [];
       } else if (this.isListConfig(value)) {
         values[path] = normalizeListItems(value);
       } else if (typeof value === 'object' && value !== null) {
@@ -1332,6 +1407,28 @@ class DialStoreClass {
     );
   }
 
+  private isMultiSelectConfig(value: unknown): value is MultiSelectConfig {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'type' in value &&
+      (value as MultiSelectConfig).type === 'multiselect' &&
+      'options' in value &&
+      Array.isArray((value as MultiSelectConfig).options)
+    );
+  }
+
+  private isSliderConfig(value: unknown): value is SliderConfig {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'type' in value &&
+      (value as SliderConfig).type === 'slider' &&
+      typeof (value as SliderConfig).min === 'number' &&
+      typeof (value as SliderConfig).max === 'number'
+    );
+  }
+
   private isListConfig(value: unknown): value is ListConfig {
     return (
       typeof value === 'object' &&
@@ -1427,6 +1524,15 @@ class DialStoreClass {
         }
         const validValues = new Set((control.chipOptions ?? []).map((option) => option.value));
         return validValues.has(existingValue) ? existingValue : defaultValue;
+      }
+      case 'multiselect': {
+        // Drop selections whose option vanished from the config; a lost shape
+        // falls back to the default. An empty result is kept — it's a real state.
+        if (!Array.isArray(existingValue) || existingValue.some((v) => typeof v !== 'string')) {
+          return defaultValue;
+        }
+        const validValues = new Set((control.multiSelectOptions ?? []).map((option) => option.value));
+        return (existingValue as string[]).filter((v) => validValues.has(v));
       }
       case 'color': {
         if (typeof existingValue !== 'string' || !this.isHexColor(existingValue)) {

@@ -51,6 +51,14 @@ type ChipOption = {
     /** Removable chips show an ✕ and emit a `remove` event (curated stay; saved go). */
     removable?: boolean;
 };
+type MultiSelectOption = {
+    value: string;
+    label: string;
+    /** One quiet line under the label — e.g. what the option contains. */
+    hint?: string;
+    /** Tiny uppercase badge next to the label — e.g. 'local' / 'cloud'. */
+    tag?: string;
+};
 type GalleryItem = {
     id: string;
     src?: string;
@@ -122,7 +130,7 @@ type AffordanceConfig = {
     label?: string;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'list';
+    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list';
     path: string;
     label: string;
     /** One line of help, revealed on hover or when focus lands inside the control. */
@@ -147,6 +155,14 @@ type ControlMeta = {
     multiple?: boolean;
     swatchOptions?: SwatchOption[];
     chipOptions?: ChipOption[];
+    multiSelectOptions?: MultiSelectOption[];
+    /** Slider display unit, from the explicit SliderConfig form. */
+    unit?: string;
+    /** Slider display formatter, from the explicit SliderConfig form. */
+    formatValue?: (value: number) => string;
+    /** Slider fill anchor, from the explicit SliderConfig form. */
+    origin?: number;
+    bipolar?: boolean;
     itemTypes?: Record<string, ListItemType>;
     addLabel?: string;
     maxItems?: number;

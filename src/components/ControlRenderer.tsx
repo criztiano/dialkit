@@ -19,6 +19,7 @@ import { GalleryControl } from './GalleryControl';
 import { FileControl } from './FileControl';
 import { SwatchControl } from './SwatchControl';
 import { ChipsControl } from './ChipsControl';
+import { MultiSelectControl } from './MultiSelectControl';
 import { ListControl } from './ListControl';
 
 interface ControlRendererProps {
@@ -56,6 +57,10 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             min={control.min}
             max={control.max}
             step={control.step}
+            unit={control.unit}
+            formatValue={control.formatValue}
+            origin={control.origin}
+            bipolar={control.bipolar}
             shortcut={control.shortcut}
             shortcutActive={shortcutCtx.activePanelId === panelId && shortcutCtx.activePath === control.path}
           />
@@ -233,6 +238,17 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             options={control.chipOptions ?? []}
             onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
             onRemove={(v) => DialStore.emitEvent(panelId, control.path, { kind: 'remove', value: v })}
+          />
+        );
+
+      case 'multiselect':
+        return (
+          <MultiSelectControl
+            key={control.path}
+            label={control.label}
+            value={(value as string[]) ?? []}
+            options={control.multiSelectOptions ?? []}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
           />
         );
 
