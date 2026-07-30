@@ -3421,7 +3421,9 @@ function SegmentedControl({
     if (!activeButton) return;
     setPillStyle({
       left: activeButton.offsetLeft,
-      width: activeButton.offsetWidth
+      width: activeButton.offsetWidth,
+      top: activeButton.offsetTop,
+      height: activeButton.offsetHeight
     });
   }, []);
   useLayoutEffect2(() => {
@@ -3437,7 +3439,10 @@ function SegmentedControl({
         style: {
           left: pillStyle.left,
           width: pillStyle.width,
-          transition: shouldAnimate ? "left 0.2s cubic-bezier(0.25, 1, 0.5, 1), width 0.2s cubic-bezier(0.25, 1, 0.5, 1)" : "none"
+          top: pillStyle.top,
+          height: pillStyle.height,
+          bottom: "auto",
+          transition: shouldAnimate ? "left 0.2s cubic-bezier(0.25, 1, 0.5, 1), width 0.2s cubic-bezier(0.25, 1, 0.5, 1), top 0.2s cubic-bezier(0.25, 1, 0.5, 1), height 0.2s cubic-bezier(0.25, 1, 0.5, 1)" : "none"
         }
       }
     ),
