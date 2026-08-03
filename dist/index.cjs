@@ -22,6 +22,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var index_exports = {};
 __export(index_exports, {
   AnalyserVisualization: () => AnalyserVisualization,
+  AudioLevelMeter: () => AudioLevelMeter,
   ButtonGroup: () => ButtonGroup,
   COLOR_FORMATS: () => COLOR_FORMATS,
   CURVE_CYCLE: () => CURVE_CYCLE,
@@ -11036,9 +11037,308 @@ function ShortcutsMenu({ panelId }) {
     )
   ] });
 }
+
+// src/components/AudioLevelMeter.tsx
+var import_react46 = require("react");
+var import_jsx_runtime40 = require("react/jsx-runtime");
+var DEFAULT_CELL_COUNT = 10;
+var MIN_CELL_COUNT = 8;
+var MAX_CELL_COUNT = 12;
+var MAX_SPECTRUM_BANDS = 12;
+var PEAK_HOLD_MS = 560;
+var PEAK_FALL_INTERVAL_MS = 120;
+function clampLevel(value) {
+  return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
+}
+function normalizeCellCount(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return DEFAULT_CELL_COUNT;
+  return Math.min(MAX_CELL_COUNT, Math.max(MIN_CELL_COUNT, Math.round(value)));
+}
+function levelToCellCount(level, cellCount) {
+  return level === 0 ? 0 : Math.ceil(level * cellCount);
+}
+function formatPercentage(level) {
+  return `${Math.round(level * 100)}%`;
+}
+function getValueSummary(mode, levels) {
+  if (mode === "mono") {
+    return `Level ${formatPercentage(levels[0])}`;
+  }
+  if (mode === "stereo") {
+    return `Left ${formatPercentage(levels[0])}, right ${formatPercentage(levels[1])}`;
+  }
+  return `Band levels ${levels.map(formatPercentage).join(", ")}`;
+}
+function getRawLevels(props) {
+  if (props.mode === "stereo") {
+    return props.levels.map((level) => Number.isFinite(level) ? level : 0);
+  }
+  if (props.mode === "spectrum") {
+    const levels = props.levels.slice(0, MAX_SPECTRUM_BANDS).map((level) => Number.isFinite(level) ? level : 0);
+    return levels.length > 0 ? levels : [0];
+  }
+  return [Number.isFinite(props.levels) ? props.levels : 0];
+}
+function getCellColor(colors, indexFromBottom, cellCount) {
+  if (colors.length === 0) return void 0;
+  const colorIndex = Math.min(
+    colors.length - 1,
+    Math.floor(indexFromBottom / cellCount * colors.length)
+  );
+  return colors[colorIndex];
+}
+function usePrefersReducedMotion() {
+  const [reducedMotion, setReducedMotion] = (0, import_react46.useState)(false);
+  (0, import_react46.useEffect)(() => {
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const updatePreference = () => setReducedMotion(mediaQuery.matches);
+    updatePreference();
+    mediaQuery.addEventListener("change", updatePreference);
+    return () => mediaQuery.removeEventListener("change", updatePreference);
+  }, []);
+  return reducedMotion;
+}
+function createPeakState(index, timestamp) {
+  return { index, holdStartedAt: timestamp, lastDropAt: timestamp };
+}
+function remapPeakIndex(index, previousCellCount, cellCount) {
+  if (index < 0) return -1;
+  return Math.min(
+    cellCount - 1,
+    Math.ceil((index + 1) / previousCellCount * cellCount) - 1
+  );
+}
+function getDefaultLabel(mode, bandCount) {
+  if (mode === "mono") {
+    return "Audio level meter, mono";
+  }
+  if (mode === "stereo") {
+    return "Audio level meter, stereo";
+  }
+  return `Audio spectrum analyzer, ${bandCount} bands`;
+}
+function getBandName(mode, index) {
+  if (mode === "mono") return "mono";
+  if (mode === "stereo") return index === 0 ? "left" : "right";
+  return `band ${index + 1}`;
+}
+function AudioLevelMeter(props) {
+  const mode = props.mode ?? "mono";
+  const cellCount = normalizeCellCount(props.cellCount);
+  const rawLevels = getRawLevels(props);
+  const levels = rawLevels.map(clampLevel);
+  const clippedBands = rawLevels.map((level) => level > 1);
+  const activeCellCounts = levels.map((level) => levelToCellCount(level, cellCount));
+  const activeCellKey = activeCellCounts.join(":");
+  const clippedBandKey = clippedBands.map(Number).join(":");
+  const currentTopCellsRef = (0, import_react46.useRef)(activeCellCounts.map((count) => count - 1));
+  const currentClippedBandsRef = (0, import_react46.useRef)(clippedBands);
+  const cellCountRef = (0, import_react46.useRef)(cellCount);
+  const peakStatesRef = (0, import_react46.useRef)([]);
+  const clipHoldUntilRef = (0, import_react46.useRef)(clippedBands.map(() => 0));
+  const animationFrameRef = (0, import_react46.useRef)(null);
+  const reducedMotion = usePrefersReducedMotion();
+  const [peakIndices, setPeakIndices] = (0, import_react46.useState)(
+    () => activeCellCounts.map((count) => count - 1)
+  );
+  const [heldClippedBands, setHeldClippedBands] = (0, import_react46.useState)(clippedBands.map(() => false));
+  const displayedClippedBands = heldClippedBands.map(
+    (isHeld, index) => isHeld || clippedBands[index]
+  );
+  const displayedPeakIndices = peakIndices.map(
+    (index) => remapPeakIndex(index, cellCountRef.current, cellCount)
+  );
+  const colors = (props.colors ?? []).slice(0, 3).filter(
+    (color) => typeof color === "string" && color.trim().length > 0
+  );
+  (0, import_react46.useEffect)(() => {
+    const timestamp = performance.now();
+    const currentTopCells = activeCellKey.split(":").map(Number).map((count) => count - 1);
+    const currentClippedBands = clippedBandKey.split(":").map((value) => value === "1");
+    const previousCellCount = cellCountRef.current;
+    const cellCountChanged = previousCellCount !== cellCount;
+    const previousCurrentClippedBands = currentClippedBandsRef.current;
+    let previousTopCells = currentTopCellsRef.current;
+    if (cellCountChanged) {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      previousTopCells = previousTopCells.map(
+        (index) => remapPeakIndex(index, previousCellCount, cellCount)
+      );
+      peakStatesRef.current = peakStatesRef.current.map((peak) => ({
+        ...peak,
+        index: remapPeakIndex(peak.index, previousCellCount, cellCount)
+      }));
+      cellCountRef.current = cellCount;
+    }
+    currentTopCellsRef.current = currentTopCells;
+    currentClippedBandsRef.current = currentClippedBands;
+    const nextClipHoldUntil = currentClippedBands.map((isCurrentlyClipped, index) => {
+      if (isCurrentlyClipped) return Number.POSITIVE_INFINITY;
+      if (previousCurrentClippedBands[index]) return timestamp + PEAK_HOLD_MS;
+      return clipHoldUntilRef.current[index] ?? 0;
+    });
+    clipHoldUntilRef.current = nextClipHoldUntil;
+    if (reducedMotion) {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      peakStatesRef.current = currentTopCells.map((index) => createPeakState(index, timestamp));
+      clipHoldUntilRef.current = currentClippedBands.map(() => 0);
+      setPeakIndices(currentTopCells);
+      setHeldClippedBands(currentClippedBands.map(() => false));
+      return;
+    }
+    const nextPeakStates = currentTopCells.map((currentTop, index) => {
+      const previous = peakStatesRef.current[index];
+      if (!previous || currentTop > previous.index) {
+        return createPeakState(currentTop, timestamp);
+      }
+      if (currentTop === previous.index) {
+        return createPeakState(currentTop, timestamp);
+      }
+      if ((previousTopCells[index] ?? -1) >= previous.index) {
+        return {
+          ...previous,
+          holdStartedAt: timestamp,
+          lastDropAt: timestamp
+        };
+      }
+      return previous;
+    });
+    peakStatesRef.current = nextPeakStates;
+    setPeakIndices(nextPeakStates.map((peak) => peak.index));
+    setHeldClippedBands(
+      nextClipHoldUntil.map(
+        (holdUntil, index) => !currentClippedBands[index] && holdUntil > timestamp
+      )
+    );
+    if (animationFrameRef.current !== null) return;
+    const hasFallingPeak = nextPeakStates.some(
+      (peak, index) => peak.index > currentTopCells[index]
+    );
+    const hasClipHold = nextClipHoldUntil.some(
+      (holdUntil, index) => !currentClippedBands[index] && holdUntil > timestamp
+    );
+    if (!hasFallingPeak && !hasClipHold) return;
+    const animatePeaks = (frameTimestamp) => {
+      let peakChanged = false;
+      let clipHoldChanged = false;
+      let needsAnotherFrame = false;
+      const next = peakStatesRef.current.map((peak, index) => {
+        const currentTop = currentTopCellsRef.current[index] ?? -1;
+        if (peak.index <= currentTop) {
+          return createPeakState(currentTop, frameTimestamp);
+        }
+        const fallStartedAt = peak.holdStartedAt + PEAK_HOLD_MS;
+        if (frameTimestamp >= fallStartedAt) {
+          const dropFrom = Math.max(peak.lastDropAt, fallStartedAt);
+          const dropCount = Math.floor((frameTimestamp - dropFrom) / PEAK_FALL_INTERVAL_MS);
+          if (dropCount > 0) {
+            const nextIndex = Math.max(currentTop, peak.index - dropCount);
+            peakChanged = peakChanged || nextIndex !== peak.index;
+            peak = {
+              ...peak,
+              index: nextIndex,
+              lastDropAt: dropFrom + dropCount * PEAK_FALL_INTERVAL_MS
+            };
+          }
+        }
+        needsAnotherFrame = needsAnotherFrame || peak.index > currentTop;
+        return peak;
+      });
+      const nextClipHolds = clipHoldUntilRef.current.map((holdUntil, index) => {
+        const isCurrentlyClipped = currentClippedBandsRef.current[index] ?? false;
+        if (isCurrentlyClipped || holdUntil === 0) return holdUntil;
+        if (holdUntil <= frameTimestamp) {
+          clipHoldChanged = true;
+          return 0;
+        }
+        needsAnotherFrame = true;
+        return holdUntil;
+      });
+      peakStatesRef.current = next;
+      clipHoldUntilRef.current = nextClipHolds;
+      if (peakChanged) setPeakIndices(next.map((peak) => peak.index));
+      if (clipHoldChanged) {
+        setHeldClippedBands(
+          nextClipHolds.map(
+            (holdUntil, index) => !currentClippedBandsRef.current[index] && holdUntil > frameTimestamp
+          )
+        );
+      }
+      if (needsAnotherFrame) {
+        animationFrameRef.current = requestAnimationFrame(animatePeaks);
+      } else {
+        animationFrameRef.current = null;
+      }
+    };
+    animationFrameRef.current = requestAnimationFrame(animatePeaks);
+  }, [activeCellKey, cellCount, clippedBandKey, reducedMotion]);
+  (0, import_react46.useEffect)(
+    () => () => {
+      if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
+    },
+    []
+  );
+  const defaultLabel = getDefaultLabel(mode, levels.length);
+  const valueSummary = getValueSummary(mode, levels);
+  const currentClippedBandNames = clippedBands.flatMap(
+    (isClipped, index) => isClipped ? [getBandName(mode, index)] : []
+  );
+  const heldClippedBandNames = heldClippedBands.flatMap(
+    (isHeld, index) => isHeld && !clippedBands[index] ? [getBandName(mode, index)] : []
+  );
+  const clippingSummary = [
+    currentClippedBandNames.length > 0 ? `Clipping: ${currentClippedBandNames.join(", ")}` : void 0,
+    heldClippedBandNames.length > 0 ? `Clipping held: ${heldClippedBandNames.join(", ")}` : void 0
+  ].filter(Boolean).join(". ");
+  const hasClipping = displayedClippedBands.some(Boolean);
+  const accessibleSummary = [props.label, defaultLabel, valueSummary, clippingSummary].filter(Boolean).join(". ");
+  const rootClassName = ["dialkit-root", "dialkit-audio-meter", props.className].filter(Boolean).join(" ");
+  const rootStyle = {
+    ...props.style,
+    "--dial-meter-band-count": levels.length,
+    "--dial-meter-cell-count": cellCount
+  };
+  return /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
+    "div",
+    {
+      className: rootClassName,
+      style: rootStyle,
+      "data-mode": mode,
+      "data-clipping": hasClipping || void 0,
+      role: "img",
+      "aria-label": accessibleSummary,
+      children: /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("div", { className: "dialkit-audio-meter__bands", "aria-hidden": "true", children: activeCellCounts.map((activeCellCount, bandIndex) => /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("div", { className: "dialkit-audio-meter__band", children: Array.from({ length: cellCount }, (_, visualIndex) => {
+        const indexFromBottom = cellCount - visualIndex - 1;
+        const isActive = indexFromBottom < activeCellCount;
+        const isPeak = indexFromBottom === displayedPeakIndices[bandIndex];
+        const isClipped = displayedClippedBands[bandIndex] && indexFromBottom === cellCount - 1;
+        const color = getCellColor(colors, indexFromBottom, cellCount);
+        const cellStyle = color ? { "--dial-meter-cell-color": color } : void 0;
+        return /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
+          "span",
+          {
+            className: "dialkit-audio-meter__cell",
+            "data-active": isActive || void 0,
+            "data-peak": isPeak || void 0,
+            "data-clipped": isClipped || void 0,
+            style: cellStyle
+          },
+          visualIndex
+        );
+      }) }, bandIndex)) })
+    }
+  );
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   AnalyserVisualization,
+  AudioLevelMeter,
   ButtonGroup,
   COLOR_FORMATS,
   CURVE_CYCLE,

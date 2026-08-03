@@ -170,6 +170,15 @@ export { MultiSelectControl } from './components/MultiSelectControl';
 export { ListControl } from './components/ListControl';
 export { PresetManager } from './components/PresetManager';
 export { ShortcutsMenu } from './components/ShortcutsMenu';
+export { AudioLevelMeter } from './components/AudioLevelMeter';
+export type {
+  AudioLevelMeterMode,
+  AudioLevelMeterColors,
+  AudioLevelMeterProps,
+  MonoAudioLevelMeterProps,
+  StereoAudioLevelMeterProps,
+  SpectrumAudioLevelMeterProps,
+} from './components/AudioLevelMeter';
 
 // Store (for advanced usage)
 export { DialStore, parseListItemSchema, groupListFields, defaultListItemParams, normalizeListItems, hintDomId } from './store/DialStore';

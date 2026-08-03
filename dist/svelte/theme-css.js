@@ -49,10 +49,97 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
   --dial-shadow-collapsed: 0 4px 16px rgba(0, 0, 0, 0.25);
   --dial-shadow-dropdown: 0 8px 24px rgba(0, 0, 0, 0.4);
 
+  /* Audio meter */
+  --dial-meter-cell-gap: 8px;
+  --dial-meter-band-gap: 6px;
+  --dial-meter-padding: 6px;
+  --dial-meter-cell-height: 2px;
+  --dial-meter-cell-radius: 2px;
+  --dial-meter-cell-idle: rgba(255, 255, 255, 0.04);
+  --dial-meter-cell-neutral: rgba(255, 255, 255, 0.6);
+  --dial-meter-cell-peak: rgba(255, 255, 255, 0.96);
+  --dial-meter-cell-clipped: #fb7185;
+  --dial-meter-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 1px 2px -1px rgba(0, 0, 0, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.16);
+
   /* Fonts */
   font-family: system-ui, -apple-system, 'SF Pro Display', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Audio level meter */
+.dialkit-audio-meter {
+  container: dialkit-audio-meter / inline-size;
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.dialkit-audio-meter__bands {
+  display: grid;
+  grid-template-columns: repeat(var(--dial-meter-band-count), minmax(0, 1fr));
+  gap: var(--dial-meter-cell-gap);
+  box-sizing: border-box;
+  padding: var(--dial-meter-padding);
+  overflow: hidden;
+  background: var(--dial-surface, rgba(255, 255, 255, 0.05));
+  border-radius: var(--dial-radius, 8px);
+  box-shadow: var(--dial-meter-shadow);
+}
+
+.dialkit-audio-meter[data-mode="mono"] .dialkit-audio-meter__bands,
+.dialkit-audio-meter[data-mode="stereo"] .dialkit-audio-meter__bands {
+  grid-template-columns: repeat(var(--dial-meter-band-count), minmax(12px, 24px));
+  justify-content: center;
+}
+
+.dialkit-audio-meter__band {
+  display: grid;
+  grid-template-rows: repeat(var(--dial-meter-cell-count), var(--dial-meter-cell-height));
+  gap: var(--dial-meter-cell-gap);
+  min-inline-size: 0;
+}
+
+.dialkit-audio-meter__cell {
+  display: block;
+  block-size: var(--dial-meter-cell-height);
+  min-block-size: 0;
+  border-radius: var(--dial-meter-cell-radius);
+  background: var(--dial-meter-cell-idle);
+}
+
+.dialkit-audio-meter__cell[data-active] {
+  background: var(--dial-meter-cell-color, var(--dial-meter-cell-neutral));
+  opacity: 0.72;
+}
+
+.dialkit-audio-meter__cell[data-peak] {
+  background: var(--dial-meter-cell-color, var(--dial-meter-cell-peak));
+  opacity: 1;
+}
+
+.dialkit-audio-meter__cell[data-clipped] {
+  background: var(--dial-meter-cell-clipped);
+  opacity: 1;
+}
+
+@container dialkit-audio-meter (min-width: 200px) {
+  .dialkit-audio-meter__bands {
+    gap: var(--dial-meter-band-gap);
+    padding: var(--dial-meter-padding);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialkit-audio-meter *,
+  .dialkit-audio-meter *::before,
+  .dialkit-audio-meter *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 .dialkit-panel {
