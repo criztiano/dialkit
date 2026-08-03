@@ -17,6 +17,15 @@ export { TextControl } from './components/TextControl';
 export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';
 export { PresetManager } from './components/PresetManager';
+export { AudioLevelMeter } from './components/AudioLevelMeter';
+export type {
+  AudioLevelMeterMode,
+  AudioLevelMeterColors,
+  AudioLevelMeterProps,
+  MonoAudioLevelMeterProps,
+  StereoAudioLevelMeterProps,
+  SpectrumAudioLevelMeterProps,
+} from './components/AudioLevelMeter';
 
 // Store (for advanced usage)
 export { DialStore } from './store/DialStore';

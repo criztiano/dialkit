@@ -237,6 +237,43 @@ When the panel is open, the toolbar provides:
 
 ---
 
+## AudioLevelMeter
+
+`AudioLevelMeter` is a read-only, discrete-cell audio meter with a classic peak indicator. Each band has 10 cells by default and can be configured from 8 to 12 cells. Current levels update immediately; the brightest top cell holds briefly, then drops one cell at a time. The decay becomes instant when the user prefers reduced motion.
+
+Values are normalized from `0` to `1`. Mono accepts a number, stereo accepts a left/right tuple, and a spectrum array creates one band per value (up to 12):
+
+```tsx
+import { AudioLevelMeter } from 'dialkit';
+
+<AudioLevelMeter levels={0.62} label="Microphone input" />
+
+<AudioLevelMeter mode="stereo" levels={[0.48, 0.71]} />
+
+<AudioLevelMeter
+  mode="spectrum"
+  levels={[0.18, 0.3, 0.46, 0.72, 0.84, 0.67, 0.42, 0.25]}
+  cellCount={12}
+  colors={['#55d6be', '#f4d35e', '#ee6352']}
+/>
+```
+
+| Prop | Type | Default |
+|------|------|---------|
+| `mode` | `'mono' \| 'stereo' \| 'spectrum'` | `'mono'` |
+| `levels` | `number \| readonly [number, number] \| readonly number[]` | Required |
+| `cellCount` | `number` (rounded and clamped to 8–12) | `10` |
+| `colors` | One to three CSS colors, ordered low to high | Neutral |
+| `label` | `string` | Mode-specific accessible label |
+| `className` | `string` | — |
+| `style` | `React.CSSProperties` | — |
+
+Negative values are clamped, non-finite values render as silence, and spectrum entries beyond the twelfth are ignored. A finite value above `1` fills the band and turns its top cell rose to indicate clipping, overriding neutral or custom colors. Current clipping stays rose; after the signal returns to range, the rose indicator remains held for 560 ms independently of the falling peak.
+
+The visual's accessible alternative includes its label, mode, current clamped percentages, and any band with current or held clipping. It is non-focusable and intentionally not an `aria-live` region, so audio-rate updates remain available to assistive technology without being proactively announced.
+
+---
+
 ## Full Example
 
 ```tsx
