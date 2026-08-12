@@ -1104,6 +1104,42 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
   aspect-ratio: 256 / 140;
 }
 
+/* Curve preview — the read-only \`{ type: 'curve' }\` row. Token-driven strokes
+   so light mode themes for free (no per-theme overrides like the spring viz). */
+.dialkit-curve {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.dialkit-curve-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dial-text-label);
+}
+
+.dialkit-curve-surface {
+  display: block;
+  width: 100%;
+  border-radius: var(--dial-radius);
+  background: var(--dial-surface);
+  border: 1px solid var(--dial-border);
+}
+
+.dialkit-curve-baseline {
+  stroke: var(--dial-border-hover, rgba(255, 255, 255, 0.15));
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.dialkit-curve-stroke {
+  stroke: var(--dial-affordance-armed, #818cf8);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* Waveform Visualization — canvas trace, themed via \`color\` (read per frame) */
 .dialkit-waveform-viz-wrap {
   position: relative;

@@ -90,6 +90,14 @@ export function useDialStorePanel(
     DialStore.setPresetProvider(panelId, optionsRef.current.presets ?? null);
   });
 
+  // Curve rows' sample functions get the same after-every-render treatment:
+  // they close over host state and are invisible to the serialized config
+  // diff, so syncCurveSamples swaps them in place and only notifies (on the
+  // control-state channel) when a function identity actually changed.
+  useEffect(() => {
+    DialStore.syncCurveSamples(panelId, configRef.current);
+  });
+
   const subscribe = useCallback(
     (callback: () => void) => DialStore.subscribe(panelId, callback),
     [panelId]

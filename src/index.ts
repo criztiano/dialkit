@@ -168,6 +168,19 @@ export { SwatchControl } from './components/SwatchControl';
 export { ChipsControl } from './components/ChipsControl';
 export { MultiSelectControl } from './components/MultiSelectControl';
 export { ListControl } from './components/ListControl';
+export { CurvePreview } from './components/CurvePreview';
+export {
+  CURVE_SAMPLE_COUNT,
+  CURVE_MIN_HEIGHT,
+  CURVE_MAX_HEIGHT,
+  CURVE_DEFAULT_HEIGHT,
+  CURVE_FIT_PADDING,
+  clampCurveHeight,
+  plotCurve,
+  curveY,
+  curvePathData,
+} from './curve-preview-core';
+export type { CurvePoint, CurvePlot } from './curve-preview-core';
 export { PresetManager } from './components/PresetManager';
 export { ShortcutsMenu } from './components/ShortcutsMenu';
 export { AudioLevelMeter } from './components/AudioLevelMeter';
@@ -207,6 +220,7 @@ export type {
   RangeValue,
   ListConfig,
   ListItemValue,
+  CurveConfig,
   AffordanceConfig,
   AffordanceContext,
   AffordanceStatus,

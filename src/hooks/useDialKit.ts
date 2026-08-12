@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { DialStore, DialConfig, DialValue, DialEvent, ResolvedValues, SpringConfig, EasingConfig, SelectConfig, SliderConfig, ColorConfig, GradientConfig, TextConfig, GalleryConfig, FileConfig, SwatchConfig, ChipsConfig, MultiSelectConfig, ListConfig, ActionConfig, ShortcutConfig, AffordanceConfig, PresetProvider, normalizeListItems } from '../store/DialStore';
+import { DialStore, DialConfig, DialValue, DialEvent, ResolvedValues, SpringConfig, EasingConfig, SelectConfig, SliderConfig, ColorConfig, GradientConfig, TextConfig, GalleryConfig, FileConfig, SwatchConfig, ChipsConfig, MultiSelectConfig, ListConfig, CurveConfig, ActionConfig, ShortcutConfig, AffordanceConfig, PresetProvider, normalizeListItems } from '../store/DialStore';
 import { useDialStorePanel } from './useDialStorePanel';
 import { normalizeGradient, DEFAULT_GRADIENT } from '../gradient-core';
 
@@ -113,6 +113,8 @@ function buildResolvedValues(
     } else if (isListConfig(configValue)) {
       // List resolves to its array of {type, params} rows.
       result[key] = flatValues[path] ?? normalizeListItems(configValue);
+    } else if (isCurveConfig(configValue)) {
+      // Display-only curve preview: no value, so no key in the resolved shape.
     } else if (typeof configValue === 'object' && configValue !== null) {
       // Nested object
       result[key] = buildResolvedValues(configValue as DialConfig, flatValues, path);
@@ -180,6 +182,10 @@ function isSliderConfig(value: unknown): value is SliderConfig {
 
 function isListConfig(value: unknown): value is ListConfig {
   return hasType(value, 'list') && 'itemTypes' in (value as object) && typeof (value as ListConfig).itemTypes === 'object';
+}
+
+function isCurveConfig(value: unknown): value is CurveConfig {
+  return hasType(value, 'curve') && typeof (value as CurveConfig).sample === 'function';
 }
 
 function getFirstOptionValue(options: (string | { value: string; label: string })[]): string {

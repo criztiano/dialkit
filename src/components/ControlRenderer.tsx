@@ -22,6 +22,7 @@ import { SwatchControl } from './SwatchControl';
 import { ChipsControl } from './ChipsControl';
 import { MultiSelectControl } from './MultiSelectControl';
 import { ListControl } from './ListControl';
+import { CurvePreview } from './CurvePreview';
 
 interface ControlRendererProps {
   panelId: string;
@@ -285,6 +286,9 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             onEvent={(event) => DialStore.emitEvent(panelId, control.path, event)}
           />
         );
+
+      case 'curve':
+        return <CurvePreview key={control.path} panelId={panelId} control={control} />;
 
       case 'action':
         return (

@@ -430,6 +430,34 @@ const p = useDialKit('Controls', {
 Action buttons trigger callbacks without storing any value. The `label` defaults to the formatted key name (camelCase becomes Title Case). Multiple adjacent actions are grouped vertically.
 Action buttons can be placed at the root or nested inside folders.
 
+### Curve (read-only preview)
+
+A display-only row that draws an arbitrary curve your own parameters produce — for parameters that shape a curve indirectly, like a pitch arc built from a shape select plus modifier sliders:
+
+```tsx
+const p = useDialKit('Grain', {
+  arcShape: { type: 'select', options: ['semicircle', 'gaussian', 'ramp'] },
+  bell: [0.5, 0, 1],
+  offset: { type: 'slider', default: 0, min: -1, max: 1, bipolar: true },
+  arcCurve: {
+    type: 'curve',
+    // Safe self-reference: the panel calls `sample` after this render returns.
+    sample: (t) => pitchArc(t, p.arcShape, p.bell, p.offset),
+    domain: [-1, 1],   // optional fixed y-range; omit to auto-fit with headroom
+    height: 64,        // optional px, clamped 32–160 (default 64)
+    label: false,      // false = full-bleed row; a string overrides the derived label
+  },
+});
+```
+
+`sample` is called with `t` in `[0, 1]` and returns the y value at that position. dialkit samples it (~160 points) and strokes the result on a panel surface, with a dashed baseline at `y = 0` whenever the domain spans negative values. Non-finite results (`NaN`, `±Infinity`) are skipped and simply break the stroke.
+
+The row holds no value: it never appears in the returned values, presets, or persistence. Because the host closes `sample` over its own state and rebuilds the config per render, the preview redraws whenever the function identity changes — turn a modifier slider and the curve follows live. Hints and label overrides apply to the row's path like any other control.
+
+**Returns:** nothing — the key is omitted from the resolved values.
+
+*(React only for now; the Solid/Svelte/Vue renderers skip the row.)*
+
 ### List
 
 A reorderable list of rows. Each row picks one of the declared `itemTypes`, and that type's `schema` becomes the row's sub-controls. Schema fields use the same shorthand as a panel config, restricted to scalars: `[default, min, max, step?]`, a bare number, a boolean, a string, or a `select` / `color` / `text` config.
@@ -1008,6 +1036,7 @@ import type {
   SelectConfig,
   ColorConfig,
   TextConfig,
+  CurveConfig,
   ListConfig,
   ListItemType,
   ListItemValue,

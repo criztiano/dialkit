@@ -156,6 +156,25 @@ type SliderConfig = {
     /** Convenience for `origin: 0` on a symmetric range. */
     bipolar?: boolean;
 };
+/**
+ * A read-only curve preview row. Draws the shape the host's own parameters
+ * produce (e.g. a pitch arc from a shape select plus modifier sliders); it
+ * holds no value of its own, so nothing lands in ResolvedValues, presets, or
+ * persistence. `sample` is a function and therefore invisible to the
+ * serialized config diff (like `formatValue`); adapters push replacements
+ * through `DialStore.syncCurveSamples` so the drawing tracks the host.
+ */
+type CurveConfig = {
+    type: 'curve';
+    /** t in [0,1] → y. Non-finite results are skipped (the stroke breaks there). */
+    sample: (t: number) => number;
+    /** Fixed y-range to fit. Default: auto-fit each draw with a little headroom. */
+    domain?: [number, number];
+    /** Surface height in px, clamped to 32–160. Default 64. */
+    height?: number;
+    /** `false` = full-bleed row without the label line; a string overrides the key-derived label. */
+    label?: false | string;
+};
 type FileConfig = {
     type: 'file';
     /** Native input `accept` filter, e.g. 'image/*' or '.svg,image/svg+xml'. */
@@ -285,10 +304,10 @@ type ListField = {
 };
 type DialValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 type DialConfig = {
-    [key: string]: DialValue | [number, number, number, number?] | DialConfig;
+    [key: string]: DialValue | [number, number, number, number?] | CurveConfig | DialConfig;
 };
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T as T[K] extends CurveConfig ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -329,7 +348,7 @@ type AffordanceConfig = {
     label?: string;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list';
+    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve';
     path: string;
     label: string;
     /** One line of help, revealed on hover or when focus lands inside the control. */
@@ -377,6 +396,14 @@ type ControlMeta = {
     snap?: boolean;
     returnToCenter?: boolean;
     showValues?: boolean;
+    /** Curve preview's host-supplied sampler — swapped in place by syncCurveSamples. */
+    sample?: (t: number) => number;
+    /** Curve preview's fixed y-range; absent = auto-fit per draw. */
+    domain?: [number, number];
+    /** Curve preview's surface height in px (renderers clamp via clampCurveHeight). */
+    height?: number;
+    /** Curve preview declared `label: false` — full-bleed row without the label line. */
+    hideLabel?: boolean;
     shortcut?: ShortcutConfig;
 };
 type PanelConfig = {
@@ -557,6 +584,17 @@ declare class DialStoreClass {
     /** One channel for every app-pushed presentation change on a panel. */
     subscribeControlState(panelId: string, listener: Listener): () => void;
     private notifyControlState;
+    /**
+     * Refresh curve rows' host-supplied sample functions in place. Functions drop
+     * out of the serialized config diff (the `formatValue` precedent), so a host
+     * that rebuilds its config per render would otherwise leave the preview
+     * drawing a stale closure. Adapters call this after every render — the same
+     * contract as setPresetProvider — and only a changed function identity
+     * notifies, on the control-state channel: curve rows are presentation, and
+     * the value snapshot must not churn (a new snapshot would re-render the host,
+     * whose rebuilt closure would notify again, forever).
+     */
+    syncCurveSamples(panelId: string, config: DialConfig): void;
     savePreset(panelId: string, name: string): string;
     loadPreset(panelId: string, presetId: string): void;
     deletePreset(panelId: string, presetId: string): void;
@@ -620,6 +658,7 @@ declare class DialStoreClass {
     private isChipsConfig;
     private isMultiSelectConfig;
     private isSliderConfig;
+    private isCurveConfig;
     private isListConfig;
     private isHexColor;
     private formatLabel;
@@ -655,4 +694,4 @@ declare function defaultListItemParams(schema: Record<string, ListItemField>): R
 declare function normalizeListItems(config: ListConfig): ListItemValue[];
 declare const DialStore: DialStoreClass;
 
-export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type DialConfig, type DialEvent, type DialKitPersistOptions, DialStore, type DialStorePanelOptions, type DialValue, type EasingConfig, type FileConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type MultiSelectConfig, type MultiSelectOption, type PanelConfig, type Preset, type PresetItem, type PresetProvider, type PresetProviderPreset, type RangeConfig, type RangeValue, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SwatchConfig, type SwatchOption, type TextConfig, type TransitionConfig, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, formatLabel, groupListFields, hintDomId, inferStep, isEasingConfigValue, isHexColor, isSpringConfigValue, normalizeListItems, parseListItemSchema, resolveDialValues };
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type CurveConfig, type DialConfig, type DialEvent, type DialKitPersistOptions, DialStore, type DialStorePanelOptions, type DialValue, type EasingConfig, type FileConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type MultiSelectConfig, type MultiSelectOption, type PanelConfig, type Preset, type PresetItem, type PresetProvider, type PresetProviderPreset, type RangeConfig, type RangeValue, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SwatchConfig, type SwatchOption, type TextConfig, type TransitionConfig, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, formatLabel, groupListFields, hintDomId, inferStep, isEasingConfigValue, isHexColor, isSpringConfigValue, normalizeListItems, parseListItemSchema, resolveDialValues };

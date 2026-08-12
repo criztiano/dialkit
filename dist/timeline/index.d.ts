@@ -156,6 +156,25 @@ type SliderConfig = {
     /** Convenience for `origin: 0` on a symmetric range. */
     bipolar?: boolean;
 };
+/**
+ * A read-only curve preview row. Draws the shape the host's own parameters
+ * produce (e.g. a pitch arc from a shape select plus modifier sliders); it
+ * holds no value of its own, so nothing lands in ResolvedValues, presets, or
+ * persistence. `sample` is a function and therefore invisible to the
+ * serialized config diff (like `formatValue`); adapters push replacements
+ * through `DialStore.syncCurveSamples` so the drawing tracks the host.
+ */
+type CurveConfig = {
+    type: 'curve';
+    /** t in [0,1] → y. Non-finite results are skipped (the stroke breaks there). */
+    sample: (t: number) => number;
+    /** Fixed y-range to fit. Default: auto-fit each draw with a little headroom. */
+    domain?: [number, number];
+    /** Surface height in px, clamped to 32–160. Default 64. */
+    height?: number;
+    /** `false` = full-bleed row without the label line; a string overrides the key-derived label. */
+    label?: false | string;
+};
 type FileConfig = {
     type: 'file';
     /** Native input `accept` filter, e.g. 'image/*' or '.svg,image/svg+xml'. */
@@ -262,10 +281,10 @@ type ListConfig = {
 };
 type DialValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 type DialConfig = {
-    [key: string]: DialValue | [number, number, number, number?] | DialConfig;
+    [key: string]: DialValue | [number, number, number, number?] | CurveConfig | DialConfig;
 };
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T as T[K] extends CurveConfig ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type DialKitPersistOptions = boolean | {
     key?: string;

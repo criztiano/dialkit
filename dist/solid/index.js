@@ -649,6 +649,7 @@ function resolveConfigValues(config, flatValues, prefix) {
       result[key] = flatValues[path] ?? configValue.default ?? "#000000";
     } else if (resolveValueHasType(configValue, "text")) {
       result[key] = flatValues[path] ?? configValue.default ?? "";
+    } else if (resolveValueHasType(configValue, "curve")) {
     } else if (typeof configValue === "object" && configValue !== null) {
       result[key] = resolveConfigValues(configValue, flatValues, path);
     }
@@ -971,6 +972,38 @@ var DialStoreClass = class {
   notifyControlState(panelId) {
     this.controlStateListeners.get(panelId)?.forEach((fn) => fn());
   }
+  /**
+   * Refresh curve rows' host-supplied sample functions in place. Functions drop
+   * out of the serialized config diff (the `formatValue` precedent), so a host
+   * that rebuilds its config per render would otherwise leave the preview
+   * drawing a stale closure. Adapters call this after every render — the same
+   * contract as setPresetProvider — and only a changed function identity
+   * notifies, on the control-state channel: curve rows are presentation, and
+   * the value snapshot must not churn (a new snapshot would re-render the host,
+   * whose rebuilt closure would notify again, forever).
+   */
+  syncCurveSamples(panelId, config) {
+    const panel = this.panels.get(panelId);
+    if (!panel) return;
+    let changed = false;
+    const visit = (cfg, prefix) => {
+      for (const [key, value] of Object.entries(cfg)) {
+        if (key === "_collapsed") continue;
+        const path = prefix ? `${prefix}.${key}` : key;
+        if (this.isCurveConfig(value)) {
+          const control = this.findControlByPath(panel.controls, path);
+          if (control?.type === "curve" && control.sample !== value.sample) {
+            control.sample = value.sample;
+            changed = true;
+          }
+        } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value)) {
+          visit(value, path);
+        }
+      }
+    };
+    visit(config, "");
+    if (changed) this.notifyControlState(panelId);
+  }
   savePreset(panelId, name) {
     const panel = this.panels.get(panelId);
     if (!panel) throw new Error(`Panel ${panelId} not found`);
@@ -1158,7 +1191,7 @@ var DialStoreClass = class {
         const hasPhysics = value.stiffness !== void 0 || value.damping !== void 0 || value.mass !== void 0;
         const hasTime = value.visualDuration !== void 0 || value.bounce !== void 0;
         values[`${path}.__mode`] = hasPhysics && !hasTime ? "advanced" : "simple";
-      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value)) {
+      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isCurveConfig(value)) {
         this.initTransitionModes(value, path, values);
       }
     }
@@ -1236,6 +1269,16 @@ var DialStoreClass = class {
         controls.push({ type: "multiselect", path, label, multiSelectOptions: value.options });
       } else if (this.isListConfig(value)) {
         controls.push({ type: "list", path, label, itemTypes: value.itemTypes, addLabel: value.addLabel, maxItems: value.max });
+      } else if (this.isCurveConfig(value)) {
+        controls.push({
+          type: "curve",
+          path,
+          label: typeof value.label === "string" ? value.label : label,
+          hideLabel: value.label === false || void 0,
+          sample: value.sample,
+          domain: value.domain,
+          height: value.height
+        });
       } else if (typeof value === "string") {
         if (this.isHexColor(value)) {
           const hasAlpha = value.length === 5 || value.length === 9;
@@ -1301,6 +1344,7 @@ var DialStoreClass = class {
         values[path] = value.default ?? [];
       } else if (this.isListConfig(value)) {
         values[path] = normalizeListItems(value);
+      } else if (this.isCurveConfig(value)) {
       } else if (typeof value === "object" && value !== null) {
         Object.assign(values, this.flattenValues(value, path));
       }
@@ -1358,6 +1402,9 @@ var DialStoreClass = class {
   }
   isSliderConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "slider" && typeof value.min === "number" && typeof value.max === "number";
+  }
+  isCurveConfig(value) {
+    return typeof value === "object" && value !== null && "type" in value && value.type === "curve" && typeof value.sample === "function";
   }
   isListConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "list" && "itemTypes" in value && typeof value.itemTypes === "object";

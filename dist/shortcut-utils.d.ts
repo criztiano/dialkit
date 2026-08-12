@@ -130,7 +130,7 @@ type AffordanceConfig = {
     label?: string;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list';
+    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve';
     path: string;
     label: string;
     /** One line of help, revealed on hover or when focus lands inside the control. */
@@ -178,6 +178,14 @@ type ControlMeta = {
     snap?: boolean;
     returnToCenter?: boolean;
     showValues?: boolean;
+    /** Curve preview's host-supplied sampler — swapped in place by syncCurveSamples. */
+    sample?: (t: number) => number;
+    /** Curve preview's fixed y-range; absent = auto-fit per draw. */
+    domain?: [number, number];
+    /** Curve preview's surface height in px (renderers clamp via clampCurveHeight). */
+    height?: number;
+    /** Curve preview declared `label: false` — full-bleed row without the label line. */
+    hideLabel?: boolean;
     shortcut?: ShortcutConfig;
 };
 

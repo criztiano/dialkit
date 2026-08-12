@@ -127,6 +127,26 @@ export type SliderConfig = {
   bipolar?: boolean;
 };
 
+/**
+ * A read-only curve preview row. Draws the shape the host's own parameters
+ * produce (e.g. a pitch arc from a shape select plus modifier sliders); it
+ * holds no value of its own, so nothing lands in ResolvedValues, presets, or
+ * persistence. `sample` is a function and therefore invisible to the
+ * serialized config diff (like `formatValue`); adapters push replacements
+ * through `DialStore.syncCurveSamples` so the drawing tracks the host.
+ */
+export type CurveConfig = {
+  type: 'curve';
+  /** t in [0,1] → y. Non-finite results are skipped (the stroke breaks there). */
+  sample: (t: number) => number;
+  /** Fixed y-range to fit. Default: auto-fit each draw with a little headroom. */
+  domain?: [number, number];
+  /** Surface height in px, clamped to 32–160. Default 64. */
+  height?: number;
+  /** `false` = full-bleed row without the label line; a string overrides the key-derived label. */
+  label?: false | string;
+};
+
 export type FileConfig = {
   type: 'file';
   /** Native input `accept` filter, e.g. 'image/*' or '.svg,image/svg+xml'. */
@@ -278,11 +298,14 @@ export type ListField = {
 export type DialValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 
 export type DialConfig = {
-  [key: string]: DialValue | [number, number, number, number?] | DialConfig;
+  // CurveConfig is not a DialValue: it never enters the value layer, so it
+  // rides the config union directly instead.
+  [key: string]: DialValue | [number, number, number, number?] | CurveConfig | DialConfig;
 };
 
 export type ResolvedValues<T extends DialConfig> = {
-  [K in keyof T]: T[K] extends [number, number, number, number?]
+  // Curve rows are display-only; their keys are dropped from the resolved shape.
+  [K in keyof T as T[K] extends CurveConfig ? never : K]: T[K] extends [number, number, number, number?]
     ? number
     : T[K] extends SliderConfig
     ? number
@@ -363,7 +386,7 @@ export type AffordanceConfig = {
 };
 
 export type ControlMeta = {
-  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list';
+  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve';
   path: string;
   label: string;
   /** One line of help, revealed on hover or when focus lands inside the control. */
@@ -408,6 +431,14 @@ export type ControlMeta = {
   snap?: boolean;
   returnToCenter?: boolean;
   showValues?: boolean;
+  /** Curve preview's host-supplied sampler — swapped in place by syncCurveSamples. */
+  sample?: (t: number) => number;
+  /** Curve preview's fixed y-range; absent = auto-fit per draw. */
+  domain?: [number, number];
+  /** Curve preview's surface height in px (renderers clamp via clampCurveHeight). */
+  height?: number;
+  /** Curve preview declared `label: false` — full-bleed row without the label line. */
+  hideLabel?: boolean;
   shortcut?: ShortcutConfig;
 };
 
@@ -605,6 +636,8 @@ function resolveConfigValues(
       result[key] = flatValues[path] ?? (configValue as ColorConfig).default ?? '#000000';
     } else if (resolveValueHasType(configValue, 'text')) {
       result[key] = flatValues[path] ?? (configValue as TextConfig).default ?? '';
+    } else if (resolveValueHasType(configValue, 'curve')) {
+      // Display-only row: no value to resolve.
     } else if (typeof configValue === 'object' && configValue !== null) {
       result[key] = resolveConfigValues(configValue as DialConfig, flatValues, path);
     }
@@ -1000,6 +1033,42 @@ class DialStoreClass {
     this.controlStateListeners.get(panelId)?.forEach(fn => fn());
   }
 
+  /**
+   * Refresh curve rows' host-supplied sample functions in place. Functions drop
+   * out of the serialized config diff (the `formatValue` precedent), so a host
+   * that rebuilds its config per render would otherwise leave the preview
+   * drawing a stale closure. Adapters call this after every render — the same
+   * contract as setPresetProvider — and only a changed function identity
+   * notifies, on the control-state channel: curve rows are presentation, and
+   * the value snapshot must not churn (a new snapshot would re-render the host,
+   * whose rebuilt closure would notify again, forever).
+   */
+  syncCurveSamples(panelId: string, config: DialConfig): void {
+    const panel = this.panels.get(panelId);
+    if (!panel) return;
+
+    let changed = false;
+    const visit = (cfg: DialConfig, prefix: string): void => {
+      for (const [key, value] of Object.entries(cfg)) {
+        if (key === '_collapsed') continue;
+        const path = prefix ? `${prefix}.${key}` : key;
+
+        if (this.isCurveConfig(value)) {
+          const control = this.findControlByPath(panel.controls, path);
+          if (control?.type === 'curve' && control.sample !== value.sample) {
+            control.sample = value.sample;
+            changed = true;
+          }
+        } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value)) {
+          visit(value as DialConfig, path);
+        }
+      }
+    };
+
+    visit(config, '');
+    if (changed) this.notifyControlState(panelId);
+  }
+
   savePreset(panelId: string, name: string): string {
     const panel = this.panels.get(panelId);
     if (!panel) throw new Error(`Panel ${panelId} not found`);
@@ -1234,7 +1303,7 @@ class DialStoreClass {
         const hasPhysics = value.stiffness !== undefined || value.damping !== undefined || value.mass !== undefined;
         const hasTime = value.visualDuration !== undefined || value.bounce !== undefined;
         values[`${path}.__mode`] = hasPhysics && !hasTime ? 'advanced' : 'simple';
-      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value)) {
+      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isCurveConfig(value)) {
         this.initTransitionModes(value as DialConfig, path, values);
       }
     }
@@ -1317,6 +1386,16 @@ class DialStoreClass {
         controls.push({ type: 'multiselect', path, label, multiSelectOptions: value.options });
       } else if (this.isListConfig(value)) {
         controls.push({ type: 'list', path, label, itemTypes: value.itemTypes, addLabel: value.addLabel, maxItems: value.max });
+      } else if (this.isCurveConfig(value)) {
+        controls.push({
+          type: 'curve',
+          path,
+          label: typeof value.label === 'string' ? value.label : label,
+          hideLabel: value.label === false || undefined,
+          sample: value.sample,
+          domain: value.domain,
+          height: value.height,
+        });
       } else if (typeof value === 'string') {
         // Auto-detect: hex color vs text. Alpha digits in the default
         // (#rgba / #rrggbbaa) opt the control into the alpha slider.
@@ -1397,6 +1476,8 @@ class DialStoreClass {
         values[path] = value.default ?? [];
       } else if (this.isListConfig(value)) {
         values[path] = normalizeListItems(value);
+      } else if (this.isCurveConfig(value)) {
+        // Display-only: no value, so nothing to persist, preset, or resolve.
       } else if (typeof value === 'object' && value !== null) {
         Object.assign(values, this.flattenValues(value as DialConfig, path));
       }
@@ -1562,6 +1643,16 @@ class DialStoreClass {
       (value as SliderConfig).type === 'slider' &&
       typeof (value as SliderConfig).min === 'number' &&
       typeof (value as SliderConfig).max === 'number'
+    );
+  }
+
+  private isCurveConfig(value: unknown): value is CurveConfig {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'type' in value &&
+      (value as CurveConfig).type === 'curve' &&
+      typeof (value as CurveConfig).sample === 'function'
     );
   }
 
