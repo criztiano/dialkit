@@ -709,7 +709,7 @@ function resolveDialValues(config, flatValues) {
 function resolveConfigValues(config, flatValues, prefix) {
   const result = {};
   for (const [key, configValue] of Object.entries(config)) {
-    if (key === "_collapsed") continue;
+    if (key === "_collapsed" || key === "_collapsible") continue;
     const path = prefix ? `${prefix}.${key}` : key;
     if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === "number") {
       result[key] = flatValues[path] ?? configValue[0];
@@ -1069,7 +1069,7 @@ var DialStoreClass = class {
     let changed = false;
     const visit = (cfg, prefix) => {
       for (const [key, value] of Object.entries(cfg)) {
-        if (key === "_collapsed") continue;
+        if (key === "_collapsed" || key === "_collapsible") continue;
         const path = prefix ? `${prefix}.${key}` : key;
         if (this.isCurveConfig(value)) {
           const control = this.findControlByPath(panel.controls, path);
@@ -1270,7 +1270,7 @@ var DialStoreClass = class {
   }
   initTransitionModes(config, prefix, values) {
     for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed") continue;
+      if (key === "_collapsed" || key === "_collapsible") continue;
       const path = prefix ? `${prefix}.${key}` : key;
       if (this.isEasingConfig(value)) {
         values[`${path}.__mode`] = "easing";
@@ -1286,7 +1286,7 @@ var DialStoreClass = class {
   parseConfig(config, prefix, shortcuts) {
     const controls = [];
     for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed" || key === "_enabled") continue;
+      if (key === "_collapsed" || key === "_collapsible" || key === "_enabled") continue;
       const path = prefix ? `${prefix}.${key}` : key;
       const label = this.formatLabel(key);
       const shortcut = shortcuts?.[path];
@@ -1376,13 +1376,16 @@ var DialStoreClass = class {
         }
       } else if (typeof value === "object" && value !== null) {
         const folderConfig = value;
-        const defaultOpen = "_collapsed" in folderConfig ? !folderConfig._collapsed : true;
+        const module2 = "_enabled" in folderConfig ? true : void 0;
+        const collapsible = !module2 && folderConfig._collapsible === false ? false : void 0;
+        const defaultOpen = collapsible === false ? true : "_collapsed" in folderConfig ? !folderConfig._collapsed : true;
         controls.push({
           type: "folder",
           path,
           label,
           defaultOpen,
-          module: "_enabled" in folderConfig ? true : void 0,
+          collapsible,
+          module: module2,
           children: this.parseConfig(folderConfig, path, shortcuts)
         });
       }
@@ -1392,7 +1395,7 @@ var DialStoreClass = class {
   flattenValues(config, prefix) {
     const values = {};
     for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed") continue;
+      if (key === "_collapsed" || key === "_collapsible") continue;
       const path = prefix ? `${prefix}.${key}` : key;
       if (Array.isArray(value) && value.length <= 4 && typeof value[0] === "number") {
         values[path] = value[0];
@@ -1832,7 +1835,7 @@ function useDialKit(name, config, options) {
 function buildResolvedValues(config, flatValues, prefix) {
   const result = {};
   for (const [key, configValue] of Object.entries(config)) {
-    if (key === "_collapsed") continue;
+    if (key === "_collapsed" || key === "_collapsible") continue;
     const path = prefix ? `${prefix}.${key}` : key;
     if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === "number") {
       result[key] = flatValues[path] ?? configValue[0];
@@ -2224,6 +2227,8 @@ var Folder = (0, import_vue2.defineComponent)({
   props: {
     title: { type: String, required: true },
     defaultOpen: { type: Boolean, default: true },
+    /** `false` renders a plain section header: no caret, no click-to-collapse, body always open. */
+    collapsible: { type: Boolean, default: true },
     isRoot: { type: Boolean, default: false },
     inline: { type: Boolean, default: false },
     toolbar: {
@@ -2237,8 +2242,8 @@ var Folder = (0, import_vue2.defineComponent)({
   },
   emits: ["openChange"],
   setup(props, { emit, slots }) {
-    const isOpen = (0, import_vue2.ref)(props.defaultOpen);
-    const isCollapsed = (0, import_vue2.ref)(!props.defaultOpen);
+    const isOpen = (0, import_vue2.ref)(props.collapsible ? props.defaultOpen : true);
+    const isCollapsed = (0, import_vue2.ref)(props.collapsible ? !props.defaultOpen : false);
     const contentRef = (0, import_vue2.ref)(null);
     const contentHeight = (0, import_vue2.ref)(void 0);
     const windowHeight = (0, import_vue2.ref)(typeof window !== "undefined" ? window.innerHeight : 800);
@@ -2253,6 +2258,7 @@ var Folder = (0, import_vue2.defineComponent)({
       if (resizeHandler) window.removeEventListener("resize", resizeHandler);
     });
     const handleToggle = () => {
+      if (!props.collapsible) return;
       if (props.inline && props.isRoot) return;
       const next = !isOpen.value;
       isOpen.value = next;
@@ -2281,8 +2287,8 @@ var Folder = (0, import_vue2.defineComponent)({
       ro?.disconnect();
     });
     const renderHeader = () => (0, import_vue2.h)("div", {
-      class: `dialkit-folder-header ${props.isRoot ? "dialkit-panel-header" : ""}`,
-      onClick: handleToggle,
+      class: `dialkit-folder-header ${props.isRoot ? "dialkit-panel-header" : ""} ${props.collapsible ? "" : "dialkit-folder-header-static"}`,
+      onClick: props.collapsible ? handleToggle : void 0,
       "data-hint": props.hint ? "true" : void 0,
       "aria-describedby": props.hint ? props.hintId : void 0
     }, [
@@ -2300,7 +2306,7 @@ var Folder = (0, import_vue2.defineComponent)({
           }),
           ...ICON_PANEL.circles.map((c) => (0, import_vue2.h)("circle", { cx: c.cx, cy: c.cy, r: c.r, fill: "currentColor", stroke: "currentColor", "stroke-width": "1.25" }))
         ]) : null,
-        !props.isRoot ? (0, import_vue2.h)(import_motion_v.motion.svg, {
+        !props.isRoot && props.collapsible ? (0, import_vue2.h)(import_motion_v.motion.svg, {
           class: "dialkit-folder-icon",
           viewBox: "0 0 24 24",
           fill: "none",
@@ -5969,6 +5975,7 @@ var ControlRenderer = (0, import_vue23.defineComponent)({
             key: control.path,
             title: control.label,
             defaultOpen: control.defaultOpen ?? true,
+            collapsible: control.collapsible ?? true,
             hint: control.hint,
             hintId: hintId(control)
           }, { default: () => (control.children ?? []).map(renderControl) });

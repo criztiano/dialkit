@@ -8,6 +8,7 @@
   let {
     title,
     defaultOpen = true,
+    collapsible = true,
     isRoot = false,
     inline = false,
     onOpenChange,
@@ -18,6 +19,8 @@
   } = $props<{
     title: string;
     defaultOpen?: boolean;
+    /** `false` renders a plain section header: no caret, no click-to-collapse, body always open. */
+    collapsible?: boolean;
     isRoot?: boolean;
     inline?: boolean;
     onOpenChange?: (isOpen: boolean) => void;
@@ -28,8 +31,8 @@
     hintId?: string;
   }>();
 
-  let isOpen = $state(defaultOpen);
-  let isCollapsed = $state(!defaultOpen);
+  let isOpen = $state(collapsible ? defaultOpen : true);
+  let isCollapsed = $state(collapsible ? !defaultOpen : false);
   let contentHeight = $state<number | undefined>(undefined);
 
   let contentRef: HTMLDivElement | undefined;
@@ -87,6 +90,7 @@
   });
 
   const handleToggle = () => {
+    if (!collapsible) return;
     if (inline && isRoot) return;
     const next = !isOpen;
     isOpen = next;
@@ -187,8 +191,8 @@
 {:else}
   <div class="dialkit-folder">
     <div
-      class="dialkit-folder-header"
-      onclick={handleToggle}
+      class="dialkit-folder-header {collapsible ? '' : 'dialkit-folder-header-static'}"
+      onclick={collapsible ? handleToggle : undefined}
       data-hint={hint ? 'true' : undefined}
       aria-describedby={hint ? hintId : undefined}
     >
@@ -197,6 +201,7 @@
           <span class="dialkit-folder-title">{title}</span>
         </div>
 
+        {#if collapsible}
         <svg
           class="dialkit-folder-icon"
           viewBox="0 0 24 24"
@@ -209,6 +214,7 @@
         >
           <path d={ICON_CHEVRON} />
         </svg>
+        {/if}
       </div>
 
       {#if hint}

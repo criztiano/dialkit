@@ -636,7 +636,7 @@ function resolveDialValues(config, flatValues) {
 function resolveConfigValues(config, flatValues, prefix) {
   const result = {};
   for (const [key, configValue] of Object.entries(config)) {
-    if (key === "_collapsed") continue;
+    if (key === "_collapsed" || key === "_collapsible") continue;
     const path = prefix ? `${prefix}.${key}` : key;
     if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === "number") {
       result[key] = flatValues[path] ?? configValue[0];
@@ -996,7 +996,7 @@ var DialStoreClass = class {
     let changed = false;
     const visit = (cfg, prefix) => {
       for (const [key, value] of Object.entries(cfg)) {
-        if (key === "_collapsed") continue;
+        if (key === "_collapsed" || key === "_collapsible") continue;
         const path = prefix ? `${prefix}.${key}` : key;
         if (this.isCurveConfig(value)) {
           const control = this.findControlByPath(panel.controls, path);
@@ -1197,7 +1197,7 @@ var DialStoreClass = class {
   }
   initTransitionModes(config, prefix, values) {
     for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed") continue;
+      if (key === "_collapsed" || key === "_collapsible") continue;
       const path = prefix ? `${prefix}.${key}` : key;
       if (this.isEasingConfig(value)) {
         values[`${path}.__mode`] = "easing";
@@ -1213,7 +1213,7 @@ var DialStoreClass = class {
   parseConfig(config, prefix, shortcuts) {
     const controls = [];
     for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed" || key === "_enabled") continue;
+      if (key === "_collapsed" || key === "_collapsible" || key === "_enabled") continue;
       const path = prefix ? `${prefix}.${key}` : key;
       const label = this.formatLabel(key);
       const shortcut = shortcuts?.[path];
@@ -1303,13 +1303,16 @@ var DialStoreClass = class {
         }
       } else if (typeof value === "object" && value !== null) {
         const folderConfig = value;
-        const defaultOpen = "_collapsed" in folderConfig ? !folderConfig._collapsed : true;
+        const module = "_enabled" in folderConfig ? true : void 0;
+        const collapsible = !module && folderConfig._collapsible === false ? false : void 0;
+        const defaultOpen = collapsible === false ? true : "_collapsed" in folderConfig ? !folderConfig._collapsed : true;
         controls.push({
           type: "folder",
           path,
           label,
           defaultOpen,
-          module: "_enabled" in folderConfig ? true : void 0,
+          collapsible,
+          module,
           children: this.parseConfig(folderConfig, path, shortcuts)
         });
       }
@@ -1319,7 +1322,7 @@ var DialStoreClass = class {
   flattenValues(config, prefix) {
     const values = {};
     for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed") continue;
+      if (key === "_collapsed" || key === "_collapsible") continue;
       const path = prefix ? `${prefix}.${key}` : key;
       if (Array.isArray(value) && value.length <= 4 && typeof value[0] === "number") {
         values[path] = value[0];
@@ -1759,7 +1762,7 @@ function useDialKit(name, config, options) {
 function buildResolvedValues(config, flatValues, prefix) {
   const result = {};
   for (const [key, configValue] of Object.entries(config)) {
-    if (key === "_collapsed") continue;
+    if (key === "_collapsed" || key === "_collapsible") continue;
     const path = prefix ? `${prefix}.${key}` : key;
     if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === "number") {
       result[key] = flatValues[path] ?? configValue[0];
@@ -2156,6 +2159,8 @@ var Folder = defineComponent({
   props: {
     title: { type: String, required: true },
     defaultOpen: { type: Boolean, default: true },
+    /** `false` renders a plain section header: no caret, no click-to-collapse, body always open. */
+    collapsible: { type: Boolean, default: true },
     isRoot: { type: Boolean, default: false },
     inline: { type: Boolean, default: false },
     toolbar: {
@@ -2169,8 +2174,8 @@ var Folder = defineComponent({
   },
   emits: ["openChange"],
   setup(props, { emit, slots }) {
-    const isOpen = ref2(props.defaultOpen);
-    const isCollapsed = ref2(!props.defaultOpen);
+    const isOpen = ref2(props.collapsible ? props.defaultOpen : true);
+    const isCollapsed = ref2(props.collapsible ? !props.defaultOpen : false);
     const contentRef = ref2(null);
     const contentHeight = ref2(void 0);
     const windowHeight = ref2(typeof window !== "undefined" ? window.innerHeight : 800);
@@ -2185,6 +2190,7 @@ var Folder = defineComponent({
       if (resizeHandler) window.removeEventListener("resize", resizeHandler);
     });
     const handleToggle = () => {
+      if (!props.collapsible) return;
       if (props.inline && props.isRoot) return;
       const next = !isOpen.value;
       isOpen.value = next;
@@ -2213,8 +2219,8 @@ var Folder = defineComponent({
       ro?.disconnect();
     });
     const renderHeader = () => h("div", {
-      class: `dialkit-folder-header ${props.isRoot ? "dialkit-panel-header" : ""}`,
-      onClick: handleToggle,
+      class: `dialkit-folder-header ${props.isRoot ? "dialkit-panel-header" : ""} ${props.collapsible ? "" : "dialkit-folder-header-static"}`,
+      onClick: props.collapsible ? handleToggle : void 0,
       "data-hint": props.hint ? "true" : void 0,
       "aria-describedby": props.hint ? props.hintId : void 0
     }, [
@@ -2232,7 +2238,7 @@ var Folder = defineComponent({
           }),
           ...ICON_PANEL.circles.map((c) => h("circle", { cx: c.cx, cy: c.cy, r: c.r, fill: "currentColor", stroke: "currentColor", "stroke-width": "1.25" }))
         ]) : null,
-        !props.isRoot ? h(motion.svg, {
+        !props.isRoot && props.collapsible ? h(motion.svg, {
           class: "dialkit-folder-icon",
           viewBox: "0 0 24 24",
           fill: "none",
@@ -5901,6 +5907,7 @@ var ControlRenderer = defineComponent22({
             key: control.path,
             title: control.label,
             defaultOpen: control.defaultOpen ?? true,
+            collapsible: control.collapsible ?? true,
             hint: control.hint,
             hintId: hintId(control)
           }, { default: () => (control.children ?? []).map(renderControl) });

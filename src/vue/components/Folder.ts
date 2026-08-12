@@ -7,6 +7,8 @@ export const Folder = defineComponent({
   props: {
     title: { type: String, required: true },
     defaultOpen: { type: Boolean, default: true },
+    /** `false` renders a plain section header: no caret, no click-to-collapse, body always open. */
+    collapsible: { type: Boolean, default: true },
     isRoot: { type: Boolean, default: false },
     inline: { type: Boolean, default: false },
     toolbar: {
@@ -20,8 +22,8 @@ export const Folder = defineComponent({
   },
   emits: ['openChange'],
   setup(props, { emit, slots }) {
-    const isOpen = ref(props.defaultOpen);
-    const isCollapsed = ref(!props.defaultOpen);
+    const isOpen = ref(props.collapsible ? props.defaultOpen : true);
+    const isCollapsed = ref(props.collapsible ? !props.defaultOpen : false);
     const contentRef = ref<HTMLElement | null>(null);
     const contentHeight = ref<number | undefined>(undefined);
     const windowHeight = ref(typeof window !== 'undefined' ? window.innerHeight : 800);
@@ -37,6 +39,7 @@ export const Folder = defineComponent({
     });
 
     const handleToggle = () => {
+      if (!props.collapsible) return;
       if (props.inline && props.isRoot) return;
       const next = !isOpen.value;
       isOpen.value = next;
@@ -72,8 +75,8 @@ export const Folder = defineComponent({
     });
 
     const renderHeader = () => h('div', {
-      class: `dialkit-folder-header ${props.isRoot ? 'dialkit-panel-header' : ''}`,
-      onClick: handleToggle,
+      class: `dialkit-folder-header ${props.isRoot ? 'dialkit-panel-header' : ''} ${props.collapsible ? '' : 'dialkit-folder-header-static'}`,
+      onClick: props.collapsible ? handleToggle : undefined,
       'data-hint': props.hint ? 'true' : undefined,
       'aria-describedby': props.hint ? props.hintId : undefined,
     }, [
@@ -97,7 +100,7 @@ export const Folder = defineComponent({
             ...ICON_PANEL.circles.map((c) => h('circle', { cx: c.cx, cy: c.cy, r: c.r, fill: 'currentColor', stroke: 'currentColor', 'stroke-width': '1.25' })),
           ])
           : null,
-        !props.isRoot
+        !props.isRoot && props.collapsible
           ? h(motion.svg, {
             class: 'dialkit-folder-icon',
             viewBox: '0 0 24 24',

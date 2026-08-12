@@ -544,6 +544,8 @@ shadow: {
 }
 ```
 
+Add `_collapsible: false` to render the folder as a plain section header instead: no caret, no click-to-collapse, body always open. Like `_collapsed`, it is a reserved UI-only key and never appears in your returned values, presets, or persistence; `_collapsed` is ignored when the folder is not collapsible. Module folders (`_enabled`, below) ignore `_collapsible` — their collapse is functional, driven by the switch.
+
 #### Module folders (`_enabled`)
 
 Add the reserved `_enabled: boolean` key to a folder and it renders as a **module**: the header carries an Off/On switch (the same idiom as the standalone `Module` component below), and when off the body collapses away with a smooth height transition. Unlike `_collapsed`, `_enabled` **is a value** — it appears in your returned values at `<folder>._enabled`, participates in presets and persistence, and toggling the switch updates it through the store. Clicking the header still collapses/expands the section while it's on, and `_collapsed` still controls the initial open state.

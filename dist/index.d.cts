@@ -669,6 +669,8 @@ type ControlMeta = {
     defaultOpen?: boolean;
     /** Folder declared `_enabled` — renders as a module whose header switch drives `<path>._enabled`. */
     module?: boolean;
+    /** Folder declared `_collapsible: false` — plain section header, no caret, body always open. */
+    collapsible?: boolean;
     options?: (string | {
         value: string;
         label: string;
@@ -1376,6 +1378,8 @@ interface FolderProps {
     title: string;
     children: ReactNode;
     defaultOpen?: boolean;
+    /** `false` renders a plain section header: no caret, no click-to-collapse, body always open. */
+    collapsible?: boolean;
     isRoot?: boolean;
     inline?: boolean;
     onOpenChange?: (isOpen: boolean) => void;
@@ -1384,7 +1388,7 @@ interface FolderProps {
     hint?: string;
     hintId?: string;
 }
-declare function Folder({ title, children, defaultOpen, isRoot, inline, onOpenChange, toolbar, hint, hintId }: FolderProps): react_jsx_runtime.JSX.Element;
+declare function Folder({ title, children, defaultOpen, collapsible, isRoot, inline, onOpenChange, toolbar, hint, hintId }: FolderProps): react_jsx_runtime.JSX.Element;
 
 interface ControlShellProps {
     /** Help text for this control. Without one the tooltip is not rendered. */

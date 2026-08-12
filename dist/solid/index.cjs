@@ -708,7 +708,7 @@ function resolveDialValues(config, flatValues) {
 function resolveConfigValues(config, flatValues, prefix) {
   const result = {};
   for (const [key, configValue] of Object.entries(config)) {
-    if (key === "_collapsed") continue;
+    if (key === "_collapsed" || key === "_collapsible") continue;
     const path = prefix ? `${prefix}.${key}` : key;
     if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === "number") {
       result[key] = flatValues[path] ?? configValue[0];
@@ -1068,7 +1068,7 @@ var DialStoreClass = class {
     let changed = false;
     const visit = (cfg, prefix) => {
       for (const [key, value] of Object.entries(cfg)) {
-        if (key === "_collapsed") continue;
+        if (key === "_collapsed" || key === "_collapsible") continue;
         const path = prefix ? `${prefix}.${key}` : key;
         if (this.isCurveConfig(value)) {
           const control = this.findControlByPath(panel.controls, path);
@@ -1269,7 +1269,7 @@ var DialStoreClass = class {
   }
   initTransitionModes(config, prefix, values) {
     for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed") continue;
+      if (key === "_collapsed" || key === "_collapsible") continue;
       const path = prefix ? `${prefix}.${key}` : key;
       if (this.isEasingConfig(value)) {
         values[`${path}.__mode`] = "easing";
@@ -1285,7 +1285,7 @@ var DialStoreClass = class {
   parseConfig(config, prefix, shortcuts) {
     const controls = [];
     for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed" || key === "_enabled") continue;
+      if (key === "_collapsed" || key === "_collapsible" || key === "_enabled") continue;
       const path = prefix ? `${prefix}.${key}` : key;
       const label = this.formatLabel(key);
       const shortcut = shortcuts?.[path];
@@ -1375,13 +1375,16 @@ var DialStoreClass = class {
         }
       } else if (typeof value === "object" && value !== null) {
         const folderConfig = value;
-        const defaultOpen = "_collapsed" in folderConfig ? !folderConfig._collapsed : true;
+        const module2 = "_enabled" in folderConfig ? true : void 0;
+        const collapsible = !module2 && folderConfig._collapsible === false ? false : void 0;
+        const defaultOpen = collapsible === false ? true : "_collapsed" in folderConfig ? !folderConfig._collapsed : true;
         controls.push({
           type: "folder",
           path,
           label,
           defaultOpen,
-          module: "_enabled" in folderConfig ? true : void 0,
+          collapsible,
+          module: module2,
           children: this.parseConfig(folderConfig, path, shortcuts)
         });
       }
@@ -1391,7 +1394,7 @@ var DialStoreClass = class {
   flattenValues(config, prefix) {
     const values = {};
     for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed") continue;
+      if (key === "_collapsed" || key === "_collapsible") continue;
       const path = prefix ? `${prefix}.${key}` : key;
       if (Array.isArray(value) && value.length <= 4 && typeof value[0] === "number") {
         values[path] = value[0];
@@ -1800,7 +1803,7 @@ function createDialKit(name, config, options) {
 function buildResolvedValues(config, flatValues, prefix) {
   const result = {};
   for (const [key, configValue] of Object.entries(config)) {
-    if (key === "_collapsed") continue;
+    if (key === "_collapsed" || key === "_collapsible") continue;
     const path = prefix ? `${prefix}.${key}` : key;
     if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === "number") {
       result[key] = flatValues[path] ?? configValue[0];
@@ -3200,14 +3203,14 @@ function createDialTimeline(name, config, options) {
 }
 
 // src/solid/components/DialRoot.tsx
-var import_web187 = require("solid-js/web");
 var import_web188 = require("solid-js/web");
 var import_web189 = require("solid-js/web");
 var import_web190 = require("solid-js/web");
 var import_web191 = require("solid-js/web");
 var import_web192 = require("solid-js/web");
-var import_solid_js26 = require("solid-js");
 var import_web193 = require("solid-js/web");
+var import_solid_js26 = require("solid-js");
+var import_web194 = require("solid-js/web");
 
 // src/solid/components/ShortcutListener.tsx
 var import_web2 = require("solid-js/web");
@@ -3528,7 +3531,6 @@ function ShortcutListener(props) {
 }
 
 // src/solid/components/Panel.tsx
-var import_web173 = require("solid-js/web");
 var import_web174 = require("solid-js/web");
 var import_web175 = require("solid-js/web");
 var import_web176 = require("solid-js/web");
@@ -3536,6 +3538,7 @@ var import_web177 = require("solid-js/web");
 var import_web178 = require("solid-js/web");
 var import_web179 = require("solid-js/web");
 var import_web180 = require("solid-js/web");
+var import_web181 = require("solid-js/web");
 var import_solid_js24 = require("solid-js");
 var import_motion8 = require("motion");
 
@@ -3609,6 +3612,7 @@ var import_web9 = require("solid-js/web");
 var import_web10 = require("solid-js/web");
 var import_web11 = require("solid-js/web");
 var import_web12 = require("solid-js/web");
+var import_web13 = require("solid-js/web");
 var import_solid_js4 = require("solid-js");
 var import_motion = require("motion");
 var _tmpl$ = /* @__PURE__ */ (0, import_web3.template)(`<div class=dialkit-panel-toolbar>`);
@@ -3670,6 +3674,7 @@ function Folder(props) {
     (0, import_solid_js4.onCleanup)(() => chevronAnim?.stop());
   });
   const handleToggle = () => {
+    if (props.collapsible === false) return;
     if (props.inline && props.isRoot) return;
     const next = !isOpen();
     setIsOpen(next);
@@ -3723,10 +3728,10 @@ function Folder(props) {
   };
   const folderContent = () => (() => {
     var _el$ = _tmpl$4(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild;
-    (0, import_web12.use)((el) => {
+    (0, import_web13.use)((el) => {
       if (props.isRoot) contentRef = el;
     }, _el$);
-    _el$2.$$click = handleToggle;
+    (0, import_web12.addEventListener)(_el$2, "click", props.collapsible === false ? void 0 : handleToggle, true);
     (0, import_web10.insert)(_el$3, (() => {
       var _c$ = (0, import_web11.memo)(() => !!props.isRoot);
       return () => _c$() ? (0, import_web9.createComponent)(import_solid_js4.Show, {
@@ -3777,11 +3782,11 @@ function Folder(props) {
       })();
     })(), null);
     (0, import_web10.insert)(_el$3, (() => {
-      var _c$3 = (0, import_web11.memo)(() => !!!props.isRoot);
+      var _c$3 = (0, import_web11.memo)(() => !!(!props.isRoot && props.collapsible !== false));
       return () => _c$3() && (() => {
         var _el$15 = _tmpl$8(), _el$16 = _el$15.firstChild;
         var _ref$ = folderChevronRef;
-        typeof _ref$ === "function" ? (0, import_web12.use)(_ref$, _el$15) : folderChevronRef = _el$15;
+        typeof _ref$ === "function" ? (0, import_web13.use)(_ref$, _el$15) : folderChevronRef = _el$15;
         (0, import_web7.setAttribute)(_el$16, "d", ICON_CHEVRON);
         return _el$15;
       })();
@@ -3814,7 +3819,7 @@ function Folder(props) {
       },
       get children() {
         var _el$6 = _tmpl$3(), _el$7 = _el$6.firstChild;
-        (0, import_web12.use)((el) => {
+        (0, import_web13.use)((el) => {
           if (props.isRoot) return;
           sectionContentRef = el;
           if (skipFirstAnim) {
@@ -3844,7 +3849,7 @@ function Folder(props) {
       }
     }), null);
     (0, import_web8.effect)((_p$) => {
-      var _v$ = `dialkit-folder ${props.isRoot ? "dialkit-folder-root" : ""}`, _v$2 = `dialkit-folder-header ${props.isRoot ? "dialkit-panel-header" : ""}`, _v$3 = props.hint ? "true" : void 0, _v$4 = props.hint ? props.hintId : void 0;
+      var _v$ = `dialkit-folder ${props.isRoot ? "dialkit-folder-root" : ""}`, _v$2 = `dialkit-folder-header ${props.isRoot ? "dialkit-panel-header" : ""} ${props.collapsible === false ? "dialkit-folder-header-static" : ""}`, _v$3 = props.hint ? "true" : void 0, _v$4 = props.hint ? props.hintId : void 0;
       _v$ !== _p$.e && (0, import_web5.className)(_el$, _p$.e = _v$);
       _v$2 !== _p$.t && (0, import_web5.className)(_el$2, _p$.t = _v$2);
       _v$3 !== _p$.a && (0, import_web7.setAttribute)(_el$2, "data-hint", _p$.a = _v$3);
@@ -3969,7 +3974,7 @@ function Folder(props) {
         });
       };
       var _ref$2 = panelRef;
-      typeof _ref$2 === "function" ? (0, import_web12.use)(_ref$2, _el$18) : panelRef = _el$18;
+      typeof _ref$2 === "function" ? (0, import_web13.use)(_ref$2, _el$18) : panelRef = _el$18;
       (0, import_web10.insert)(_el$18, folderContent);
       (0, import_web8.effect)(() => (0, import_web7.setAttribute)(_el$18, "data-collapsed", String(isCollapsed())));
       return _el$18;
@@ -3980,26 +3985,25 @@ function Folder(props) {
 (0, import_web4.delegateEvents)(["click", "pointerdown", "pointerup"]);
 
 // src/solid/components/ControlRenderer.tsx
-var import_web157 = require("solid-js/web");
 var import_web158 = require("solid-js/web");
 var import_web159 = require("solid-js/web");
 var import_web160 = require("solid-js/web");
 var import_web161 = require("solid-js/web");
 var import_web162 = require("solid-js/web");
+var import_web163 = require("solid-js/web");
 var import_solid_js22 = require("solid-js");
 
 // src/solid/components/ModuleFolder.tsx
-var import_web21 = require("solid-js/web");
 var import_web22 = require("solid-js/web");
 var import_web23 = require("solid-js/web");
 var import_web24 = require("solid-js/web");
 var import_web25 = require("solid-js/web");
 var import_web26 = require("solid-js/web");
 var import_web27 = require("solid-js/web");
+var import_web28 = require("solid-js/web");
 var import_solid_js6 = require("solid-js");
 
 // src/solid/components/SegmentedControl.tsx
-var import_web13 = require("solid-js/web");
 var import_web14 = require("solid-js/web");
 var import_web15 = require("solid-js/web");
 var import_web16 = require("solid-js/web");
@@ -4007,10 +4011,11 @@ var import_web17 = require("solid-js/web");
 var import_web18 = require("solid-js/web");
 var import_web19 = require("solid-js/web");
 var import_web20 = require("solid-js/web");
+var import_web21 = require("solid-js/web");
 var import_solid_js5 = require("solid-js");
-var _tmpl$10 = /* @__PURE__ */ (0, import_web13.template)(`<div class=dialkit-segmented>`);
-var _tmpl$22 = /* @__PURE__ */ (0, import_web13.template)(`<div class=dialkit-segmented-pill>`);
-var _tmpl$32 = /* @__PURE__ */ (0, import_web13.template)(`<button class=dialkit-segmented-button>`);
+var _tmpl$10 = /* @__PURE__ */ (0, import_web14.template)(`<div class=dialkit-segmented>`);
+var _tmpl$22 = /* @__PURE__ */ (0, import_web14.template)(`<div class=dialkit-segmented-pill>`);
+var _tmpl$32 = /* @__PURE__ */ (0, import_web14.template)(`<button class=dialkit-segmented-button>`);
 function SegmentedControl(props) {
   let containerRef;
   let hasAnimated = false;
@@ -4040,18 +4045,18 @@ function SegmentedControl(props) {
   return (() => {
     var _el$ = _tmpl$10();
     var _ref$ = containerRef;
-    typeof _ref$ === "function" ? (0, import_web20.use)(_ref$, _el$) : containerRef = _el$;
-    (0, import_web18.insert)(_el$, (0, import_web19.createComponent)(import_solid_js5.Show, {
+    typeof _ref$ === "function" ? (0, import_web21.use)(_ref$, _el$) : containerRef = _el$;
+    (0, import_web19.insert)(_el$, (0, import_web20.createComponent)(import_solid_js5.Show, {
       get when() {
         return pillStyle();
       },
       children: (style) => (() => {
         var _el$2 = _tmpl$22();
-        (0, import_web17.effect)((_p$) => {
+        (0, import_web18.effect)((_p$) => {
           var _v$ = `${style().left}px`, _v$2 = `${style().width}px`, _v$3 = transition();
-          _v$ !== _p$.e && (0, import_web16.setStyleProperty)(_el$2, "left", _p$.e = _v$);
-          _v$2 !== _p$.t && (0, import_web16.setStyleProperty)(_el$2, "width", _p$.t = _v$2);
-          _v$3 !== _p$.a && (0, import_web16.setStyleProperty)(_el$2, "transition", _p$.a = _v$3);
+          _v$ !== _p$.e && (0, import_web17.setStyleProperty)(_el$2, "left", _p$.e = _v$);
+          _v$2 !== _p$.t && (0, import_web17.setStyleProperty)(_el$2, "width", _p$.t = _v$2);
+          _v$3 !== _p$.a && (0, import_web17.setStyleProperty)(_el$2, "transition", _p$.a = _v$3);
           return _p$;
         }, {
           e: void 0,
@@ -4061,26 +4066,26 @@ function SegmentedControl(props) {
         return _el$2;
       })()
     }), null);
-    (0, import_web18.insert)(_el$, (0, import_web19.createComponent)(import_solid_js5.For, {
+    (0, import_web19.insert)(_el$, (0, import_web20.createComponent)(import_solid_js5.For, {
       get each() {
         return props.options;
       },
       children: (option) => (() => {
         var _el$3 = _tmpl$32();
         _el$3.$$click = () => props.onChange(option.value);
-        (0, import_web18.insert)(_el$3, () => option.label);
-        (0, import_web17.effect)(() => (0, import_web15.setAttribute)(_el$3, "data-active", String(props.value === option.value)));
+        (0, import_web19.insert)(_el$3, () => option.label);
+        (0, import_web18.effect)(() => (0, import_web16.setAttribute)(_el$3, "data-active", String(props.value === option.value)));
         return _el$3;
       })()
     }), null);
     return _el$;
   })();
 }
-(0, import_web14.delegateEvents)(["click"]);
+(0, import_web15.delegateEvents)(["click"]);
 
 // src/solid/components/ModuleFolder.tsx
-var _tmpl$11 = /* @__PURE__ */ (0, import_web21.template)(`<span class=dialkit-hint role=tooltip>`);
-var _tmpl$23 = /* @__PURE__ */ (0, import_web21.template)(`<div class=dialkit-module><div class="dialkit-module-header dialkit-module-header-toggle"><span class=dialkit-module-title></span><div class=dialkit-module-switch></div></div><div class=dialkit-module-collapse><div class=dialkit-module-collapse-clip><div class=dialkit-module-inner>`);
+var _tmpl$11 = /* @__PURE__ */ (0, import_web22.template)(`<span class=dialkit-hint role=tooltip>`);
+var _tmpl$23 = /* @__PURE__ */ (0, import_web22.template)(`<div class=dialkit-module><div class="dialkit-module-header dialkit-module-header-toggle"><span class=dialkit-module-title></span><div class=dialkit-module-switch></div></div><div class=dialkit-module-collapse><div class=dialkit-module-collapse-clip><div class=dialkit-module-inner>`);
 var ENABLE_OPTIONS = [{
   value: "off",
   label: "Off"
@@ -4099,32 +4104,32 @@ function ModuleFolder(props) {
     _el$2.$$click = () => {
       if (props.enabled) setIsOpen((open) => !open);
     };
-    (0, import_web27.insert)(_el$3, () => props.title);
+    (0, import_web28.insert)(_el$3, () => props.title);
     _el$4.$$click = (e) => e.stopPropagation();
-    (0, import_web27.insert)(_el$4, (0, import_web25.createComponent)(SegmentedControl, {
+    (0, import_web28.insert)(_el$4, (0, import_web26.createComponent)(SegmentedControl, {
       options: ENABLE_OPTIONS,
       get value() {
         return props.enabled ? "on" : "off";
       },
       onChange: (v) => handleEnabledChange(v === "on")
     }));
-    (0, import_web27.insert)(_el$2, (0, import_web25.createComponent)(import_solid_js6.Show, {
+    (0, import_web28.insert)(_el$2, (0, import_web26.createComponent)(import_solid_js6.Show, {
       get when() {
         return props.hint;
       },
       get children() {
         var _el$5 = _tmpl$11();
-        (0, import_web27.insert)(_el$5, () => props.hint);
-        (0, import_web24.effect)(() => (0, import_web23.setAttribute)(_el$5, "id", props.hintId));
+        (0, import_web28.insert)(_el$5, () => props.hint);
+        (0, import_web25.effect)(() => (0, import_web24.setAttribute)(_el$5, "id", props.hintId));
         return _el$5;
       }
     }), null);
-    (0, import_web27.insert)(_el$8, () => props.children);
-    (0, import_web24.effect)((_p$) => {
+    (0, import_web28.insert)(_el$8, () => props.children);
+    (0, import_web25.effect)((_p$) => {
       var _v$ = props.hint ? "true" : void 0, _v$2 = props.hint ? props.hintId : void 0, _v$3 = props.enabled && isOpen();
-      _v$ !== _p$.e && (0, import_web23.setAttribute)(_el$2, "data-hint", _p$.e = _v$);
-      _v$2 !== _p$.t && (0, import_web23.setAttribute)(_el$2, "aria-describedby", _p$.t = _v$2);
-      _v$3 !== _p$.a && (0, import_web23.setAttribute)(_el$6, "data-open", _p$.a = _v$3);
+      _v$ !== _p$.e && (0, import_web24.setAttribute)(_el$2, "data-hint", _p$.e = _v$);
+      _v$2 !== _p$.t && (0, import_web24.setAttribute)(_el$2, "aria-describedby", _p$.t = _v$2);
+      _v$3 !== _p$.a && (0, import_web24.setAttribute)(_el$6, "data-open", _p$.a = _v$3);
       return _p$;
     }, {
       e: void 0,
@@ -4134,10 +4139,9 @@ function ModuleFolder(props) {
     return _el$;
   })();
 }
-(0, import_web22.delegateEvents)(["click"]);
+(0, import_web23.delegateEvents)(["click"]);
 
 // src/solid/components/ControlShell.tsx
-var import_web28 = require("solid-js/web");
 var import_web29 = require("solid-js/web");
 var import_web30 = require("solid-js/web");
 var import_web31 = require("solid-js/web");
@@ -4147,8 +4151,9 @@ var import_web34 = require("solid-js/web");
 var import_web35 = require("solid-js/web");
 var import_web36 = require("solid-js/web");
 var import_web37 = require("solid-js/web");
-var import_solid_js7 = require("solid-js");
 var import_web38 = require("solid-js/web");
+var import_solid_js7 = require("solid-js");
+var import_web39 = require("solid-js/web");
 
 // src/affordance-core.ts
 var AFFORDANCE_POPOVER_WIDTH = 200;
@@ -4167,10 +4172,10 @@ function placePopover(anchor, popoverHeight, viewportHeight, width = AFFORDANCE_
 }
 
 // src/solid/components/ControlShell.tsx
-var _tmpl$12 = /* @__PURE__ */ (0, import_web28.template)(`<span class=dialkit-hint role=tooltip>`);
-var _tmpl$24 = /* @__PURE__ */ (0, import_web28.template)(`<button type=button class=dialkit-affordance-dot>`);
-var _tmpl$33 = /* @__PURE__ */ (0, import_web28.template)(`<div class=dialkit-control-tip>`);
-var _tmpl$42 = /* @__PURE__ */ (0, import_web28.template)(`<div class=dialkit-affordance-popover role=dialog tabindex=-1><span class=dialkit-affordance-popover-title>`);
+var _tmpl$12 = /* @__PURE__ */ (0, import_web29.template)(`<span class=dialkit-hint role=tooltip>`);
+var _tmpl$24 = /* @__PURE__ */ (0, import_web29.template)(`<button type=button class=dialkit-affordance-dot>`);
+var _tmpl$33 = /* @__PURE__ */ (0, import_web29.template)(`<div class=dialkit-control-tip>`);
+var _tmpl$42 = /* @__PURE__ */ (0, import_web29.template)(`<div class=dialkit-affordance-popover role=dialog tabindex=-1><span class=dialkit-affordance-popover-title>`);
 function ControlShell(props) {
   const hasAffordance = () => Boolean(props.affordance && props.panelId && props.path);
   const label = () => props.affordance?.label ?? "Options";
@@ -4245,19 +4250,19 @@ function ControlShell(props) {
   });
   return [(() => {
     var _el$ = _tmpl$33();
-    (0, import_web37.insert)(_el$, () => props.children, null);
-    (0, import_web37.insert)(_el$, (0, import_web34.createComponent)(import_solid_js7.Show, {
+    (0, import_web38.insert)(_el$, () => props.children, null);
+    (0, import_web38.insert)(_el$, (0, import_web35.createComponent)(import_solid_js7.Show, {
       get when() {
         return props.hint;
       },
       get children() {
         var _el$2 = _tmpl$12();
-        (0, import_web37.insert)(_el$2, () => props.hint);
-        (0, import_web36.effect)(() => (0, import_web35.setAttribute)(_el$2, "id", props.id));
+        (0, import_web38.insert)(_el$2, () => props.hint);
+        (0, import_web37.effect)(() => (0, import_web36.setAttribute)(_el$2, "id", props.id));
         return _el$2;
       }
     }), null);
-    (0, import_web37.insert)(_el$, (0, import_web34.createComponent)(import_solid_js7.Show, {
+    (0, import_web38.insert)(_el$, (0, import_web35.createComponent)(import_solid_js7.Show, {
       get when() {
         return hasAffordance();
       },
@@ -4265,13 +4270,13 @@ function ControlShell(props) {
         var _el$3 = _tmpl$24();
         _el$3.$$click = () => setOpen(!open());
         var _ref$ = dotEl;
-        typeof _ref$ === "function" ? (0, import_web33.use)(_ref$, _el$3) : dotEl = _el$3;
-        (0, import_web36.effect)((_p$) => {
+        typeof _ref$ === "function" ? (0, import_web34.use)(_ref$, _el$3) : dotEl = _el$3;
+        (0, import_web37.effect)((_p$) => {
           var _v$ = status(), _v$2 = String(open()), _v$3 = label(), _v$4 = open();
-          _v$ !== _p$.e && (0, import_web35.setAttribute)(_el$3, "data-status", _p$.e = _v$);
-          _v$2 !== _p$.t && (0, import_web35.setAttribute)(_el$3, "data-open", _p$.t = _v$2);
-          _v$3 !== _p$.a && (0, import_web35.setAttribute)(_el$3, "aria-label", _p$.a = _v$3);
-          _v$4 !== _p$.o && (0, import_web35.setAttribute)(_el$3, "aria-expanded", _p$.o = _v$4);
+          _v$ !== _p$.e && (0, import_web36.setAttribute)(_el$3, "data-status", _p$.e = _v$);
+          _v$2 !== _p$.t && (0, import_web36.setAttribute)(_el$3, "data-open", _p$.t = _v$2);
+          _v$3 !== _p$.a && (0, import_web36.setAttribute)(_el$3, "aria-label", _p$.a = _v$3);
+          _v$4 !== _p$.o && (0, import_web36.setAttribute)(_el$3, "aria-expanded", _p$.o = _v$4);
           return _p$;
         }, {
           e: void 0,
@@ -4282,16 +4287,16 @@ function ControlShell(props) {
         return _el$3;
       }
     }), null);
-    (0, import_web36.effect)((_p$) => {
+    (0, import_web37.effect)((_p$) => {
       var _v$5 = props.hint ? "true" : void 0, _v$6 = hasAffordance() ? "true" : void 0, _v$7 = open() ? "true" : void 0, _v$8 = disabled() ? "true" : void 0, _v$9 = disabled() ? "true" : void 0, _v$0 = props.hint ? "group" : void 0, _v$1 = props.hint ? props.id : void 0, _v$10 = props.hint ? void 0 : props.title;
-      _v$5 !== _p$.e && (0, import_web35.setAttribute)(_el$, "data-hint", _p$.e = _v$5);
-      _v$6 !== _p$.t && (0, import_web35.setAttribute)(_el$, "data-affordance", _p$.t = _v$6);
-      _v$7 !== _p$.a && (0, import_web35.setAttribute)(_el$, "data-affordance-open", _p$.a = _v$7);
-      _v$8 !== _p$.o && (0, import_web35.setAttribute)(_el$, "data-disabled", _p$.o = _v$8);
-      _v$9 !== _p$.i && (0, import_web35.setAttribute)(_el$, "aria-disabled", _p$.i = _v$9);
-      _v$0 !== _p$.n && (0, import_web35.setAttribute)(_el$, "role", _p$.n = _v$0);
-      _v$1 !== _p$.s && (0, import_web35.setAttribute)(_el$, "aria-describedby", _p$.s = _v$1);
-      _v$10 !== _p$.h && (0, import_web35.setAttribute)(_el$, "title", _p$.h = _v$10);
+      _v$5 !== _p$.e && (0, import_web36.setAttribute)(_el$, "data-hint", _p$.e = _v$5);
+      _v$6 !== _p$.t && (0, import_web36.setAttribute)(_el$, "data-affordance", _p$.t = _v$6);
+      _v$7 !== _p$.a && (0, import_web36.setAttribute)(_el$, "data-affordance-open", _p$.a = _v$7);
+      _v$8 !== _p$.o && (0, import_web36.setAttribute)(_el$, "data-disabled", _p$.o = _v$8);
+      _v$9 !== _p$.i && (0, import_web36.setAttribute)(_el$, "aria-disabled", _p$.i = _v$9);
+      _v$0 !== _p$.n && (0, import_web36.setAttribute)(_el$, "role", _p$.n = _v$0);
+      _v$1 !== _p$.s && (0, import_web36.setAttribute)(_el$, "aria-describedby", _p$.s = _v$1);
+      _v$10 !== _p$.h && (0, import_web36.setAttribute)(_el$, "title", _p$.h = _v$10);
       return _p$;
     }, {
       e: void 0,
@@ -4304,32 +4309,32 @@ function ControlShell(props) {
       h: void 0
     });
     return _el$;
-  })(), (0, import_web34.createComponent)(import_solid_js7.Show, {
+  })(), (0, import_web35.createComponent)(import_solid_js7.Show, {
     get when() {
-      return (0, import_web32.memo)(() => !!(open() && hasAffordance()))() && portalTarget();
+      return (0, import_web33.memo)(() => !!(open() && hasAffordance()))() && portalTarget();
     },
     get children() {
-      return (0, import_web34.createComponent)(import_web38.Portal, {
+      return (0, import_web35.createComponent)(import_web39.Portal, {
         get mount() {
           return portalTarget();
         },
         get children() {
           var _el$4 = _tmpl$42(), _el$5 = _el$4.firstChild;
           var _ref$2 = popoverEl;
-          typeof _ref$2 === "function" ? (0, import_web33.use)(_ref$2, _el$4) : popoverEl = _el$4;
-          (0, import_web31.setStyleProperty)(_el$4, "width", `${AFFORDANCE_POPOVER_WIDTH}px`);
-          (0, import_web37.insert)(_el$5, label);
-          (0, import_web37.insert)(_el$4, (0, import_web34.createComponent)(import_web38.Dynamic, (0, import_web30.mergeProps)({
+          typeof _ref$2 === "function" ? (0, import_web34.use)(_ref$2, _el$4) : popoverEl = _el$4;
+          (0, import_web32.setStyleProperty)(_el$4, "width", `${AFFORDANCE_POPOVER_WIDTH}px`);
+          (0, import_web38.insert)(_el$5, label);
+          (0, import_web38.insert)(_el$4, (0, import_web35.createComponent)(import_web39.Dynamic, (0, import_web31.mergeProps)({
             get component() {
               return props.affordance.content;
             }
           }, ctx)), null);
-          (0, import_web36.effect)((_p$) => {
+          (0, import_web37.effect)((_p$) => {
             var _v$11 = label(), _v$12 = `${pos()?.left ?? 0}px`, _v$13 = `${pos()?.top ?? 0}px`, _v$14 = pos() ? void 0 : "hidden";
-            _v$11 !== _p$.e && (0, import_web35.setAttribute)(_el$4, "aria-label", _p$.e = _v$11);
-            _v$12 !== _p$.t && (0, import_web31.setStyleProperty)(_el$4, "left", _p$.t = _v$12);
-            _v$13 !== _p$.a && (0, import_web31.setStyleProperty)(_el$4, "top", _p$.a = _v$13);
-            _v$14 !== _p$.o && (0, import_web31.setStyleProperty)(_el$4, "visibility", _p$.o = _v$14);
+            _v$11 !== _p$.e && (0, import_web36.setAttribute)(_el$4, "aria-label", _p$.e = _v$11);
+            _v$12 !== _p$.t && (0, import_web32.setStyleProperty)(_el$4, "left", _p$.t = _v$12);
+            _v$13 !== _p$.a && (0, import_web32.setStyleProperty)(_el$4, "top", _p$.a = _v$13);
+            _v$14 !== _p$.o && (0, import_web32.setStyleProperty)(_el$4, "visibility", _p$.o = _v$14);
             return _p$;
           }, {
             e: void 0,
@@ -4343,10 +4348,9 @@ function ControlShell(props) {
     }
   })];
 }
-(0, import_web29.delegateEvents)(["click"]);
+(0, import_web30.delegateEvents)(["click"]);
 
 // src/solid/components/Slider.tsx
-var import_web39 = require("solid-js/web");
 var import_web40 = require("solid-js/web");
 var import_web41 = require("solid-js/web");
 var import_web42 = require("solid-js/web");
@@ -4355,12 +4359,13 @@ var import_web44 = require("solid-js/web");
 var import_web45 = require("solid-js/web");
 var import_web46 = require("solid-js/web");
 var import_web47 = require("solid-js/web");
+var import_web48 = require("solid-js/web");
 var import_solid_js8 = require("solid-js");
 var import_motion2 = require("motion");
-var _tmpl$13 = /* @__PURE__ */ (0, import_web39.template)(`<div class=dialkit-slider-hashmark>`);
-var _tmpl$25 = /* @__PURE__ */ (0, import_web39.template)(`<span>`);
-var _tmpl$34 = /* @__PURE__ */ (0, import_web39.template)(`<div class=dialkit-slider-wrapper><div><div class=dialkit-slider-hashmarks></div><div class=dialkit-slider-fill></div><div class=dialkit-slider-handle style="transform:translateY(-50%) scaleX(0.25) scaleY(1);opacity:0"></div><span class=dialkit-slider-label>`);
-var _tmpl$43 = /* @__PURE__ */ (0, import_web39.template)(`<input type=text class=dialkit-slider-input>`);
+var _tmpl$13 = /* @__PURE__ */ (0, import_web40.template)(`<div class=dialkit-slider-hashmark>`);
+var _tmpl$25 = /* @__PURE__ */ (0, import_web40.template)(`<span>`);
+var _tmpl$34 = /* @__PURE__ */ (0, import_web40.template)(`<div class=dialkit-slider-wrapper><div><div class=dialkit-slider-hashmarks></div><div class=dialkit-slider-fill></div><div class=dialkit-slider-handle style="transform:translateY(-50%) scaleX(0.25) scaleY(1);opacity:0"></div><span class=dialkit-slider-label>`);
+var _tmpl$43 = /* @__PURE__ */ (0, import_web40.template)(`<input type=text class=dialkit-slider-input>`);
 var CLICK_THRESHOLD = 3;
 var DEAD_ZONE = 32;
 var MAX_CURSOR_RANGE = 200;
@@ -4662,7 +4667,7 @@ function Slider(props) {
         const pct = (i + 1) * step() / (max() - min()) * 100;
         return (() => {
           var _el$ = _tmpl$13();
-          (0, import_web47.setStyleProperty)(_el$, "left", `${pct}%`);
+          (0, import_web48.setStyleProperty)(_el$, "left", `${pct}%`);
           return _el$;
         })();
       });
@@ -4673,7 +4678,7 @@ function Slider(props) {
       const pct = (i + 1) * 10;
       return (() => {
         var _el$2 = _tmpl$13();
-        (0, import_web47.setStyleProperty)(_el$2, "left", `${pct}%`);
+        (0, import_web48.setStyleProperty)(_el$2, "left", `${pct}%`);
         return _el$2;
       })();
     });
@@ -4681,7 +4686,7 @@ function Slider(props) {
   return (() => {
     var _el$3 = _tmpl$34(), _el$4 = _el$3.firstChild, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.nextSibling, _el$8 = _el$7.nextSibling;
     var _ref$ = wrapperRef;
-    typeof _ref$ === "function" ? (0, import_web46.use)(_ref$, _el$3) : wrapperRef = _el$3;
+    typeof _ref$ === "function" ? (0, import_web47.use)(_ref$, _el$3) : wrapperRef = _el$3;
     _el$4.addEventListener("mouseleave", () => setIsHovered(false));
     _el$4.addEventListener("mouseenter", () => setIsHovered(true));
     _el$4.addEventListener("pointercancel", handlePointerCancel);
@@ -4689,28 +4694,28 @@ function Slider(props) {
     _el$4.$$pointermove = handlePointerMove;
     _el$4.$$pointerdown = handlePointerDown;
     var _ref$2 = trackRef;
-    typeof _ref$2 === "function" ? (0, import_web46.use)(_ref$2, _el$4) : trackRef = _el$4;
-    (0, import_web45.insert)(_el$5, hashMarks);
+    typeof _ref$2 === "function" ? (0, import_web47.use)(_ref$2, _el$4) : trackRef = _el$4;
+    (0, import_web46.insert)(_el$5, hashMarks);
     var _ref$3 = fillRef;
-    typeof _ref$3 === "function" ? (0, import_web46.use)(_ref$3, _el$6) : fillRef = _el$6;
+    typeof _ref$3 === "function" ? (0, import_web47.use)(_ref$3, _el$6) : fillRef = _el$6;
     var _ref$4 = handleRef;
-    typeof _ref$4 === "function" ? (0, import_web46.use)(_ref$4, _el$7) : handleRef = _el$7;
+    typeof _ref$4 === "function" ? (0, import_web47.use)(_ref$4, _el$7) : handleRef = _el$7;
     var _ref$5 = labelRef;
-    typeof _ref$5 === "function" ? (0, import_web46.use)(_ref$5, _el$8) : labelRef = _el$8;
-    (0, import_web45.insert)(_el$8, () => props.label, null);
-    (0, import_web45.insert)(_el$8, (0, import_web42.createComponent)(import_solid_js8.Show, {
+    typeof _ref$5 === "function" ? (0, import_web47.use)(_ref$5, _el$8) : labelRef = _el$8;
+    (0, import_web46.insert)(_el$8, () => props.label, null);
+    (0, import_web46.insert)(_el$8, (0, import_web43.createComponent)(import_solid_js8.Show, {
       get when() {
         return props.shortcut;
       },
       get children() {
         var _el$9 = _tmpl$25();
-        (0, import_web45.insert)(_el$9, () => formatSliderShortcut(props.shortcut));
-        (0, import_web44.effect)(() => (0, import_web43.className)(_el$9, `dialkit-shortcut-pill${props.shortcutActive ? " dialkit-shortcut-pill-active" : ""}`));
+        (0, import_web46.insert)(_el$9, () => formatSliderShortcut(props.shortcut));
+        (0, import_web45.effect)(() => (0, import_web44.className)(_el$9, `dialkit-shortcut-pill${props.shortcutActive ? " dialkit-shortcut-pill-active" : ""}`));
         return _el$9;
       }
     }), null);
-    (0, import_web45.insert)(_el$4, (() => {
-      var _c$ = (0, import_web41.memo)(() => !!showInput());
+    (0, import_web46.insert)(_el$4, (() => {
+      var _c$ = (0, import_web42.memo)(() => !!showInput());
       return () => _c$() ? (() => {
         var _el$0 = _tmpl$43();
         _el$0.$$mousedown = (e) => e.stopPropagation();
@@ -4719,8 +4724,8 @@ function Slider(props) {
         _el$0.$$keydown = handleInputKeyDown;
         _el$0.$$input = (e) => setInputValue(e.currentTarget.value);
         var _ref$6 = inputRef;
-        typeof _ref$6 === "function" ? (0, import_web46.use)(_ref$6, _el$0) : inputRef = _el$0;
-        (0, import_web44.effect)(() => _el$0.value = inputValue());
+        typeof _ref$6 === "function" ? (0, import_web47.use)(_ref$6, _el$0) : inputRef = _el$0;
+        (0, import_web45.effect)(() => _el$0.value = inputValue());
         return _el$0;
       })() : (() => {
         var _el$1 = _tmpl$25();
@@ -4729,12 +4734,12 @@ function Slider(props) {
         _el$1.addEventListener("mouseleave", () => setIsValueHovered(false));
         _el$1.addEventListener("mouseenter", () => setIsValueHovered(true));
         var _ref$7 = valueSpanRef;
-        typeof _ref$7 === "function" ? (0, import_web46.use)(_ref$7, _el$1) : valueSpanRef = _el$1;
-        (0, import_web45.insert)(_el$1, displayValue);
-        (0, import_web44.effect)((_p$) => {
+        typeof _ref$7 === "function" ? (0, import_web47.use)(_ref$7, _el$1) : valueSpanRef = _el$1;
+        (0, import_web46.insert)(_el$1, displayValue);
+        (0, import_web45.effect)((_p$) => {
           var _v$5 = `dialkit-slider-value ${isValueEditable() ? "dialkit-slider-value-editable" : ""}`, _v$6 = isValueEditable() ? "text" : "default";
-          _v$5 !== _p$.e && (0, import_web43.className)(_el$1, _p$.e = _v$5);
-          _v$6 !== _p$.t && (0, import_web47.setStyleProperty)(_el$1, "cursor", _p$.t = _v$6);
+          _v$5 !== _p$.e && (0, import_web44.className)(_el$1, _p$.e = _v$5);
+          _v$6 !== _p$.t && (0, import_web48.setStyleProperty)(_el$1, "cursor", _p$.t = _v$6);
           return _p$;
         }, {
           e: void 0,
@@ -4743,12 +4748,12 @@ function Slider(props) {
         return _el$1;
       })();
     })(), null);
-    (0, import_web44.effect)((_p$) => {
+    (0, import_web45.effect)((_p$) => {
       var _v$ = `dialkit-slider ${isActive() ? "dialkit-slider-active" : ""}`, _v$2 = hasOrigin() ? `${Math.min(fillPercent.get(), originPercent())}%` : "0%", _v$3 = hasOrigin() ? `${Math.abs(fillPercent.get() - originPercent())}%` : `${fillPercent.get()}%`, _v$4 = `max(5px, calc(${fillPercent.get()}% - 9px))`;
-      _v$ !== _p$.e && (0, import_web43.className)(_el$4, _p$.e = _v$);
-      _v$2 !== _p$.t && (0, import_web47.setStyleProperty)(_el$6, "left", _p$.t = _v$2);
-      _v$3 !== _p$.a && (0, import_web47.setStyleProperty)(_el$6, "width", _p$.a = _v$3);
-      _v$4 !== _p$.o && (0, import_web47.setStyleProperty)(_el$7, "left", _p$.o = _v$4);
+      _v$ !== _p$.e && (0, import_web44.className)(_el$4, _p$.e = _v$);
+      _v$2 !== _p$.t && (0, import_web48.setStyleProperty)(_el$6, "left", _p$.t = _v$2);
+      _v$3 !== _p$.a && (0, import_web48.setStyleProperty)(_el$6, "width", _p$.a = _v$3);
+      _v$4 !== _p$.o && (0, import_web48.setStyleProperty)(_el$7, "left", _p$.o = _v$4);
       return _p$;
     }, {
       e: void 0,
@@ -4759,10 +4764,9 @@ function Slider(props) {
     return _el$3;
   })();
 }
-(0, import_web40.delegateEvents)(["pointerdown", "pointermove", "pointerup", "input", "keydown", "click", "mousedown"]);
+(0, import_web41.delegateEvents)(["pointerdown", "pointermove", "pointerup", "input", "keydown", "click", "mousedown"]);
 
 // src/solid/components/RangeSlider.tsx
-var import_web48 = require("solid-js/web");
 var import_web49 = require("solid-js/web");
 var import_web50 = require("solid-js/web");
 var import_web51 = require("solid-js/web");
@@ -4770,11 +4774,12 @@ var import_web52 = require("solid-js/web");
 var import_web53 = require("solid-js/web");
 var import_web54 = require("solid-js/web");
 var import_web55 = require("solid-js/web");
+var import_web56 = require("solid-js/web");
 var import_solid_js9 = require("solid-js");
 var import_motion3 = require("motion");
-var _tmpl$14 = /* @__PURE__ */ (0, import_web48.template)(`<input type=text class=dialkit-range-slider-input>`);
-var _tmpl$26 = /* @__PURE__ */ (0, import_web48.template)(`<div class=dialkit-range-slider-wrapper><div><div class=dialkit-range-slider-fill></div><div class=dialkit-range-slider-handle style=transform:translateY(-50%);opacity:0.35></div><div class=dialkit-range-slider-handle style=transform:translateY(-50%);opacity:0.35></div><span class=dialkit-range-slider-label>`);
-var _tmpl$35 = /* @__PURE__ */ (0, import_web48.template)(`<span class=dialkit-range-slider-value><span class=dialkit-range-slider-bound></span><span class=dialkit-range-slider-dash>\u2013</span><span class=dialkit-range-slider-bound>`);
+var _tmpl$14 = /* @__PURE__ */ (0, import_web49.template)(`<input type=text class=dialkit-range-slider-input>`);
+var _tmpl$26 = /* @__PURE__ */ (0, import_web49.template)(`<div class=dialkit-range-slider-wrapper><div><div class=dialkit-range-slider-fill></div><div class=dialkit-range-slider-handle style=transform:translateY(-50%);opacity:0.35></div><div class=dialkit-range-slider-handle style=transform:translateY(-50%);opacity:0.35></div><span class=dialkit-range-slider-label>`);
+var _tmpl$35 = /* @__PURE__ */ (0, import_web49.template)(`<span class=dialkit-range-slider-value><span class=dialkit-range-slider-bound></span><span class=dialkit-range-slider-dash>\u2013</span><span class=dialkit-range-slider-bound>`);
 var CLICK_THRESHOLD2 = 3;
 var HANDLE_HIT_PX = 12;
 function RangeSlider(props) {
@@ -5037,7 +5042,7 @@ function RangeSlider(props) {
   return (() => {
     var _el$ = _tmpl$26(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.nextSibling, _el$6 = _el$5.nextSibling;
     var _ref$ = wrapperRef;
-    typeof _ref$ === "function" ? (0, import_web55.use)(_ref$, _el$) : wrapperRef = _el$;
+    typeof _ref$ === "function" ? (0, import_web56.use)(_ref$, _el$) : wrapperRef = _el$;
     _el$2.addEventListener("mouseleave", () => setIsHovered(false));
     _el$2.addEventListener("mouseenter", () => setIsHovered(true));
     _el$2.$$dblclick = handleDoubleClick;
@@ -5046,15 +5051,15 @@ function RangeSlider(props) {
     _el$2.$$pointermove = handlePointerMove;
     _el$2.$$pointerdown = handlePointerDown;
     var _ref$2 = trackRef;
-    typeof _ref$2 === "function" ? (0, import_web55.use)(_ref$2, _el$2) : trackRef = _el$2;
+    typeof _ref$2 === "function" ? (0, import_web56.use)(_ref$2, _el$2) : trackRef = _el$2;
     var _ref$3 = fillRef;
-    typeof _ref$3 === "function" ? (0, import_web55.use)(_ref$3, _el$3) : fillRef = _el$3;
+    typeof _ref$3 === "function" ? (0, import_web56.use)(_ref$3, _el$3) : fillRef = _el$3;
     var _ref$4 = lowHandleRef;
-    typeof _ref$4 === "function" ? (0, import_web55.use)(_ref$4, _el$4) : lowHandleRef = _el$4;
+    typeof _ref$4 === "function" ? (0, import_web56.use)(_ref$4, _el$4) : lowHandleRef = _el$4;
     var _ref$5 = highHandleRef;
-    typeof _ref$5 === "function" ? (0, import_web55.use)(_ref$5, _el$5) : highHandleRef = _el$5;
-    (0, import_web54.insert)(_el$6, () => props.label);
-    (0, import_web54.insert)(_el$2, (0, import_web52.createComponent)(import_solid_js9.Show, {
+    typeof _ref$5 === "function" ? (0, import_web56.use)(_ref$5, _el$5) : highHandleRef = _el$5;
+    (0, import_web55.insert)(_el$6, () => props.label);
+    (0, import_web55.insert)(_el$2, (0, import_web53.createComponent)(import_solid_js9.Show, {
       get when() {
         return editing() !== null;
       },
@@ -5066,13 +5071,13 @@ function RangeSlider(props) {
             e.stopPropagation();
             openEditor("min");
           };
-          (0, import_web54.insert)(_el$9, lowText);
+          (0, import_web55.insert)(_el$9, lowText);
           _el$1.$$pointerdown = (e) => e.stopPropagation();
           _el$1.$$click = (e) => {
             e.stopPropagation();
             openEditor("max");
           };
-          (0, import_web54.insert)(_el$1, highText);
+          (0, import_web55.insert)(_el$1, highText);
           return _el$8;
         })();
       },
@@ -5084,18 +5089,18 @@ function RangeSlider(props) {
         _el$7.$$keydown = handleInputKeyDown;
         _el$7.$$input = (e) => setInputValue(e.currentTarget.value);
         var _ref$6 = inputRef;
-        typeof _ref$6 === "function" ? (0, import_web55.use)(_ref$6, _el$7) : inputRef = _el$7;
-        (0, import_web53.effect)(() => _el$7.value = inputValue());
+        typeof _ref$6 === "function" ? (0, import_web56.use)(_ref$6, _el$7) : inputRef = _el$7;
+        (0, import_web54.effect)(() => _el$7.value = inputValue());
         return _el$7;
       }
     }), null);
-    (0, import_web53.effect)((_p$) => {
+    (0, import_web54.effect)((_p$) => {
       var _v$ = `dialkit-range-slider ${isActive() ? "dialkit-range-slider-active" : ""}`, _v$2 = `${lowPercent()}%`, _v$3 = `${Math.max(0, highPercent() - lowPercent())}%`, _v$4 = handleLeftStyles(lowPercent(), highPercent()).low, _v$5 = handleLeftStyles(lowPercent(), highPercent()).high;
-      _v$ !== _p$.e && (0, import_web51.className)(_el$2, _p$.e = _v$);
-      _v$2 !== _p$.t && (0, import_web50.setStyleProperty)(_el$3, "left", _p$.t = _v$2);
-      _v$3 !== _p$.a && (0, import_web50.setStyleProperty)(_el$3, "width", _p$.a = _v$3);
-      _v$4 !== _p$.o && (0, import_web50.setStyleProperty)(_el$4, "left", _p$.o = _v$4);
-      _v$5 !== _p$.i && (0, import_web50.setStyleProperty)(_el$5, "left", _p$.i = _v$5);
+      _v$ !== _p$.e && (0, import_web52.className)(_el$2, _p$.e = _v$);
+      _v$2 !== _p$.t && (0, import_web51.setStyleProperty)(_el$3, "left", _p$.t = _v$2);
+      _v$3 !== _p$.a && (0, import_web51.setStyleProperty)(_el$3, "width", _p$.a = _v$3);
+      _v$4 !== _p$.o && (0, import_web51.setStyleProperty)(_el$4, "left", _p$.o = _v$4);
+      _v$5 !== _p$.i && (0, import_web51.setStyleProperty)(_el$5, "left", _p$.i = _v$5);
       return _p$;
     }, {
       e: void 0,
@@ -5107,34 +5112,34 @@ function RangeSlider(props) {
     return _el$;
   })();
 }
-(0, import_web49.delegateEvents)(["pointerdown", "pointermove", "pointerup", "dblclick", "input", "keydown", "click"]);
+(0, import_web50.delegateEvents)(["pointerdown", "pointermove", "pointerup", "dblclick", "input", "keydown", "click"]);
 
 // src/solid/components/Toggle.tsx
-var import_web56 = require("solid-js/web");
 var import_web57 = require("solid-js/web");
 var import_web58 = require("solid-js/web");
 var import_web59 = require("solid-js/web");
 var import_web60 = require("solid-js/web");
 var import_web61 = require("solid-js/web");
+var import_web62 = require("solid-js/web");
 var import_solid_js10 = require("solid-js");
-var _tmpl$15 = /* @__PURE__ */ (0, import_web56.template)(`<span>`);
-var _tmpl$27 = /* @__PURE__ */ (0, import_web56.template)(`<div class=dialkit-labeled-control><span class=dialkit-labeled-control-label>`);
+var _tmpl$15 = /* @__PURE__ */ (0, import_web57.template)(`<span>`);
+var _tmpl$27 = /* @__PURE__ */ (0, import_web57.template)(`<div class=dialkit-labeled-control><span class=dialkit-labeled-control-label>`);
 function Toggle(props) {
   return (() => {
     var _el$ = _tmpl$27(), _el$2 = _el$.firstChild;
-    (0, import_web61.insert)(_el$2, () => props.label, null);
-    (0, import_web61.insert)(_el$2, (0, import_web58.createComponent)(import_solid_js10.Show, {
+    (0, import_web62.insert)(_el$2, () => props.label, null);
+    (0, import_web62.insert)(_el$2, (0, import_web59.createComponent)(import_solid_js10.Show, {
       get when() {
         return props.shortcut;
       },
       get children() {
         var _el$3 = _tmpl$15();
-        (0, import_web61.insert)(_el$3, () => formatToggleShortcut(props.shortcut));
-        (0, import_web60.effect)(() => (0, import_web59.className)(_el$3, `dialkit-shortcut-pill${props.shortcutActive ? " dialkit-shortcut-pill-active" : ""}`));
+        (0, import_web62.insert)(_el$3, () => formatToggleShortcut(props.shortcut));
+        (0, import_web61.effect)(() => (0, import_web60.className)(_el$3, `dialkit-shortcut-pill${props.shortcutActive ? " dialkit-shortcut-pill-active" : ""}`));
         return _el$3;
       }
     }), null);
-    (0, import_web61.insert)(_el$, (0, import_web58.createComponent)(SegmentedControl, {
+    (0, import_web62.insert)(_el$, (0, import_web59.createComponent)(SegmentedControl, {
       options: [{
         value: "off",
         label: "Off"
@@ -5152,20 +5157,20 @@ function Toggle(props) {
 }
 
 // src/solid/components/SpringControl.tsx
-var import_web66 = require("solid-js/web");
 var import_web67 = require("solid-js/web");
 var import_web68 = require("solid-js/web");
 var import_web69 = require("solid-js/web");
+var import_web70 = require("solid-js/web");
 var import_solid_js11 = require("solid-js");
 
 // src/solid/components/SpringVisualization.tsx
-var import_web62 = require("solid-js/web");
 var import_web63 = require("solid-js/web");
 var import_web64 = require("solid-js/web");
 var import_web65 = require("solid-js/web");
-var _tmpl$16 = /* @__PURE__ */ (0, import_web62.template)(`<svg><line y1=0 y2=140 stroke="rgba(255, 255, 255, 0.08)"stroke-width=1></svg>`, false, true, false);
-var _tmpl$28 = /* @__PURE__ */ (0, import_web62.template)(`<svg><line x1=0 x2=256 stroke="rgba(255, 255, 255, 0.08)"stroke-width=1></svg>`, false, true, false);
-var _tmpl$36 = /* @__PURE__ */ (0, import_web62.template)(`<svg viewBox="0 0 256 140"class=dialkit-spring-viz><line x1=0 y1=70 x2=256 y2=70 stroke="rgba(255, 255, 255, 0.15)"stroke-width=1 stroke-dasharray=4,4></line><path fill=none stroke="rgba(255, 255, 255, 0.6)"stroke-width=2 stroke-linecap=round stroke-linejoin=round>`);
+var import_web66 = require("solid-js/web");
+var _tmpl$16 = /* @__PURE__ */ (0, import_web63.template)(`<svg><line y1=0 y2=140 stroke="rgba(255, 255, 255, 0.08)"stroke-width=1></svg>`, false, true, false);
+var _tmpl$28 = /* @__PURE__ */ (0, import_web63.template)(`<svg><line x1=0 x2=256 stroke="rgba(255, 255, 255, 0.08)"stroke-width=1></svg>`, false, true, false);
+var _tmpl$36 = /* @__PURE__ */ (0, import_web63.template)(`<svg viewBox="0 0 256 140"class=dialkit-spring-viz><line x1=0 y1=70 x2=256 y2=70 stroke="rgba(255, 255, 255, 0.15)"stroke-width=1 stroke-dasharray=4,4></line><path fill=none stroke="rgba(255, 255, 255, 0.6)"stroke-width=2 stroke-linecap=round stroke-linejoin=round>`);
 function generateSpringCurve(stiffness, damping, mass, duration) {
   const points = [];
   const steps = 100;
@@ -5224,13 +5229,13 @@ function SpringVisualization(props) {
       const y = height / 4 * i;
       lines.push((() => {
         var _el$ = _tmpl$16();
-        (0, import_web65.setAttribute)(_el$, "x1", x);
-        (0, import_web65.setAttribute)(_el$, "x2", x);
+        (0, import_web66.setAttribute)(_el$, "x1", x);
+        (0, import_web66.setAttribute)(_el$, "x2", x);
         return _el$;
       })(), (() => {
         var _el$2 = _tmpl$28();
-        (0, import_web65.setAttribute)(_el$2, "y1", y);
-        (0, import_web65.setAttribute)(_el$2, "y2", y);
+        (0, import_web66.setAttribute)(_el$2, "y1", y);
+        (0, import_web66.setAttribute)(_el$2, "y2", y);
         return _el$2;
       })());
     }
@@ -5238,14 +5243,14 @@ function SpringVisualization(props) {
   };
   return (() => {
     var _el$3 = _tmpl$36(), _el$4 = _el$3.firstChild, _el$5 = _el$4.nextSibling;
-    (0, import_web64.insert)(_el$3, gridLines, _el$4);
-    (0, import_web63.effect)(() => (0, import_web65.setAttribute)(_el$5, "d", params()));
+    (0, import_web65.insert)(_el$3, gridLines, _el$4);
+    (0, import_web64.effect)(() => (0, import_web66.setAttribute)(_el$5, "d", params()));
     return _el$3;
   })();
 }
 
 // src/solid/components/SpringControl.tsx
-var _tmpl$17 = /* @__PURE__ */ (0, import_web66.template)(`<div style=display:flex;flex-direction:column;gap:6px><div class=dialkit-labeled-control><span class=dialkit-labeled-control-label>Type`);
+var _tmpl$17 = /* @__PURE__ */ (0, import_web67.template)(`<div style=display:flex;flex-direction:column;gap:6px><div class=dialkit-labeled-control><span class=dialkit-labeled-control-label>Type`);
 function SpringControl(props) {
   const [mode, setMode] = (0, import_solid_js11.createSignal)(DialStore.getSpringMode(props.panelId, props.path));
   (0, import_solid_js11.onMount)(() => {
@@ -5305,14 +5310,14 @@ function SpringControl(props) {
       });
     }
   };
-  return (0, import_web69.createComponent)(Folder, {
+  return (0, import_web70.createComponent)(Folder, {
     get title() {
       return props.label;
     },
     defaultOpen: true,
     get children() {
       var _el$ = _tmpl$17(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild;
-      (0, import_web68.insert)(_el$, (0, import_web69.createComponent)(SpringVisualization, {
+      (0, import_web69.insert)(_el$, (0, import_web70.createComponent)(SpringVisualization, {
         get spring() {
           return props.spring;
         },
@@ -5320,7 +5325,7 @@ function SpringControl(props) {
           return isSimpleMode();
         }
       }), _el$2);
-      (0, import_web68.insert)(_el$2, (0, import_web69.createComponent)(SegmentedControl, {
+      (0, import_web69.insert)(_el$2, (0, import_web70.createComponent)(SegmentedControl, {
         options: [{
           value: "simple",
           label: "Time"
@@ -5333,9 +5338,9 @@ function SpringControl(props) {
         },
         onChange: handleModeChange
       }), null);
-      (0, import_web68.insert)(_el$, (() => {
-        var _c$ = (0, import_web67.memo)(() => !!isSimpleMode());
-        return () => _c$() ? [(0, import_web69.createComponent)(Slider, {
+      (0, import_web69.insert)(_el$, (() => {
+        var _c$ = (0, import_web68.memo)(() => !!isSimpleMode());
+        return () => _c$() ? [(0, import_web70.createComponent)(Slider, {
           label: "Duration",
           get value() {
             return props.spring.visualDuration ?? 0.3;
@@ -5345,7 +5350,7 @@ function SpringControl(props) {
           max: 1,
           step: 0.05,
           unit: "s"
-        }), (0, import_web69.createComponent)(Slider, {
+        }), (0, import_web70.createComponent)(Slider, {
           label: "Bounce",
           get value() {
             return props.spring.bounce ?? 0.2;
@@ -5354,7 +5359,7 @@ function SpringControl(props) {
           min: 0,
           max: 1,
           step: 0.05
-        })] : [(0, import_web69.createComponent)(Slider, {
+        })] : [(0, import_web70.createComponent)(Slider, {
           label: "Stiffness",
           get value() {
             return props.spring.stiffness ?? 400;
@@ -5363,7 +5368,7 @@ function SpringControl(props) {
           min: 1,
           max: 1e3,
           step: 10
-        }), (0, import_web69.createComponent)(Slider, {
+        }), (0, import_web70.createComponent)(Slider, {
           label: "Damping",
           get value() {
             return props.spring.damping ?? 17;
@@ -5372,7 +5377,7 @@ function SpringControl(props) {
           min: 1,
           max: 100,
           step: 1
-        }), (0, import_web69.createComponent)(Slider, {
+        }), (0, import_web70.createComponent)(Slider, {
           label: "Mass",
           get value() {
             return props.spring.mass ?? 1;
@@ -5389,20 +5394,20 @@ function SpringControl(props) {
 }
 
 // src/solid/components/TransitionControl.tsx
-var import_web74 = require("solid-js/web");
 var import_web75 = require("solid-js/web");
 var import_web76 = require("solid-js/web");
 var import_web77 = require("solid-js/web");
 var import_web78 = require("solid-js/web");
 var import_web79 = require("solid-js/web");
 var import_web80 = require("solid-js/web");
+var import_web81 = require("solid-js/web");
 var import_solid_js13 = require("solid-js");
 
 // src/solid/primitives.ts
 var import_solid_js12 = require("solid-js");
-var import_web70 = require("solid-js/web");
+var import_web71 = require("solid-js/web");
 function fromStore(read, subscribe) {
-  if (import_web70.isServer) return read;
+  if (import_web71.isServer) return read;
   const value = (0, import_solid_js12.from)((set) => {
     set(() => read());
     return subscribe(() => set(() => read()));
@@ -5411,10 +5416,10 @@ function fromStore(read, subscribe) {
 }
 
 // src/solid/components/EasingVisualization.tsx
-var import_web71 = require("solid-js/web");
 var import_web72 = require("solid-js/web");
 var import_web73 = require("solid-js/web");
-var _tmpl$18 = /* @__PURE__ */ (0, import_web71.template)(`<svg viewBox="0 0 200 200"preserveAspectRatio="xMidYMid slice"class="dialkit-spring-viz dialkit-easing-viz"><line stroke="rgba(255, 255, 255, 0.15)"stroke-width=1 stroke-dasharray=4,4></line><path fill=none stroke="rgba(255, 255, 255, 0.6)"stroke-width=2 stroke-linecap=round>`);
+var import_web74 = require("solid-js/web");
+var _tmpl$18 = /* @__PURE__ */ (0, import_web72.template)(`<svg viewBox="0 0 200 200"preserveAspectRatio="xMidYMid slice"class="dialkit-spring-viz dialkit-easing-viz"><line stroke="rgba(255, 255, 255, 0.15)"stroke-width=1 stroke-dasharray=4,4></line><path fill=none stroke="rgba(255, 255, 255, 0.6)"stroke-width=2 stroke-linecap=round>`);
 function EasingVisualization(props) {
   const size = 200;
   const pad = 10;
@@ -5433,13 +5438,13 @@ function EasingVisualization(props) {
   };
   return (() => {
     var _el$ = _tmpl$18(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling;
-    (0, import_web73.effect)((_p$) => {
+    (0, import_web74.effect)((_p$) => {
       var _v$ = start.x, _v$2 = start.y, _v$3 = end.x, _v$4 = end.y, _v$5 = curvePath2();
-      _v$ !== _p$.e && (0, import_web72.setAttribute)(_el$2, "x1", _p$.e = _v$);
-      _v$2 !== _p$.t && (0, import_web72.setAttribute)(_el$2, "y1", _p$.t = _v$2);
-      _v$3 !== _p$.a && (0, import_web72.setAttribute)(_el$2, "x2", _p$.a = _v$3);
-      _v$4 !== _p$.o && (0, import_web72.setAttribute)(_el$2, "y2", _p$.o = _v$4);
-      _v$5 !== _p$.i && (0, import_web72.setAttribute)(_el$3, "d", _p$.i = _v$5);
+      _v$ !== _p$.e && (0, import_web73.setAttribute)(_el$2, "x1", _p$.e = _v$);
+      _v$2 !== _p$.t && (0, import_web73.setAttribute)(_el$2, "y1", _p$.t = _v$2);
+      _v$3 !== _p$.a && (0, import_web73.setAttribute)(_el$2, "x2", _p$.a = _v$3);
+      _v$4 !== _p$.o && (0, import_web73.setAttribute)(_el$2, "y2", _p$.o = _v$4);
+      _v$5 !== _p$.i && (0, import_web73.setAttribute)(_el$3, "d", _p$.i = _v$5);
       return _p$;
     }, {
       e: void 0,
@@ -5453,8 +5458,8 @@ function EasingVisualization(props) {
 }
 
 // src/solid/components/TransitionControl.tsx
-var _tmpl$19 = /* @__PURE__ */ (0, import_web74.template)(`<div class=dialkit-labeled-control><span class=dialkit-labeled-control-label>Ease</span><input type=text class=dialkit-text-input>`);
-var _tmpl$29 = /* @__PURE__ */ (0, import_web74.template)(`<div style=display:flex;flex-direction:column;gap:6px><div class=dialkit-labeled-control><span class=dialkit-labeled-control-label>Type`);
+var _tmpl$19 = /* @__PURE__ */ (0, import_web75.template)(`<div class=dialkit-labeled-control><span class=dialkit-labeled-control-label>Ease</span><input type=text class=dialkit-text-input>`);
+var _tmpl$29 = /* @__PURE__ */ (0, import_web75.template)(`<div style=display:flex;flex-direction:column;gap:6px><div class=dialkit-labeled-control><span class=dialkit-labeled-control-label>Type`);
 function TransitionControl(props) {
   const mode = fromStore(() => DialStore.getTransitionMode(props.panelId, props.path), (notify2) => DialStore.subscribe(props.panelId, notify2));
   const [editingEase, setEditingEase] = (0, import_solid_js13.createSignal)(false);
@@ -5546,7 +5551,7 @@ function TransitionControl(props) {
   const durationSlider = () => {
     if (props.hideDuration || !isEasing() && !isSimple()) return null;
     const external = props.durationControl;
-    return (0, import_web79.createComponent)(Slider, {
+    return (0, import_web80.createComponent)(Slider, {
       label: "Duration",
       get value() {
         return external?.value ?? (isEasing() ? easing().duration : spring().visualDuration ?? 0.3);
@@ -5572,19 +5577,19 @@ function TransitionControl(props) {
       unit: "s"
     });
   };
-  return (0, import_web79.createComponent)(Folder, {
+  return (0, import_web80.createComponent)(Folder, {
     get title() {
       return props.label;
     },
     defaultOpen: true,
     get children() {
       var _el$ = _tmpl$29(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild;
-      (0, import_web78.insert)(_el$, (0, import_web79.createComponent)(import_solid_js13.Show, {
+      (0, import_web79.insert)(_el$, (0, import_web80.createComponent)(import_solid_js13.Show, {
         get when() {
           return isEasing();
         },
         get fallback() {
-          return (0, import_web79.createComponent)(SpringVisualization, {
+          return (0, import_web80.createComponent)(SpringVisualization, {
             get spring() {
               return spring();
             },
@@ -5594,14 +5599,14 @@ function TransitionControl(props) {
           });
         },
         get children() {
-          return (0, import_web79.createComponent)(EasingVisualization, {
+          return (0, import_web80.createComponent)(EasingVisualization, {
             get easing() {
               return easing();
             }
           });
         }
       }), _el$2);
-      (0, import_web78.insert)(_el$2, (0, import_web79.createComponent)(SegmentedControl, {
+      (0, import_web79.insert)(_el$2, (0, import_web80.createComponent)(SegmentedControl, {
         options: [{
           value: "easing",
           label: "Easing"
@@ -5617,12 +5622,12 @@ function TransitionControl(props) {
         },
         onChange: handleModeChange
       }), null);
-      (0, import_web78.insert)(_el$, (0, import_web79.createComponent)(import_solid_js13.Show, {
+      (0, import_web79.insert)(_el$, (0, import_web80.createComponent)(import_solid_js13.Show, {
         get when() {
           return isEasing();
         },
         get children() {
-          return [(0, import_web79.createComponent)(Slider, {
+          return [(0, import_web80.createComponent)(Slider, {
             label: "x1",
             get value() {
               return easing().ease[0];
@@ -5631,7 +5636,7 @@ function TransitionControl(props) {
             min: 0,
             max: 1,
             step: 0.01
-          }), (0, import_web79.createComponent)(Slider, {
+          }), (0, import_web80.createComponent)(Slider, {
             label: "y1",
             get value() {
               return easing().ease[1];
@@ -5640,7 +5645,7 @@ function TransitionControl(props) {
             min: -1,
             max: 2,
             step: 0.01
-          }), (0, import_web79.createComponent)(Slider, {
+          }), (0, import_web80.createComponent)(Slider, {
             label: "x2",
             get value() {
               return easing().ease[2];
@@ -5649,7 +5654,7 @@ function TransitionControl(props) {
             min: 0,
             max: 1,
             step: 0.01
-          }), (0, import_web79.createComponent)(Slider, {
+          }), (0, import_web80.createComponent)(Slider, {
             label: "y2",
             get value() {
               return easing().ease[3];
@@ -5669,18 +5674,18 @@ function TransitionControl(props) {
               setEditingEase(true);
             });
             _el$6.$$input = (event) => setEaseDraft(event.currentTarget.value);
-            (0, import_web76.setAttribute)(_el$6, "spellcheck", false);
-            (0, import_web77.effect)(() => _el$6.value = editingEase() ? easeDraft() : formatEase(easing().ease));
+            (0, import_web77.setAttribute)(_el$6, "spellcheck", false);
+            (0, import_web78.effect)(() => _el$6.value = editingEase() ? easeDraft() : formatEase(easing().ease));
             return _el$4;
           })()];
         }
       }), null);
-      (0, import_web78.insert)(_el$, (0, import_web79.createComponent)(import_solid_js13.Show, {
+      (0, import_web79.insert)(_el$, (0, import_web80.createComponent)(import_solid_js13.Show, {
         get when() {
           return isSimple();
         },
         get children() {
-          return (0, import_web79.createComponent)(Slider, {
+          return (0, import_web80.createComponent)(Slider, {
             label: "Bounce",
             get value() {
               return spring().bounce ?? 0.2;
@@ -5692,12 +5697,12 @@ function TransitionControl(props) {
           });
         }
       }), null);
-      (0, import_web78.insert)(_el$, (0, import_web79.createComponent)(import_solid_js13.Show, {
+      (0, import_web79.insert)(_el$, (0, import_web80.createComponent)(import_solid_js13.Show, {
         get when() {
-          return (0, import_web80.memo)(() => !!!isEasing())() && !isSimple();
+          return (0, import_web81.memo)(() => !!!isEasing())() && !isSimple();
         },
         get children() {
-          return [(0, import_web79.createComponent)(Slider, {
+          return [(0, import_web80.createComponent)(Slider, {
             label: "Stiffness",
             get value() {
               return spring().stiffness ?? 400;
@@ -5706,7 +5711,7 @@ function TransitionControl(props) {
             min: 1,
             max: 1e3,
             step: 10
-          }), (0, import_web79.createComponent)(Slider, {
+          }), (0, import_web80.createComponent)(Slider, {
             label: "Damping",
             get value() {
               return spring().damping ?? 17;
@@ -5715,7 +5720,7 @@ function TransitionControl(props) {
             min: 1,
             max: 100,
             step: 1
-          }), (0, import_web79.createComponent)(Slider, {
+          }), (0, import_web80.createComponent)(Slider, {
             label: "Mass",
             get value() {
               return spring().mass ?? 1;
@@ -5727,38 +5732,37 @@ function TransitionControl(props) {
           })];
         }
       }), null);
-      (0, import_web78.insert)(_el$, durationSlider, null);
+      (0, import_web79.insert)(_el$, durationSlider, null);
       return _el$;
     }
   });
 }
-(0, import_web75.delegateEvents)(["input", "keydown"]);
+(0, import_web76.delegateEvents)(["input", "keydown"]);
 
 // src/solid/components/TextControl.tsx
-var import_web81 = require("solid-js/web");
 var import_web82 = require("solid-js/web");
 var import_web83 = require("solid-js/web");
 var import_web84 = require("solid-js/web");
 var import_web85 = require("solid-js/web");
+var import_web86 = require("solid-js/web");
 var import_solid_js14 = require("solid-js");
-var _tmpl$20 = /* @__PURE__ */ (0, import_web81.template)(`<div class=dialkit-text-control><label class=dialkit-text-label></label><input type=text class=dialkit-text-input>`);
+var _tmpl$20 = /* @__PURE__ */ (0, import_web82.template)(`<div class=dialkit-text-control><label class=dialkit-text-label></label><input type=text class=dialkit-text-input>`);
 function TextControl(props) {
   const inputId = (0, import_solid_js14.createUniqueId)();
   return (() => {
     var _el$ = _tmpl$20(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling;
-    (0, import_web85.setAttribute)(_el$2, "for", inputId);
-    (0, import_web84.insert)(_el$2, () => props.label);
+    (0, import_web86.setAttribute)(_el$2, "for", inputId);
+    (0, import_web85.insert)(_el$2, () => props.label);
     _el$3.$$input = (e) => props.onChange(e.currentTarget.value);
-    (0, import_web85.setAttribute)(_el$3, "id", inputId);
-    (0, import_web83.effect)(() => (0, import_web85.setAttribute)(_el$3, "placeholder", props.placeholder));
-    (0, import_web83.effect)(() => _el$3.value = props.value);
+    (0, import_web86.setAttribute)(_el$3, "id", inputId);
+    (0, import_web84.effect)(() => (0, import_web86.setAttribute)(_el$3, "placeholder", props.placeholder));
+    (0, import_web84.effect)(() => _el$3.value = props.value);
     return _el$;
   })();
 }
-(0, import_web82.delegateEvents)(["input"]);
+(0, import_web83.delegateEvents)(["input"]);
 
 // src/solid/components/SelectControl.tsx
-var import_web86 = require("solid-js/web");
 var import_web87 = require("solid-js/web");
 var import_web88 = require("solid-js/web");
 var import_web89 = require("solid-js/web");
@@ -5767,12 +5771,13 @@ var import_web91 = require("solid-js/web");
 var import_web92 = require("solid-js/web");
 var import_web93 = require("solid-js/web");
 var import_web94 = require("solid-js/web");
-var import_solid_js15 = require("solid-js");
 var import_web95 = require("solid-js/web");
+var import_solid_js15 = require("solid-js");
+var import_web96 = require("solid-js/web");
 var import_motion4 = require("motion");
-var _tmpl$21 = /* @__PURE__ */ (0, import_web86.template)(`<div class=dialkit-select-dropdown>`);
-var _tmpl$210 = /* @__PURE__ */ (0, import_web86.template)(`<div class=dialkit-select-row><button class=dialkit-select-trigger><span class=dialkit-select-label></span><div class=dialkit-select-right><span class=dialkit-select-value></span><svg class=dialkit-select-chevron viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
-var _tmpl$37 = /* @__PURE__ */ (0, import_web86.template)(`<button class=dialkit-select-option>`);
+var _tmpl$21 = /* @__PURE__ */ (0, import_web87.template)(`<div class=dialkit-select-dropdown>`);
+var _tmpl$210 = /* @__PURE__ */ (0, import_web87.template)(`<div class=dialkit-select-row><button class=dialkit-select-trigger><span class=dialkit-select-label></span><div class=dialkit-select-right><span class=dialkit-select-value></span><svg class=dialkit-select-chevron viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
+var _tmpl$37 = /* @__PURE__ */ (0, import_web87.template)(`<button class=dialkit-select-option>`);
 function toTitleCase(s) {
   return s.replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -5898,29 +5903,29 @@ function SelectControl(props) {
     var _el$ = _tmpl$210(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.firstChild;
     _el$2.$$click = () => isOpen() ? closeDropdown() : openDropdown();
     var _ref$ = triggerRef;
-    typeof _ref$ === "function" ? (0, import_web94.use)(_ref$, _el$2) : triggerRef = _el$2;
-    (0, import_web93.insert)(_el$3, () => props.label);
-    (0, import_web93.insert)(_el$5, () => selectedOption()?.label ?? props.value);
+    typeof _ref$ === "function" ? (0, import_web95.use)(_ref$, _el$2) : triggerRef = _el$2;
+    (0, import_web94.insert)(_el$3, () => props.label);
+    (0, import_web94.insert)(_el$5, () => selectedOption()?.label ?? props.value);
     var _ref$2 = chevronRef;
-    typeof _ref$2 === "function" ? (0, import_web94.use)(_ref$2, _el$6) : chevronRef = _el$6;
-    (0, import_web91.setAttribute)(_el$7, "d", ICON_CHEVRON);
-    (0, import_web93.insert)(_el$, (0, import_web90.createComponent)(import_solid_js15.Show, {
+    typeof _ref$2 === "function" ? (0, import_web95.use)(_ref$2, _el$6) : chevronRef = _el$6;
+    (0, import_web92.setAttribute)(_el$7, "d", ICON_CHEVRON);
+    (0, import_web94.insert)(_el$, (0, import_web91.createComponent)(import_solid_js15.Show, {
       get when() {
         return !!portalTarget();
       },
       get children() {
-        return (0, import_web90.createComponent)(import_web95.Portal, {
+        return (0, import_web91.createComponent)(import_web96.Portal, {
           get mount() {
             return portalTarget();
           },
           get children() {
-            return (0, import_web90.createComponent)(import_solid_js15.Show, {
+            return (0, import_web91.createComponent)(import_solid_js15.Show, {
               get when() {
-                return (0, import_web92.memo)(() => !!mounted())() && pos();
+                return (0, import_web93.memo)(() => !!mounted())() && pos();
               },
               get children() {
                 var _el$8 = _tmpl$21();
-                (0, import_web94.use)((el) => {
+                (0, import_web95.use)((el) => {
                   dropdownRef = el;
                   const above = pos()?.above ?? false;
                   (0, import_motion4.animate)(el, {
@@ -5933,7 +5938,7 @@ function SelectControl(props) {
                     bounce: 0
                   });
                 }, _el$8);
-                (0, import_web93.insert)(_el$8, (0, import_web90.createComponent)(import_solid_js15.For, {
+                (0, import_web94.insert)(_el$8, (0, import_web91.createComponent)(import_solid_js15.For, {
                   get each() {
                     return normalized();
                   },
@@ -5943,12 +5948,12 @@ function SelectControl(props) {
                       props.onChange(option.value);
                       closeDropdown();
                     };
-                    (0, import_web93.insert)(_el$9, () => option.label);
-                    (0, import_web89.effect)(() => (0, import_web91.setAttribute)(_el$9, "data-selected", String(option.value === props.value)));
+                    (0, import_web94.insert)(_el$9, () => option.label);
+                    (0, import_web90.effect)(() => (0, import_web92.setAttribute)(_el$9, "data-selected", String(option.value === props.value)));
                     return _el$9;
                   })()
                 }));
-                (0, import_web89.effect)((_$p) => (0, import_web88.style)(_el$8, dropdownStyle(), _$p));
+                (0, import_web90.effect)((_$p) => (0, import_web89.style)(_el$8, dropdownStyle(), _$p));
                 return _el$8;
               }
             });
@@ -5956,14 +5961,13 @@ function SelectControl(props) {
         });
       }
     }), null);
-    (0, import_web89.effect)(() => (0, import_web91.setAttribute)(_el$2, "data-open", String(isOpen())));
+    (0, import_web90.effect)(() => (0, import_web92.setAttribute)(_el$2, "data-open", String(isOpen())));
     return _el$;
   })();
 }
-(0, import_web87.delegateEvents)(["click"]);
+(0, import_web88.delegateEvents)(["click"]);
 
 // src/solid/components/ColorControl.tsx
-var import_web107 = require("solid-js/web");
 var import_web108 = require("solid-js/web");
 var import_web109 = require("solid-js/web");
 var import_web110 = require("solid-js/web");
@@ -5973,12 +5977,12 @@ var import_web113 = require("solid-js/web");
 var import_web114 = require("solid-js/web");
 var import_web115 = require("solid-js/web");
 var import_web116 = require("solid-js/web");
-var import_solid_js17 = require("solid-js");
 var import_web117 = require("solid-js/web");
+var import_solid_js17 = require("solid-js");
+var import_web118 = require("solid-js/web");
 var import_motion5 = require("motion");
 
 // src/solid/components/ColorPickerPanel.tsx
-var import_web96 = require("solid-js/web");
 var import_web97 = require("solid-js/web");
 var import_web98 = require("solid-js/web");
 var import_web99 = require("solid-js/web");
@@ -5989,6 +5993,7 @@ var import_web103 = require("solid-js/web");
 var import_web104 = require("solid-js/web");
 var import_web105 = require("solid-js/web");
 var import_web106 = require("solid-js/web");
+var import_web107 = require("solid-js/web");
 var import_solid_js16 = require("solid-js");
 
 // src/color-palette-store.ts
@@ -6042,12 +6047,12 @@ function subscribePalette(cb) {
 }
 
 // src/solid/components/ColorPickerPanel.tsx
-var _tmpl$30 = /* @__PURE__ */ (0, import_web96.template)(`<label class=dialkit-color-field><input type=text inputmode=decimal><span class=dialkit-color-field-label>`);
-var _tmpl$211 = /* @__PURE__ */ (0, import_web96.template)(`<label class="dialkit-color-field dialkit-color-field-hex"><input type=text><span class=dialkit-color-field-label>HEX`);
-var _tmpl$38 = /* @__PURE__ */ (0, import_web96.template)(`<button class=dialkit-color-palette-slot>`);
-var _tmpl$44 = /* @__PURE__ */ (0, import_web96.template)(`<div class="dialkit-color-slider dialkit-color-alpha dialkit-checker"><div class=dialkit-color-alpha-gradient></div><div class=dialkit-color-slider-thumb>`);
-var _tmpl$52 = /* @__PURE__ */ (0, import_web96.template)(`<div class=dialkit-color-palette>`);
-var _tmpl$62 = /* @__PURE__ */ (0, import_web96.template)(`<div class=dialkit-color-picker><div class=dialkit-color-sv><div class=dialkit-color-sv-thumb></div></div><div class="dialkit-color-slider dialkit-color-hue"><div class=dialkit-color-slider-thumb></div></div><div class=dialkit-color-fields>`);
+var _tmpl$30 = /* @__PURE__ */ (0, import_web97.template)(`<label class=dialkit-color-field><input type=text inputmode=decimal><span class=dialkit-color-field-label>`);
+var _tmpl$211 = /* @__PURE__ */ (0, import_web97.template)(`<label class="dialkit-color-field dialkit-color-field-hex"><input type=text><span class=dialkit-color-field-label>HEX`);
+var _tmpl$38 = /* @__PURE__ */ (0, import_web97.template)(`<button class=dialkit-color-palette-slot>`);
+var _tmpl$44 = /* @__PURE__ */ (0, import_web97.template)(`<div class="dialkit-color-slider dialkit-color-alpha dialkit-checker"><div class=dialkit-color-alpha-gradient></div><div class=dialkit-color-slider-thumb>`);
+var _tmpl$52 = /* @__PURE__ */ (0, import_web97.template)(`<div class=dialkit-color-palette>`);
+var _tmpl$62 = /* @__PURE__ */ (0, import_web97.template)(`<div class=dialkit-color-picker><div class=dialkit-color-sv><div class=dialkit-color-sv-thumb></div></div><div class="dialkit-color-slider dialkit-color-hue"><div class=dialkit-color-slider-thumb></div></div><div class=dialkit-color-fields>`);
 var FORMAT_OPTIONS = [{
   value: "hex",
   label: "HEX"
@@ -6129,8 +6134,8 @@ function ChannelField(props) {
       setDraft(String(props.value));
       e.currentTarget.select();
     });
-    (0, import_web105.insert)(_el$3, () => props.spec.label);
-    (0, import_web106.effect)(() => _el$2.value = display());
+    (0, import_web106.insert)(_el$3, () => props.spec.label);
+    (0, import_web107.effect)(() => _el$2.value = display());
     return _el$;
   })();
 }
@@ -6162,8 +6167,8 @@ function HexField(props) {
       setDraft(props.value);
       e.currentTarget.select();
     });
-    (0, import_web104.setAttribute)(_el$5, "spellcheck", false);
-    (0, import_web106.effect)(() => _el$5.value = (draft() ?? props.value).toUpperCase());
+    (0, import_web105.setAttribute)(_el$5, "spellcheck", false);
+    (0, import_web107.effect)(() => _el$5.value = (draft() ?? props.value).toUpperCase());
     return _el$4;
   })();
 }
@@ -6213,14 +6218,14 @@ function PaletteSlot(props) {
       }, LONG_PRESS_MS);
     };
     _el$6.$$contextmenu = (e) => e.preventDefault();
-    (0, import_web106.effect)((_p$) => {
+    (0, import_web107.effect)((_p$) => {
       var _v$ = String(props.color !== null), _v$2 = String(holding()), _v$3 = props.color ? {
         "--swatch-color": props.color
       } : void 0, _v$4 = props.color ? `${props.color.toUpperCase()} \u2014 click to apply, hold to clear` : "Save current color";
-      _v$ !== _p$.e && (0, import_web104.setAttribute)(_el$6, "data-filled", _p$.e = _v$);
-      _v$2 !== _p$.t && (0, import_web104.setAttribute)(_el$6, "data-holding", _p$.t = _v$2);
-      _p$.a = (0, import_web103.style)(_el$6, _v$3, _p$.a);
-      _v$4 !== _p$.o && (0, import_web104.setAttribute)(_el$6, "title", _p$.o = _v$4);
+      _v$ !== _p$.e && (0, import_web105.setAttribute)(_el$6, "data-filled", _p$.e = _v$);
+      _v$2 !== _p$.t && (0, import_web105.setAttribute)(_el$6, "data-holding", _p$.t = _v$2);
+      _p$.a = (0, import_web104.style)(_el$6, _v$3, _p$.a);
+      _v$4 !== _p$.o && (0, import_web105.setAttribute)(_el$6, "title", _p$.o = _v$4);
       return _p$;
     }, {
       e: void 0,
@@ -6293,36 +6298,36 @@ function ColorPickerPanel(props) {
   };
   return (() => {
     var _el$7 = _tmpl$62(), _el$8 = _el$7.firstChild, _el$9 = _el$8.firstChild, _el$0 = _el$8.nextSibling, _el$1 = _el$0.firstChild, _el$13 = _el$0.nextSibling;
-    (0, import_web101.addEventListener)(_el$8, "pointercancel", svDrag.onPointerCancel);
-    (0, import_web101.addEventListener)(_el$8, "pointerup", svDrag.onPointerUp, true);
-    (0, import_web101.addEventListener)(_el$8, "pointermove", svDrag.onPointerMove, true);
-    (0, import_web101.addEventListener)(_el$8, "pointerdown", svDrag.onPointerDown, true);
+    (0, import_web102.addEventListener)(_el$8, "pointercancel", svDrag.onPointerCancel);
+    (0, import_web102.addEventListener)(_el$8, "pointerup", svDrag.onPointerUp, true);
+    (0, import_web102.addEventListener)(_el$8, "pointermove", svDrag.onPointerMove, true);
+    (0, import_web102.addEventListener)(_el$8, "pointerdown", svDrag.onPointerDown, true);
     var _ref$ = svDrag.ref;
-    typeof _ref$ === "function" ? (0, import_web102.use)(_ref$, _el$8) : svDrag.ref = _el$8;
-    (0, import_web101.addEventListener)(_el$0, "pointercancel", hueDrag.onPointerCancel);
-    (0, import_web101.addEventListener)(_el$0, "pointerup", hueDrag.onPointerUp, true);
-    (0, import_web101.addEventListener)(_el$0, "pointermove", hueDrag.onPointerMove, true);
-    (0, import_web101.addEventListener)(_el$0, "pointerdown", hueDrag.onPointerDown, true);
+    typeof _ref$ === "function" ? (0, import_web103.use)(_ref$, _el$8) : svDrag.ref = _el$8;
+    (0, import_web102.addEventListener)(_el$0, "pointercancel", hueDrag.onPointerCancel);
+    (0, import_web102.addEventListener)(_el$0, "pointerup", hueDrag.onPointerUp, true);
+    (0, import_web102.addEventListener)(_el$0, "pointermove", hueDrag.onPointerMove, true);
+    (0, import_web102.addEventListener)(_el$0, "pointerdown", hueDrag.onPointerDown, true);
     var _ref$2 = hueDrag.ref;
-    typeof _ref$2 === "function" ? (0, import_web102.use)(_ref$2, _el$0) : hueDrag.ref = _el$0;
-    (0, import_web105.insert)(_el$7, (0, import_web99.createComponent)(import_solid_js16.Show, {
+    typeof _ref$2 === "function" ? (0, import_web103.use)(_ref$2, _el$0) : hueDrag.ref = _el$0;
+    (0, import_web106.insert)(_el$7, (0, import_web100.createComponent)(import_solid_js16.Show, {
       get when() {
         return alpha();
       },
       get children() {
         var _el$10 = _tmpl$44(), _el$11 = _el$10.firstChild, _el$12 = _el$11.nextSibling;
-        (0, import_web101.addEventListener)(_el$10, "pointercancel", alphaDrag.onPointerCancel);
-        (0, import_web101.addEventListener)(_el$10, "pointerup", alphaDrag.onPointerUp, true);
-        (0, import_web101.addEventListener)(_el$10, "pointermove", alphaDrag.onPointerMove, true);
-        (0, import_web101.addEventListener)(_el$10, "pointerdown", alphaDrag.onPointerDown, true);
+        (0, import_web102.addEventListener)(_el$10, "pointercancel", alphaDrag.onPointerCancel);
+        (0, import_web102.addEventListener)(_el$10, "pointerup", alphaDrag.onPointerUp, true);
+        (0, import_web102.addEventListener)(_el$10, "pointermove", alphaDrag.onPointerMove, true);
+        (0, import_web102.addEventListener)(_el$10, "pointerdown", alphaDrag.onPointerDown, true);
         var _ref$3 = alphaDrag.ref;
-        typeof _ref$3 === "function" ? (0, import_web102.use)(_ref$3, _el$10) : alphaDrag.ref = _el$10;
-        (0, import_web106.effect)((_p$) => {
+        typeof _ref$3 === "function" ? (0, import_web103.use)(_ref$3, _el$10) : alphaDrag.ref = _el$10;
+        (0, import_web107.effect)((_p$) => {
           var _v$5 = `linear-gradient(to right, transparent, ${opaqueHex()})`, _v$6 = `${hsva().a * 100}%`, _v$7 = opaqueHex(), _v$8 = Math.max(hsva().a, 0.15);
-          _v$5 !== _p$.e && (0, import_web100.setStyleProperty)(_el$11, "background", _p$.e = _v$5);
-          _v$6 !== _p$.t && (0, import_web100.setStyleProperty)(_el$12, "left", _p$.t = _v$6);
-          _v$7 !== _p$.a && (0, import_web100.setStyleProperty)(_el$12, "background", _p$.a = _v$7);
-          _v$8 !== _p$.o && (0, import_web100.setStyleProperty)(_el$12, "opacity", _p$.o = _v$8);
+          _v$5 !== _p$.e && (0, import_web101.setStyleProperty)(_el$11, "background", _p$.e = _v$5);
+          _v$6 !== _p$.t && (0, import_web101.setStyleProperty)(_el$12, "left", _p$.t = _v$6);
+          _v$7 !== _p$.a && (0, import_web101.setStyleProperty)(_el$12, "background", _p$.a = _v$7);
+          _v$8 !== _p$.o && (0, import_web101.setStyleProperty)(_el$12, "opacity", _p$.o = _v$8);
           return _p$;
         }, {
           e: void 0,
@@ -6333,7 +6338,7 @@ function ColorPickerPanel(props) {
         return _el$10;
       }
     }), _el$13);
-    (0, import_web105.insert)(_el$7, (0, import_web99.createComponent)(SegmentedControl, {
+    (0, import_web106.insert)(_el$7, (0, import_web100.createComponent)(SegmentedControl, {
       options: FORMAT_OPTIONS,
       get value() {
         return format();
@@ -6343,16 +6348,16 @@ function ColorPickerPanel(props) {
         setFormat(f);
       }
     }), _el$13);
-    (0, import_web105.insert)(_el$13, (0, import_web99.createComponent)(import_solid_js16.Show, {
+    (0, import_web106.insert)(_el$13, (0, import_web100.createComponent)(import_solid_js16.Show, {
       get when() {
         return format() === "hex";
       },
       get fallback() {
-        return (0, import_web99.createComponent)(import_solid_js16.For, {
+        return (0, import_web100.createComponent)(import_solid_js16.For, {
           get each() {
             return channelSpecs();
           },
-          children: (spec, i) => (0, import_web99.createComponent)(ChannelField, {
+          children: (spec, i) => (0, import_web100.createComponent)(ChannelField, {
             spec,
             get value() {
               return channelValues()[i()];
@@ -6362,7 +6367,7 @@ function ColorPickerPanel(props) {
         });
       },
       get children() {
-        return [(0, import_web99.createComponent)(HexField, {
+        return [(0, import_web100.createComponent)(HexField, {
           get value() {
             return currentHex();
           },
@@ -6370,12 +6375,12 @@ function ColorPickerPanel(props) {
             return alpha();
           },
           onCommit: applyHex
-        }), (0, import_web99.createComponent)(import_solid_js16.Show, {
+        }), (0, import_web100.createComponent)(import_solid_js16.Show, {
           get when() {
             return alpha();
           },
           get children() {
-            return (0, import_web99.createComponent)(ChannelField, {
+            return (0, import_web100.createComponent)(ChannelField, {
               spec: {
                 key: "a",
                 label: "A",
@@ -6396,19 +6401,19 @@ function ColorPickerPanel(props) {
         })];
       }
     }));
-    (0, import_web105.insert)(_el$7, (0, import_web99.createComponent)(import_solid_js16.Show, {
+    (0, import_web106.insert)(_el$7, (0, import_web100.createComponent)(import_solid_js16.Show, {
       get when() {
         return palette();
       },
       get children() {
         var _el$14 = _tmpl$52();
-        (0, import_web105.insert)(_el$14, (0, import_web99.createComponent)(import_solid_js16.For, {
+        (0, import_web106.insert)(_el$14, (0, import_web100.createComponent)(import_solid_js16.For, {
           get each() {
             return Array.from({
               length: PALETTE_SIZE
             }, (_, i) => i);
           },
-          children: (i) => (0, import_web99.createComponent)(PaletteSlot, {
+          children: (i) => (0, import_web100.createComponent)(PaletteSlot, {
             get color() {
               return slots()[i] ?? null;
             },
@@ -6423,15 +6428,15 @@ function ColorPickerPanel(props) {
         return _el$14;
       }
     }), null);
-    (0, import_web106.effect)((_p$) => {
+    (0, import_web107.effect)((_p$) => {
       var _v$9 = String(hsva().h), _v$0 = `${hsva().s * 100}%`, _v$1 = `${(1 - hsva().v) * 100}%`, _v$10 = opaqueHex(), _v$11 = `${hsva().h / 360 * 100}%`, _v$12 = `hsl(${hsva().h} 100% 50%)`, _v$13 = format();
-      _v$9 !== _p$.e && (0, import_web100.setStyleProperty)(_el$7, "--picker-hue", _p$.e = _v$9);
-      _v$0 !== _p$.t && (0, import_web100.setStyleProperty)(_el$9, "left", _p$.t = _v$0);
-      _v$1 !== _p$.a && (0, import_web100.setStyleProperty)(_el$9, "top", _p$.a = _v$1);
-      _v$10 !== _p$.o && (0, import_web100.setStyleProperty)(_el$9, "background", _p$.o = _v$10);
-      _v$11 !== _p$.i && (0, import_web100.setStyleProperty)(_el$1, "left", _p$.i = _v$11);
-      _v$12 !== _p$.n && (0, import_web100.setStyleProperty)(_el$1, "background", _p$.n = _v$12);
-      _v$13 !== _p$.s && (0, import_web104.setAttribute)(_el$13, "data-format", _p$.s = _v$13);
+      _v$9 !== _p$.e && (0, import_web101.setStyleProperty)(_el$7, "--picker-hue", _p$.e = _v$9);
+      _v$0 !== _p$.t && (0, import_web101.setStyleProperty)(_el$9, "left", _p$.t = _v$0);
+      _v$1 !== _p$.a && (0, import_web101.setStyleProperty)(_el$9, "top", _p$.a = _v$1);
+      _v$10 !== _p$.o && (0, import_web101.setStyleProperty)(_el$9, "background", _p$.o = _v$10);
+      _v$11 !== _p$.i && (0, import_web101.setStyleProperty)(_el$1, "left", _p$.i = _v$11);
+      _v$12 !== _p$.n && (0, import_web101.setStyleProperty)(_el$1, "background", _p$.n = _v$12);
+      _v$13 !== _p$.s && (0, import_web105.setAttribute)(_el$13, "data-format", _p$.s = _v$13);
       return _p$;
     }, {
       e: void 0,
@@ -6445,15 +6450,15 @@ function ColorPickerPanel(props) {
     return _el$7;
   })();
 }
-(0, import_web97.delegateEvents)(["input", "keydown", "contextmenu", "pointerdown", "pointermove", "pointerup", "click"]);
+(0, import_web98.delegateEvents)(["input", "keydown", "contextmenu", "pointerdown", "pointermove", "pointerup", "click"]);
 
 // src/solid/components/ColorControl.tsx
-var _tmpl$31 = /* @__PURE__ */ (0, import_web107.template)(`<input type=text class=dialkit-color-hex-input>`);
-var _tmpl$212 = /* @__PURE__ */ (0, import_web107.template)(`<div class=dialkit-color-picker-popover>`);
-var _tmpl$39 = /* @__PURE__ */ (0, import_web107.template)(`<div class=dialkit-color-control><span class=dialkit-color-label></span><div class=dialkit-color-inputs><span class=dialkit-color-hex-wrap><span class=dialkit-color-hash aria-hidden=true>#</span></span><button class=dialkit-color-swatch title="Pick color">`);
-var _tmpl$45 = /* @__PURE__ */ (0, import_web107.template)(`<span class=dialkit-color-hex>`);
-var _tmpl$53 = /* @__PURE__ */ (0, import_web107.template)(`<span class=dialkit-color-divider aria-hidden=true>`);
-var _tmpl$63 = /* @__PURE__ */ (0, import_web107.template)(`<span class=dialkit-color-opacity> <span class=dialkit-color-opacity-unit>%`);
+var _tmpl$31 = /* @__PURE__ */ (0, import_web108.template)(`<input type=text class=dialkit-color-hex-input>`);
+var _tmpl$212 = /* @__PURE__ */ (0, import_web108.template)(`<div class=dialkit-color-picker-popover>`);
+var _tmpl$39 = /* @__PURE__ */ (0, import_web108.template)(`<div class=dialkit-color-control><span class=dialkit-color-label></span><div class=dialkit-color-inputs><span class=dialkit-color-hex-wrap><span class=dialkit-color-hash aria-hidden=true>#</span></span><button class=dialkit-color-swatch title="Pick color">`);
+var _tmpl$45 = /* @__PURE__ */ (0, import_web108.template)(`<span class=dialkit-color-hex>`);
+var _tmpl$53 = /* @__PURE__ */ (0, import_web108.template)(`<span class=dialkit-color-divider aria-hidden=true>`);
+var _tmpl$63 = /* @__PURE__ */ (0, import_web108.template)(`<span class=dialkit-color-opacity> <span class=dialkit-color-opacity-unit>%`);
 var PICKER_WIDTH = 240;
 var PICKER_BASE_HEIGHT = 270;
 var PICKER_ALPHA_HEIGHT = 22;
@@ -6599,17 +6604,17 @@ function ColorControl(props) {
   };
   return (() => {
     var _el$ = _tmpl$39(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$4 = _el$3.firstChild, _el$5 = _el$4.firstChild, _el$7 = _el$4.nextSibling;
-    (0, import_web116.insert)(_el$2, () => props.label);
+    (0, import_web117.insert)(_el$2, () => props.label);
     _el$4.$$click = () => setIsEditing(true);
-    (0, import_web116.insert)(_el$4, (0, import_web112.createComponent)(import_solid_js17.Show, {
+    (0, import_web117.insert)(_el$4, (0, import_web113.createComponent)(import_solid_js17.Show, {
       get when() {
         return isEditing();
       },
       get fallback() {
         return (() => {
           var _el$9 = _tmpl$45();
-          (0, import_web116.insert)(_el$9, () => bareHex(props.value));
-          (0, import_web114.effect)(() => (0, import_web113.setAttribute)(_el$9, "aria-label", `Hex color for ${props.label}`));
+          (0, import_web117.insert)(_el$9, () => bareHex(props.value));
+          (0, import_web115.effect)(() => (0, import_web114.setAttribute)(_el$9, "aria-label", `Hex color for ${props.label}`));
           return _el$9;
         })();
       },
@@ -6618,45 +6623,45 @@ function ColorControl(props) {
         _el$6.$$keydown = handleKeyDown;
         _el$6.addEventListener("blur", handleTextSubmit);
         _el$6.$$input = (e) => setEditValue(e.currentTarget.value);
-        (0, import_web115.use)((el) => queueMicrotask(() => {
+        (0, import_web116.use)((el) => queueMicrotask(() => {
           el.focus();
           el.select();
         }), _el$6);
-        (0, import_web114.effect)(() => (0, import_web113.setAttribute)(_el$6, "aria-label", `Hex color for ${props.label}`));
-        (0, import_web114.effect)(() => _el$6.value = editValue());
+        (0, import_web115.effect)(() => (0, import_web114.setAttribute)(_el$6, "aria-label", `Hex color for ${props.label}`));
+        (0, import_web115.effect)(() => _el$6.value = editValue());
         return _el$6;
       }
     }), null);
-    (0, import_web116.insert)(_el$3, (0, import_web112.createComponent)(import_solid_js17.Show, {
+    (0, import_web117.insert)(_el$3, (0, import_web113.createComponent)(import_solid_js17.Show, {
       get when() {
-        return (0, import_web111.memo)(() => !!alpha())() && rgba();
+        return (0, import_web112.memo)(() => !!alpha())() && rgba();
       },
       children: (r) => [_tmpl$53(), (() => {
         var _el$1 = _tmpl$63(), _el$10 = _el$1.firstChild;
-        (0, import_web116.insert)(_el$1, () => opacityPercent(r()), _el$10);
+        (0, import_web117.insert)(_el$1, () => opacityPercent(r()), _el$10);
         return _el$1;
       })()]
     }), _el$7);
     _el$7.$$click = () => isOpen() ? closePopover() : openPopover();
     var _ref$ = swatchRef;
-    typeof _ref$ === "function" ? (0, import_web115.use)(_ref$, _el$7) : swatchRef = _el$7;
-    (0, import_web116.insert)(_el$, (0, import_web112.createComponent)(import_solid_js17.Show, {
+    typeof _ref$ === "function" ? (0, import_web116.use)(_ref$, _el$7) : swatchRef = _el$7;
+    (0, import_web117.insert)(_el$, (0, import_web113.createComponent)(import_solid_js17.Show, {
       get when() {
         return !!portalTarget();
       },
       get children() {
-        return (0, import_web112.createComponent)(import_web117.Portal, {
+        return (0, import_web113.createComponent)(import_web118.Portal, {
           get mount() {
             return portalTarget();
           },
           get children() {
-            return (0, import_web112.createComponent)(import_solid_js17.Show, {
+            return (0, import_web113.createComponent)(import_solid_js17.Show, {
               get when() {
-                return (0, import_web111.memo)(() => !!mounted())() && pos();
+                return (0, import_web112.memo)(() => !!mounted())() && pos();
               },
               get children() {
                 var _el$8 = _tmpl$212();
-                (0, import_web115.use)((el) => {
+                (0, import_web116.use)((el) => {
                   pickerRef = el;
                   const above = pos()?.above ?? false;
                   (0, import_motion5.animate)(el, {
@@ -6669,7 +6674,7 @@ function ColorControl(props) {
                     bounce: 0
                   });
                 }, _el$8);
-                (0, import_web116.insert)(_el$8, (0, import_web112.createComponent)(ColorPickerPanel, {
+                (0, import_web117.insert)(_el$8, (0, import_web113.createComponent)(ColorPickerPanel, {
                   get value() {
                     return props.value;
                   },
@@ -6681,7 +6686,7 @@ function ColorControl(props) {
                     return palette();
                   }
                 }));
-                (0, import_web114.effect)((_$p) => (0, import_web110.style)(_el$8, popoverStyle(), _$p));
+                (0, import_web115.effect)((_$p) => (0, import_web111.style)(_el$8, popoverStyle(), _$p));
                 return _el$8;
               }
             });
@@ -6689,12 +6694,12 @@ function ColorControl(props) {
         });
       }
     }), null);
-    (0, import_web114.effect)((_p$) => {
+    (0, import_web115.effect)((_p$) => {
       var _v$ = props.value, _v$2 = String(isOpen()), _v$3 = `Pick color for ${props.label}`, _v$4 = isOpen();
-      _v$ !== _p$.e && (0, import_web109.setStyleProperty)(_el$7, "--swatch-color", _p$.e = _v$);
-      _v$2 !== _p$.t && (0, import_web113.setAttribute)(_el$7, "data-open", _p$.t = _v$2);
-      _v$3 !== _p$.a && (0, import_web113.setAttribute)(_el$7, "aria-label", _p$.a = _v$3);
-      _v$4 !== _p$.o && (0, import_web113.setAttribute)(_el$7, "aria-expanded", _p$.o = _v$4);
+      _v$ !== _p$.e && (0, import_web110.setStyleProperty)(_el$7, "--swatch-color", _p$.e = _v$);
+      _v$2 !== _p$.t && (0, import_web114.setAttribute)(_el$7, "data-open", _p$.t = _v$2);
+      _v$3 !== _p$.a && (0, import_web114.setAttribute)(_el$7, "aria-label", _p$.a = _v$3);
+      _v$4 !== _p$.o && (0, import_web114.setAttribute)(_el$7, "aria-expanded", _p$.o = _v$4);
       return _p$;
     }, {
       e: void 0,
@@ -6705,10 +6710,9 @@ function ColorControl(props) {
     return _el$;
   })();
 }
-(0, import_web108.delegateEvents)(["click", "input", "keydown"]);
+(0, import_web109.delegateEvents)(["click", "input", "keydown"]);
 
 // src/solid/components/GradientControl.tsx
-var import_web135 = require("solid-js/web");
 var import_web136 = require("solid-js/web");
 var import_web137 = require("solid-js/web");
 var import_web138 = require("solid-js/web");
@@ -6718,12 +6722,12 @@ var import_web141 = require("solid-js/web");
 var import_web142 = require("solid-js/web");
 var import_web143 = require("solid-js/web");
 var import_web144 = require("solid-js/web");
-var import_solid_js20 = require("solid-js");
 var import_web145 = require("solid-js/web");
+var import_solid_js20 = require("solid-js");
+var import_web146 = require("solid-js/web");
 var import_motion6 = require("motion");
 
 // src/solid/components/GradientPanel.tsx
-var import_web127 = require("solid-js/web");
 var import_web128 = require("solid-js/web");
 var import_web129 = require("solid-js/web");
 var import_web130 = require("solid-js/web");
@@ -6731,10 +6735,10 @@ var import_web131 = require("solid-js/web");
 var import_web132 = require("solid-js/web");
 var import_web133 = require("solid-js/web");
 var import_web134 = require("solid-js/web");
+var import_web135 = require("solid-js/web");
 var import_solid_js19 = require("solid-js");
 
 // src/solid/components/GradientTransformPad.tsx
-var import_web118 = require("solid-js/web");
 var import_web119 = require("solid-js/web");
 var import_web120 = require("solid-js/web");
 var import_web121 = require("solid-js/web");
@@ -6743,13 +6747,14 @@ var import_web123 = require("solid-js/web");
 var import_web124 = require("solid-js/web");
 var import_web125 = require("solid-js/web");
 var import_web126 = require("solid-js/web");
+var import_web127 = require("solid-js/web");
 var import_solid_js18 = require("solid-js");
-var _tmpl$40 = /* @__PURE__ */ (0, import_web118.template)(`<div class=dialkit-gradient-pad-line>`);
-var _tmpl$213 = /* @__PURE__ */ (0, import_web118.template)(`<button type=button class=dialkit-gradient-pad-handle data-kind=major aria-label="Gradient size and rotation">`);
-var _tmpl$310 = /* @__PURE__ */ (0, import_web118.template)(`<button type=button class=dialkit-gradient-pad-handle data-kind=minor aria-label="Gradient squash">`);
-var _tmpl$46 = /* @__PURE__ */ (0, import_web118.template)(`<button type=button class=dialkit-gradient-pad-handle data-kind=angle aria-label="Gradient angle">`);
-var _tmpl$54 = /* @__PURE__ */ (0, import_web118.template)(`<button type=button class=dialkit-gradient-pad-handle data-kind=center aria-label="Gradient center">`);
-var _tmpl$64 = /* @__PURE__ */ (0, import_web118.template)(`<div class="dialkit-gradient-pad dialkit-checker"><div class=dialkit-gradient-pad-fill>`);
+var _tmpl$40 = /* @__PURE__ */ (0, import_web119.template)(`<div class=dialkit-gradient-pad-line>`);
+var _tmpl$213 = /* @__PURE__ */ (0, import_web119.template)(`<button type=button class=dialkit-gradient-pad-handle data-kind=major aria-label="Gradient size and rotation">`);
+var _tmpl$310 = /* @__PURE__ */ (0, import_web119.template)(`<button type=button class=dialkit-gradient-pad-handle data-kind=minor aria-label="Gradient squash">`);
+var _tmpl$46 = /* @__PURE__ */ (0, import_web119.template)(`<button type=button class=dialkit-gradient-pad-handle data-kind=angle aria-label="Gradient angle">`);
+var _tmpl$54 = /* @__PURE__ */ (0, import_web119.template)(`<button type=button class=dialkit-gradient-pad-handle data-kind=center aria-label="Gradient center">`);
+var _tmpl$64 = /* @__PURE__ */ (0, import_web119.template)(`<div class="dialkit-gradient-pad dialkit-checker"><div class=dialkit-gradient-pad-fill>`);
 var clamp5 = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 var wrap360 = (deg) => (deg % 360 + 360) % 360;
 var RAD = Math.PI / 180;
@@ -6848,20 +6853,20 @@ function GradientTransformPad(props) {
   return (() => {
     var _el$ = _tmpl$64(), _el$2 = _el$.firstChild;
     var _ref$ = padRef;
-    typeof _ref$ === "function" ? (0, import_web126.use)(_ref$, _el$) : padRef = _el$;
-    (0, import_web120.insert)(_el$, (0, import_web122.createComponent)(import_solid_js18.Show, {
+    typeof _ref$ === "function" ? (0, import_web127.use)(_ref$, _el$) : padRef = _el$;
+    (0, import_web121.insert)(_el$, (0, import_web123.createComponent)(import_solid_js18.Show, {
       get when() {
         return radial();
       },
       get children() {
         return [(() => {
           var _el$3 = _tmpl$40();
-          (0, import_web125.effect)((_p$) => {
+          (0, import_web126.effect)((_p$) => {
             var _v$ = `${cxPx()}px`, _v$2 = `${cyPx()}px`, _v$3 = `${majorLineLen()}px`, _v$4 = `rotate(${majorLineAngle()}deg)`;
-            _v$ !== _p$.e && (0, import_web124.setStyleProperty)(_el$3, "left", _p$.e = _v$);
-            _v$2 !== _p$.t && (0, import_web124.setStyleProperty)(_el$3, "top", _p$.t = _v$2);
-            _v$3 !== _p$.a && (0, import_web124.setStyleProperty)(_el$3, "width", _p$.a = _v$3);
-            _v$4 !== _p$.o && (0, import_web124.setStyleProperty)(_el$3, "transform", _p$.o = _v$4);
+            _v$ !== _p$.e && (0, import_web125.setStyleProperty)(_el$3, "left", _p$.e = _v$);
+            _v$2 !== _p$.t && (0, import_web125.setStyleProperty)(_el$3, "top", _p$.t = _v$2);
+            _v$3 !== _p$.a && (0, import_web125.setStyleProperty)(_el$3, "width", _p$.a = _v$3);
+            _v$4 !== _p$.o && (0, import_web125.setStyleProperty)(_el$3, "transform", _p$.o = _v$4);
             return _p$;
           }, {
             e: void 0,
@@ -6876,11 +6881,11 @@ function GradientTransformPad(props) {
           _el$4.addEventListener("pointercancel", onHandleUp);
           _el$4.$$pointerup = onHandleUp;
           _el$4.$$pointermove = onHandleMove;
-          (0, import_web123.addEventListener)(_el$4, "pointerdown", onHandleDown("major"), true);
-          (0, import_web125.effect)((_p$) => {
+          (0, import_web124.addEventListener)(_el$4, "pointerdown", onHandleDown("major"), true);
+          (0, import_web126.effect)((_p$) => {
             var _v$5 = `${major().x}px`, _v$6 = `${major().y}px`;
-            _v$5 !== _p$.e && (0, import_web124.setStyleProperty)(_el$4, "left", _p$.e = _v$5);
-            _v$6 !== _p$.t && (0, import_web124.setStyleProperty)(_el$4, "top", _p$.t = _v$6);
+            _v$5 !== _p$.e && (0, import_web125.setStyleProperty)(_el$4, "left", _p$.e = _v$5);
+            _v$6 !== _p$.t && (0, import_web125.setStyleProperty)(_el$4, "top", _p$.t = _v$6);
             return _p$;
           }, {
             e: void 0,
@@ -6893,11 +6898,11 @@ function GradientTransformPad(props) {
           _el$5.addEventListener("pointercancel", onHandleUp);
           _el$5.$$pointerup = onHandleUp;
           _el$5.$$pointermove = onHandleMove;
-          (0, import_web123.addEventListener)(_el$5, "pointerdown", onHandleDown("minor"), true);
-          (0, import_web125.effect)((_p$) => {
+          (0, import_web124.addEventListener)(_el$5, "pointerdown", onHandleDown("minor"), true);
+          (0, import_web126.effect)((_p$) => {
             var _v$7 = `${minor().x}px`, _v$8 = `${minor().y}px`;
-            _v$7 !== _p$.e && (0, import_web124.setStyleProperty)(_el$5, "left", _p$.e = _v$7);
-            _v$8 !== _p$.t && (0, import_web124.setStyleProperty)(_el$5, "top", _p$.t = _v$8);
+            _v$7 !== _p$.e && (0, import_web125.setStyleProperty)(_el$5, "left", _p$.e = _v$7);
+            _v$8 !== _p$.t && (0, import_web125.setStyleProperty)(_el$5, "top", _p$.t = _v$8);
             return _p$;
           }, {
             e: void 0,
@@ -6907,19 +6912,19 @@ function GradientTransformPad(props) {
         })()];
       }
     }), null);
-    (0, import_web120.insert)(_el$, (0, import_web122.createComponent)(import_solid_js18.Show, {
+    (0, import_web121.insert)(_el$, (0, import_web123.createComponent)(import_solid_js18.Show, {
       get when() {
         return !radial();
       },
       get children() {
         return [(() => {
           var _el$6 = _tmpl$40();
-          (0, import_web125.effect)((_p$) => {
+          (0, import_web126.effect)((_p$) => {
             var _v$9 = `${angleOx()}px`, _v$0 = `${angleOy()}px`, _v$1 = `${angleLineLen()}px`, _v$10 = `rotate(${angleLineAngle()}deg)`;
-            _v$9 !== _p$.e && (0, import_web124.setStyleProperty)(_el$6, "left", _p$.e = _v$9);
-            _v$0 !== _p$.t && (0, import_web124.setStyleProperty)(_el$6, "top", _p$.t = _v$0);
-            _v$1 !== _p$.a && (0, import_web124.setStyleProperty)(_el$6, "width", _p$.a = _v$1);
-            _v$10 !== _p$.o && (0, import_web124.setStyleProperty)(_el$6, "transform", _p$.o = _v$10);
+            _v$9 !== _p$.e && (0, import_web125.setStyleProperty)(_el$6, "left", _p$.e = _v$9);
+            _v$0 !== _p$.t && (0, import_web125.setStyleProperty)(_el$6, "top", _p$.t = _v$0);
+            _v$1 !== _p$.a && (0, import_web125.setStyleProperty)(_el$6, "width", _p$.a = _v$1);
+            _v$10 !== _p$.o && (0, import_web125.setStyleProperty)(_el$6, "transform", _p$.o = _v$10);
             return _p$;
           }, {
             e: void 0,
@@ -6934,11 +6939,11 @@ function GradientTransformPad(props) {
           _el$7.addEventListener("pointercancel", onHandleUp);
           _el$7.$$pointerup = onHandleUp;
           _el$7.$$pointermove = onHandleMove;
-          (0, import_web123.addEventListener)(_el$7, "pointerdown", onHandleDown("angle"), true);
-          (0, import_web125.effect)((_p$) => {
+          (0, import_web124.addEventListener)(_el$7, "pointerdown", onHandleDown("angle"), true);
+          (0, import_web126.effect)((_p$) => {
             var _v$11 = `${angleHandle().x}px`, _v$12 = `${angleHandle().y}px`;
-            _v$11 !== _p$.e && (0, import_web124.setStyleProperty)(_el$7, "left", _p$.e = _v$11);
-            _v$12 !== _p$.t && (0, import_web124.setStyleProperty)(_el$7, "top", _p$.t = _v$12);
+            _v$11 !== _p$.e && (0, import_web125.setStyleProperty)(_el$7, "left", _p$.e = _v$11);
+            _v$12 !== _p$.t && (0, import_web125.setStyleProperty)(_el$7, "top", _p$.t = _v$12);
             return _p$;
           }, {
             e: void 0,
@@ -6948,7 +6953,7 @@ function GradientTransformPad(props) {
         })()];
       }
     }), null);
-    (0, import_web120.insert)(_el$, (0, import_web122.createComponent)(import_solid_js18.Show, {
+    (0, import_web121.insert)(_el$, (0, import_web123.createComponent)(import_solid_js18.Show, {
       get when() {
         return radial() || conic();
       },
@@ -6958,11 +6963,11 @@ function GradientTransformPad(props) {
         _el$8.addEventListener("pointercancel", onHandleUp);
         _el$8.$$pointerup = onHandleUp;
         _el$8.$$pointermove = onHandleMove;
-        (0, import_web123.addEventListener)(_el$8, "pointerdown", onHandleDown("center"), true);
-        (0, import_web125.effect)((_p$) => {
+        (0, import_web124.addEventListener)(_el$8, "pointerdown", onHandleDown("center"), true);
+        (0, import_web126.effect)((_p$) => {
           var _v$13 = `${clamp5(cxPx(), 5, size().w - 5)}px`, _v$14 = `${clamp5(cyPx(), 5, size().h - 5)}px`;
-          _v$13 !== _p$.e && (0, import_web124.setStyleProperty)(_el$8, "left", _p$.e = _v$13);
-          _v$14 !== _p$.t && (0, import_web124.setStyleProperty)(_el$8, "top", _p$.t = _v$14);
+          _v$13 !== _p$.e && (0, import_web125.setStyleProperty)(_el$8, "left", _p$.e = _v$13);
+          _v$14 !== _p$.t && (0, import_web125.setStyleProperty)(_el$8, "top", _p$.t = _v$14);
           return _p$;
         }, {
           e: void 0,
@@ -6971,15 +6976,15 @@ function GradientTransformPad(props) {
         return _el$8;
       }
     }), null);
-    (0, import_web125.effect)((_p$) => {
+    (0, import_web126.effect)((_p$) => {
       var _v$15 = fill().background, _v$16 = fill().transform, _v$17 = fill().transformOrigin, _v$18 = `${fill().left}px`, _v$19 = `${fill().top}px`, _v$20 = `${fill().width}px`, _v$21 = `${fill().height}px`;
-      _v$15 !== _p$.e && (0, import_web124.setStyleProperty)(_el$2, "background", _p$.e = _v$15);
-      _v$16 !== _p$.t && (0, import_web124.setStyleProperty)(_el$2, "transform", _p$.t = _v$16);
-      _v$17 !== _p$.a && (0, import_web124.setStyleProperty)(_el$2, "transform-origin", _p$.a = _v$17);
-      _v$18 !== _p$.o && (0, import_web124.setStyleProperty)(_el$2, "left", _p$.o = _v$18);
-      _v$19 !== _p$.i && (0, import_web124.setStyleProperty)(_el$2, "top", _p$.i = _v$19);
-      _v$20 !== _p$.n && (0, import_web124.setStyleProperty)(_el$2, "width", _p$.n = _v$20);
-      _v$21 !== _p$.s && (0, import_web124.setStyleProperty)(_el$2, "height", _p$.s = _v$21);
+      _v$15 !== _p$.e && (0, import_web125.setStyleProperty)(_el$2, "background", _p$.e = _v$15);
+      _v$16 !== _p$.t && (0, import_web125.setStyleProperty)(_el$2, "transform", _p$.t = _v$16);
+      _v$17 !== _p$.a && (0, import_web125.setStyleProperty)(_el$2, "transform-origin", _p$.a = _v$17);
+      _v$18 !== _p$.o && (0, import_web125.setStyleProperty)(_el$2, "left", _p$.o = _v$18);
+      _v$19 !== _p$.i && (0, import_web125.setStyleProperty)(_el$2, "top", _p$.i = _v$19);
+      _v$20 !== _p$.n && (0, import_web125.setStyleProperty)(_el$2, "width", _p$.n = _v$20);
+      _v$21 !== _p$.s && (0, import_web125.setStyleProperty)(_el$2, "height", _p$.s = _v$21);
       return _p$;
     }, {
       e: void 0,
@@ -6993,12 +6998,12 @@ function GradientTransformPad(props) {
     return _el$;
   })();
 }
-(0, import_web119.delegateEvents)(["pointerdown", "pointermove", "pointerup"]);
+(0, import_web120.delegateEvents)(["pointerdown", "pointermove", "pointerup"]);
 
 // src/solid/components/GradientPanel.tsx
-var _tmpl$41 = /* @__PURE__ */ (0, import_web127.template)(`<div class=dialkit-gradient-panel><div class=dialkit-gradient-toolbar><button type=button class=dialkit-gradient-grip aria-label="Drag to move"title="Drag to move"><svg viewBox="0 0 24 24"fill=currentColor aria-hidden=true></svg></button></div><div class=dialkit-gradient-strip></div><span class=dialkit-gradient-divider aria-hidden=true>`);
-var _tmpl$214 = /* @__PURE__ */ (0, import_web127.template)(`<svg><circle r=1.5></svg>`, false, true, false);
-var _tmpl$311 = /* @__PURE__ */ (0, import_web127.template)(`<button type=button class=dialkit-gradient-stop>`);
+var _tmpl$41 = /* @__PURE__ */ (0, import_web128.template)(`<div class=dialkit-gradient-panel><div class=dialkit-gradient-toolbar><button type=button class=dialkit-gradient-grip aria-label="Drag to move"title="Drag to move"><svg viewBox="0 0 24 24"fill=currentColor aria-hidden=true></svg></button></div><div class=dialkit-gradient-strip></div><span class=dialkit-gradient-divider aria-hidden=true>`);
+var _tmpl$214 = /* @__PURE__ */ (0, import_web128.template)(`<svg><circle r=1.5></svg>`, false, true, false);
+var _tmpl$311 = /* @__PURE__ */ (0, import_web128.template)(`<button type=button class=dialkit-gradient-stop>`);
 var TYPE_OPTIONS = [{
   value: "linear",
   label: "Linear"
@@ -7178,15 +7183,15 @@ function GradientPanel(props) {
     _el$3.$$pointermove = onGripMove;
     _el$3.$$pointerdown = onGripDown;
     var _ref$ = gripRef;
-    typeof _ref$ === "function" ? (0, import_web134.use)(_ref$, _el$3) : gripRef = _el$3;
-    (0, import_web132.insert)(_el$4, (0, import_web133.createComponent)(import_solid_js19.For, {
+    typeof _ref$ === "function" ? (0, import_web135.use)(_ref$, _el$3) : gripRef = _el$3;
+    (0, import_web133.insert)(_el$4, (0, import_web134.createComponent)(import_solid_js19.For, {
       each: ICON_GRIP,
       children: (c) => (() => {
         var _el$7 = _tmpl$214();
-        (0, import_web131.effect)((_p$) => {
+        (0, import_web132.effect)((_p$) => {
           var _v$ = c.cx, _v$2 = c.cy;
-          _v$ !== _p$.e && (0, import_web129.setAttribute)(_el$7, "cx", _p$.e = _v$);
-          _v$2 !== _p$.t && (0, import_web129.setAttribute)(_el$7, "cy", _p$.t = _v$2);
+          _v$ !== _p$.e && (0, import_web130.setAttribute)(_el$7, "cx", _p$.e = _v$);
+          _v$2 !== _p$.t && (0, import_web130.setAttribute)(_el$7, "cy", _p$.t = _v$2);
           return _p$;
         }, {
           e: void 0,
@@ -7195,14 +7200,14 @@ function GradientPanel(props) {
         return _el$7;
       })()
     }));
-    (0, import_web132.insert)(_el$2, (0, import_web133.createComponent)(SegmentedControl, {
+    (0, import_web133.insert)(_el$2, (0, import_web134.createComponent)(SegmentedControl, {
       options: TYPE_OPTIONS,
       get value() {
         return props.value.type;
       },
       onChange: (t) => props.onChange(setGradientType(props.value, t))
     }), null);
-    (0, import_web132.insert)(_el$, (0, import_web133.createComponent)(GradientTransformPad, {
+    (0, import_web133.insert)(_el$, (0, import_web134.createComponent)(GradientTransformPad, {
       get value() {
         return props.value;
       },
@@ -7215,8 +7220,8 @@ function GradientPanel(props) {
     _el$5.$$pointermove = onPointerMove;
     _el$5.$$pointerdown = onPointerDown;
     var _ref$2 = stripRef;
-    typeof _ref$2 === "function" ? (0, import_web134.use)(_ref$2, _el$5) : stripRef = _el$5;
-    (0, import_web132.insert)(_el$5, (0, import_web133.createComponent)(import_solid_js19.For, {
+    typeof _ref$2 === "function" ? (0, import_web135.use)(_ref$2, _el$5) : stripRef = _el$5;
+    (0, import_web133.insert)(_el$5, (0, import_web134.createComponent)(import_solid_js19.For, {
       get each() {
         return props.value.stops;
       },
@@ -7224,17 +7229,17 @@ function GradientPanel(props) {
         const detaching = () => detach()?.index === i();
         return (() => {
           var _el$8 = _tmpl$311();
-          (0, import_web131.effect)((_p$) => {
+          (0, import_web132.effect)((_p$) => {
             var _v$3 = i(), _v$4 = String(i() === safeIndex()), _v$5 = String(i() === holdingIndex()), _v$6 = String(detaching()), _v$7 = `${stop.position * 100}%`, _v$8 = i() === safeIndex() ? 99 : i() + 1, _v$9 = stop.color, _v$0 = detaching() ? `${detach().y}px` : "0px", _v$1 = `Gradient stop ${i() + 1}`;
-            _v$3 !== _p$.e && (0, import_web129.setAttribute)(_el$8, "data-index", _p$.e = _v$3);
-            _v$4 !== _p$.t && (0, import_web129.setAttribute)(_el$8, "data-selected", _p$.t = _v$4);
-            _v$5 !== _p$.a && (0, import_web129.setAttribute)(_el$8, "data-holding", _p$.a = _v$5);
-            _v$6 !== _p$.o && (0, import_web129.setAttribute)(_el$8, "data-detaching", _p$.o = _v$6);
-            _v$7 !== _p$.i && (0, import_web130.setStyleProperty)(_el$8, "left", _p$.i = _v$7);
-            _v$8 !== _p$.n && (0, import_web130.setStyleProperty)(_el$8, "z-index", _p$.n = _v$8);
-            _v$9 !== _p$.s && (0, import_web130.setStyleProperty)(_el$8, "--swatch-color", _p$.s = _v$9);
-            _v$0 !== _p$.h && (0, import_web130.setStyleProperty)(_el$8, "--detach-y", _p$.h = _v$0);
-            _v$1 !== _p$.r && (0, import_web129.setAttribute)(_el$8, "aria-label", _p$.r = _v$1);
+            _v$3 !== _p$.e && (0, import_web130.setAttribute)(_el$8, "data-index", _p$.e = _v$3);
+            _v$4 !== _p$.t && (0, import_web130.setAttribute)(_el$8, "data-selected", _p$.t = _v$4);
+            _v$5 !== _p$.a && (0, import_web130.setAttribute)(_el$8, "data-holding", _p$.a = _v$5);
+            _v$6 !== _p$.o && (0, import_web130.setAttribute)(_el$8, "data-detaching", _p$.o = _v$6);
+            _v$7 !== _p$.i && (0, import_web131.setStyleProperty)(_el$8, "left", _p$.i = _v$7);
+            _v$8 !== _p$.n && (0, import_web131.setStyleProperty)(_el$8, "z-index", _p$.n = _v$8);
+            _v$9 !== _p$.s && (0, import_web131.setStyleProperty)(_el$8, "--swatch-color", _p$.s = _v$9);
+            _v$0 !== _p$.h && (0, import_web131.setStyleProperty)(_el$8, "--detach-y", _p$.h = _v$0);
+            _v$1 !== _p$.r && (0, import_web130.setAttribute)(_el$8, "aria-label", _p$.r = _v$1);
             return _p$;
           }, {
             e: void 0,
@@ -7251,14 +7256,14 @@ function GradientPanel(props) {
         })();
       }
     }));
-    (0, import_web132.insert)(_el$, (0, import_web133.createComponent)(import_solid_js19.Show, {
+    (0, import_web133.insert)(_el$, (0, import_web134.createComponent)(import_solid_js19.Show, {
       get when() {
         return safeIndex() + 1;
       },
       keyed: true,
       children: (keyed) => {
         const index = keyed - 1;
-        return (0, import_web133.createComponent)(ColorPickerPanel, {
+        return (0, import_web134.createComponent)(ColorPickerPanel, {
           get value() {
             return props.value.stops[index].color;
           },
@@ -7268,15 +7273,15 @@ function GradientPanel(props) {
         });
       }
     }), null);
-    (0, import_web131.effect)((_$p) => (0, import_web130.setStyleProperty)(_el$5, "--gradient-ramp", rampCss(previewStops())));
+    (0, import_web132.effect)((_$p) => (0, import_web131.setStyleProperty)(_el$5, "--gradient-ramp", rampCss(previewStops())));
     return _el$;
   })();
 }
-(0, import_web128.delegateEvents)(["pointerdown", "pointermove", "pointerup"]);
+(0, import_web129.delegateEvents)(["pointerdown", "pointermove", "pointerup"]);
 
 // src/solid/components/GradientControl.tsx
-var _tmpl$47 = /* @__PURE__ */ (0, import_web135.template)(`<div class=dialkit-gradient-popover>`);
-var _tmpl$215 = /* @__PURE__ */ (0, import_web135.template)(`<div class=dialkit-gradient-control><span class=dialkit-gradient-label></span><button class="dialkit-gradient-preview dialkit-checker"title="Edit gradient">`);
+var _tmpl$47 = /* @__PURE__ */ (0, import_web136.template)(`<div class=dialkit-gradient-popover>`);
+var _tmpl$215 = /* @__PURE__ */ (0, import_web136.template)(`<div class=dialkit-gradient-control><span class=dialkit-gradient-label></span><button class="dialkit-gradient-preview dialkit-checker"title="Edit gradient">`);
 var PANEL_WIDTH = 240;
 var PANEL_HEIGHT_ANGLED = 470;
 var PANEL_HEIGHT_RADIAL = 430;
@@ -7421,27 +7426,27 @@ function GradientControl(props) {
   };
   return (() => {
     var _el$ = _tmpl$215(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling;
-    (0, import_web144.insert)(_el$2, () => props.label);
+    (0, import_web145.insert)(_el$2, () => props.label);
     _el$3.$$click = () => isOpen() ? closePopover() : openPopover();
     var _ref$ = triggerRef;
-    typeof _ref$ === "function" ? (0, import_web143.use)(_ref$, _el$3) : triggerRef = _el$3;
-    (0, import_web144.insert)(_el$, (0, import_web141.createComponent)(import_solid_js20.Show, {
+    typeof _ref$ === "function" ? (0, import_web144.use)(_ref$, _el$3) : triggerRef = _el$3;
+    (0, import_web145.insert)(_el$, (0, import_web142.createComponent)(import_solid_js20.Show, {
       get when() {
         return !!portalTarget();
       },
       get children() {
-        return (0, import_web141.createComponent)(import_web145.Portal, {
+        return (0, import_web142.createComponent)(import_web146.Portal, {
           get mount() {
             return portalTarget();
           },
           get children() {
-            return (0, import_web141.createComponent)(import_solid_js20.Show, {
+            return (0, import_web142.createComponent)(import_solid_js20.Show, {
               get when() {
-                return (0, import_web142.memo)(() => !!mounted())() && pos();
+                return (0, import_web143.memo)(() => !!mounted())() && pos();
               },
               get children() {
                 var _el$4 = _tmpl$47();
-                (0, import_web143.use)((el) => {
+                (0, import_web144.use)((el) => {
                   panelRef = el;
                   const above = pos()?.above ?? false;
                   (0, import_motion6.animate)(el, {
@@ -7454,14 +7459,14 @@ function GradientControl(props) {
                     bounce: 0
                   });
                 }, _el$4);
-                (0, import_web144.insert)(_el$4, (0, import_web141.createComponent)(GradientPanel, {
+                (0, import_web145.insert)(_el$4, (0, import_web142.createComponent)(GradientPanel, {
                   get value() {
                     return props.value;
                   },
                   onChange: (v) => props.onChange(v),
                   onDrag: onPanelDrag
                 }));
-                (0, import_web140.effect)((_$p) => (0, import_web139.style)(_el$4, popoverStyle(), _$p));
+                (0, import_web141.effect)((_$p) => (0, import_web140.style)(_el$4, popoverStyle(), _$p));
                 return _el$4;
               }
             });
@@ -7469,12 +7474,12 @@ function GradientControl(props) {
         });
       }
     }), null);
-    (0, import_web140.effect)((_p$) => {
+    (0, import_web141.effect)((_p$) => {
       var _v$ = gradientToCss(props.value), _v$2 = String(isOpen()), _v$3 = `Edit gradient for ${props.label}`, _v$4 = isOpen();
-      _v$ !== _p$.e && (0, import_web138.setStyleProperty)(_el$3, "--gradient-preview", _p$.e = _v$);
-      _v$2 !== _p$.t && (0, import_web137.setAttribute)(_el$3, "data-open", _p$.t = _v$2);
-      _v$3 !== _p$.a && (0, import_web137.setAttribute)(_el$3, "aria-label", _p$.a = _v$3);
-      _v$4 !== _p$.o && (0, import_web137.setAttribute)(_el$3, "aria-expanded", _p$.o = _v$4);
+      _v$ !== _p$.e && (0, import_web139.setStyleProperty)(_el$3, "--gradient-preview", _p$.e = _v$);
+      _v$2 !== _p$.t && (0, import_web138.setAttribute)(_el$3, "data-open", _p$.t = _v$2);
+      _v$3 !== _p$.a && (0, import_web138.setAttribute)(_el$3, "aria-label", _p$.a = _v$3);
+      _v$4 !== _p$.o && (0, import_web138.setAttribute)(_el$3, "aria-expanded", _p$.o = _v$4);
       return _p$;
     }, {
       e: void 0,
@@ -7485,13 +7490,12 @@ function GradientControl(props) {
     return _el$;
   })();
 }
-(0, import_web136.delegateEvents)(["click"]);
+(0, import_web137.delegateEvents)(["click"]);
 
 // src/solid/components/XYControl.tsx
-var import_web156 = require("solid-js/web");
+var import_web157 = require("solid-js/web");
 
 // src/solid/components/XYPad.tsx
-var import_web146 = require("solid-js/web");
 var import_web147 = require("solid-js/web");
 var import_web148 = require("solid-js/web");
 var import_web149 = require("solid-js/web");
@@ -7501,10 +7505,11 @@ var import_web152 = require("solid-js/web");
 var import_web153 = require("solid-js/web");
 var import_web154 = require("solid-js/web");
 var import_web155 = require("solid-js/web");
+var import_web156 = require("solid-js/web");
 var import_solid_js21 = require("solid-js");
-var _tmpl$48 = /* @__PURE__ */ (0, import_web146.template)(`<span>`);
-var _tmpl$216 = /* @__PURE__ */ (0, import_web146.template)(`<div class=dialkit-xy-grid aria-hidden=true>`);
-var _tmpl$312 = /* @__PURE__ */ (0, import_web146.template)(`<div class=dialkit-xy><div class=dialkit-xy-header><span class=dialkit-xy-label></span></div><div class=dialkit-xy-area role=application aria-roledescription="2D pad"><div class="dialkit-xy-axis dialkit-xy-axis-x"aria-hidden=true></div><div class="dialkit-xy-axis dialkit-xy-axis-y"aria-hidden=true></div><div class="dialkit-xy-guide dialkit-xy-guide-v"aria-hidden=true></div><div class="dialkit-xy-guide dialkit-xy-guide-h"aria-hidden=true></div><div class=dialkit-xy-thumb aria-hidden=true>`);
+var _tmpl$48 = /* @__PURE__ */ (0, import_web147.template)(`<span>`);
+var _tmpl$216 = /* @__PURE__ */ (0, import_web147.template)(`<div class=dialkit-xy-grid aria-hidden=true>`);
+var _tmpl$312 = /* @__PURE__ */ (0, import_web147.template)(`<div class=dialkit-xy><div class=dialkit-xy-header><span class=dialkit-xy-label></span></div><div class=dialkit-xy-area role=application aria-roledescription="2D pad"><div class="dialkit-xy-axis dialkit-xy-axis-x"aria-hidden=true></div><div class="dialkit-xy-axis dialkit-xy-axis-y"aria-hidden=true></div><div class="dialkit-xy-guide dialkit-xy-guide-v"aria-hidden=true></div><div class="dialkit-xy-guide dialkit-xy-guide-h"aria-hidden=true></div><div class=dialkit-xy-thumb aria-hidden=true>`);
 var DEFAULT_GRID_X = 5;
 var DEFAULT_GRID_Y = 5;
 var FINE_DRAG = 0.15;
@@ -7671,15 +7676,15 @@ function XYPad(props) {
   const topPct = () => `${point().y * 100}%`;
   return (() => {
     var _el$ = _tmpl$312(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$5 = _el$2.nextSibling, _el$7 = _el$5.firstChild, _el$8 = _el$7.nextSibling, _el$9 = _el$8.nextSibling, _el$0 = _el$9.nextSibling, _el$1 = _el$0.nextSibling;
-    (0, import_web155.insert)(_el$3, () => props.label, null);
-    (0, import_web155.insert)(_el$3, (0, import_web152.createComponent)(import_solid_js21.Show, {
+    (0, import_web156.insert)(_el$3, () => props.label, null);
+    (0, import_web156.insert)(_el$3, (0, import_web153.createComponent)(import_solid_js21.Show, {
       get when() {
         return props.shortcut;
       },
       get children() {
         var _el$4 = _tmpl$48();
-        (0, import_web155.insert)(_el$4, () => formatSliderShortcut(props.shortcut));
-        (0, import_web154.effect)(() => (0, import_web153.className)(_el$4, `dialkit-shortcut-pill${props.shortcutActive ? " dialkit-shortcut-pill-active" : ""}`));
+        (0, import_web156.insert)(_el$4, () => formatSliderShortcut(props.shortcut));
+        (0, import_web155.effect)(() => (0, import_web154.className)(_el$4, `dialkit-shortcut-pill${props.shortcutActive ? " dialkit-shortcut-pill-active" : ""}`));
         return _el$4;
       }
     }), null);
@@ -7699,41 +7704,41 @@ function XYPad(props) {
     _el$5.$$pointermove = handlePointerMove;
     _el$5.$$pointerdown = handlePointerDown;
     var _ref$ = areaRef;
-    typeof _ref$ === "function" ? (0, import_web151.use)(_ref$, _el$5) : areaRef = _el$5;
-    (0, import_web155.insert)(_el$5, (0, import_web152.createComponent)(import_solid_js21.Show, {
+    typeof _ref$ === "function" ? (0, import_web152.use)(_ref$, _el$5) : areaRef = _el$5;
+    (0, import_web156.insert)(_el$5, (0, import_web153.createComponent)(import_solid_js21.Show, {
       get when() {
         return showGrid();
       },
       get children() {
         var _el$6 = _tmpl$216();
-        (0, import_web154.effect)((_$p) => (0, import_web150.style)(_el$6, {
+        (0, import_web155.effect)((_$p) => (0, import_web151.style)(_el$6, {
           "--dial-xy-grid-step-x": `${100 / gridX()}%`,
           "--dial-xy-grid-step-y": `${100 / gridY()}%`
         }, _$p));
         return _el$6;
       }
     }), _el$7);
-    (0, import_web155.insert)(_el$7, xVisual);
-    (0, import_web155.insert)(_el$8, yVisual);
-    (0, import_web154.effect)((_p$) => {
+    (0, import_web156.insert)(_el$7, xVisual);
+    (0, import_web156.insert)(_el$8, yVisual);
+    (0, import_web155.effect)((_p$) => {
       var _v$ = String(active()), _v$2 = String(disabled()), _v$3 = `${size()}px`, _v$4 = props.label, _v$5 = readout(), _v$6 = xAxis().min, _v$7 = xAxis().max, _v$8 = props.value.x, _v$9 = disabled() || void 0, _v$0 = disabled() ? -1 : 0, _v$1 = String(active()), _v$10 = String(draggingState()), _v$11 = String(disabled()), _v$12 = leftPct(), _v$13 = topPct(), _v$14 = leftPct(), _v$15 = topPct();
-      _v$ !== _p$.e && (0, import_web149.setAttribute)(_el$, "data-active", _p$.e = _v$);
-      _v$2 !== _p$.t && (0, import_web149.setAttribute)(_el$, "data-disabled", _p$.t = _v$2);
-      _v$3 !== _p$.a && (0, import_web148.setStyleProperty)(_el$5, "height", _p$.a = _v$3);
-      _v$4 !== _p$.o && (0, import_web149.setAttribute)(_el$5, "aria-label", _p$.o = _v$4);
-      _v$5 !== _p$.i && (0, import_web149.setAttribute)(_el$5, "aria-valuetext", _p$.i = _v$5);
-      _v$6 !== _p$.n && (0, import_web149.setAttribute)(_el$5, "aria-valuemin", _p$.n = _v$6);
-      _v$7 !== _p$.s && (0, import_web149.setAttribute)(_el$5, "aria-valuemax", _p$.s = _v$7);
-      _v$8 !== _p$.h && (0, import_web149.setAttribute)(_el$5, "aria-valuenow", _p$.h = _v$8);
-      _v$9 !== _p$.r && (0, import_web149.setAttribute)(_el$5, "aria-disabled", _p$.r = _v$9);
-      _v$0 !== _p$.d && (0, import_web149.setAttribute)(_el$5, "tabindex", _p$.d = _v$0);
-      _v$1 !== _p$.l && (0, import_web149.setAttribute)(_el$5, "data-active", _p$.l = _v$1);
-      _v$10 !== _p$.u && (0, import_web149.setAttribute)(_el$5, "data-dragging", _p$.u = _v$10);
-      _v$11 !== _p$.c && (0, import_web149.setAttribute)(_el$5, "data-disabled", _p$.c = _v$11);
-      _v$12 !== _p$.w && (0, import_web148.setStyleProperty)(_el$9, "left", _p$.w = _v$12);
-      _v$13 !== _p$.m && (0, import_web148.setStyleProperty)(_el$0, "top", _p$.m = _v$13);
-      _v$14 !== _p$.f && (0, import_web148.setStyleProperty)(_el$1, "left", _p$.f = _v$14);
-      _v$15 !== _p$.y && (0, import_web148.setStyleProperty)(_el$1, "top", _p$.y = _v$15);
+      _v$ !== _p$.e && (0, import_web150.setAttribute)(_el$, "data-active", _p$.e = _v$);
+      _v$2 !== _p$.t && (0, import_web150.setAttribute)(_el$, "data-disabled", _p$.t = _v$2);
+      _v$3 !== _p$.a && (0, import_web149.setStyleProperty)(_el$5, "height", _p$.a = _v$3);
+      _v$4 !== _p$.o && (0, import_web150.setAttribute)(_el$5, "aria-label", _p$.o = _v$4);
+      _v$5 !== _p$.i && (0, import_web150.setAttribute)(_el$5, "aria-valuetext", _p$.i = _v$5);
+      _v$6 !== _p$.n && (0, import_web150.setAttribute)(_el$5, "aria-valuemin", _p$.n = _v$6);
+      _v$7 !== _p$.s && (0, import_web150.setAttribute)(_el$5, "aria-valuemax", _p$.s = _v$7);
+      _v$8 !== _p$.h && (0, import_web150.setAttribute)(_el$5, "aria-valuenow", _p$.h = _v$8);
+      _v$9 !== _p$.r && (0, import_web150.setAttribute)(_el$5, "aria-disabled", _p$.r = _v$9);
+      _v$0 !== _p$.d && (0, import_web150.setAttribute)(_el$5, "tabindex", _p$.d = _v$0);
+      _v$1 !== _p$.l && (0, import_web150.setAttribute)(_el$5, "data-active", _p$.l = _v$1);
+      _v$10 !== _p$.u && (0, import_web150.setAttribute)(_el$5, "data-dragging", _p$.u = _v$10);
+      _v$11 !== _p$.c && (0, import_web150.setAttribute)(_el$5, "data-disabled", _p$.c = _v$11);
+      _v$12 !== _p$.w && (0, import_web149.setStyleProperty)(_el$9, "left", _p$.w = _v$12);
+      _v$13 !== _p$.m && (0, import_web149.setStyleProperty)(_el$0, "top", _p$.m = _v$13);
+      _v$14 !== _p$.f && (0, import_web149.setStyleProperty)(_el$1, "left", _p$.f = _v$14);
+      _v$15 !== _p$.y && (0, import_web149.setStyleProperty)(_el$1, "top", _p$.y = _v$15);
       return _p$;
     }, {
       e: void 0,
@@ -7757,11 +7762,11 @@ function XYPad(props) {
     return _el$;
   })();
 }
-(0, import_web147.delegateEvents)(["pointerdown", "pointermove", "pointerup", "dblclick", "click", "keydown"]);
+(0, import_web148.delegateEvents)(["pointerdown", "pointermove", "pointerup", "dblclick", "click", "keydown"]);
 
 // src/solid/components/XYControl.tsx
 function XYControl(props) {
-  return (0, import_web156.createComponent)(XYPad, {
+  return (0, import_web157.createComponent)(XYPad, {
     get label() {
       return props.label;
     },
@@ -7802,7 +7807,7 @@ function XYControl(props) {
 }
 
 // src/solid/components/ControlRenderer.tsx
-var _tmpl$49 = /* @__PURE__ */ (0, import_web157.template)(`<button class=dialkit-button>`);
+var _tmpl$49 = /* @__PURE__ */ (0, import_web158.template)(`<button class=dialkit-button>`);
 function ControlRenderer(props) {
   const shortcut = useShortcutContext();
   const hintId = (control) => hintDomId(props.panelId, control.path);
@@ -7811,7 +7816,7 @@ function ControlRenderer(props) {
     const active = () => shortcut().activePanelId === props.panelId && shortcut().activePath === control.path;
     switch (control.type) {
       case "slider":
-        return (0, import_web162.createComponent)(Slider, {
+        return (0, import_web163.createComponent)(Slider, {
           get label() {
             return control.label;
           },
@@ -7836,7 +7841,7 @@ function ControlRenderer(props) {
           }
         });
       case "range":
-        return (0, import_web162.createComponent)(RangeSlider, {
+        return (0, import_web163.createComponent)(RangeSlider, {
           get label() {
             return control.label;
           },
@@ -7858,7 +7863,7 @@ function ControlRenderer(props) {
           onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
         });
       case "toggle":
-        return (0, import_web162.createComponent)(Toggle, {
+        return (0, import_web163.createComponent)(Toggle, {
           get label() {
             return control.label;
           },
@@ -7874,7 +7879,7 @@ function ControlRenderer(props) {
           }
         });
       case "spring":
-        return (0, import_web162.createComponent)(SpringControl, {
+        return (0, import_web163.createComponent)(SpringControl, {
           get panelId() {
             return props.panelId;
           },
@@ -7890,7 +7895,7 @@ function ControlRenderer(props) {
           onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
         });
       case "transition":
-        return (0, import_web162.createComponent)(TransitionControl, {
+        return (0, import_web163.createComponent)(TransitionControl, {
           get panelId() {
             return props.panelId;
           },
@@ -7911,7 +7916,7 @@ function ControlRenderer(props) {
       case "folder":
         if (control.module) {
           const enabledPath = `${control.path}._enabled`;
-          return (0, import_web162.createComponent)(ModuleFolder, {
+          return (0, import_web163.createComponent)(ModuleFolder, {
             get title() {
               return control.label;
             },
@@ -7929,7 +7934,7 @@ function ControlRenderer(props) {
               return hintId(control);
             },
             get children() {
-              return (0, import_web162.createComponent)(import_solid_js22.For, {
+              return (0, import_web163.createComponent)(import_solid_js22.For, {
                 get each() {
                   return control.children ?? [];
                 },
@@ -7938,12 +7943,15 @@ function ControlRenderer(props) {
             }
           });
         }
-        return (0, import_web162.createComponent)(Folder, {
+        return (0, import_web163.createComponent)(Folder, {
           get title() {
             return control.label;
           },
           get defaultOpen() {
             return control.defaultOpen ?? true;
+          },
+          get collapsible() {
+            return control.collapsible ?? true;
           },
           get hint() {
             return control.hint;
@@ -7952,7 +7960,7 @@ function ControlRenderer(props) {
             return hintId(control);
           },
           get children() {
-            return (0, import_web162.createComponent)(import_solid_js22.For, {
+            return (0, import_web163.createComponent)(import_solid_js22.For, {
               get each() {
                 return control.children ?? [];
               },
@@ -7961,7 +7969,7 @@ function ControlRenderer(props) {
           }
         });
       case "text":
-        return (0, import_web162.createComponent)(TextControl, {
+        return (0, import_web163.createComponent)(TextControl, {
           get label() {
             return control.label;
           },
@@ -7974,7 +7982,7 @@ function ControlRenderer(props) {
           }
         });
       case "select":
-        return (0, import_web162.createComponent)(SelectControl, {
+        return (0, import_web163.createComponent)(SelectControl, {
           get label() {
             return control.label;
           },
@@ -7987,7 +7995,7 @@ function ControlRenderer(props) {
           onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
         });
       case "color":
-        return (0, import_web162.createComponent)(ColorControl, {
+        return (0, import_web163.createComponent)(ColorControl, {
           get label() {
             return control.label;
           },
@@ -8003,7 +8011,7 @@ function ControlRenderer(props) {
           }
         });
       case "gradient":
-        return (0, import_web162.createComponent)(GradientControl, {
+        return (0, import_web163.createComponent)(GradientControl, {
           get label() {
             return control.label;
           },
@@ -8013,7 +8021,7 @@ function ControlRenderer(props) {
           onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
         });
       case "xy":
-        return (0, import_web162.createComponent)(XYControl, {
+        return (0, import_web163.createComponent)(XYControl, {
           get label() {
             return control.label;
           },
@@ -8053,8 +8061,8 @@ function ControlRenderer(props) {
         return (() => {
           var _el$ = _tmpl$49();
           _el$.$$click = () => DialStore.triggerAction(props.panelId, control.path);
-          (0, import_web160.insert)(_el$, () => control.label);
-          (0, import_web159.effect)(() => _el$.disabled = DialStore.isDisabled(props.panelId, control.path));
+          (0, import_web161.insert)(_el$, () => control.label);
+          (0, import_web160.effect)(() => _el$.disabled = DialStore.isDisabled(props.panelId, control.path));
           return _el$;
         })();
       default:
@@ -8064,7 +8072,7 @@ function ControlRenderer(props) {
   const renderControl = (control) => {
     const node = renderControlNode(control);
     if (control.type === "folder") return node;
-    return (0, import_web162.createComponent)(ControlShell, {
+    return (0, import_web163.createComponent)(ControlShell, {
       get hint() {
         return control.hint;
       },
@@ -8086,17 +8094,16 @@ function ControlRenderer(props) {
       children: node
     });
   };
-  return (0, import_web162.createComponent)(import_solid_js22.For, {
+  return (0, import_web163.createComponent)(import_solid_js22.For, {
     get each() {
       return props.controls;
     },
     children: renderControl
   });
 }
-(0, import_web158.delegateEvents)(["click"]);
+(0, import_web159.delegateEvents)(["click"]);
 
 // src/solid/components/PresetManager.tsx
-var import_web163 = require("solid-js/web");
 var import_web164 = require("solid-js/web");
 var import_web165 = require("solid-js/web");
 var import_web166 = require("solid-js/web");
@@ -8105,14 +8112,15 @@ var import_web168 = require("solid-js/web");
 var import_web169 = require("solid-js/web");
 var import_web170 = require("solid-js/web");
 var import_web171 = require("solid-js/web");
-var import_solid_js23 = require("solid-js");
 var import_web172 = require("solid-js/web");
+var import_solid_js23 = require("solid-js");
+var import_web173 = require("solid-js/web");
 var import_motion7 = require("motion");
-var _tmpl$50 = /* @__PURE__ */ (0, import_web163.template)(`<div class=dialkit-preset-item><span class=dialkit-preset-name>Version 1`);
-var _tmpl$217 = /* @__PURE__ */ (0, import_web163.template)(`<div class="dialkit-root dialkit-preset-dropdown"style=position:fixed>`);
-var _tmpl$313 = /* @__PURE__ */ (0, import_web163.template)(`<div class=dialkit-preset-manager><button class=dialkit-preset-trigger><span class=dialkit-preset-label></span><svg class=dialkit-select-chevron viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
-var _tmpl$410 = /* @__PURE__ */ (0, import_web163.template)(`<button class=dialkit-preset-delete title="Delete preset"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round><path></path><path></path><path></path><path></path><path>`);
-var _tmpl$55 = /* @__PURE__ */ (0, import_web163.template)(`<div class=dialkit-preset-item><span class=dialkit-preset-name>`);
+var _tmpl$50 = /* @__PURE__ */ (0, import_web164.template)(`<div class=dialkit-preset-item><span class=dialkit-preset-name>Version 1`);
+var _tmpl$217 = /* @__PURE__ */ (0, import_web164.template)(`<div class="dialkit-root dialkit-preset-dropdown"style=position:fixed>`);
+var _tmpl$313 = /* @__PURE__ */ (0, import_web164.template)(`<div class=dialkit-preset-manager><button class=dialkit-preset-trigger><span class=dialkit-preset-label></span><svg class=dialkit-select-chevron viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
+var _tmpl$410 = /* @__PURE__ */ (0, import_web164.template)(`<button class=dialkit-preset-delete title="Delete preset"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round><path></path><path></path><path></path><path></path><path>`);
+var _tmpl$55 = /* @__PURE__ */ (0, import_web164.template)(`<div class=dialkit-preset-item><span class=dialkit-preset-name>`);
 function PresetManager(props) {
   const [isOpen, setIsOpen] = (0, import_solid_js23.createSignal)(false);
   const [mounted, setMounted] = (0, import_solid_js23.createSignal)(false);
@@ -8227,31 +8235,31 @@ function PresetManager(props) {
     var _el$ = _tmpl$313(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild;
     _el$2.$$click = toggle;
     var _ref$ = triggerRef;
-    typeof _ref$ === "function" ? (0, import_web171.use)(_ref$, _el$2) : triggerRef = _el$2;
-    (0, import_web169.insert)(_el$3, (() => {
-      var _c$ = (0, import_web170.memo)(() => !!activePreset());
+    typeof _ref$ === "function" ? (0, import_web172.use)(_ref$, _el$2) : triggerRef = _el$2;
+    (0, import_web170.insert)(_el$3, (() => {
+      var _c$ = (0, import_web171.memo)(() => !!activePreset());
       return () => _c$() ? activePreset().name : props.providerMode ? "Presets" : "Version 1";
     })());
     var _ref$2 = chevronRef;
-    typeof _ref$2 === "function" ? (0, import_web171.use)(_ref$2, _el$4) : chevronRef = _el$4;
-    (0, import_web168.setAttribute)(_el$5, "d", ICON_CHEVRON);
-    (0, import_web169.insert)(_el$, (0, import_web166.createComponent)(import_solid_js23.Show, {
+    typeof _ref$2 === "function" ? (0, import_web172.use)(_ref$2, _el$4) : chevronRef = _el$4;
+    (0, import_web169.setAttribute)(_el$5, "d", ICON_CHEVRON);
+    (0, import_web170.insert)(_el$, (0, import_web167.createComponent)(import_solid_js23.Show, {
       get when() {
         return !!portalTarget();
       },
       get children() {
-        return (0, import_web166.createComponent)(import_web172.Portal, {
+        return (0, import_web167.createComponent)(import_web173.Portal, {
           get mount() {
             return portalTarget();
           },
           get children() {
-            return (0, import_web166.createComponent)(import_solid_js23.Show, {
+            return (0, import_web167.createComponent)(import_solid_js23.Show, {
               get when() {
                 return mounted();
               },
               get children() {
                 var _el$6 = _tmpl$217();
-                (0, import_web171.use)((el) => {
+                (0, import_web172.use)((el) => {
                   dropdownRef = el;
                   (0, import_motion7.animate)(el, {
                     opacity: [0, 1],
@@ -8263,39 +8271,39 @@ function PresetManager(props) {
                     bounce: 0
                   });
                 }, _el$6);
-                (0, import_web169.insert)(_el$6, (0, import_web166.createComponent)(import_solid_js23.Show, {
+                (0, import_web170.insert)(_el$6, (0, import_web167.createComponent)(import_solid_js23.Show, {
                   get when() {
                     return !props.providerMode;
                   },
                   get children() {
                     var _el$7 = _tmpl$50();
                     _el$7.$$click = () => handleSelect(null);
-                    (0, import_web167.effect)(() => (0, import_web168.setAttribute)(_el$7, "data-active", String(!props.activePresetId)));
+                    (0, import_web168.effect)(() => (0, import_web169.setAttribute)(_el$7, "data-active", String(!props.activePresetId)));
                     return _el$7;
                   }
                 }), null);
-                (0, import_web169.insert)(_el$6, (0, import_web166.createComponent)(import_solid_js23.For, {
+                (0, import_web170.insert)(_el$6, (0, import_web167.createComponent)(import_solid_js23.For, {
                   get each() {
                     return props.presets;
                   },
                   children: (preset) => (() => {
                     var _el$8 = _tmpl$55(), _el$9 = _el$8.firstChild;
                     _el$8.$$click = () => handleSelect(preset.id);
-                    (0, import_web169.insert)(_el$9, () => preset.name);
-                    (0, import_web169.insert)(_el$8, (0, import_web166.createComponent)(import_solid_js23.Show, {
+                    (0, import_web170.insert)(_el$9, () => preset.name);
+                    (0, import_web170.insert)(_el$8, (0, import_web167.createComponent)(import_solid_js23.Show, {
                       get when() {
                         return preset.deletable ?? true;
                       },
                       get children() {
                         var _el$0 = _tmpl$410(), _el$1 = _el$0.firstChild, _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$11.nextSibling, _el$13 = _el$12.nextSibling, _el$14 = _el$13.nextSibling;
                         _el$0.$$click = (e) => handleDelete(e, preset.id);
-                        (0, import_web167.effect)((_p$) => {
+                        (0, import_web168.effect)((_p$) => {
                           var _v$7 = ICON_TRASH[0], _v$8 = ICON_TRASH[1], _v$9 = ICON_TRASH[2], _v$0 = ICON_TRASH[3], _v$1 = ICON_TRASH[4];
-                          _v$7 !== _p$.e && (0, import_web168.setAttribute)(_el$10, "d", _p$.e = _v$7);
-                          _v$8 !== _p$.t && (0, import_web168.setAttribute)(_el$11, "d", _p$.t = _v$8);
-                          _v$9 !== _p$.a && (0, import_web168.setAttribute)(_el$12, "d", _p$.a = _v$9);
-                          _v$0 !== _p$.o && (0, import_web168.setAttribute)(_el$13, "d", _p$.o = _v$0);
-                          _v$1 !== _p$.i && (0, import_web168.setAttribute)(_el$14, "d", _p$.i = _v$1);
+                          _v$7 !== _p$.e && (0, import_web169.setAttribute)(_el$10, "d", _p$.e = _v$7);
+                          _v$8 !== _p$.t && (0, import_web169.setAttribute)(_el$11, "d", _p$.t = _v$8);
+                          _v$9 !== _p$.a && (0, import_web169.setAttribute)(_el$12, "d", _p$.a = _v$9);
+                          _v$0 !== _p$.o && (0, import_web169.setAttribute)(_el$13, "d", _p$.o = _v$0);
+                          _v$1 !== _p$.i && (0, import_web169.setAttribute)(_el$14, "d", _p$.i = _v$1);
                           return _p$;
                         }, {
                           e: void 0,
@@ -8307,15 +8315,15 @@ function PresetManager(props) {
                         return _el$0;
                       }
                     }), null);
-                    (0, import_web167.effect)(() => (0, import_web168.setAttribute)(_el$8, "data-active", String(preset.id === props.activePresetId)));
+                    (0, import_web168.effect)(() => (0, import_web169.setAttribute)(_el$8, "data-active", String(preset.id === props.activePresetId)));
                     return _el$8;
                   })()
                 }), null);
-                (0, import_web167.effect)((_p$) => {
+                (0, import_web168.effect)((_p$) => {
                   var _v$ = `${pos().top}px`, _v$2 = `${pos().left}px`, _v$3 = `${pos().width}px`;
-                  _v$ !== _p$.e && (0, import_web165.setStyleProperty)(_el$6, "top", _p$.e = _v$);
-                  _v$2 !== _p$.t && (0, import_web165.setStyleProperty)(_el$6, "left", _p$.t = _v$2);
-                  _v$3 !== _p$.a && (0, import_web165.setStyleProperty)(_el$6, "min-width", _p$.a = _v$3);
+                  _v$ !== _p$.e && (0, import_web166.setStyleProperty)(_el$6, "top", _p$.e = _v$);
+                  _v$2 !== _p$.t && (0, import_web166.setStyleProperty)(_el$6, "left", _p$.t = _v$2);
+                  _v$3 !== _p$.a && (0, import_web166.setStyleProperty)(_el$6, "min-width", _p$.a = _v$3);
                   return _p$;
                 }, {
                   e: void 0,
@@ -8329,11 +8337,11 @@ function PresetManager(props) {
         });
       }
     }), null);
-    (0, import_web167.effect)((_p$) => {
+    (0, import_web168.effect)((_p$) => {
       var _v$4 = String(isOpen()), _v$5 = String(!!activePreset()), _v$6 = String(!hasPresets());
-      _v$4 !== _p$.e && (0, import_web168.setAttribute)(_el$2, "data-open", _p$.e = _v$4);
-      _v$5 !== _p$.t && (0, import_web168.setAttribute)(_el$2, "data-has-preset", _p$.t = _v$5);
-      _v$6 !== _p$.a && (0, import_web168.setAttribute)(_el$2, "data-disabled", _p$.a = _v$6);
+      _v$4 !== _p$.e && (0, import_web169.setAttribute)(_el$2, "data-open", _p$.e = _v$4);
+      _v$5 !== _p$.t && (0, import_web169.setAttribute)(_el$2, "data-has-preset", _p$.t = _v$5);
+      _v$6 !== _p$.a && (0, import_web169.setAttribute)(_el$2, "data-disabled", _p$.a = _v$6);
       return _p$;
     }, {
       e: void 0,
@@ -8343,12 +8351,12 @@ function PresetManager(props) {
     return _el$;
   })();
 }
-(0, import_web164.delegateEvents)(["click"]);
+(0, import_web165.delegateEvents)(["click"]);
 
 // src/solid/components/Panel.tsx
-var _tmpl$51 = /* @__PURE__ */ (0, import_web173.template)(`<button class=dialkit-toolbar-add title="Add preset"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path></path><path></path><path></path><path></path><path>`);
-var _tmpl$218 = /* @__PURE__ */ (0, import_web173.template)(`<button class=dialkit-toolbar-copy title="Copy parameters"><span class=dialkit-toolbar-copy-icon-wrap><span class=dialkit-toolbar-copy-icon style=opacity:1;transform:scale(1);filter:blur(0px)><svg viewBox="0 0 24 24"fill=none width=16 height=16><path stroke=currentColor stroke-width=2 stroke-linejoin=round></path><path fill=currentColor></path><path stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round></path></svg></span><span class=dialkit-toolbar-copy-icon style=opacity:0;transform:scale(0.5);filter:blur(4px)><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round width=16 height=16><path></path></svg></span></span>Copy`);
-var _tmpl$314 = /* @__PURE__ */ (0, import_web173.template)(`<div class=dialkit-panel-wrapper>`);
+var _tmpl$51 = /* @__PURE__ */ (0, import_web174.template)(`<button class=dialkit-toolbar-add title="Add preset"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path></path><path></path><path></path><path></path><path>`);
+var _tmpl$218 = /* @__PURE__ */ (0, import_web174.template)(`<button class=dialkit-toolbar-copy title="Copy parameters"><span class=dialkit-toolbar-copy-icon-wrap><span class=dialkit-toolbar-copy-icon style=opacity:1;transform:scale(1);filter:blur(0px)><svg viewBox="0 0 24 24"fill=none width=16 height=16><path stroke=currentColor stroke-width=2 stroke-linejoin=round></path><path fill=currentColor></path><path stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round></path></svg></span><span class=dialkit-toolbar-copy-icon style=opacity:0;transform:scale(0.5);filter:blur(4px)><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round width=16 height=16><path></path></svg></span></span>Copy`);
+var _tmpl$314 = /* @__PURE__ */ (0, import_web174.template)(`<div class=dialkit-panel-wrapper>`);
 function Panel(props) {
   const [copied, setCopied] = (0, import_solid_js24.createSignal)(false);
   const [isPanelOpen, setIsPanelOpen] = (0, import_solid_js24.createSignal)(props.defaultOpen ?? true);
@@ -8460,7 +8468,7 @@ Apply these values as the new defaults in the createDialKit call.`;
       scale: 1
     }, tapTransition);
   };
-  const renderControls = () => (0, import_web180.createComponent)(ControlRenderer, {
+  const renderControls = () => (0, import_web181.createComponent)(ControlRenderer, {
     get panelId() {
       return props.panel.id;
     },
@@ -8479,14 +8487,14 @@ Apply these values as the new defaults in the createDialKit call.`;
     _el$.$$pointerdown = handleAddTapStart;
     _el$.$$click = handleAddPreset;
     var _ref$ = addButtonRef;
-    typeof _ref$ === "function" ? (0, import_web179.use)(_ref$, _el$) : addButtonRef = _el$;
-    (0, import_web178.effect)((_p$) => {
+    typeof _ref$ === "function" ? (0, import_web180.use)(_ref$, _el$) : addButtonRef = _el$;
+    (0, import_web179.effect)((_p$) => {
       var _v$ = ICON_ADD_PRESET[0], _v$2 = ICON_ADD_PRESET[1], _v$3 = ICON_ADD_PRESET[2], _v$4 = ICON_ADD_PRESET[3], _v$5 = ICON_ADD_PRESET[4];
-      _v$ !== _p$.e && (0, import_web177.setAttribute)(_el$3, "d", _p$.e = _v$);
-      _v$2 !== _p$.t && (0, import_web177.setAttribute)(_el$4, "d", _p$.t = _v$2);
-      _v$3 !== _p$.a && (0, import_web177.setAttribute)(_el$5, "d", _p$.a = _v$3);
-      _v$4 !== _p$.o && (0, import_web177.setAttribute)(_el$6, "d", _p$.o = _v$4);
-      _v$5 !== _p$.i && (0, import_web177.setAttribute)(_el$7, "d", _p$.i = _v$5);
+      _v$ !== _p$.e && (0, import_web178.setAttribute)(_el$3, "d", _p$.e = _v$);
+      _v$2 !== _p$.t && (0, import_web178.setAttribute)(_el$4, "d", _p$.t = _v$2);
+      _v$3 !== _p$.a && (0, import_web178.setAttribute)(_el$5, "d", _p$.a = _v$3);
+      _v$4 !== _p$.o && (0, import_web178.setAttribute)(_el$6, "d", _p$.o = _v$4);
+      _v$5 !== _p$.i && (0, import_web178.setAttribute)(_el$7, "d", _p$.i = _v$5);
       return _p$;
     }, {
       e: void 0,
@@ -8496,7 +8504,7 @@ Apply these values as the new defaults in the createDialKit call.`;
       i: void 0
     });
     return _el$;
-  })(), (0, import_web180.createComponent)(PresetManager, {
+  })(), (0, import_web181.createComponent)(PresetManager, {
     get panelId() {
       return props.panel.id;
     },
@@ -8518,17 +8526,17 @@ Apply these values as the new defaults in the createDialKit call.`;
     _el$8.$$pointerdown = handleCopyTapStart;
     _el$8.$$click = handleCopy;
     var _ref$2 = copyButtonRef;
-    typeof _ref$2 === "function" ? (0, import_web179.use)(_ref$2, _el$8) : copyButtonRef = _el$8;
+    typeof _ref$2 === "function" ? (0, import_web180.use)(_ref$2, _el$8) : copyButtonRef = _el$8;
     var _ref$3 = copyClipboardIconRef;
-    typeof _ref$3 === "function" ? (0, import_web179.use)(_ref$3, _el$0) : copyClipboardIconRef = _el$0;
+    typeof _ref$3 === "function" ? (0, import_web180.use)(_ref$3, _el$0) : copyClipboardIconRef = _el$0;
     var _ref$4 = copyCheckIconRef;
-    typeof _ref$4 === "function" ? (0, import_web179.use)(_ref$4, _el$13) : copyCheckIconRef = _el$13;
-    (0, import_web177.setAttribute)(_el$15, "d", ICON_CHECK);
-    (0, import_web178.effect)((_p$) => {
+    typeof _ref$4 === "function" ? (0, import_web180.use)(_ref$4, _el$13) : copyCheckIconRef = _el$13;
+    (0, import_web178.setAttribute)(_el$15, "d", ICON_CHECK);
+    (0, import_web179.effect)((_p$) => {
       var _v$6 = ICON_CLIPBOARD.board, _v$7 = ICON_CLIPBOARD.sparkle, _v$8 = ICON_CLIPBOARD.body;
-      _v$6 !== _p$.e && (0, import_web177.setAttribute)(_el$10, "d", _p$.e = _v$6);
-      _v$7 !== _p$.t && (0, import_web177.setAttribute)(_el$11, "d", _p$.t = _v$7);
-      _v$8 !== _p$.a && (0, import_web177.setAttribute)(_el$12, "d", _p$.a = _v$8);
+      _v$6 !== _p$.e && (0, import_web178.setAttribute)(_el$10, "d", _p$.e = _v$6);
+      _v$7 !== _p$.t && (0, import_web178.setAttribute)(_el$11, "d", _p$.t = _v$7);
+      _v$8 !== _p$.a && (0, import_web178.setAttribute)(_el$12, "d", _p$.a = _v$8);
       return _p$;
     }, {
       e: void 0,
@@ -8536,10 +8544,10 @@ Apply these values as the new defaults in the createDialKit call.`;
       a: void 0
     });
     return _el$8;
-  })(), (0, import_web176.memo)(() => props.toolbarExtra)];
+  })(), (0, import_web177.memo)(() => props.toolbarExtra)];
   return (() => {
     var _el$16 = _tmpl$314();
-    (0, import_web175.insert)(_el$16, (0, import_web180.createComponent)(Folder, {
+    (0, import_web176.insert)(_el$16, (0, import_web181.createComponent)(Folder, {
       get title() {
         return props.panel.name;
       },
@@ -8559,38 +8567,38 @@ Apply these values as the new defaults in the createDialKit call.`;
     return _el$16;
   })();
 }
-(0, import_web174.delegateEvents)(["click", "pointerdown", "pointerup"]);
+(0, import_web175.delegateEvents)(["click", "pointerdown", "pointerup"]);
 
 // src/solid/components/Timeline/TimelineToggleButton.tsx
-var import_web181 = require("solid-js/web");
 var import_web182 = require("solid-js/web");
 var import_web183 = require("solid-js/web");
 var import_web184 = require("solid-js/web");
 var import_web185 = require("solid-js/web");
 var import_web186 = require("solid-js/web");
+var import_web187 = require("solid-js/web");
 var import_solid_js25 = require("solid-js");
-var _tmpl$56 = /* @__PURE__ */ (0, import_web181.template)(`<button class="dialkit-toolbar-add dialkit-timeline-toolbar-toggle"><svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
-var _tmpl$219 = /* @__PURE__ */ (0, import_web181.template)(`<svg><path fill=currentColor></svg>`, false, true, false);
+var _tmpl$56 = /* @__PURE__ */ (0, import_web182.template)(`<button class="dialkit-toolbar-add dialkit-timeline-toolbar-toggle"><svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
+var _tmpl$219 = /* @__PURE__ */ (0, import_web182.template)(`<svg><path fill=currentColor></svg>`, false, true, false);
 function TimelineToggleButton() {
   const visible = fromStore(() => TimelineUiStore.getVisible(), (notify2) => TimelineUiStore.subscribe(notify2));
   const label = () => visible() ? "Hide timeline" : "Show timeline";
   return (() => {
     var _el$ = _tmpl$56(), _el$2 = _el$.firstChild;
     _el$.$$click = () => TimelineUiStore.toggle();
-    (0, import_web185.insert)(_el$2, (0, import_web186.createComponent)(import_solid_js25.For, {
+    (0, import_web186.insert)(_el$2, (0, import_web187.createComponent)(import_solid_js25.For, {
       each: ICON_TIMELINE,
       children: (path) => (() => {
         var _el$3 = _tmpl$219();
-        (0, import_web183.setAttribute)(_el$3, "d", path);
+        (0, import_web184.setAttribute)(_el$3, "d", path);
         return _el$3;
       })()
     }));
-    (0, import_web184.effect)((_p$) => {
+    (0, import_web185.effect)((_p$) => {
       var _v$ = visible() || void 0, _v$2 = visible(), _v$3 = label(), _v$4 = label();
-      _v$ !== _p$.e && (0, import_web183.setAttribute)(_el$, "data-active", _p$.e = _v$);
-      _v$2 !== _p$.t && (0, import_web183.setAttribute)(_el$, "aria-pressed", _p$.t = _v$2);
-      _v$3 !== _p$.a && (0, import_web183.setAttribute)(_el$, "aria-label", _p$.a = _v$3);
-      _v$4 !== _p$.o && (0, import_web183.setAttribute)(_el$, "title", _p$.o = _v$4);
+      _v$ !== _p$.e && (0, import_web184.setAttribute)(_el$, "data-active", _p$.e = _v$);
+      _v$2 !== _p$.t && (0, import_web184.setAttribute)(_el$, "aria-pressed", _p$.t = _v$2);
+      _v$3 !== _p$.a && (0, import_web184.setAttribute)(_el$, "aria-label", _p$.a = _v$3);
+      _v$4 !== _p$.o && (0, import_web184.setAttribute)(_el$, "title", _p$.o = _v$4);
       return _p$;
     }, {
       e: void 0,
@@ -8601,13 +8609,13 @@ function TimelineToggleButton() {
     return _el$;
   })();
 }
-(0, import_web182.delegateEvents)(["click"]);
+(0, import_web183.delegateEvents)(["click"]);
 
 // src/solid/components/DialRoot.tsx
 var import_meta2 = {};
-var _tmpl$57 = /* @__PURE__ */ (0, import_web187.template)(`<div class=dialkit-root><div class=dialkit-panel>`);
-var _tmpl$220 = /* @__PURE__ */ (0, import_web187.template)(`<div class=dialkit-timeline-toolkit-only>Timeline`);
-var _tmpl$315 = /* @__PURE__ */ (0, import_web187.template)(`<div class=dialkit-panel-wrapper>`);
+var _tmpl$57 = /* @__PURE__ */ (0, import_web188.template)(`<div class=dialkit-root><div class=dialkit-panel>`);
+var _tmpl$220 = /* @__PURE__ */ (0, import_web188.template)(`<div class=dialkit-timeline-toolkit-only>Timeline`);
+var _tmpl$315 = /* @__PURE__ */ (0, import_web188.template)(`<div class=dialkit-panel-wrapper>`);
 var isDevDefault2 = typeof process !== "undefined" && process?.env?.NODE_ENV ? process.env.NODE_ENV !== "production" : typeof import_meta2 !== "undefined" && import_meta2.env?.MODE ? import_meta2.env.MODE !== "production" : true;
 function DialRoot(props) {
   if ((props.productionEnabled ?? isDevDefault2) === false) return null;
@@ -8630,18 +8638,18 @@ function DialRoot(props) {
       unsubTimelines();
     });
   });
-  const timelineToggle = () => timelineCount() > 0 ? (0, import_web192.createComponent)(TimelineToggleButton, {}) : null;
-  const content = () => (0, import_web192.createComponent)(ShortcutListener, {
+  const timelineToggle = () => timelineCount() > 0 ? (0, import_web193.createComponent)(TimelineToggleButton, {}) : null;
+  const content = () => (0, import_web193.createComponent)(ShortcutListener, {
     get children() {
       var _el$ = _tmpl$57(), _el$2 = _el$.firstChild;
-      (0, import_web191.insert)(_el$2, (0, import_web192.createComponent)(import_solid_js26.Show, {
+      (0, import_web192.insert)(_el$2, (0, import_web193.createComponent)(import_solid_js26.Show, {
         get when() {
           return panels().length > 0;
         },
         get fallback() {
           return (() => {
             var _el$3 = _tmpl$315();
-            (0, import_web191.insert)(_el$3, (0, import_web192.createComponent)(Folder, {
+            (0, import_web192.insert)(_el$3, (0, import_web193.createComponent)(Folder, {
               title: "DialKit",
               get defaultOpen() {
                 return inline() || (props.defaultOpen ?? true);
@@ -8661,11 +8669,11 @@ function DialRoot(props) {
           })();
         },
         get children() {
-          return (0, import_web192.createComponent)(import_solid_js26.For, {
+          return (0, import_web193.createComponent)(import_solid_js26.For, {
             get each() {
               return panels();
             },
-            children: (panel) => (0, import_web192.createComponent)(Panel, {
+            children: (panel) => (0, import_web193.createComponent)(Panel, {
               panel,
               get defaultOpen() {
                 return inline() || (props.defaultOpen ?? true);
@@ -8680,12 +8688,12 @@ function DialRoot(props) {
           });
         }
       }));
-      (0, import_web190.effect)((_p$) => {
+      (0, import_web191.effect)((_p$) => {
         var _v$ = props.mode ?? "popover", _v$2 = props.theme ?? "system", _v$3 = inline() ? void 0 : props.position ?? "top-right", _v$4 = props.mode ?? "popover";
-        _v$ !== _p$.e && (0, import_web189.setAttribute)(_el$, "data-mode", _p$.e = _v$);
-        _v$2 !== _p$.t && (0, import_web189.setAttribute)(_el$, "data-theme", _p$.t = _v$2);
-        _v$3 !== _p$.a && (0, import_web189.setAttribute)(_el$2, "data-position", _p$.a = _v$3);
-        _v$4 !== _p$.o && (0, import_web189.setAttribute)(_el$2, "data-mode", _p$.o = _v$4);
+        _v$ !== _p$.e && (0, import_web190.setAttribute)(_el$, "data-mode", _p$.e = _v$);
+        _v$2 !== _p$.t && (0, import_web190.setAttribute)(_el$, "data-theme", _p$.t = _v$2);
+        _v$3 !== _p$.a && (0, import_web190.setAttribute)(_el$2, "data-position", _p$.a = _v$3);
+        _v$4 !== _p$.o && (0, import_web190.setAttribute)(_el$2, "data-mode", _p$.o = _v$4);
         return _p$;
       }, {
         e: void 0,
@@ -8696,12 +8704,12 @@ function DialRoot(props) {
       return _el$;
     }
   });
-  return (0, import_web192.createComponent)(import_solid_js26.Show, {
+  return (0, import_web193.createComponent)(import_solid_js26.Show, {
     get when() {
-      return (0, import_web188.memo)(() => !!(mounted() && typeof window !== "undefined"))() && (panels().length > 0 || timelineCount() > 0);
+      return (0, import_web189.memo)(() => !!(mounted() && typeof window !== "undefined"))() && (panels().length > 0 || timelineCount() > 0);
     },
     get children() {
-      return (0, import_web192.createComponent)(import_solid_js26.Show, {
+      return (0, import_web193.createComponent)(import_solid_js26.Show, {
         get when() {
           return !inline();
         },
@@ -8709,7 +8717,7 @@ function DialRoot(props) {
           return content();
         },
         get children() {
-          return (0, import_web192.createComponent)(import_web193.Portal, {
+          return (0, import_web193.createComponent)(import_web194.Portal, {
             get mount() {
               return document.body;
             },
@@ -8724,7 +8732,6 @@ function DialRoot(props) {
 }
 
 // src/solid/components/Timeline/DialTimeline.tsx
-var import_web194 = require("solid-js/web");
 var import_web195 = require("solid-js/web");
 var import_web196 = require("solid-js/web");
 var import_web197 = require("solid-js/web");
@@ -8735,43 +8742,44 @@ var import_web201 = require("solid-js/web");
 var import_web202 = require("solid-js/web");
 var import_web203 = require("solid-js/web");
 var import_web204 = require("solid-js/web");
-var import_solid_js27 = require("solid-js");
 var import_web205 = require("solid-js/web");
-var _tmpl$58 = /* @__PURE__ */ (0, import_web194.template)(`<div class="dialkit-root dialkit-timeline"><div class=dialkit-timeline-resize-handle role=separator aria-label="Resize timeline height"aria-orientation=horizontal title="Drag to resize timeline"></div><div class=dialkit-timeline-dock>`);
-var _tmpl$221 = /* @__PURE__ */ (0, import_web194.template)(`<svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
-var _tmpl$316 = /* @__PURE__ */ (0, import_web194.template)(`<button class=dialkit-toolbar-add><span style=position:relative;width:16px;height:16px>`);
-var _tmpl$411 = /* @__PURE__ */ (0, import_web194.template)(`<svg viewBox="0 0 24 24"fill=none aria-hidden=true><path fill=currentColor>`);
-var _tmpl$59 = /* @__PURE__ */ (0, import_web194.template)(`<svg><path fill=currentColor></svg>`, false, true, false);
-var _tmpl$65 = /* @__PURE__ */ (0, import_web194.template)(`<button class=dialkit-toolbar-add title=Replay aria-label=Replay><svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
-var _tmpl$72 = /* @__PURE__ */ (0, import_web194.template)(`<div class=dialkit-timeline-overview title="Drag to scrub the full timeline"><div class=dialkit-timeline-overview-viewport></div><div class=dialkit-timeline-overview-progress></div><div class=dialkit-timeline-overview-playhead>`);
-var _tmpl$82 = /* @__PURE__ */ (0, import_web194.template)(`<div class=dialkit-timeline-playhead-control role=slider aria-label="Timeline current time"aria-valuemin=0 title="Drag to scrub the timeline"><div class=dialkit-timeline-playhead-stem></div><div class=dialkit-timeline-playhead-anchor><div class=dialkit-timeline-playhead-flag>`);
-var _tmpl$92 = /* @__PURE__ */ (0, import_web194.template)(`<div class="dialkit-timeline-row dialkit-timeline-group-row"><div class=dialkit-timeline-label><button class=dialkit-timeline-group-toggle></button><span></span></div><div class=dialkit-timeline-lane>`);
-var _tmpl$02 = /* @__PURE__ */ (0, import_web194.template)(`<button class=dialkit-timeline-group-toggle>`);
-var _tmpl$1 = /* @__PURE__ */ (0, import_web194.template)(`<div class=dialkit-timeline-row><div class=dialkit-timeline-label></div><div class=dialkit-timeline-lane>`);
-var _tmpl$102 = /* @__PURE__ */ (0, import_web194.template)(`<div class="dialkit-timeline-row dialkit-timeline-track-row"><div class=dialkit-timeline-label></div><div class=dialkit-timeline-lane>`);
-var _tmpl$112 = /* @__PURE__ */ (0, import_web194.template)(`<svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path>`);
-var _tmpl$122 = /* @__PURE__ */ (0, import_web194.template)(`<div class=dialkit-timeline-scroll-row><div class=dialkit-timeline-label></div><div class=dialkit-timeline-horizontal-scroll aria-label="Timeline horizontal scroll"><div>`);
-var _tmpl$132 = /* @__PURE__ */ (0, import_web194.template)(`<div class=dialkit-timeline-body><div class=dialkit-timeline-grid><div class="dialkit-timeline-row dialkit-timeline-ruler-row"><div class=dialkit-timeline-label></div><div class=dialkit-timeline-ruler title="Click to seek \xB7 drag to set a loop region \xB7 Option-drag to zoom \xB7 Shift-drag to reset zoom">`);
-var _tmpl$142 = /* @__PURE__ */ (0, import_web194.template)(`<div class=dialkit-timeline-section><div class=dialkit-timeline-header><div class=dialkit-timeline-identity><span class=dialkit-timeline-title></span></div><div class=dialkit-timeline-actions><button class=dialkit-timeline-loop-toggle><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round aria-hidden=true></svg></button><button class=dialkit-toolbar-add title="Add timeline version"aria-label="Add timeline version"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round aria-hidden=true></svg></button><button class=dialkit-toolbar-add title="Copy parameters"><span style=position:relative;width:16px;height:16px></span></button><button class=dialkit-timeline-chevron>`);
-var _tmpl$152 = /* @__PURE__ */ (0, import_web194.template)(`<svg><path></svg>`, false, true, false);
-var _tmpl$162 = /* @__PURE__ */ (0, import_web194.template)(`<svg viewBox="0 0 24 24"fill=none aria-hidden=true><path stroke=currentColor stroke-width=2 stroke-linejoin=round></path><path fill=currentColor></path><path stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round>`);
-var _tmpl$172 = /* @__PURE__ */ (0, import_web194.template)(`<div class=dialkit-timeline-loop-dim style=left:0px>`);
-var _tmpl$182 = /* @__PURE__ */ (0, import_web194.template)(`<div class=dialkit-timeline-loop-dim style=right:0px>`);
-var _tmpl$192 = /* @__PURE__ */ (0, import_web194.template)(`<div class=dialkit-timeline-loop-band>`);
-var _tmpl$202 = /* @__PURE__ */ (0, import_web194.template)(`<div class="dialkit-timeline-tick dialkit-timeline-tick-fine">`);
-var _tmpl$2110 = /* @__PURE__ */ (0, import_web194.template)(`<div class="dialkit-timeline-tick dialkit-timeline-tick-medium">`);
-var _tmpl$222 = /* @__PURE__ */ (0, import_web194.template)(`<div class=dialkit-timeline-tick><span class=dialkit-timeline-tick-label>`);
-var _tmpl$232 = /* @__PURE__ */ (0, import_web194.template)(`<svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
-var _tmpl$242 = /* @__PURE__ */ (0, import_web194.template)(`<div class=dialkit-root><div class=dialkit-timeline-popover role=dialog><div class=dialkit-timeline-popover-header><span class=dialkit-timeline-popover-title></span><button class=dialkit-timeline-popover-close title="Close editor"aria-label="Close editor"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round><path d="M6 6L18 18M18 6L6 18"></path></svg></button></div><div class=dialkit-timeline-popover-body>`);
-var _tmpl$252 = /* @__PURE__ */ (0, import_web194.template)(`<div class=dialkit-timeline-clip-handle data-edge=start>`);
-var _tmpl$262 = /* @__PURE__ */ (0, import_web194.template)(`<div class=dialkit-timeline-clip>`);
-var _tmpl$272 = /* @__PURE__ */ (0, import_web194.template)(`<span class=dialkit-timeline-loop-infinity aria-hidden=true title="Repeats indefinitely">\u221E`);
-var _tmpl$282 = /* @__PURE__ */ (0, import_web194.template)(`<div class=dialkit-timeline-clip-ghost aria-hidden=true>`);
-var _tmpl$292 = /* @__PURE__ */ (0, import_web194.template)(`<span class=dialkit-timeline-clip-ghost-segment>`);
-var _tmpl$302 = /* @__PURE__ */ (0, import_web194.template)(`<span class=dialkit-timeline-clip-duration>`);
-var _tmpl$317 = /* @__PURE__ */ (0, import_web194.template)(`<div class=dialkit-timeline-clip-handle data-edge=end>`);
-var _tmpl$322 = /* @__PURE__ */ (0, import_web194.template)(`<div class=dialkit-timeline-clip-segment>`);
-var _tmpl$332 = /* @__PURE__ */ (0, import_web194.template)(`<div class=dialkit-timeline-clip-handle>`);
+var import_solid_js27 = require("solid-js");
+var import_web206 = require("solid-js/web");
+var _tmpl$58 = /* @__PURE__ */ (0, import_web195.template)(`<div class="dialkit-root dialkit-timeline"><div class=dialkit-timeline-resize-handle role=separator aria-label="Resize timeline height"aria-orientation=horizontal title="Drag to resize timeline"></div><div class=dialkit-timeline-dock>`);
+var _tmpl$221 = /* @__PURE__ */ (0, import_web195.template)(`<svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
+var _tmpl$316 = /* @__PURE__ */ (0, import_web195.template)(`<button class=dialkit-toolbar-add><span style=position:relative;width:16px;height:16px>`);
+var _tmpl$411 = /* @__PURE__ */ (0, import_web195.template)(`<svg viewBox="0 0 24 24"fill=none aria-hidden=true><path fill=currentColor>`);
+var _tmpl$59 = /* @__PURE__ */ (0, import_web195.template)(`<svg><path fill=currentColor></svg>`, false, true, false);
+var _tmpl$65 = /* @__PURE__ */ (0, import_web195.template)(`<button class=dialkit-toolbar-add title=Replay aria-label=Replay><svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
+var _tmpl$72 = /* @__PURE__ */ (0, import_web195.template)(`<div class=dialkit-timeline-overview title="Drag to scrub the full timeline"><div class=dialkit-timeline-overview-viewport></div><div class=dialkit-timeline-overview-progress></div><div class=dialkit-timeline-overview-playhead>`);
+var _tmpl$82 = /* @__PURE__ */ (0, import_web195.template)(`<div class=dialkit-timeline-playhead-control role=slider aria-label="Timeline current time"aria-valuemin=0 title="Drag to scrub the timeline"><div class=dialkit-timeline-playhead-stem></div><div class=dialkit-timeline-playhead-anchor><div class=dialkit-timeline-playhead-flag>`);
+var _tmpl$92 = /* @__PURE__ */ (0, import_web195.template)(`<div class="dialkit-timeline-row dialkit-timeline-group-row"><div class=dialkit-timeline-label><button class=dialkit-timeline-group-toggle></button><span></span></div><div class=dialkit-timeline-lane>`);
+var _tmpl$02 = /* @__PURE__ */ (0, import_web195.template)(`<button class=dialkit-timeline-group-toggle>`);
+var _tmpl$1 = /* @__PURE__ */ (0, import_web195.template)(`<div class=dialkit-timeline-row><div class=dialkit-timeline-label></div><div class=dialkit-timeline-lane>`);
+var _tmpl$102 = /* @__PURE__ */ (0, import_web195.template)(`<div class="dialkit-timeline-row dialkit-timeline-track-row"><div class=dialkit-timeline-label></div><div class=dialkit-timeline-lane>`);
+var _tmpl$112 = /* @__PURE__ */ (0, import_web195.template)(`<svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path>`);
+var _tmpl$122 = /* @__PURE__ */ (0, import_web195.template)(`<div class=dialkit-timeline-scroll-row><div class=dialkit-timeline-label></div><div class=dialkit-timeline-horizontal-scroll aria-label="Timeline horizontal scroll"><div>`);
+var _tmpl$132 = /* @__PURE__ */ (0, import_web195.template)(`<div class=dialkit-timeline-body><div class=dialkit-timeline-grid><div class="dialkit-timeline-row dialkit-timeline-ruler-row"><div class=dialkit-timeline-label></div><div class=dialkit-timeline-ruler title="Click to seek \xB7 drag to set a loop region \xB7 Option-drag to zoom \xB7 Shift-drag to reset zoom">`);
+var _tmpl$142 = /* @__PURE__ */ (0, import_web195.template)(`<div class=dialkit-timeline-section><div class=dialkit-timeline-header><div class=dialkit-timeline-identity><span class=dialkit-timeline-title></span></div><div class=dialkit-timeline-actions><button class=dialkit-timeline-loop-toggle><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round aria-hidden=true></svg></button><button class=dialkit-toolbar-add title="Add timeline version"aria-label="Add timeline version"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round aria-hidden=true></svg></button><button class=dialkit-toolbar-add title="Copy parameters"><span style=position:relative;width:16px;height:16px></span></button><button class=dialkit-timeline-chevron>`);
+var _tmpl$152 = /* @__PURE__ */ (0, import_web195.template)(`<svg><path></svg>`, false, true, false);
+var _tmpl$162 = /* @__PURE__ */ (0, import_web195.template)(`<svg viewBox="0 0 24 24"fill=none aria-hidden=true><path stroke=currentColor stroke-width=2 stroke-linejoin=round></path><path fill=currentColor></path><path stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round>`);
+var _tmpl$172 = /* @__PURE__ */ (0, import_web195.template)(`<div class=dialkit-timeline-loop-dim style=left:0px>`);
+var _tmpl$182 = /* @__PURE__ */ (0, import_web195.template)(`<div class=dialkit-timeline-loop-dim style=right:0px>`);
+var _tmpl$192 = /* @__PURE__ */ (0, import_web195.template)(`<div class=dialkit-timeline-loop-band>`);
+var _tmpl$202 = /* @__PURE__ */ (0, import_web195.template)(`<div class="dialkit-timeline-tick dialkit-timeline-tick-fine">`);
+var _tmpl$2110 = /* @__PURE__ */ (0, import_web195.template)(`<div class="dialkit-timeline-tick dialkit-timeline-tick-medium">`);
+var _tmpl$222 = /* @__PURE__ */ (0, import_web195.template)(`<div class=dialkit-timeline-tick><span class=dialkit-timeline-tick-label>`);
+var _tmpl$232 = /* @__PURE__ */ (0, import_web195.template)(`<svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
+var _tmpl$242 = /* @__PURE__ */ (0, import_web195.template)(`<div class=dialkit-root><div class=dialkit-timeline-popover role=dialog><div class=dialkit-timeline-popover-header><span class=dialkit-timeline-popover-title></span><button class=dialkit-timeline-popover-close title="Close editor"aria-label="Close editor"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round><path d="M6 6L18 18M18 6L6 18"></path></svg></button></div><div class=dialkit-timeline-popover-body>`);
+var _tmpl$252 = /* @__PURE__ */ (0, import_web195.template)(`<div class=dialkit-timeline-clip-handle data-edge=start>`);
+var _tmpl$262 = /* @__PURE__ */ (0, import_web195.template)(`<div class=dialkit-timeline-clip>`);
+var _tmpl$272 = /* @__PURE__ */ (0, import_web195.template)(`<span class=dialkit-timeline-loop-infinity aria-hidden=true title="Repeats indefinitely">\u221E`);
+var _tmpl$282 = /* @__PURE__ */ (0, import_web195.template)(`<div class=dialkit-timeline-clip-ghost aria-hidden=true>`);
+var _tmpl$292 = /* @__PURE__ */ (0, import_web195.template)(`<span class=dialkit-timeline-clip-ghost-segment>`);
+var _tmpl$302 = /* @__PURE__ */ (0, import_web195.template)(`<span class=dialkit-timeline-clip-duration>`);
+var _tmpl$317 = /* @__PURE__ */ (0, import_web195.template)(`<div class=dialkit-timeline-clip-handle data-edge=end>`);
+var _tmpl$322 = /* @__PURE__ */ (0, import_web195.template)(`<div class=dialkit-timeline-clip-segment>`);
+var _tmpl$332 = /* @__PURE__ */ (0, import_web195.template)(`<div class=dialkit-timeline-clip-handle>`);
 var DRAG_THRESHOLD_PX = 3;
 var LOOP_DRAG_THRESHOLD_PX = 4;
 var MAJOR_TICK_TARGET_PX = 140;
@@ -8786,12 +8794,12 @@ var DEFAULT_DOCK_MAX_HEIGHT = 400;
 var MIN_DOCK_MAX_HEIGHT = 120;
 function DialTimeline(props) {
   const enabled = () => (props.productionEnabled ?? isDevDefault) !== false;
-  return (0, import_web204.createComponent)(import_solid_js27.Show, {
+  return (0, import_web205.createComponent)(import_solid_js27.Show, {
     get when() {
       return enabled();
     },
     get children() {
-      return (0, import_web204.createComponent)(DialTimelineDock, props);
+      return (0, import_web205.createComponent)(DialTimelineDock, props);
     }
   });
 }
@@ -8845,12 +8853,12 @@ function DialTimelineDock(props) {
     window.addEventListener("pointercancel", finish);
     resizeCleanup = finish;
   };
-  return (0, import_web204.createComponent)(import_solid_js27.Show, {
+  return (0, import_web205.createComponent)(import_solid_js27.Show, {
     get when() {
-      return (0, import_web203.memo)(() => !!mounted())() && timelines().length > 0;
+      return (0, import_web204.memo)(() => !!mounted())() && timelines().length > 0;
     },
     get children() {
-      return (0, import_web204.createComponent)(import_web205.Portal, {
+      return (0, import_web205.createComponent)(import_web206.Portal, {
         get mount() {
           return document.body;
         },
@@ -8858,12 +8866,12 @@ function DialTimelineDock(props) {
           var _el$ = _tmpl$58(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling;
           _el$2.$$pointerdown = handleResizePointerDown;
           var _ref$ = dockRef;
-          typeof _ref$ === "function" ? (0, import_web202.use)(_ref$, _el$3) : dockRef = _el$3;
-          (0, import_web201.insert)(_el$3, (0, import_web204.createComponent)(import_solid_js27.For, {
+          typeof _ref$ === "function" ? (0, import_web203.use)(_ref$, _el$3) : dockRef = _el$3;
+          (0, import_web202.insert)(_el$3, (0, import_web205.createComponent)(import_solid_js27.For, {
             get each() {
               return timelines();
             },
-            children: (timeline) => (0, import_web204.createComponent)(TimelineSection, {
+            children: (timeline) => (0, import_web205.createComponent)(TimelineSection, {
               meta: timeline,
               get defaultOpen() {
                 return props.defaultOpen ?? true;
@@ -8876,11 +8884,11 @@ function DialTimelineDock(props) {
               }
             })
           }));
-          (0, import_web200.effect)((_p$) => {
+          (0, import_web201.effect)((_p$) => {
             var _v$ = props.theme ?? "system", _v$2 = !visible(), _v$3 = `min(${dockMaxHeight()}px, calc(100vh - 24px))`;
-            _v$ !== _p$.e && (0, import_web199.setAttribute)(_el$, "data-theme", _p$.e = _v$);
+            _v$ !== _p$.e && (0, import_web200.setAttribute)(_el$, "data-theme", _p$.e = _v$);
             _v$2 !== _p$.t && (_el$.hidden = _p$.t = _v$2);
-            _v$3 !== _p$.a && (0, import_web198.setStyleProperty)(_el$3, "max-height", _p$.a = _v$3);
+            _v$3 !== _p$.a && (0, import_web199.setStyleProperty)(_el$3, "max-height", _p$.a = _v$3);
             return _p$;
           }, {
             e: void 0,
@@ -8899,36 +8907,36 @@ function PlayPauseButton(props) {
   return (() => {
     var _el$4 = _tmpl$316(), _el$5 = _el$4.firstChild;
     _el$4.$$click = () => playing() ? TimelineStore.pause(props.id) : TimelineStore.play(props.id);
-    (0, import_web201.insert)(_el$5, (0, import_web204.createComponent)(import_solid_js27.Show, {
+    (0, import_web202.insert)(_el$5, (0, import_web205.createComponent)(import_solid_js27.Show, {
       get when() {
         return playing();
       },
       get fallback() {
         return (() => {
           var _el$7 = _tmpl$411(), _el$8 = _el$7.firstChild;
-          (0, import_web199.setAttribute)(_el$8, "d", ICON_PLAY);
-          (0, import_web200.effect)((_$p) => (0, import_web197.style)(_el$7, iconStyle, _$p));
+          (0, import_web200.setAttribute)(_el$8, "d", ICON_PLAY);
+          (0, import_web201.effect)((_$p) => (0, import_web198.style)(_el$7, iconStyle, _$p));
           return _el$7;
         })();
       },
       get children() {
         var _el$6 = _tmpl$221();
-        (0, import_web201.insert)(_el$6, (0, import_web204.createComponent)(import_solid_js27.For, {
+        (0, import_web202.insert)(_el$6, (0, import_web205.createComponent)(import_solid_js27.For, {
           each: ICON_PAUSE,
           children: (path) => (() => {
             var _el$9 = _tmpl$59();
-            (0, import_web199.setAttribute)(_el$9, "d", path);
+            (0, import_web200.setAttribute)(_el$9, "d", path);
             return _el$9;
           })()
         }));
-        (0, import_web200.effect)((_$p) => (0, import_web197.style)(_el$6, iconStyle, _$p));
+        (0, import_web201.effect)((_$p) => (0, import_web198.style)(_el$6, iconStyle, _$p));
         return _el$6;
       }
     }));
-    (0, import_web200.effect)((_p$) => {
+    (0, import_web201.effect)((_p$) => {
       var _v$4 = label(), _v$5 = label();
-      _v$4 !== _p$.e && (0, import_web199.setAttribute)(_el$4, "title", _p$.e = _v$4);
-      _v$5 !== _p$.t && (0, import_web199.setAttribute)(_el$4, "aria-label", _p$.t = _v$5);
+      _v$4 !== _p$.e && (0, import_web200.setAttribute)(_el$4, "title", _p$.e = _v$4);
+      _v$5 !== _p$.t && (0, import_web200.setAttribute)(_el$4, "aria-label", _p$.t = _v$5);
       return _p$;
     }, {
       e: void 0,
@@ -8940,12 +8948,12 @@ function PlayPauseButton(props) {
 function ReplayButton(props) {
   return (() => {
     var _el$0 = _tmpl$65(), _el$1 = _el$0.firstChild;
-    (0, import_web196.addEventListener)(_el$0, "click", props.onReplay, true);
-    (0, import_web201.insert)(_el$1, (0, import_web204.createComponent)(import_solid_js27.For, {
+    (0, import_web197.addEventListener)(_el$0, "click", props.onReplay, true);
+    (0, import_web202.insert)(_el$1, (0, import_web205.createComponent)(import_solid_js27.For, {
       each: ICON_REPLAY,
       children: (path) => (() => {
         var _el$10 = _tmpl$59();
-        (0, import_web199.setAttribute)(_el$10, "d", path);
+        (0, import_web200.setAttribute)(_el$10, "d", path);
         return _el$10;
       })()
     }));
@@ -8988,13 +8996,13 @@ function TimelineOverview(props) {
       TimelineStore.pause(props.id);
       seekFromClientX(event.clientX);
     };
-    (0, import_web200.effect)((_p$) => {
+    (0, import_web201.effect)((_p$) => {
       var _v$6 = (props.duration > 0 ? (props.viewEnd - props.viewStart) / props.duration * 100 : 100) < 99.999 || void 0, _v$7 = `${props.duration > 0 ? props.viewStart / props.duration * 100 : 0}%`, _v$8 = `${props.duration > 0 ? (props.viewEnd - props.viewStart) / props.duration * 100 : 100}%`, _v$9 = `${props.duration > 0 ? time() / props.duration * 100 : 0}%`, _v$0 = `${props.duration > 0 ? time() / props.duration * 100 : 0}%`;
-      _v$6 !== _p$.e && (0, import_web199.setAttribute)(_el$12, "data-zoomed", _p$.e = _v$6);
-      _v$7 !== _p$.t && (0, import_web198.setStyleProperty)(_el$12, "left", _p$.t = _v$7);
-      _v$8 !== _p$.a && (0, import_web198.setStyleProperty)(_el$12, "width", _p$.a = _v$8);
-      _v$9 !== _p$.o && (0, import_web198.setStyleProperty)(_el$13, "width", _p$.o = _v$9);
-      _v$0 !== _p$.i && (0, import_web198.setStyleProperty)(_el$14, "left", _p$.i = _v$0);
+      _v$6 !== _p$.e && (0, import_web200.setAttribute)(_el$12, "data-zoomed", _p$.e = _v$6);
+      _v$7 !== _p$.t && (0, import_web199.setStyleProperty)(_el$12, "left", _p$.t = _v$7);
+      _v$8 !== _p$.a && (0, import_web199.setStyleProperty)(_el$12, "width", _p$.a = _v$8);
+      _v$9 !== _p$.o && (0, import_web199.setStyleProperty)(_el$13, "width", _p$.o = _v$9);
+      _v$0 !== _p$.i && (0, import_web199.setStyleProperty)(_el$14, "left", _p$.i = _v$0);
       return _p$;
     }, {
       e: void 0,
@@ -9019,9 +9027,9 @@ function TimelinePlayheadFlag(props) {
   const flagCenter = () => clamp4(x(), PLAYHEAD_FLAG_WIDTH / 2 - PLAYHEAD_FLAG_EDGE_OVERHANG, props.laneWidth - PLAYHEAD_FLAG_WIDTH / 2 + PLAYHEAD_FLAG_EDGE_OVERHANG);
   const flagOffset = () => flagCenter() - x();
   const edge = () => flagOffset() > 0.5 ? "start" : flagOffset() < -0.5 ? "end" : "center";
-  return (0, import_web204.createComponent)(import_solid_js27.Show, {
+  return (0, import_web205.createComponent)(import_solid_js27.Show, {
     get when() {
-      return (0, import_web203.memo)(() => !!(time() >= props.viewStart && time() <= props.viewEnd))() && props.laneWidth > 0;
+      return (0, import_web204.memo)(() => !!(time() >= props.viewStart && time() <= props.viewEnd))() && props.laneWidth > 0;
     },
     get children() {
       var _el$15 = _tmpl$82(), _el$16 = _el$15.firstChild, _el$17 = _el$16.nextSibling, _el$18 = _el$17.firstChild;
@@ -9060,14 +9068,14 @@ function TimelinePlayheadFlag(props) {
         window.addEventListener("pointercancel", finish);
         cleanup = finish;
       };
-      (0, import_web201.insert)(_el$18, () => time().toFixed(2));
-      (0, import_web200.effect)((_p$) => {
+      (0, import_web202.insert)(_el$18, () => time().toFixed(2));
+      (0, import_web201.effect)((_p$) => {
         var _v$1 = edge(), _v$10 = `calc(var(--dial-timeline-label-w) + ${x()}px)`, _v$11 = `${flagOffset()}px`, _v$12 = props.duration, _v$13 = time();
-        _v$1 !== _p$.e && (0, import_web199.setAttribute)(_el$15, "data-edge", _p$.e = _v$1);
-        _v$10 !== _p$.t && (0, import_web198.setStyleProperty)(_el$15, "left", _p$.t = _v$10);
-        _v$11 !== _p$.a && (0, import_web198.setStyleProperty)(_el$15, "--dial-timeline-playhead-flag-offset", _p$.a = _v$11);
-        _v$12 !== _p$.o && (0, import_web199.setAttribute)(_el$15, "aria-valuemax", _p$.o = _v$12);
-        _v$13 !== _p$.i && (0, import_web199.setAttribute)(_el$15, "aria-valuenow", _p$.i = _v$13);
+        _v$1 !== _p$.e && (0, import_web200.setAttribute)(_el$15, "data-edge", _p$.e = _v$1);
+        _v$10 !== _p$.t && (0, import_web199.setStyleProperty)(_el$15, "left", _p$.t = _v$10);
+        _v$11 !== _p$.a && (0, import_web199.setStyleProperty)(_el$15, "--dial-timeline-playhead-flag-offset", _p$.a = _v$11);
+        _v$12 !== _p$.o && (0, import_web200.setAttribute)(_el$15, "aria-valuemax", _p$.o = _v$12);
+        _v$13 !== _p$.i && (0, import_web200.setAttribute)(_el$15, "aria-valuenow", _p$.i = _v$13);
         return _p$;
       }, {
         e: void 0,
@@ -9344,10 +9352,10 @@ function TimelineSection(props) {
           result.push((() => {
             var _el$19 = _tmpl$92(), _el$20 = _el$19.firstChild, _el$21 = _el$20.firstChild, _el$22 = _el$21.nextSibling;
             _el$21.$$click = () => toggleGroup(group);
-            (0, import_web199.setAttribute)(_el$21, "data-open", !collapsed);
-            (0, import_web199.setAttribute)(_el$21, "title", collapsed ? "Expand layer" : "Collapse layer");
-            (0, import_web201.insert)(_el$21, (0, import_web204.createComponent)(ChevronIcon, {}));
-            (0, import_web201.insert)(_el$22, () => formatLabel(group));
+            (0, import_web200.setAttribute)(_el$21, "data-open", !collapsed);
+            (0, import_web200.setAttribute)(_el$21, "title", collapsed ? "Expand layer" : "Collapse layer");
+            (0, import_web202.insert)(_el$21, (0, import_web205.createComponent)(ChevronIcon, {}));
+            (0, import_web202.insert)(_el$22, () => formatLabel(group));
             return _el$19;
           })());
         }
@@ -9359,7 +9367,7 @@ function TimelineSection(props) {
       const selected = popover()?.clip.key === clip.key;
       result.push((() => {
         var _el$23 = _tmpl$1(), _el$24 = _el$23.firstChild, _el$26 = _el$24.nextSibling;
-        (0, import_web201.insert)(_el$24, (0, import_web204.createComponent)(import_solid_js27.Show, {
+        (0, import_web202.insert)(_el$24, (0, import_web205.createComponent)(import_solid_js27.Show, {
           when: isProps,
           get children() {
             var _el$25 = _tmpl$02();
@@ -9367,14 +9375,14 @@ function TimelineSection(props) {
               event.stopPropagation();
               toggleTracks(clip.key);
             };
-            (0, import_web199.setAttribute)(_el$25, "data-open", tracksOpen);
-            (0, import_web199.setAttribute)(_el$25, "title", tracksOpen ? "Collapse properties" : "Expand properties");
-            (0, import_web201.insert)(_el$25, (0, import_web204.createComponent)(ChevronIcon, {}));
+            (0, import_web200.setAttribute)(_el$25, "data-open", tracksOpen);
+            (0, import_web200.setAttribute)(_el$25, "title", tracksOpen ? "Collapse properties" : "Expand properties");
+            (0, import_web202.insert)(_el$25, (0, import_web205.createComponent)(ChevronIcon, {}));
             return _el$25;
           }
         }), null);
-        (0, import_web201.insert)(_el$24, () => clip.label, null);
-        (0, import_web201.insert)(_el$26, (0, import_web204.createComponent)(TimelineClip, {
+        (0, import_web202.insert)(_el$24, () => clip.label, null);
+        (0, import_web202.insert)(_el$26, (0, import_web205.createComponent)(TimelineClip, {
           get timelineId() {
             return props.meta.id;
           },
@@ -9389,7 +9397,7 @@ function TimelineSection(props) {
             return stat.loop;
           },
           get steps() {
-            return (0, import_web203.memo)(() => !!clip.stepKeys?.length)() ? stat.tracks[0]?.steps : void 0;
+            return (0, import_web204.memo)(() => !!clip.stepKeys?.length)() ? stat.tracks[0]?.steps : void 0;
           },
           get fixedDuration() {
             return isProps ? true : stat.isPhysics;
@@ -9411,7 +9419,7 @@ function TimelineSection(props) {
           onClick: handleBarClick,
           onDrag: closePopover
         }));
-        (0, import_web200.effect)(() => (0, import_web199.setAttribute)(_el$23, "data-grouped", clip.group ? "" : void 0));
+        (0, import_web201.effect)(() => (0, import_web200.setAttribute)(_el$23, "data-grouped", clip.group ? "" : void 0));
         return _el$23;
       })());
       if (!tracksOpen) continue;
@@ -9430,8 +9438,8 @@ function TimelineSection(props) {
         const trackSelected = popover()?.clip.key === trackKey;
         result.push((() => {
           var _el$27 = _tmpl$102(), _el$28 = _el$27.firstChild, _el$29 = _el$28.nextSibling;
-          (0, import_web201.insert)(_el$28, () => formatLabel(trackRef.prop));
-          (0, import_web201.insert)(_el$29, (0, import_web204.createComponent)(TimelineClip, {
+          (0, import_web202.insert)(_el$28, () => formatLabel(trackRef.prop));
+          (0, import_web202.insert)(_el$29, (0, import_web205.createComponent)(TimelineClip, {
             get timelineId() {
               return props.meta.id;
             },
@@ -9446,10 +9454,10 @@ function TimelineSection(props) {
               return stat.loop;
             },
             get steps() {
-              return (0, import_web203.memo)(() => !!trackRef.stepKeys?.length)() ? track.steps : void 0;
+              return (0, import_web204.memo)(() => !!trackRef.stepKeys?.length)() ? track.steps : void 0;
             },
             get fixedDuration() {
-              return (0, import_web203.memo)(() => !!!trackRef.stepKeys?.length)() && track.steps[0]?.isPhysics === true;
+              return (0, import_web204.memo)(() => !!!trackRef.stepKeys?.length)() && track.steps[0]?.isPhysics === true;
             },
             get baseAt() {
               return stat.at;
@@ -9471,7 +9479,7 @@ function TimelineSection(props) {
             onClick: openClipPopover,
             onDrag: closePopover
           }));
-          (0, import_web200.effect)(() => (0, import_web199.setAttribute)(_el$27, "data-grouped", clip.group ? "" : void 0));
+          (0, import_web201.effect)(() => (0, import_web200.setAttribute)(_el$27, "data-grouped", clip.group ? "" : void 0));
           return _el$27;
         })());
       }
@@ -9480,13 +9488,13 @@ function TimelineSection(props) {
   });
   return (() => {
     var _el$30 = _tmpl$142(), _el$31 = _el$30.firstChild, _el$32 = _el$31.firstChild, _el$33 = _el$32.firstChild, _el$34 = _el$32.nextSibling, _el$35 = _el$34.firstChild, _el$36 = _el$35.firstChild, _el$37 = _el$35.nextSibling, _el$38 = _el$37.firstChild, _el$39 = _el$37.nextSibling, _el$40 = _el$39.firstChild, _el$43 = _el$39.nextSibling;
-    (0, import_web201.insert)(_el$33, () => props.meta.name);
-    (0, import_web201.insert)(_el$31, (0, import_web204.createComponent)(import_solid_js27.Show, {
+    (0, import_web202.insert)(_el$33, () => props.meta.name);
+    (0, import_web202.insert)(_el$31, (0, import_web205.createComponent)(import_solid_js27.Show, {
       get when() {
         return !open();
       },
       get children() {
-        return (0, import_web204.createComponent)(TimelineOverview, {
+        return (0, import_web205.createComponent)(TimelineOverview, {
           get id() {
             return props.meta.id;
           },
@@ -9504,32 +9512,32 @@ function TimelineSection(props) {
       }
     }), _el$34);
     _el$35.$$click = handleClearLoopRegion;
-    (0, import_web201.insert)(_el$36, (0, import_web204.createComponent)(import_solid_js27.For, {
+    (0, import_web202.insert)(_el$36, (0, import_web205.createComponent)(import_solid_js27.For, {
       each: ICON_LOOP,
       children: (path) => (() => {
         var _el$53 = _tmpl$152();
-        (0, import_web199.setAttribute)(_el$53, "d", path);
+        (0, import_web200.setAttribute)(_el$53, "d", path);
         return _el$53;
       })()
     }));
-    (0, import_web201.insert)(_el$34, (0, import_web204.createComponent)(PlayPauseButton, {
+    (0, import_web202.insert)(_el$34, (0, import_web205.createComponent)(PlayPauseButton, {
       get id() {
         return props.meta.id;
       }
     }), _el$37);
-    (0, import_web201.insert)(_el$34, (0, import_web204.createComponent)(ReplayButton, {
+    (0, import_web202.insert)(_el$34, (0, import_web205.createComponent)(ReplayButton, {
       onReplay: handleReplay
     }), _el$37);
     _el$37.$$click = handleAddPreset;
-    (0, import_web201.insert)(_el$38, (0, import_web204.createComponent)(import_solid_js27.For, {
+    (0, import_web202.insert)(_el$38, (0, import_web205.createComponent)(import_solid_js27.For, {
       each: ICON_ADD_PRESET,
       children: (path) => (() => {
         var _el$54 = _tmpl$152();
-        (0, import_web199.setAttribute)(_el$54, "d", path);
+        (0, import_web200.setAttribute)(_el$54, "d", path);
         return _el$54;
       })()
     }));
-    (0, import_web201.insert)(_el$34, (0, import_web204.createComponent)(PresetManager, {
+    (0, import_web202.insert)(_el$34, (0, import_web205.createComponent)(PresetManager, {
       get panelId() {
         return props.meta.id;
       },
@@ -9542,19 +9550,19 @@ function TimelineSection(props) {
       onAdd: handleAddPreset
     }), _el$39);
     _el$39.$$click = handleCopy;
-    (0, import_web201.insert)(_el$40, (0, import_web204.createComponent)(import_solid_js27.Show, {
+    (0, import_web202.insert)(_el$40, (0, import_web205.createComponent)(import_solid_js27.Show, {
       get when() {
         return copied();
       },
       get fallback() {
         return (() => {
           var _el$55 = _tmpl$162(), _el$56 = _el$55.firstChild, _el$57 = _el$56.nextSibling, _el$58 = _el$57.nextSibling;
-          (0, import_web200.effect)((_p$) => {
+          (0, import_web201.effect)((_p$) => {
             var _v$24 = iconStyle, _v$25 = ICON_CLIPBOARD.board, _v$26 = ICON_CLIPBOARD.sparkle, _v$27 = ICON_CLIPBOARD.body;
-            _p$.e = (0, import_web197.style)(_el$55, _v$24, _p$.e);
-            _v$25 !== _p$.t && (0, import_web199.setAttribute)(_el$56, "d", _p$.t = _v$25);
-            _v$26 !== _p$.a && (0, import_web199.setAttribute)(_el$57, "d", _p$.a = _v$26);
-            _v$27 !== _p$.o && (0, import_web199.setAttribute)(_el$58, "d", _p$.o = _v$27);
+            _p$.e = (0, import_web198.style)(_el$55, _v$24, _p$.e);
+            _v$25 !== _p$.t && (0, import_web200.setAttribute)(_el$56, "d", _p$.t = _v$25);
+            _v$26 !== _p$.a && (0, import_web200.setAttribute)(_el$57, "d", _p$.a = _v$26);
+            _v$27 !== _p$.o && (0, import_web200.setAttribute)(_el$58, "d", _p$.o = _v$27);
             return _p$;
           }, {
             e: void 0,
@@ -9567,14 +9575,14 @@ function TimelineSection(props) {
       },
       get children() {
         var _el$41 = _tmpl$112(), _el$42 = _el$41.firstChild;
-        (0, import_web199.setAttribute)(_el$42, "d", ICON_CHECK);
-        (0, import_web200.effect)((_$p) => (0, import_web197.style)(_el$41, iconStyle, _$p));
+        (0, import_web200.setAttribute)(_el$42, "d", ICON_CHECK);
+        (0, import_web201.effect)((_$p) => (0, import_web198.style)(_el$41, iconStyle, _$p));
         return _el$41;
       }
     }));
     _el$43.$$click = () => setOpen((current) => !current);
-    (0, import_web201.insert)(_el$43, (0, import_web204.createComponent)(ChevronIcon, {}));
-    (0, import_web201.insert)(_el$30, (0, import_web204.createComponent)(import_solid_js27.Show, {
+    (0, import_web202.insert)(_el$43, (0, import_web205.createComponent)(ChevronIcon, {}));
+    (0, import_web202.insert)(_el$30, (0, import_web205.createComponent)(import_solid_js27.Show, {
       get when() {
         return open();
       },
@@ -9592,29 +9600,29 @@ function TimelineSection(props) {
         _el$48.$$pointermove = handleRulerPointerMove;
         _el$48.$$pointerdown = handleRulerPointerDown;
         var _ref$2 = laneAreaRef;
-        typeof _ref$2 === "function" ? (0, import_web202.use)(_ref$2, _el$48) : laneAreaRef = _el$48;
-        (0, import_web201.insert)(_el$48, (0, import_web204.createComponent)(import_solid_js27.Show, {
+        typeof _ref$2 === "function" ? (0, import_web203.use)(_ref$2, _el$48) : laneAreaRef = _el$48;
+        (0, import_web202.insert)(_el$48, (0, import_web205.createComponent)(import_solid_js27.Show, {
           get when() {
-            return (0, import_web203.memo)(() => pxPerSecond() > 0)() && (loopDrag() ?? loopRegion());
+            return (0, import_web204.memo)(() => pxPerSecond() > 0)() && (loopDrag() ?? loopRegion());
           },
           children: (region) => {
             const left = () => (region().start - safeViewStart()) * pxPerSecond();
             const width = () => Math.max(0, (region().end - region().start) * pxPerSecond());
             return [(() => {
               var _el$59 = _tmpl$172();
-              (0, import_web200.effect)((_$p) => (0, import_web198.setStyleProperty)(_el$59, "width", `${Math.max(0, left())}px`));
+              (0, import_web201.effect)((_$p) => (0, import_web199.setStyleProperty)(_el$59, "width", `${Math.max(0, left())}px`));
               return _el$59;
             })(), (() => {
               var _el$60 = _tmpl$182();
-              (0, import_web200.effect)((_$p) => (0, import_web198.setStyleProperty)(_el$60, "left", `${left() + width()}px`));
+              (0, import_web201.effect)((_$p) => (0, import_web199.setStyleProperty)(_el$60, "left", `${left() + width()}px`));
               return _el$60;
             })(), (() => {
               var _el$61 = _tmpl$192();
-              (0, import_web200.effect)((_p$) => {
+              (0, import_web201.effect)((_p$) => {
                 var _v$28 = loopDrag() ? "true" : void 0, _v$29 = `${left()}px`, _v$30 = `${width()}px`;
-                _v$28 !== _p$.e && (0, import_web199.setAttribute)(_el$61, "data-live", _p$.e = _v$28);
-                _v$29 !== _p$.t && (0, import_web198.setStyleProperty)(_el$61, "left", _p$.t = _v$29);
-                _v$30 !== _p$.a && (0, import_web198.setStyleProperty)(_el$61, "width", _p$.a = _v$30);
+                _v$28 !== _p$.e && (0, import_web200.setAttribute)(_el$61, "data-live", _p$.e = _v$28);
+                _v$29 !== _p$.t && (0, import_web199.setStyleProperty)(_el$61, "left", _p$.t = _v$29);
+                _v$30 !== _p$.a && (0, import_web199.setStyleProperty)(_el$61, "width", _p$.a = _v$30);
                 return _p$;
               }, {
                 e: void 0,
@@ -9625,44 +9633,44 @@ function TimelineSection(props) {
             })()];
           }
         }), null);
-        (0, import_web201.insert)(_el$48, (0, import_web204.createComponent)(import_solid_js27.For, {
+        (0, import_web202.insert)(_el$48, (0, import_web205.createComponent)(import_solid_js27.For, {
           get each() {
             return ticks().fine;
           },
           children: (time) => (() => {
             var _el$62 = _tmpl$202();
-            (0, import_web200.effect)((_$p) => (0, import_web198.setStyleProperty)(_el$62, "left", `${(time - safeViewStart()) * pxPerSecond()}px`));
+            (0, import_web201.effect)((_$p) => (0, import_web199.setStyleProperty)(_el$62, "left", `${(time - safeViewStart()) * pxPerSecond()}px`));
             return _el$62;
           })()
         }), null);
-        (0, import_web201.insert)(_el$48, (0, import_web204.createComponent)(import_solid_js27.For, {
+        (0, import_web202.insert)(_el$48, (0, import_web205.createComponent)(import_solid_js27.For, {
           get each() {
             return ticks().medium;
           },
           children: (time) => (() => {
             var _el$63 = _tmpl$2110();
-            (0, import_web200.effect)((_$p) => (0, import_web198.setStyleProperty)(_el$63, "left", `${(time - safeViewStart()) * pxPerSecond()}px`));
+            (0, import_web201.effect)((_$p) => (0, import_web199.setStyleProperty)(_el$63, "left", `${(time - safeViewStart()) * pxPerSecond()}px`));
             return _el$63;
           })()
         }), null);
-        (0, import_web201.insert)(_el$48, (0, import_web204.createComponent)(import_solid_js27.For, {
+        (0, import_web202.insert)(_el$48, (0, import_web205.createComponent)(import_solid_js27.For, {
           get each() {
             return ticks().major;
           },
           children: (time) => (() => {
             var _el$64 = _tmpl$222(), _el$65 = _el$64.firstChild;
-            (0, import_web201.insert)(_el$65, () => formatRulerSeconds(time, ticks().majorStep));
-            (0, import_web200.effect)((_$p) => (0, import_web198.setStyleProperty)(_el$64, "left", `${(time - safeViewStart()) * pxPerSecond()}px`));
+            (0, import_web202.insert)(_el$65, () => formatRulerSeconds(time, ticks().majorStep));
+            (0, import_web201.effect)((_$p) => (0, import_web199.setStyleProperty)(_el$64, "left", `${(time - safeViewStart()) * pxPerSecond()}px`));
             return _el$64;
           })()
         }), null);
-        (0, import_web201.insert)(_el$45, rows, null);
-        (0, import_web201.insert)(_el$45, (0, import_web204.createComponent)(import_solid_js27.Show, {
+        (0, import_web202.insert)(_el$45, rows, null);
+        (0, import_web202.insert)(_el$45, (0, import_web205.createComponent)(import_solid_js27.Show, {
           get when() {
             return pxPerSecond() > 0;
           },
           get children() {
-            return (0, import_web204.createComponent)(TimelinePlayheadFlag, {
+            return (0, import_web205.createComponent)(TimelinePlayheadFlag, {
               get id() {
                 return props.meta.id;
               },
@@ -9686,7 +9694,7 @@ function TimelineSection(props) {
             });
           }
         }), null);
-        (0, import_web201.insert)(_el$44, (0, import_web204.createComponent)(import_solid_js27.Show, {
+        (0, import_web202.insert)(_el$44, (0, import_web205.createComponent)(import_solid_js27.Show, {
           get when() {
             return zoom() > 1;
           },
@@ -9694,19 +9702,19 @@ function TimelineSection(props) {
             var _el$49 = _tmpl$122(), _el$50 = _el$49.firstChild, _el$51 = _el$50.nextSibling, _el$52 = _el$51.firstChild;
             _el$51.addEventListener("scroll", handleHorizontalScroll);
             var _ref$3 = horizontalScrollRef;
-            typeof _ref$3 === "function" ? (0, import_web202.use)(_ref$3, _el$51) : horizontalScrollRef = _el$51;
-            (0, import_web200.effect)((_$p) => (0, import_web198.setStyleProperty)(_el$52, "width", `${laneWidth() * zoom()}px`));
+            typeof _ref$3 === "function" ? (0, import_web203.use)(_ref$3, _el$51) : horizontalScrollRef = _el$51;
+            (0, import_web201.effect)((_$p) => (0, import_web199.setStyleProperty)(_el$52, "width", `${laneWidth() * zoom()}px`));
             return _el$49;
           }
         }), null);
         return _el$44;
       }
     }), null);
-    (0, import_web201.insert)(_el$30, (0, import_web204.createComponent)(import_solid_js27.Show, {
+    (0, import_web202.insert)(_el$30, (0, import_web205.createComponent)(import_solid_js27.Show, {
       get when() {
         return popover();
       },
-      children: (current) => (0, import_web204.createComponent)(ClipPopover, {
+      children: (current) => (0, import_web205.createComponent)(ClipPopover, {
         get panelId() {
           return props.meta.id;
         },
@@ -9722,18 +9730,18 @@ function TimelineSection(props) {
         onClose: closePopover
       })
     }), null);
-    (0, import_web200.effect)((_p$) => {
+    (0, import_web201.effect)((_p$) => {
       var _v$14 = open() || void 0, _v$15 = loopRegion() ? "true" : void 0, _v$16 = !loopRegion(), _v$17 = loopRegion() ? "Looping a region \xB7 click to loop the whole timeline" : "Looping the whole timeline \xB7 drag the ruler to set a loop region", _v$18 = loopRegion() ? "Clear loop region" : "Looping whole timeline", _v$19 = loopRegion() ? true : false, _v$20 = copied() ? "Copied parameters" : "Copy parameters", _v$21 = open(), _v$22 = open(), _v$23 = open() ? "Collapse timeline" : "Expand timeline";
-      _v$14 !== _p$.e && (0, import_web199.setAttribute)(_el$31, "data-open", _p$.e = _v$14);
-      _v$15 !== _p$.t && (0, import_web199.setAttribute)(_el$35, "data-active", _p$.t = _v$15);
+      _v$14 !== _p$.e && (0, import_web200.setAttribute)(_el$31, "data-open", _p$.e = _v$14);
+      _v$15 !== _p$.t && (0, import_web200.setAttribute)(_el$35, "data-active", _p$.t = _v$15);
       _v$16 !== _p$.a && (_el$35.disabled = _p$.a = _v$16);
-      _v$17 !== _p$.o && (0, import_web199.setAttribute)(_el$35, "title", _p$.o = _v$17);
-      _v$18 !== _p$.i && (0, import_web199.setAttribute)(_el$35, "aria-label", _p$.i = _v$18);
-      _v$19 !== _p$.n && (0, import_web199.setAttribute)(_el$35, "aria-pressed", _p$.n = _v$19);
-      _v$20 !== _p$.s && (0, import_web199.setAttribute)(_el$39, "aria-label", _p$.s = _v$20);
-      _v$21 !== _p$.h && (0, import_web199.setAttribute)(_el$43, "data-open", _p$.h = _v$21);
-      _v$22 !== _p$.r && (0, import_web199.setAttribute)(_el$43, "aria-expanded", _p$.r = _v$22);
-      _v$23 !== _p$.d && (0, import_web199.setAttribute)(_el$43, "title", _p$.d = _v$23);
+      _v$17 !== _p$.o && (0, import_web200.setAttribute)(_el$35, "title", _p$.o = _v$17);
+      _v$18 !== _p$.i && (0, import_web200.setAttribute)(_el$35, "aria-label", _p$.i = _v$18);
+      _v$19 !== _p$.n && (0, import_web200.setAttribute)(_el$35, "aria-pressed", _p$.n = _v$19);
+      _v$20 !== _p$.s && (0, import_web200.setAttribute)(_el$39, "aria-label", _p$.s = _v$20);
+      _v$21 !== _p$.h && (0, import_web200.setAttribute)(_el$43, "data-open", _p$.h = _v$21);
+      _v$22 !== _p$.r && (0, import_web200.setAttribute)(_el$43, "aria-expanded", _p$.r = _v$22);
+      _v$23 !== _p$.d && (0, import_web200.setAttribute)(_el$43, "title", _p$.d = _v$23);
       return _p$;
     }, {
       e: void 0,
@@ -9753,7 +9761,7 @@ function TimelineSection(props) {
 function ChevronIcon() {
   return (() => {
     var _el$66 = _tmpl$232(), _el$67 = _el$66.firstChild;
-    (0, import_web199.setAttribute)(_el$67, "d", ICON_CHEVRON);
+    (0, import_web200.setAttribute)(_el$67, "d", ICON_CHEVRON);
     return _el$66;
   })();
 }
@@ -9848,22 +9856,22 @@ function ClipPopover(props) {
       placeAbove
     };
   });
-  return (0, import_web204.createComponent)(import_solid_js27.Show, {
+  return (0, import_web205.createComponent)(import_solid_js27.Show, {
     get when() {
       return presentation().controls.length > 0;
     },
     get children() {
-      return (0, import_web204.createComponent)(import_web205.Portal, {
+      return (0, import_web205.createComponent)(import_web206.Portal, {
         get mount() {
           return document.body;
         },
         get children() {
           var _el$68 = _tmpl$242(), _el$69 = _el$68.firstChild, _el$70 = _el$69.firstChild, _el$71 = _el$70.firstChild, _el$72 = _el$71.nextSibling, _el$73 = _el$70.nextSibling;
           var _ref$4 = ref;
-          typeof _ref$4 === "function" ? (0, import_web202.use)(_ref$4, _el$69) : ref = _el$69;
-          (0, import_web201.insert)(_el$71, () => presentation().title);
-          (0, import_web196.addEventListener)(_el$72, "click", props.onClose, true);
-          (0, import_web201.insert)(_el$73, (0, import_web204.createComponent)(ControlRenderer, {
+          typeof _ref$4 === "function" ? (0, import_web203.use)(_ref$4, _el$69) : ref = _el$69;
+          (0, import_web202.insert)(_el$71, () => presentation().title);
+          (0, import_web197.addEventListener)(_el$72, "click", props.onClose, true);
+          (0, import_web202.insert)(_el$73, (0, import_web205.createComponent)(ControlRenderer, {
             get panelId() {
               return props.panelId;
             },
@@ -9877,16 +9885,16 @@ function ClipPopover(props) {
               return presentation().transitionDuration;
             }
           }));
-          (0, import_web200.effect)((_p$) => {
+          (0, import_web201.effect)((_p$) => {
             var _v$31 = props.theme, _v$32 = position().placeAbove ? "above" : "below", _v$33 = `${position().left}px`, _v$34 = `${position().top}px`, _v$35 = `${position().width}px`, _v$36 = `${position().availableHeight}px`, _v$37 = naturalHeight() > 0 ? "visible" : "hidden", _v$38 = `Edit ${presentation().title}`;
-            _v$31 !== _p$.e && (0, import_web199.setAttribute)(_el$68, "data-theme", _p$.e = _v$31);
-            _v$32 !== _p$.t && (0, import_web199.setAttribute)(_el$69, "data-placement", _p$.t = _v$32);
-            _v$33 !== _p$.a && (0, import_web198.setStyleProperty)(_el$69, "left", _p$.a = _v$33);
-            _v$34 !== _p$.o && (0, import_web198.setStyleProperty)(_el$69, "top", _p$.o = _v$34);
-            _v$35 !== _p$.i && (0, import_web198.setStyleProperty)(_el$69, "width", _p$.i = _v$35);
-            _v$36 !== _p$.n && (0, import_web198.setStyleProperty)(_el$69, "max-height", _p$.n = _v$36);
-            _v$37 !== _p$.s && (0, import_web198.setStyleProperty)(_el$69, "visibility", _p$.s = _v$37);
-            _v$38 !== _p$.h && (0, import_web199.setAttribute)(_el$69, "aria-label", _p$.h = _v$38);
+            _v$31 !== _p$.e && (0, import_web200.setAttribute)(_el$68, "data-theme", _p$.e = _v$31);
+            _v$32 !== _p$.t && (0, import_web200.setAttribute)(_el$69, "data-placement", _p$.t = _v$32);
+            _v$33 !== _p$.a && (0, import_web199.setStyleProperty)(_el$69, "left", _p$.a = _v$33);
+            _v$34 !== _p$.o && (0, import_web199.setStyleProperty)(_el$69, "top", _p$.o = _v$34);
+            _v$35 !== _p$.i && (0, import_web199.setStyleProperty)(_el$69, "width", _p$.i = _v$35);
+            _v$36 !== _p$.n && (0, import_web199.setStyleProperty)(_el$69, "max-height", _p$.n = _v$36);
+            _v$37 !== _p$.s && (0, import_web199.setStyleProperty)(_el$69, "visibility", _p$.s = _v$37);
+            _v$38 !== _p$.h && (0, import_web200.setAttribute)(_el$69, "aria-label", _p$.h = _v$38);
             return _p$;
           }, {
             e: void 0,
@@ -10028,28 +10036,28 @@ function TimelineClip(props) {
   const durationText = () => `${props.fixedDuration && !props.composite ? "~" : ""}${formatSeconds(props.duration)}`;
   const looping = () => props.loop === "repeat" && props.duration > 0;
   const title = () => props.composite ? `${props.clip.label} \u2014 composite of its property tracks${looping() ? " \xB7 repeats through timeline" : ""} \xB7 click to expand` : `${props.clip.label} \u2014 ${formatSeconds(props.at)} for ${durationText()}${props.fixedDuration ? " (duration set by spring physics)" : ""}${looping() ? " \xB7 repeats through timeline" : ""}${props.delayMode ? " \xB7 drag to phase-shift" : ""}`;
-  return [(0, import_web204.createComponent)(import_solid_js27.For, {
+  return [(0, import_web205.createComponent)(import_solid_js27.For, {
     get each() {
       return ghostCycles();
     },
     children: (cycle) => (() => {
       var _el$77 = _tmpl$282();
-      (0, import_web201.insert)(_el$77, (0, import_web204.createComponent)(import_solid_js27.For, {
+      (0, import_web202.insert)(_el$77, (0, import_web205.createComponent)(import_solid_js27.For, {
         get each() {
           return props.steps;
         },
         children: (step) => (() => {
           var _el$78 = _tmpl$292();
-          (0, import_web200.effect)((_$p) => (0, import_web198.setStyleProperty)(_el$78, "width", `${step.duration * props.pxPerSecond}px`));
+          (0, import_web201.effect)((_$p) => (0, import_web199.setStyleProperty)(_el$78, "width", `${step.duration * props.pxPerSecond}px`));
           return _el$78;
         })()
       }));
-      (0, import_web200.effect)((_p$) => {
+      (0, import_web201.effect)((_p$) => {
         var _v$47 = isSteps() || void 0, _v$48 = `${(cycle.start - props.viewStart) * props.pxPerSecond + 1}px`, _v$49 = `${Math.max(1, cycle.duration * props.pxPerSecond - 2)}px`, _v$50 = props.clip.color;
-        _v$47 !== _p$.e && (0, import_web199.setAttribute)(_el$77, "data-steps", _p$.e = _v$47);
-        _v$48 !== _p$.t && (0, import_web198.setStyleProperty)(_el$77, "left", _p$.t = _v$48);
-        _v$49 !== _p$.a && (0, import_web198.setStyleProperty)(_el$77, "width", _p$.a = _v$49);
-        _v$50 !== _p$.o && (0, import_web198.setStyleProperty)(_el$77, "background", _p$.o = _v$50);
+        _v$47 !== _p$.e && (0, import_web200.setAttribute)(_el$77, "data-steps", _p$.e = _v$47);
+        _v$48 !== _p$.t && (0, import_web199.setStyleProperty)(_el$77, "left", _p$.t = _v$48);
+        _v$49 !== _p$.a && (0, import_web199.setStyleProperty)(_el$77, "width", _p$.a = _v$49);
+        _v$50 !== _p$.o && (0, import_web199.setStyleProperty)(_el$77, "background", _p$.o = _v$50);
         return _p$;
       }, {
         e: void 0,
@@ -10066,45 +10074,45 @@ function TimelineClip(props) {
     _el$74.$$pointerup = (event) => finish(event);
     _el$74.$$pointermove = handlePointerMove;
     _el$74.$$pointerdown = handlePointerDown;
-    (0, import_web201.insert)(_el$74, (0, import_web204.createComponent)(import_solid_js27.Show, {
+    (0, import_web202.insert)(_el$74, (0, import_web205.createComponent)(import_solid_js27.Show, {
       get when() {
         return !props.composite;
       },
       get fallback() {
-        return (0, import_web204.createComponent)(import_solid_js27.Show, {
+        return (0, import_web205.createComponent)(import_solid_js27.Show, {
           get when() {
             return width() > 56;
           },
           get children() {
             var _el$79 = _tmpl$302();
-            (0, import_web201.insert)(_el$79, durationText);
+            (0, import_web202.insert)(_el$79, durationText);
             return _el$79;
           }
         });
       },
       get children() {
-        return (0, import_web204.createComponent)(import_solid_js27.Show, {
+        return (0, import_web205.createComponent)(import_solid_js27.Show, {
           get when() {
             return isSteps();
           },
           get fallback() {
-            return [(0, import_web204.createComponent)(import_solid_js27.Show, {
+            return [(0, import_web205.createComponent)(import_solid_js27.Show, {
               get when() {
                 return resizable();
               },
               get children() {
                 return _tmpl$252();
               }
-            }), (0, import_web204.createComponent)(import_solid_js27.Show, {
+            }), (0, import_web205.createComponent)(import_solid_js27.Show, {
               get when() {
                 return width() > 56;
               },
               get children() {
                 var _el$81 = _tmpl$302();
-                (0, import_web201.insert)(_el$81, durationText);
+                (0, import_web202.insert)(_el$81, durationText);
                 return _el$81;
               }
-            }), (0, import_web204.createComponent)(import_solid_js27.Show, {
+            }), (0, import_web205.createComponent)(import_solid_js27.Show, {
               get when() {
                 return resizable();
               },
@@ -10114,7 +10122,7 @@ function TimelineClip(props) {
             })];
           },
           get children() {
-            return [(0, import_web204.createComponent)(import_solid_js27.For, {
+            return [(0, import_web205.createComponent)(import_solid_js27.For, {
               get each() {
                 return props.steps;
               },
@@ -10122,21 +10130,21 @@ function TimelineClip(props) {
                 const segmentWidth = () => step.duration * props.pxPerSecond;
                 return (() => {
                   var _el$83 = _tmpl$322();
-                  (0, import_web201.insert)(_el$83, (0, import_web204.createComponent)(import_solid_js27.Show, {
+                  (0, import_web202.insert)(_el$83, (0, import_web205.createComponent)(import_solid_js27.Show, {
                     get when() {
                       return segmentWidth() > 52;
                     },
                     get children() {
                       var _el$84 = _tmpl$302();
-                      (0, import_web201.insert)(_el$84, () => formatSeconds(step.duration));
+                      (0, import_web202.insert)(_el$84, () => formatSeconds(step.duration));
                       return _el$84;
                     }
                   }));
-                  (0, import_web200.effect)((_p$) => {
+                  (0, import_web201.effect)((_p$) => {
                     var _v$51 = step.key ?? void 0, _v$52 = props.selectedStepKey === step.key || void 0, _v$53 = `${segmentWidth()}px`;
-                    _v$51 !== _p$.e && (0, import_web199.setAttribute)(_el$83, "data-step", _p$.e = _v$51);
-                    _v$52 !== _p$.t && (0, import_web199.setAttribute)(_el$83, "data-selected", _p$.t = _v$52);
-                    _v$53 !== _p$.a && (0, import_web198.setStyleProperty)(_el$83, "width", _p$.a = _v$53);
+                    _v$51 !== _p$.e && (0, import_web200.setAttribute)(_el$83, "data-step", _p$.e = _v$51);
+                    _v$52 !== _p$.t && (0, import_web200.setAttribute)(_el$83, "data-selected", _p$.t = _v$52);
+                    _v$53 !== _p$.a && (0, import_web199.setStyleProperty)(_el$83, "width", _p$.a = _v$53);
                     return _p$;
                   }, {
                     e: void 0,
@@ -10146,20 +10154,20 @@ function TimelineClip(props) {
                   return _el$83;
                 })();
               }
-            }), (0, import_web204.createComponent)(import_solid_js27.For, {
+            }), (0, import_web205.createComponent)(import_solid_js27.For, {
               get each() {
                 return props.steps;
               },
-              children: (step, index) => (0, import_web204.createComponent)(import_solid_js27.Show, {
+              children: (step, index) => (0, import_web205.createComponent)(import_solid_js27.Show, {
                 get when() {
                   return !step.isPhysics;
                 },
                 get children() {
                   var _el$85 = _tmpl$332();
-                  (0, import_web200.effect)((_p$) => {
+                  (0, import_web201.effect)((_p$) => {
                     var _v$54 = index(), _v$55 = `${boundaries2()[index()] * props.pxPerSecond - 4}px`;
-                    _v$54 !== _p$.e && (0, import_web199.setAttribute)(_el$85, "data-boundary", _p$.e = _v$54);
-                    _v$55 !== _p$.t && (0, import_web198.setStyleProperty)(_el$85, "left", _p$.t = _v$55);
+                    _v$54 !== _p$.e && (0, import_web200.setAttribute)(_el$85, "data-boundary", _p$.e = _v$54);
+                    _v$55 !== _p$.t && (0, import_web199.setStyleProperty)(_el$85, "left", _p$.t = _v$55);
                     return _p$;
                   }, {
                     e: void 0,
@@ -10168,7 +10176,7 @@ function TimelineClip(props) {
                   return _el$85;
                 }
               })
-            }), (0, import_web204.createComponent)(import_solid_js27.Show, {
+            }), (0, import_web205.createComponent)(import_solid_js27.Show, {
               get when() {
                 return !props.steps?.[0]?.isPhysics;
               },
@@ -10180,16 +10188,16 @@ function TimelineClip(props) {
         });
       }
     }));
-    (0, import_web200.effect)((_p$) => {
+    (0, import_web201.effect)((_p$) => {
       var _v$39 = isSteps() || void 0, _v$40 = props.composite || void 0, _v$41 = props.selected || void 0, _v$42 = dragging() || void 0, _v$43 = `${(props.at - props.viewStart) * props.pxPerSecond}px`, _v$44 = `${width()}px`, _v$45 = props.composite ? `${props.clip.color}80` : props.clip.color, _v$46 = title();
-      _v$39 !== _p$.e && (0, import_web199.setAttribute)(_el$74, "data-steps", _p$.e = _v$39);
-      _v$40 !== _p$.t && (0, import_web199.setAttribute)(_el$74, "data-composite", _p$.t = _v$40);
-      _v$41 !== _p$.a && (0, import_web199.setAttribute)(_el$74, "data-selected", _p$.a = _v$41);
-      _v$42 !== _p$.o && (0, import_web199.setAttribute)(_el$74, "data-dragging", _p$.o = _v$42);
-      _v$43 !== _p$.i && (0, import_web198.setStyleProperty)(_el$74, "left", _p$.i = _v$43);
-      _v$44 !== _p$.n && (0, import_web198.setStyleProperty)(_el$74, "width", _p$.n = _v$44);
-      _v$45 !== _p$.s && (0, import_web198.setStyleProperty)(_el$74, "background", _p$.s = _v$45);
-      _v$46 !== _p$.h && (0, import_web199.setAttribute)(_el$74, "title", _p$.h = _v$46);
+      _v$39 !== _p$.e && (0, import_web200.setAttribute)(_el$74, "data-steps", _p$.e = _v$39);
+      _v$40 !== _p$.t && (0, import_web200.setAttribute)(_el$74, "data-composite", _p$.t = _v$40);
+      _v$41 !== _p$.a && (0, import_web200.setAttribute)(_el$74, "data-selected", _p$.a = _v$41);
+      _v$42 !== _p$.o && (0, import_web200.setAttribute)(_el$74, "data-dragging", _p$.o = _v$42);
+      _v$43 !== _p$.i && (0, import_web199.setStyleProperty)(_el$74, "left", _p$.i = _v$43);
+      _v$44 !== _p$.n && (0, import_web199.setStyleProperty)(_el$74, "width", _p$.n = _v$44);
+      _v$45 !== _p$.s && (0, import_web199.setStyleProperty)(_el$74, "background", _p$.s = _v$45);
+      _v$46 !== _p$.h && (0, import_web200.setAttribute)(_el$74, "title", _p$.h = _v$46);
       return _p$;
     }, {
       e: void 0,
@@ -10202,7 +10210,7 @@ function TimelineClip(props) {
       h: void 0
     });
     return _el$74;
-  })(), (0, import_web204.createComponent)(import_solid_js27.Show, {
+  })(), (0, import_web205.createComponent)(import_solid_js27.Show, {
     get when() {
       return looping();
     },
@@ -10211,16 +10219,16 @@ function TimelineClip(props) {
     }
   })];
 }
-(0, import_web195.delegateEvents)(["pointerdown", "click", "pointermove", "pointerup"]);
+(0, import_web196.delegateEvents)(["pointerdown", "click", "pointermove", "pointerup"]);
 
 // src/solid/components/Module.tsx
-var import_web206 = require("solid-js/web");
 var import_web207 = require("solid-js/web");
 var import_web208 = require("solid-js/web");
 var import_web209 = require("solid-js/web");
 var import_web210 = require("solid-js/web");
 var import_web211 = require("solid-js/web");
-var _tmpl$60 = /* @__PURE__ */ (0, import_web206.template)(`<div class=dialkit-module><div class=dialkit-module-header><span class=dialkit-module-title></span><div class=dialkit-module-switch></div></div><div class=dialkit-module-collapse><div class=dialkit-module-collapse-clip><div class=dialkit-module-inner>`);
+var import_web212 = require("solid-js/web");
+var _tmpl$60 = /* @__PURE__ */ (0, import_web207.template)(`<div class=dialkit-module><div class=dialkit-module-header><span class=dialkit-module-title></span><div class=dialkit-module-switch></div></div><div class=dialkit-module-collapse><div class=dialkit-module-collapse-clip><div class=dialkit-module-inner>`);
 var ENABLE_OPTIONS2 = [{
   value: "off",
   label: "Off"
@@ -10231,56 +10239,56 @@ var ENABLE_OPTIONS2 = [{
 function Module(props) {
   return (() => {
     var _el$ = _tmpl$60(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$2.nextSibling, _el$6 = _el$5.firstChild, _el$7 = _el$6.firstChild;
-    (0, import_web211.insert)(_el$3, () => props.title);
-    (0, import_web211.insert)(_el$4, (0, import_web209.createComponent)(SegmentedControl, {
+    (0, import_web212.insert)(_el$3, () => props.title);
+    (0, import_web212.insert)(_el$4, (0, import_web210.createComponent)(SegmentedControl, {
       options: ENABLE_OPTIONS2,
       get value() {
         return props.enabled ? "on" : "off";
       },
       onChange: (v) => props.onEnabledChange(v === "on")
     }));
-    (0, import_web211.insert)(_el$7, () => props.children);
-    (0, import_web208.effect)(() => (0, import_web207.setAttribute)(_el$5, "data-open", props.enabled));
+    (0, import_web212.insert)(_el$7, () => props.children);
+    (0, import_web209.effect)(() => (0, import_web208.setAttribute)(_el$5, "data-open", props.enabled));
     return _el$;
   })();
 }
 
 // src/solid/components/ButtonGroup.tsx
-var import_web212 = require("solid-js/web");
 var import_web213 = require("solid-js/web");
 var import_web214 = require("solid-js/web");
 var import_web215 = require("solid-js/web");
 var import_web216 = require("solid-js/web");
+var import_web217 = require("solid-js/web");
 var import_solid_js28 = require("solid-js");
-var _tmpl$61 = /* @__PURE__ */ (0, import_web212.template)(`<div class=dialkit-button-group>`);
-var _tmpl$223 = /* @__PURE__ */ (0, import_web212.template)(`<button class=dialkit-button>`);
+var _tmpl$61 = /* @__PURE__ */ (0, import_web213.template)(`<div class=dialkit-button-group>`);
+var _tmpl$223 = /* @__PURE__ */ (0, import_web213.template)(`<button class=dialkit-button>`);
 function ButtonGroup(props) {
   return (() => {
     var _el$ = _tmpl$61();
-    (0, import_web215.insert)(_el$, (0, import_web216.createComponent)(import_solid_js28.For, {
+    (0, import_web216.insert)(_el$, (0, import_web217.createComponent)(import_solid_js28.For, {
       get each() {
         return props.buttons;
       },
       children: (button) => (() => {
         var _el$2 = _tmpl$223();
-        (0, import_web214.addEventListener)(_el$2, "click", button.onClick, true);
-        (0, import_web215.insert)(_el$2, () => button.label);
+        (0, import_web215.addEventListener)(_el$2, "click", button.onClick, true);
+        (0, import_web216.insert)(_el$2, () => button.label);
         return _el$2;
       })()
     }));
     return _el$;
   })();
 }
-(0, import_web213.delegateEvents)(["click"]);
+(0, import_web214.delegateEvents)(["click"]);
 
 // src/solid/components/WaveformVisualization.tsx
-var import_web217 = require("solid-js/web");
 var import_web218 = require("solid-js/web");
 var import_web219 = require("solid-js/web");
 var import_web220 = require("solid-js/web");
 var import_web221 = require("solid-js/web");
 var import_web222 = require("solid-js/web");
 var import_web223 = require("solid-js/web");
+var import_web224 = require("solid-js/web");
 var import_solid_js29 = require("solid-js");
 
 // src/waveform-dsp.ts
@@ -10674,9 +10682,9 @@ function createWaveformEngine(canvas, get) {
 }
 
 // src/solid/components/WaveformVisualization.tsx
-var _tmpl$66 = /* @__PURE__ */ (0, import_web217.template)(`<button type=button aria-label="Zoom out"><svg viewBox="0 0 16 16"fill=none><path d="M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
-var _tmpl$224 = /* @__PURE__ */ (0, import_web217.template)(`<div class=dialkit-waveform-zoom><button type=button aria-label="Zoom in"><svg viewBox="0 0 16 16"fill=none><path d="M8 3.5v9M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
-var _tmpl$318 = /* @__PURE__ */ (0, import_web217.template)(`<div class=dialkit-waveform-viz-wrap><canvas class=dialkit-waveform-viz>`);
+var _tmpl$66 = /* @__PURE__ */ (0, import_web218.template)(`<button type=button aria-label="Zoom out"><svg viewBox="0 0 16 16"fill=none><path d="M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
+var _tmpl$224 = /* @__PURE__ */ (0, import_web218.template)(`<div class=dialkit-waveform-zoom><button type=button aria-label="Zoom in"><svg viewBox="0 0 16 16"fill=none><path d="M8 3.5v9M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
+var _tmpl$318 = /* @__PURE__ */ (0, import_web218.template)(`<div class=dialkit-waveform-viz-wrap><canvas class=dialkit-waveform-viz>`);
 function WaveformVisualization(props) {
   const p = (0, import_solid_js29.mergeProps)({
     buffer: null,
@@ -10722,14 +10730,14 @@ function WaveformVisualization(props) {
   return (() => {
     var _el$ = _tmpl$318(), _el$2 = _el$.firstChild;
     var _ref$ = canvasEl;
-    typeof _ref$ === "function" ? (0, import_web223.use)(_ref$, _el$2) : canvasEl = _el$2;
-    (0, import_web221.insert)(_el$, (0, import_web222.createComponent)(import_solid_js29.Show, {
+    typeof _ref$ === "function" ? (0, import_web224.use)(_ref$, _el$2) : canvasEl = _el$2;
+    (0, import_web222.insert)(_el$, (0, import_web223.createComponent)(import_solid_js29.Show, {
       get when() {
         return !framingLoop();
       },
       get children() {
         var _el$3 = _tmpl$224(), _el$5 = _el$3.firstChild;
-        (0, import_web221.insert)(_el$3, (0, import_web222.createComponent)(import_solid_js29.Show, {
+        (0, import_web222.insert)(_el$3, (0, import_web223.createComponent)(import_solid_js29.Show, {
           get when() {
             return zoom() > 1;
           },
@@ -10740,15 +10748,15 @@ function WaveformVisualization(props) {
           }
         }), _el$5);
         _el$5.$$click = () => setZoom((z) => Math.min(WAVEFORM_MAX_ZOOM, z * 2));
-        (0, import_web220.effect)(() => _el$5.disabled = zoom() >= WAVEFORM_MAX_ZOOM);
+        (0, import_web221.effect)(() => _el$5.disabled = zoom() >= WAVEFORM_MAX_ZOOM);
         return _el$3;
       }
     }), null);
-    (0, import_web220.effect)((_p$) => {
+    (0, import_web221.effect)((_p$) => {
       var _v$ = `${p.width}px`, _v$2 = `${p.width}px`, _v$3 = `${p.height}px`;
-      _v$ !== _p$.e && (0, import_web219.setStyleProperty)(_el$, "width", _p$.e = _v$);
-      _v$2 !== _p$.t && (0, import_web219.setStyleProperty)(_el$2, "width", _p$.t = _v$2);
-      _v$3 !== _p$.a && (0, import_web219.setStyleProperty)(_el$2, "height", _p$.a = _v$3);
+      _v$ !== _p$.e && (0, import_web220.setStyleProperty)(_el$, "width", _p$.e = _v$);
+      _v$2 !== _p$.t && (0, import_web220.setStyleProperty)(_el$2, "width", _p$.t = _v$2);
+      _v$3 !== _p$.a && (0, import_web220.setStyleProperty)(_el$2, "height", _p$.a = _v$3);
       return _p$;
     }, {
       e: void 0,
@@ -10758,10 +10766,9 @@ function WaveformVisualization(props) {
     return _el$;
   })();
 }
-(0, import_web218.delegateEvents)(["click"]);
+(0, import_web219.delegateEvents)(["click"]);
 
 // src/solid/components/AnalyserVisualization.tsx
-var import_web224 = require("solid-js/web");
 var import_web225 = require("solid-js/web");
 var import_web226 = require("solid-js/web");
 var import_web227 = require("solid-js/web");
@@ -10770,6 +10777,7 @@ var import_web229 = require("solid-js/web");
 var import_web230 = require("solid-js/web");
 var import_web231 = require("solid-js/web");
 var import_web232 = require("solid-js/web");
+var import_web233 = require("solid-js/web");
 var import_solid_js30 = require("solid-js");
 
 // src/analyser-core.ts
@@ -11107,10 +11115,10 @@ function createAnalyserEngine(canvas, get) {
 }
 
 // src/solid/components/AnalyserVisualization.tsx
-var _tmpl$67 = /* @__PURE__ */ (0, import_web224.template)(`<button type=button aria-label=Mute>M`);
-var _tmpl$225 = /* @__PURE__ */ (0, import_web224.template)(`<button type=button aria-label=Solo>S`);
-var _tmpl$319 = /* @__PURE__ */ (0, import_web224.template)(`<div class=dialkit-analyser-actions>`);
-var _tmpl$412 = /* @__PURE__ */ (0, import_web224.template)(`<div class=dialkit-analyser-viz-wrap><canvas class=dialkit-analyser-viz>`);
+var _tmpl$67 = /* @__PURE__ */ (0, import_web225.template)(`<button type=button aria-label=Mute>M`);
+var _tmpl$225 = /* @__PURE__ */ (0, import_web225.template)(`<button type=button aria-label=Solo>S`);
+var _tmpl$319 = /* @__PURE__ */ (0, import_web225.template)(`<div class=dialkit-analyser-actions>`);
+var _tmpl$412 = /* @__PURE__ */ (0, import_web225.template)(`<div class=dialkit-analyser-viz-wrap><canvas class=dialkit-analyser-viz>`);
 function AnalyserVisualization(props) {
   const p = (0, import_solid_js30.mergeProps)({
     analyser: null,
@@ -11151,43 +11159,43 @@ function AnalyserVisualization(props) {
   return (() => {
     var _el$ = _tmpl$412(), _el$2 = _el$.firstChild;
     var _ref$ = canvasEl;
-    typeof _ref$ === "function" ? (0, import_web232.use)(_ref$, _el$2) : canvasEl = _el$2;
-    (0, import_web227.insert)(_el$, (0, import_web228.createComponent)(import_solid_js30.Show, {
+    typeof _ref$ === "function" ? (0, import_web233.use)(_ref$, _el$2) : canvasEl = _el$2;
+    (0, import_web228.insert)(_el$, (0, import_web229.createComponent)(import_solid_js30.Show, {
       get when() {
         return p.onMuteChange || p.onSoloChange;
       },
       get children() {
         var _el$3 = _tmpl$319();
-        (0, import_web227.insert)(_el$3, (0, import_web228.createComponent)(import_solid_js30.Show, {
+        (0, import_web228.insert)(_el$3, (0, import_web229.createComponent)(import_solid_js30.Show, {
           get when() {
             return p.onMuteChange;
           },
           get children() {
             var _el$4 = _tmpl$67();
             _el$4.$$click = () => p.onMuteChange?.(!p.muted);
-            (0, import_web230.effect)(() => (0, import_web229.setAttribute)(_el$4, "aria-pressed", p.muted));
+            (0, import_web231.effect)(() => (0, import_web230.setAttribute)(_el$4, "aria-pressed", p.muted));
             return _el$4;
           }
         }), null);
-        (0, import_web227.insert)(_el$3, (0, import_web228.createComponent)(import_solid_js30.Show, {
+        (0, import_web228.insert)(_el$3, (0, import_web229.createComponent)(import_solid_js30.Show, {
           get when() {
             return p.onSoloChange;
           },
           get children() {
             var _el$5 = _tmpl$225();
             _el$5.$$click = () => p.onSoloChange?.(!p.soloed);
-            (0, import_web230.effect)(() => (0, import_web229.setAttribute)(_el$5, "aria-pressed", p.soloed));
+            (0, import_web231.effect)(() => (0, import_web230.setAttribute)(_el$5, "aria-pressed", p.soloed));
             return _el$5;
           }
         }), null);
         return _el$3;
       }
     }), null);
-    (0, import_web230.effect)((_p$) => {
+    (0, import_web231.effect)((_p$) => {
       var _v$ = `${p.width}px`, _v$2 = `${p.width}px`, _v$3 = `${p.height}px`;
-      _v$ !== _p$.e && (0, import_web226.setStyleProperty)(_el$, "width", _p$.e = _v$);
-      _v$2 !== _p$.t && (0, import_web226.setStyleProperty)(_el$2, "width", _p$.t = _v$2);
-      _v$3 !== _p$.a && (0, import_web226.setStyleProperty)(_el$2, "height", _p$.a = _v$3);
+      _v$ !== _p$.e && (0, import_web227.setStyleProperty)(_el$, "width", _p$.e = _v$);
+      _v$2 !== _p$.t && (0, import_web227.setStyleProperty)(_el$2, "width", _p$.t = _v$2);
+      _v$3 !== _p$.a && (0, import_web227.setStyleProperty)(_el$2, "height", _p$.a = _v$3);
       return _p$;
     }, {
       e: void 0,
@@ -11197,10 +11205,9 @@ function AnalyserVisualization(props) {
     return _el$;
   })();
 }
-(0, import_web225.delegateEvents)(["click"]);
+(0, import_web226.delegateEvents)(["click"]);
 
 // src/solid/components/CurveComposer.tsx
-var import_web233 = require("solid-js/web");
 var import_web234 = require("solid-js/web");
 var import_web235 = require("solid-js/web");
 var import_web236 = require("solid-js/web");
@@ -11209,6 +11216,7 @@ var import_web238 = require("solid-js/web");
 var import_web239 = require("solid-js/web");
 var import_web240 = require("solid-js/web");
 var import_web241 = require("solid-js/web");
+var import_web242 = require("solid-js/web");
 var import_solid_js31 = require("solid-js");
 
 // src/curve-composer-core.ts
@@ -11614,19 +11622,19 @@ function triggersCrossed(prevValue, curValue, steps) {
 }
 
 // src/solid/components/CurveComposer.tsx
-var _tmpl$68 = /* @__PURE__ */ (0, import_web233.template)(`<div class=dialkit-cc-wrap><svg class=dialkit-cc><rect class=dialkit-cc-lane rx=8></rect><line class=dialkit-cc-playhead x1=0 x2=0></line><circle class=dialkit-cc-dot cx=0 r=3>`);
-var _tmpl$226 = /* @__PURE__ */ (0, import_web233.template)(`<svg><line class=dialkit-cc-grid></svg>`, false, true, false);
-var _tmpl$320 = /* @__PURE__ */ (0, import_web233.template)(`<svg><rect class=dialkit-cc-seg-selected rx=8></svg>`, false, true, false);
-var _tmpl$413 = /* @__PURE__ */ (0, import_web233.template)(`<svg><rect class=dialkit-cc-seg-hover rx=8></svg>`, false, true, false);
-var _tmpl$510 = /* @__PURE__ */ (0, import_web233.template)(`<svg><g><line class=dialkit-cc-diagonal></line><path class=dialkit-cc-curve></path><text class=dialkit-cc-label></svg>`, false, true, false);
-var _tmpl$69 = /* @__PURE__ */ (0, import_web233.template)(`<svg><path class=dialkit-cc-connector></svg>`, false, true, false);
-var _tmpl$73 = /* @__PURE__ */ (0, import_web233.template)(`<svg><line class=dialkit-cc-boundary></svg>`, false, true, false);
-var _tmpl$83 = /* @__PURE__ */ (0, import_web233.template)(`<svg><rect class=dialkit-cc-lane rx=8></svg>`, false, true, false);
-var _tmpl$93 = /* @__PURE__ */ (0, import_web233.template)(`<svg><rect class=dialkit-cc-seg-hover x=0 rx=8></svg>`, false, true, false);
-var _tmpl$03 = /* @__PURE__ */ (0, import_web233.template)(`<svg><path class="dialkit-cc-curve dialkit-cc-curve-driver"></svg>`, false, true, false);
-var _tmpl$110 = /* @__PURE__ */ (0, import_web233.template)(`<svg><text class=dialkit-cc-label>driver \xB7 </svg>`, false, true, false);
-var _tmpl$103 = /* @__PURE__ */ (0, import_web233.template)(`<svg><line class=dialkit-cc-playhead x1=0 x2=0></svg>`, false, true, false);
-var _tmpl$113 = /* @__PURE__ */ (0, import_web233.template)(`<svg><line class=dialkit-cc-diagonal></svg>`, false, true, false);
+var _tmpl$68 = /* @__PURE__ */ (0, import_web234.template)(`<div class=dialkit-cc-wrap><svg class=dialkit-cc><rect class=dialkit-cc-lane rx=8></rect><line class=dialkit-cc-playhead x1=0 x2=0></line><circle class=dialkit-cc-dot cx=0 r=3>`);
+var _tmpl$226 = /* @__PURE__ */ (0, import_web234.template)(`<svg><line class=dialkit-cc-grid></svg>`, false, true, false);
+var _tmpl$320 = /* @__PURE__ */ (0, import_web234.template)(`<svg><rect class=dialkit-cc-seg-selected rx=8></svg>`, false, true, false);
+var _tmpl$413 = /* @__PURE__ */ (0, import_web234.template)(`<svg><rect class=dialkit-cc-seg-hover rx=8></svg>`, false, true, false);
+var _tmpl$510 = /* @__PURE__ */ (0, import_web234.template)(`<svg><g><line class=dialkit-cc-diagonal></line><path class=dialkit-cc-curve></path><text class=dialkit-cc-label></svg>`, false, true, false);
+var _tmpl$69 = /* @__PURE__ */ (0, import_web234.template)(`<svg><path class=dialkit-cc-connector></svg>`, false, true, false);
+var _tmpl$73 = /* @__PURE__ */ (0, import_web234.template)(`<svg><line class=dialkit-cc-boundary></svg>`, false, true, false);
+var _tmpl$83 = /* @__PURE__ */ (0, import_web234.template)(`<svg><rect class=dialkit-cc-lane rx=8></svg>`, false, true, false);
+var _tmpl$93 = /* @__PURE__ */ (0, import_web234.template)(`<svg><rect class=dialkit-cc-seg-hover x=0 rx=8></svg>`, false, true, false);
+var _tmpl$03 = /* @__PURE__ */ (0, import_web234.template)(`<svg><path class="dialkit-cc-curve dialkit-cc-curve-driver"></svg>`, false, true, false);
+var _tmpl$110 = /* @__PURE__ */ (0, import_web234.template)(`<svg><text class=dialkit-cc-label>driver \xB7 </svg>`, false, true, false);
+var _tmpl$103 = /* @__PURE__ */ (0, import_web234.template)(`<svg><line class=dialkit-cc-playhead x1=0 x2=0></svg>`, false, true, false);
+var _tmpl$113 = /* @__PURE__ */ (0, import_web234.template)(`<svg><line class=dialkit-cc-diagonal></svg>`, false, true, false);
 function CurveComposer(props) {
   const p = (0, import_solid_js31.mergeProps)({
     driver: null,
@@ -11878,19 +11886,19 @@ function CurveComposer(props) {
     _el$2.$$pointermove = onPointerMove;
     _el$2.$$pointerdown = onPointerDown;
     var _ref$ = svgEl;
-    typeof _ref$ === "function" ? (0, import_web241.use)(_ref$, _el$2) : svgEl = _el$2;
-    (0, import_web238.insert)(_el$2, (0, import_web240.createComponent)(import_solid_js31.For, {
+    typeof _ref$ === "function" ? (0, import_web242.use)(_ref$, _el$2) : svgEl = _el$2;
+    (0, import_web239.insert)(_el$2, (0, import_web241.createComponent)(import_solid_js31.For, {
       get each() {
         return laneGridLines(mainRect());
       },
       children: (g) => (() => {
         var _el$6 = _tmpl$226();
-        (0, import_web237.effect)((_p$) => {
+        (0, import_web238.effect)((_p$) => {
           var _v$16 = g.gx, _v$17 = g.y1, _v$18 = g.gx, _v$19 = g.y2;
-          _v$16 !== _p$.e && (0, import_web235.setAttribute)(_el$6, "x1", _p$.e = _v$16);
-          _v$17 !== _p$.t && (0, import_web235.setAttribute)(_el$6, "y1", _p$.t = _v$17);
-          _v$18 !== _p$.a && (0, import_web235.setAttribute)(_el$6, "x2", _p$.a = _v$18);
-          _v$19 !== _p$.o && (0, import_web235.setAttribute)(_el$6, "y2", _p$.o = _v$19);
+          _v$16 !== _p$.e && (0, import_web236.setAttribute)(_el$6, "x1", _p$.e = _v$16);
+          _v$17 !== _p$.t && (0, import_web236.setAttribute)(_el$6, "y1", _p$.t = _v$17);
+          _v$18 !== _p$.a && (0, import_web236.setAttribute)(_el$6, "x2", _p$.a = _v$18);
+          _v$19 !== _p$.o && (0, import_web236.setAttribute)(_el$6, "y2", _p$.o = _v$19);
           return _p$;
         }, {
           e: void 0,
@@ -11901,9 +11909,9 @@ function CurveComposer(props) {
         return _el$6;
       })()
     }), _el$4);
-    (0, import_web238.insert)(_el$2, (0, import_web240.createComponent)(import_solid_js31.Show, {
+    (0, import_web239.insert)(_el$2, (0, import_web241.createComponent)(import_solid_js31.Show, {
       get when() {
-        return (0, import_web239.memo)(() => !!(p.selectedIndex != null && p.selectedIndex >= 0))() && p.selectedIndex < p.segments.length;
+        return (0, import_web240.memo)(() => !!(p.selectedIndex != null && p.selectedIndex >= 0))() && p.selectedIndex < p.segments.length;
       },
       get children() {
         return (() => {
@@ -11911,12 +11919,12 @@ function CurveComposer(props) {
           const mr = mainRect();
           return (() => {
             var _el$7 = _tmpl$320();
-            (0, import_web237.effect)((_p$) => {
+            (0, import_web238.effect)((_p$) => {
               var _v$20 = span[0] * W(), _v$21 = mr.y, _v$22 = (span[1] - span[0]) * W(), _v$23 = mr.h;
-              _v$20 !== _p$.e && (0, import_web235.setAttribute)(_el$7, "x", _p$.e = _v$20);
-              _v$21 !== _p$.t && (0, import_web235.setAttribute)(_el$7, "y", _p$.t = _v$21);
-              _v$22 !== _p$.a && (0, import_web235.setAttribute)(_el$7, "width", _p$.a = _v$22);
-              _v$23 !== _p$.o && (0, import_web235.setAttribute)(_el$7, "height", _p$.o = _v$23);
+              _v$20 !== _p$.e && (0, import_web236.setAttribute)(_el$7, "x", _p$.e = _v$20);
+              _v$21 !== _p$.t && (0, import_web236.setAttribute)(_el$7, "y", _p$.t = _v$21);
+              _v$22 !== _p$.a && (0, import_web236.setAttribute)(_el$7, "width", _p$.a = _v$22);
+              _v$23 !== _p$.o && (0, import_web236.setAttribute)(_el$7, "height", _p$.o = _v$23);
               return _p$;
             }, {
               e: void 0,
@@ -11929,7 +11937,7 @@ function CurveComposer(props) {
         })();
       }
     }), _el$4);
-    (0, import_web238.insert)(_el$2, (0, import_web240.createComponent)(import_solid_js31.Show, {
+    (0, import_web239.insert)(_el$2, (0, import_web241.createComponent)(import_solid_js31.Show, {
       get when() {
         return hover()?.kind === "segment" && !drag;
       },
@@ -11939,12 +11947,12 @@ function CurveComposer(props) {
           const mr = mainRect();
           return (() => {
             var _el$8 = _tmpl$413();
-            (0, import_web237.effect)((_p$) => {
+            (0, import_web238.effect)((_p$) => {
               var _v$24 = span[0] * W(), _v$25 = mr.y, _v$26 = (span[1] - span[0]) * W(), _v$27 = mr.h;
-              _v$24 !== _p$.e && (0, import_web235.setAttribute)(_el$8, "x", _p$.e = _v$24);
-              _v$25 !== _p$.t && (0, import_web235.setAttribute)(_el$8, "y", _p$.t = _v$25);
-              _v$26 !== _p$.a && (0, import_web235.setAttribute)(_el$8, "width", _p$.a = _v$26);
-              _v$27 !== _p$.o && (0, import_web235.setAttribute)(_el$8, "height", _p$.o = _v$27);
+              _v$24 !== _p$.e && (0, import_web236.setAttribute)(_el$8, "x", _p$.e = _v$24);
+              _v$25 !== _p$.t && (0, import_web236.setAttribute)(_el$8, "y", _p$.t = _v$25);
+              _v$26 !== _p$.a && (0, import_web236.setAttribute)(_el$8, "width", _p$.a = _v$26);
+              _v$27 !== _p$.o && (0, import_web236.setAttribute)(_el$8, "height", _p$.o = _v$27);
               return _p$;
             }, {
               e: void 0,
@@ -11957,7 +11965,7 @@ function CurveComposer(props) {
         })();
       }
     }), _el$4);
-    (0, import_web238.insert)(_el$2, (0, import_web240.createComponent)(import_solid_js31.For, {
+    (0, import_web239.insert)(_el$2, (0, import_web241.createComponent)(import_solid_js31.For, {
       get each() {
         return p.segments;
       },
@@ -11967,16 +11975,16 @@ function CurveComposer(props) {
         const diag = () => diagonalLine(mr(), span(), W());
         return (() => {
           var _el$9 = _tmpl$510(), _el$0 = _el$9.firstChild, _el$1 = _el$0.nextSibling, _el$10 = _el$1.nextSibling;
-          (0, import_web238.insert)(_el$10, () => seg.type);
-          (0, import_web237.effect)((_p$) => {
+          (0, import_web239.insert)(_el$10, () => seg.type);
+          (0, import_web238.effect)((_p$) => {
             var _v$28 = diag().x1, _v$29 = diag().y1, _v$30 = diag().x2, _v$31 = diag().y2, _v$32 = curvePath(seg, mr(), span(), W()), _v$33 = (span()[0] + span()[1]) * 0.5 * W(), _v$34 = mr().y + 13;
-            _v$28 !== _p$.e && (0, import_web235.setAttribute)(_el$0, "x1", _p$.e = _v$28);
-            _v$29 !== _p$.t && (0, import_web235.setAttribute)(_el$0, "y1", _p$.t = _v$29);
-            _v$30 !== _p$.a && (0, import_web235.setAttribute)(_el$0, "x2", _p$.a = _v$30);
-            _v$31 !== _p$.o && (0, import_web235.setAttribute)(_el$0, "y2", _p$.o = _v$31);
-            _v$32 !== _p$.i && (0, import_web235.setAttribute)(_el$1, "d", _p$.i = _v$32);
-            _v$33 !== _p$.n && (0, import_web235.setAttribute)(_el$10, "x", _p$.n = _v$33);
-            _v$34 !== _p$.s && (0, import_web235.setAttribute)(_el$10, "y", _p$.s = _v$34);
+            _v$28 !== _p$.e && (0, import_web236.setAttribute)(_el$0, "x1", _p$.e = _v$28);
+            _v$29 !== _p$.t && (0, import_web236.setAttribute)(_el$0, "y1", _p$.t = _v$29);
+            _v$30 !== _p$.a && (0, import_web236.setAttribute)(_el$0, "x2", _p$.a = _v$30);
+            _v$31 !== _p$.o && (0, import_web236.setAttribute)(_el$0, "y2", _p$.o = _v$31);
+            _v$32 !== _p$.i && (0, import_web236.setAttribute)(_el$1, "d", _p$.i = _v$32);
+            _v$33 !== _p$.n && (0, import_web236.setAttribute)(_el$10, "x", _p$.n = _v$33);
+            _v$34 !== _p$.s && (0, import_web236.setAttribute)(_el$10, "y", _p$.s = _v$34);
             return _p$;
           }, {
             e: void 0,
@@ -11991,24 +11999,24 @@ function CurveComposer(props) {
         })();
       }
     }), _el$4);
-    (0, import_web238.insert)(_el$2, (0, import_web240.createComponent)(import_solid_js31.Show, {
+    (0, import_web239.insert)(_el$2, (0, import_web241.createComponent)(import_solid_js31.Show, {
       get when() {
         return p.gap > 0;
       },
       get children() {
-        return (0, import_web240.createComponent)(import_solid_js31.For, {
+        return (0, import_web241.createComponent)(import_solid_js31.For, {
           get each() {
             return timelineSlots(p.segments, p.gap).filter((slot) => slot.kind === "gap" && slot.b > slot.a);
           },
           children: (slot) => (() => {
             var _el$11 = _tmpl$69();
-            (0, import_web237.effect)(() => (0, import_web235.setAttribute)(_el$11, "d", connectorPath(slot, samplers(), p.segments.length, mainRect(), W())));
+            (0, import_web238.effect)(() => (0, import_web236.setAttribute)(_el$11, "d", connectorPath(slot, samplers(), p.segments.length, mainRect(), W())));
             return _el$11;
           })()
         });
       }
     }), _el$4);
-    (0, import_web238.insert)(_el$2, (0, import_web240.createComponent)(import_solid_js31.For, {
+    (0, import_web239.insert)(_el$2, (0, import_web241.createComponent)(import_solid_js31.For, {
       get each() {
         return interior();
       },
@@ -12020,13 +12028,13 @@ function CurveComposer(props) {
         };
         return (() => {
           var _el$12 = _tmpl$73();
-          (0, import_web237.effect)((_p$) => {
+          (0, import_web238.effect)((_p$) => {
             var _v$35 = String(active()), _v$36 = bx * W(), _v$37 = mr.y, _v$38 = bx * W(), _v$39 = mr.y + mr.h;
-            _v$35 !== _p$.e && (0, import_web235.setAttribute)(_el$12, "data-active", _p$.e = _v$35);
-            _v$36 !== _p$.t && (0, import_web235.setAttribute)(_el$12, "x1", _p$.t = _v$36);
-            _v$37 !== _p$.a && (0, import_web235.setAttribute)(_el$12, "y1", _p$.a = _v$37);
-            _v$38 !== _p$.o && (0, import_web235.setAttribute)(_el$12, "x2", _p$.o = _v$38);
-            _v$39 !== _p$.i && (0, import_web235.setAttribute)(_el$12, "y2", _p$.i = _v$39);
+            _v$35 !== _p$.e && (0, import_web236.setAttribute)(_el$12, "data-active", _p$.e = _v$35);
+            _v$36 !== _p$.t && (0, import_web236.setAttribute)(_el$12, "x1", _p$.t = _v$36);
+            _v$37 !== _p$.a && (0, import_web236.setAttribute)(_el$12, "y1", _p$.a = _v$37);
+            _v$38 !== _p$.o && (0, import_web236.setAttribute)(_el$12, "x2", _p$.o = _v$38);
+            _v$39 !== _p$.i && (0, import_web236.setAttribute)(_el$12, "y2", _p$.i = _v$39);
             return _p$;
           }, {
             e: void 0,
@@ -12040,21 +12048,21 @@ function CurveComposer(props) {
       }
     }), _el$4);
     var _ref$2 = seriesPlayheadEl;
-    typeof _ref$2 === "function" ? (0, import_web241.use)(_ref$2, _el$4) : seriesPlayheadEl = _el$4;
+    typeof _ref$2 === "function" ? (0, import_web242.use)(_ref$2, _el$4) : seriesPlayheadEl = _el$4;
     var _ref$3 = seriesDotEl;
-    typeof _ref$3 === "function" ? (0, import_web241.use)(_ref$3, _el$5) : seriesDotEl = _el$5;
-    (0, import_web238.insert)(_el$2, (0, import_web240.createComponent)(import_solid_js31.Show, {
+    typeof _ref$3 === "function" ? (0, import_web242.use)(_ref$3, _el$5) : seriesDotEl = _el$5;
+    (0, import_web239.insert)(_el$2, (0, import_web241.createComponent)(import_solid_js31.Show, {
       get when() {
         return driverRect();
       },
       children: (dr) => [(() => {
         var _el$13 = _tmpl$83();
-        (0, import_web237.effect)((_p$) => {
+        (0, import_web238.effect)((_p$) => {
           var _v$40 = dr().x, _v$41 = dr().y, _v$42 = dr().w, _v$43 = dr().h;
-          _v$40 !== _p$.e && (0, import_web235.setAttribute)(_el$13, "x", _p$.e = _v$40);
-          _v$41 !== _p$.t && (0, import_web235.setAttribute)(_el$13, "y", _p$.t = _v$41);
-          _v$42 !== _p$.a && (0, import_web235.setAttribute)(_el$13, "width", _p$.a = _v$42);
-          _v$43 !== _p$.o && (0, import_web235.setAttribute)(_el$13, "height", _p$.o = _v$43);
+          _v$40 !== _p$.e && (0, import_web236.setAttribute)(_el$13, "x", _p$.e = _v$40);
+          _v$41 !== _p$.t && (0, import_web236.setAttribute)(_el$13, "y", _p$.t = _v$41);
+          _v$42 !== _p$.a && (0, import_web236.setAttribute)(_el$13, "width", _p$.a = _v$42);
+          _v$43 !== _p$.o && (0, import_web236.setAttribute)(_el$13, "height", _p$.o = _v$43);
           return _p$;
         }, {
           e: void 0,
@@ -12063,18 +12071,18 @@ function CurveComposer(props) {
           o: void 0
         });
         return _el$13;
-      })(), (0, import_web240.createComponent)(import_solid_js31.For, {
+      })(), (0, import_web241.createComponent)(import_solid_js31.For, {
         get each() {
           return laneGridLines(dr());
         },
         children: (g) => (() => {
           var _el$19 = _tmpl$226();
-          (0, import_web237.effect)((_p$) => {
+          (0, import_web238.effect)((_p$) => {
             var _v$52 = g.gx, _v$53 = g.y1, _v$54 = g.gx, _v$55 = g.y2;
-            _v$52 !== _p$.e && (0, import_web235.setAttribute)(_el$19, "x1", _p$.e = _v$52);
-            _v$53 !== _p$.t && (0, import_web235.setAttribute)(_el$19, "y1", _p$.t = _v$53);
-            _v$54 !== _p$.a && (0, import_web235.setAttribute)(_el$19, "x2", _p$.a = _v$54);
-            _v$55 !== _p$.o && (0, import_web235.setAttribute)(_el$19, "y2", _p$.o = _v$55);
+            _v$52 !== _p$.e && (0, import_web236.setAttribute)(_el$19, "x1", _p$.e = _v$52);
+            _v$53 !== _p$.t && (0, import_web236.setAttribute)(_el$19, "y1", _p$.t = _v$53);
+            _v$54 !== _p$.a && (0, import_web236.setAttribute)(_el$19, "x2", _p$.a = _v$54);
+            _v$55 !== _p$.o && (0, import_web236.setAttribute)(_el$19, "y2", _p$.o = _v$55);
             return _p$;
           }, {
             e: void 0,
@@ -12084,17 +12092,17 @@ function CurveComposer(props) {
           });
           return _el$19;
         })()
-      }), (0, import_web240.createComponent)(import_solid_js31.Show, {
+      }), (0, import_web241.createComponent)(import_solid_js31.Show, {
         get when() {
           return hover()?.kind === "driver" && !drag;
         },
         get children() {
           var _el$14 = _tmpl$93();
-          (0, import_web237.effect)((_p$) => {
+          (0, import_web238.effect)((_p$) => {
             var _v$44 = dr().y, _v$45 = W(), _v$46 = dr().h;
-            _v$44 !== _p$.e && (0, import_web235.setAttribute)(_el$14, "y", _p$.e = _v$44);
-            _v$45 !== _p$.t && (0, import_web235.setAttribute)(_el$14, "width", _p$.t = _v$45);
-            _v$46 !== _p$.a && (0, import_web235.setAttribute)(_el$14, "height", _p$.a = _v$46);
+            _v$44 !== _p$.e && (0, import_web236.setAttribute)(_el$14, "y", _p$.e = _v$44);
+            _v$45 !== _p$.t && (0, import_web236.setAttribute)(_el$14, "width", _p$.t = _v$45);
+            _v$46 !== _p$.a && (0, import_web236.setAttribute)(_el$14, "height", _p$.a = _v$46);
             return _p$;
           }, {
             e: void 0,
@@ -12103,16 +12111,16 @@ function CurveComposer(props) {
           });
           return _el$14;
         }
-      }), (0, import_web239.memo)(() => {
+      }), (0, import_web240.memo)(() => {
         const diag = diagonalLine(dr(), [0, 1], W());
         return (() => {
           var _el$20 = _tmpl$113();
-          (0, import_web237.effect)((_p$) => {
+          (0, import_web238.effect)((_p$) => {
             var _v$56 = diag.x1, _v$57 = diag.y1, _v$58 = diag.x2, _v$59 = diag.y2;
-            _v$56 !== _p$.e && (0, import_web235.setAttribute)(_el$20, "x1", _p$.e = _v$56);
-            _v$57 !== _p$.t && (0, import_web235.setAttribute)(_el$20, "y1", _p$.t = _v$57);
-            _v$58 !== _p$.a && (0, import_web235.setAttribute)(_el$20, "x2", _p$.a = _v$58);
-            _v$59 !== _p$.o && (0, import_web235.setAttribute)(_el$20, "y2", _p$.o = _v$59);
+            _v$56 !== _p$.e && (0, import_web236.setAttribute)(_el$20, "x1", _p$.e = _v$56);
+            _v$57 !== _p$.t && (0, import_web236.setAttribute)(_el$20, "y1", _p$.t = _v$57);
+            _v$58 !== _p$.a && (0, import_web236.setAttribute)(_el$20, "x2", _p$.a = _v$58);
+            _v$59 !== _p$.o && (0, import_web236.setAttribute)(_el$20, "y2", _p$.o = _v$59);
             return _p$;
           }, {
             e: void 0,
@@ -12124,15 +12132,15 @@ function CurveComposer(props) {
         })();
       }), (() => {
         var _el$15 = _tmpl$03();
-        (0, import_web237.effect)(() => (0, import_web235.setAttribute)(_el$15, "d", curvePath(p.driver, dr(), [0, 1], W())));
+        (0, import_web238.effect)(() => (0, import_web236.setAttribute)(_el$15, "d", curvePath(p.driver, dr(), [0, 1], W())));
         return _el$15;
       })(), (() => {
         var _el$16 = _tmpl$110(), _el$17 = _el$16.firstChild;
-        (0, import_web238.insert)(_el$16, () => p.driver.type, null);
-        (0, import_web237.effect)((_p$) => {
+        (0, import_web239.insert)(_el$16, () => p.driver.type, null);
+        (0, import_web238.effect)((_p$) => {
           var _v$47 = W() * 0.5, _v$48 = dr().y + 13;
-          _v$47 !== _p$.e && (0, import_web235.setAttribute)(_el$16, "x", _p$.e = _v$47);
-          _v$48 !== _p$.t && (0, import_web235.setAttribute)(_el$16, "y", _p$.t = _v$48);
+          _v$47 !== _p$.e && (0, import_web236.setAttribute)(_el$16, "x", _p$.e = _v$47);
+          _v$48 !== _p$.t && (0, import_web236.setAttribute)(_el$16, "y", _p$.t = _v$48);
           return _p$;
         }, {
           e: void 0,
@@ -12142,12 +12150,12 @@ function CurveComposer(props) {
       })(), (() => {
         var _el$18 = _tmpl$103();
         var _ref$4 = driverPlayheadEl;
-        typeof _ref$4 === "function" ? (0, import_web241.use)(_ref$4, _el$18) : driverPlayheadEl = _el$18;
-        (0, import_web237.effect)((_p$) => {
+        typeof _ref$4 === "function" ? (0, import_web242.use)(_ref$4, _el$18) : driverPlayheadEl = _el$18;
+        (0, import_web238.effect)((_p$) => {
           var _v$49 = dr().y, _v$50 = dr().y + dr().h, _v$51 = p.playheadColor;
-          _v$49 !== _p$.e && (0, import_web235.setAttribute)(_el$18, "y1", _p$.e = _v$49);
-          _v$50 !== _p$.t && (0, import_web235.setAttribute)(_el$18, "y2", _p$.t = _v$50);
-          _v$51 !== _p$.a && (0, import_web236.setStyleProperty)(_el$18, "stroke", _p$.a = _v$51);
+          _v$49 !== _p$.e && (0, import_web236.setAttribute)(_el$18, "y1", _p$.e = _v$49);
+          _v$50 !== _p$.t && (0, import_web236.setAttribute)(_el$18, "y2", _p$.t = _v$50);
+          _v$51 !== _p$.a && (0, import_web237.setStyleProperty)(_el$18, "stroke", _p$.a = _v$51);
           return _p$;
         }, {
           e: void 0,
@@ -12157,25 +12165,25 @@ function CurveComposer(props) {
         return _el$18;
       })()]
     }), null);
-    (0, import_web237.effect)((_p$) => {
+    (0, import_web238.effect)((_p$) => {
       var _v$ = `${W()}px`, _v$2 = `0 0 ${W()} ${totalH()}`, _v$3 = W(), _v$4 = totalH(), _v$5 = `${W()}px`, _v$6 = `${totalH()}px`, _v$7 = cursor(), _v$8 = p.curveColor, _v$9 = mainRect().x, _v$0 = mainRect().y, _v$1 = mainRect().w, _v$10 = mainRect().h, _v$11 = mainRect().y, _v$12 = mainRect().y + mainRect().h, _v$13 = p.playheadColor, _v$14 = mapY(mainRect(), 0), _v$15 = p.playheadColor;
-      _v$ !== _p$.e && (0, import_web236.setStyleProperty)(_el$, "width", _p$.e = _v$);
-      _v$2 !== _p$.t && (0, import_web235.setAttribute)(_el$2, "viewBox", _p$.t = _v$2);
-      _v$3 !== _p$.a && (0, import_web235.setAttribute)(_el$2, "width", _p$.a = _v$3);
-      _v$4 !== _p$.o && (0, import_web235.setAttribute)(_el$2, "height", _p$.o = _v$4);
-      _v$5 !== _p$.i && (0, import_web236.setStyleProperty)(_el$2, "width", _p$.i = _v$5);
-      _v$6 !== _p$.n && (0, import_web236.setStyleProperty)(_el$2, "height", _p$.n = _v$6);
-      _v$7 !== _p$.s && (0, import_web236.setStyleProperty)(_el$2, "cursor", _p$.s = _v$7);
-      _v$8 !== _p$.h && (0, import_web236.setStyleProperty)(_el$2, "color", _p$.h = _v$8);
-      _v$9 !== _p$.r && (0, import_web235.setAttribute)(_el$3, "x", _p$.r = _v$9);
-      _v$0 !== _p$.d && (0, import_web235.setAttribute)(_el$3, "y", _p$.d = _v$0);
-      _v$1 !== _p$.l && (0, import_web235.setAttribute)(_el$3, "width", _p$.l = _v$1);
-      _v$10 !== _p$.u && (0, import_web235.setAttribute)(_el$3, "height", _p$.u = _v$10);
-      _v$11 !== _p$.c && (0, import_web235.setAttribute)(_el$4, "y1", _p$.c = _v$11);
-      _v$12 !== _p$.w && (0, import_web235.setAttribute)(_el$4, "y2", _p$.w = _v$12);
-      _v$13 !== _p$.m && (0, import_web236.setStyleProperty)(_el$4, "stroke", _p$.m = _v$13);
-      _v$14 !== _p$.f && (0, import_web235.setAttribute)(_el$5, "cy", _p$.f = _v$14);
-      _v$15 !== _p$.y && (0, import_web236.setStyleProperty)(_el$5, "fill", _p$.y = _v$15);
+      _v$ !== _p$.e && (0, import_web237.setStyleProperty)(_el$, "width", _p$.e = _v$);
+      _v$2 !== _p$.t && (0, import_web236.setAttribute)(_el$2, "viewBox", _p$.t = _v$2);
+      _v$3 !== _p$.a && (0, import_web236.setAttribute)(_el$2, "width", _p$.a = _v$3);
+      _v$4 !== _p$.o && (0, import_web236.setAttribute)(_el$2, "height", _p$.o = _v$4);
+      _v$5 !== _p$.i && (0, import_web237.setStyleProperty)(_el$2, "width", _p$.i = _v$5);
+      _v$6 !== _p$.n && (0, import_web237.setStyleProperty)(_el$2, "height", _p$.n = _v$6);
+      _v$7 !== _p$.s && (0, import_web237.setStyleProperty)(_el$2, "cursor", _p$.s = _v$7);
+      _v$8 !== _p$.h && (0, import_web237.setStyleProperty)(_el$2, "color", _p$.h = _v$8);
+      _v$9 !== _p$.r && (0, import_web236.setAttribute)(_el$3, "x", _p$.r = _v$9);
+      _v$0 !== _p$.d && (0, import_web236.setAttribute)(_el$3, "y", _p$.d = _v$0);
+      _v$1 !== _p$.l && (0, import_web236.setAttribute)(_el$3, "width", _p$.l = _v$1);
+      _v$10 !== _p$.u && (0, import_web236.setAttribute)(_el$3, "height", _p$.u = _v$10);
+      _v$11 !== _p$.c && (0, import_web236.setAttribute)(_el$4, "y1", _p$.c = _v$11);
+      _v$12 !== _p$.w && (0, import_web236.setAttribute)(_el$4, "y2", _p$.w = _v$12);
+      _v$13 !== _p$.m && (0, import_web237.setStyleProperty)(_el$4, "stroke", _p$.m = _v$13);
+      _v$14 !== _p$.f && (0, import_web236.setAttribute)(_el$5, "cy", _p$.f = _v$14);
+      _v$15 !== _p$.y && (0, import_web237.setStyleProperty)(_el$5, "fill", _p$.y = _v$15);
       return _p$;
     }, {
       e: void 0,
@@ -12199,7 +12207,7 @@ function CurveComposer(props) {
     return _el$;
   })();
 }
-(0, import_web234.delegateEvents)(["pointerdown", "pointermove", "pointerup", "dblclick"]);
+(0, import_web235.delegateEvents)(["pointerdown", "pointermove", "pointerup", "dblclick"]);
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   AnalyserVisualization,

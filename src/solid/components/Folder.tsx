@@ -6,6 +6,8 @@ interface FolderProps {
   title: string;
   children: JSX.Element;
   defaultOpen?: boolean;
+  /** `false` renders a plain section header: no caret, no click-to-collapse, body always open. */
+  collapsible?: boolean;
   isRoot?: boolean;
   inline?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
@@ -73,6 +75,7 @@ export function Folder(props: FolderProps) {
   });
 
   const handleToggle = () => {
+    if (props.collapsible === false) return;
     if (props.inline && props.isRoot) return;
     const next = !isOpen();
     setIsOpen(next);
@@ -133,8 +136,8 @@ export function Folder(props: FolderProps) {
       class={`dialkit-folder ${props.isRoot ? 'dialkit-folder-root' : ''}`}
     >
       <div
-        class={`dialkit-folder-header ${props.isRoot ? 'dialkit-panel-header' : ''}`}
-        onClick={handleToggle}
+        class={`dialkit-folder-header ${props.isRoot ? 'dialkit-panel-header' : ''} ${props.collapsible === false ? 'dialkit-folder-header-static' : ''}`}
+        onClick={props.collapsible === false ? undefined : handleToggle}
         data-hint={props.hint ? 'true' : undefined}
         aria-describedby={props.hint ? props.hintId : undefined}
       >
@@ -165,7 +168,7 @@ export function Folder(props: FolderProps) {
               <circle cx={ICON_PANEL.circles[2].cx} cy={ICON_PANEL.circles[2].cy} r={ICON_PANEL.circles[2].r} fill="currentColor" stroke="currentColor" stroke-width="1.25" />
             </svg>
           )}
-          {!props.isRoot && (
+          {!props.isRoot && props.collapsible !== false && (
             <svg
               ref={folderChevronRef}
               class="dialkit-folder-icon"

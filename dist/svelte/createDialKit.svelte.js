@@ -45,7 +45,7 @@ export function createDialKit(name, config, options) {
 function buildResolvedValues(config, flatValues, prefix) {
     const result = {};
     for (const [key, configValue] of Object.entries(config)) {
-        if (key === '_collapsed')
+        if (key === '_collapsed' || key === '_collapsible')
             continue;
         const path = prefix ? `${prefix}.${key}` : key;
         if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === 'number') {

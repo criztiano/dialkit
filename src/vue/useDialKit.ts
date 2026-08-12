@@ -115,7 +115,7 @@ function buildResolvedValues(
   const result: Record<string, unknown> = {};
 
   for (const [key, configValue] of Object.entries(config)) {
-    if (key === '_collapsed') continue;
+    if (key === '_collapsed' || key === '_collapsible') continue;
     const path = prefix ? `${prefix}.${key}` : key;
 
     if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === 'number') {

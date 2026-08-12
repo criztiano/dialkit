@@ -378,6 +378,8 @@ type ControlMeta = {
     defaultOpen?: boolean;
     /** Folder declared `_enabled` — renders as a module whose header switch drives `<path>._enabled`. */
     module?: boolean;
+    /** Folder declared `_collapsible: false` — plain section header, no caret, body always open. */
+    collapsible?: boolean;
     options?: (string | {
         value: string;
         label: string;
@@ -1414,6 +1416,11 @@ declare const Folder: vue.DefineComponent<vue.ExtractPropTypes<{
         type: BooleanConstructor;
         default: boolean;
     };
+    /** `false` renders a plain section header: no caret, no click-to-collapse, body always open. */
+    collapsible: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
     isRoot: {
         type: BooleanConstructor;
         default: boolean;
@@ -1447,6 +1454,11 @@ declare const Folder: vue.DefineComponent<vue.ExtractPropTypes<{
         type: BooleanConstructor;
         default: boolean;
     };
+    /** `false` renders a plain section header: no caret, no click-to-collapse, body always open. */
+    collapsible: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
     isRoot: {
         type: BooleanConstructor;
         default: boolean;
@@ -1473,6 +1485,7 @@ declare const Folder: vue.DefineComponent<vue.ExtractPropTypes<{
     onOpenChange?: ((...args: any[]) => any) | undefined;
 }>, {
     defaultOpen: boolean;
+    collapsible: boolean;
     isRoot: boolean;
     inline: boolean;
     toolbar: (() => ReturnType<typeof h>) | null;

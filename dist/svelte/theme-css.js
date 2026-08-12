@@ -278,6 +278,11 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
   user-select: none;
 }
 
+/* \`_collapsible: false\` folder — plain section header, not a toggle */
+.dialkit-folder-header-static {
+  cursor: default;
+}
+
 .dialkit-folder-header-top {
   display: flex;
   align-items: center;

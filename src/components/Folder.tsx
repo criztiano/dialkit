@@ -6,6 +6,8 @@ interface FolderProps {
   title: string;
   children: ReactNode;
   defaultOpen?: boolean;
+  /** `false` renders a plain section header: no caret, no click-to-collapse, body always open. */
+  collapsible?: boolean;
   isRoot?: boolean;
   inline?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
@@ -15,9 +17,9 @@ interface FolderProps {
   hintId?: string;
 }
 
-export function Folder({ title, children, defaultOpen = true, isRoot = false, inline = false, onOpenChange, toolbar, hint, hintId }: FolderProps) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
-  const [isCollapsed, setIsCollapsed] = useState(!defaultOpen);
+export function Folder({ title, children, defaultOpen = true, collapsible = true, isRoot = false, inline = false, onOpenChange, toolbar, hint, hintId }: FolderProps) {
+  const [isOpen, setIsOpen] = useState(collapsible ? defaultOpen : true);
+  const [isCollapsed, setIsCollapsed] = useState(collapsible ? !defaultOpen : false);
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | undefined>(undefined);
   const [windowHeight, setWindowHeight] = useState(typeof window !== 'undefined' ? window.innerHeight : 800);
@@ -44,6 +46,7 @@ export function Folder({ title, children, defaultOpen = true, isRoot = false, in
   }, [isOpen]);
 
   const handleToggle = () => {
+    if (!collapsible) return;
     if (inline && isRoot) return;
     const next = !isOpen;
     setIsOpen(next);
@@ -58,8 +61,8 @@ export function Folder({ title, children, defaultOpen = true, isRoot = false, in
   const folderContent = (
     <div ref={isRoot ? contentRef : undefined} className={`dialkit-folder ${isRoot ? 'dialkit-folder-root' : ''}`}>
       <div
-        className={`dialkit-folder-header ${isRoot ? 'dialkit-panel-header' : ''}`}
-        onClick={handleToggle}
+        className={`dialkit-folder-header ${isRoot ? 'dialkit-panel-header' : ''} ${collapsible ? '' : 'dialkit-folder-header-static'}`}
+        onClick={collapsible ? handleToggle : undefined}
         data-hint={hint ? 'true' : undefined}
         aria-describedby={hint ? hintId : undefined}
       >
@@ -91,7 +94,7 @@ export function Folder({ title, children, defaultOpen = true, isRoot = false, in
               ))}
             </svg>
           )}
-          {!isRoot && (
+          {!isRoot && collapsible && (
             <motion.svg
               className="dialkit-folder-icon"
               viewBox="0 0 24 24"

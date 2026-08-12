@@ -636,7 +636,7 @@ function resolveDialValues(config, flatValues) {
 function resolveConfigValues(config, flatValues, prefix) {
   const result = {};
   for (const [key, configValue] of Object.entries(config)) {
-    if (key === "_collapsed") continue;
+    if (key === "_collapsed" || key === "_collapsible") continue;
     const path = prefix ? `${prefix}.${key}` : key;
     if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === "number") {
       result[key] = flatValues[path] ?? configValue[0];
@@ -996,7 +996,7 @@ var DialStoreClass = class {
     let changed = false;
     const visit = (cfg, prefix) => {
       for (const [key, value] of Object.entries(cfg)) {
-        if (key === "_collapsed") continue;
+        if (key === "_collapsed" || key === "_collapsible") continue;
         const path = prefix ? `${prefix}.${key}` : key;
         if (this.isCurveConfig(value)) {
           const control = this.findControlByPath(panel.controls, path);
@@ -1197,7 +1197,7 @@ var DialStoreClass = class {
   }
   initTransitionModes(config, prefix, values) {
     for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed") continue;
+      if (key === "_collapsed" || key === "_collapsible") continue;
       const path = prefix ? `${prefix}.${key}` : key;
       if (this.isEasingConfig(value)) {
         values[`${path}.__mode`] = "easing";
@@ -1213,7 +1213,7 @@ var DialStoreClass = class {
   parseConfig(config, prefix, shortcuts) {
     const controls = [];
     for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed" || key === "_enabled") continue;
+      if (key === "_collapsed" || key === "_collapsible" || key === "_enabled") continue;
       const path = prefix ? `${prefix}.${key}` : key;
       const label = this.formatLabel(key);
       const shortcut = shortcuts?.[path];
@@ -1303,13 +1303,16 @@ var DialStoreClass = class {
         }
       } else if (typeof value === "object" && value !== null) {
         const folderConfig = value;
-        const defaultOpen = "_collapsed" in folderConfig ? !folderConfig._collapsed : true;
+        const module = "_enabled" in folderConfig ? true : void 0;
+        const collapsible = !module && folderConfig._collapsible === false ? false : void 0;
+        const defaultOpen = collapsible === false ? true : "_collapsed" in folderConfig ? !folderConfig._collapsed : true;
         controls.push({
           type: "folder",
           path,
           label,
           defaultOpen,
-          module: "_enabled" in folderConfig ? true : void 0,
+          collapsible,
+          module,
           children: this.parseConfig(folderConfig, path, shortcuts)
         });
       }
@@ -1319,7 +1322,7 @@ var DialStoreClass = class {
   flattenValues(config, prefix) {
     const values = {};
     for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed") continue;
+      if (key === "_collapsed" || key === "_collapsible") continue;
       const path = prefix ? `${prefix}.${key}` : key;
       if (Array.isArray(value) && value.length <= 4 && typeof value[0] === "number") {
         values[path] = value[0];
@@ -1728,7 +1731,7 @@ function createDialKit(name, config, options) {
 function buildResolvedValues(config, flatValues, prefix) {
   const result = {};
   for (const [key, configValue] of Object.entries(config)) {
-    if (key === "_collapsed") continue;
+    if (key === "_collapsed" || key === "_collapsible") continue;
     const path = prefix ? `${prefix}.${key}` : key;
     if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === "number") {
       result[key] = flatValues[path] ?? configValue[0];
@@ -3535,6 +3538,7 @@ import { effect as _$effect } from "solid-js/web";
 import { createComponent as _$createComponent2 } from "solid-js/web";
 import { insert as _$insert } from "solid-js/web";
 import { memo as _$memo } from "solid-js/web";
+import { addEventListener as _$addEventListener } from "solid-js/web";
 import { use as _$use } from "solid-js/web";
 import { createSignal as createSignal4, createEffect as createEffect3, onCleanup as onCleanup4, Show } from "solid-js";
 import { animate } from "motion";
@@ -3597,6 +3601,7 @@ function Folder(props) {
     onCleanup4(() => chevronAnim?.stop());
   });
   const handleToggle = () => {
+    if (props.collapsible === false) return;
     if (props.inline && props.isRoot) return;
     const next = !isOpen();
     setIsOpen(next);
@@ -3653,7 +3658,7 @@ function Folder(props) {
     _$use((el) => {
       if (props.isRoot) contentRef = el;
     }, _el$);
-    _el$2.$$click = handleToggle;
+    _$addEventListener(_el$2, "click", props.collapsible === false ? void 0 : handleToggle, true);
     _$insert(_el$3, (() => {
       var _c$ = _$memo(() => !!props.isRoot);
       return () => _c$() ? _$createComponent2(Show, {
@@ -3704,7 +3709,7 @@ function Folder(props) {
       })();
     })(), null);
     _$insert(_el$3, (() => {
-      var _c$3 = _$memo(() => !!!props.isRoot);
+      var _c$3 = _$memo(() => !!(!props.isRoot && props.collapsible !== false));
       return () => _c$3() && (() => {
         var _el$15 = _tmpl$8(), _el$16 = _el$15.firstChild;
         var _ref$ = folderChevronRef;
@@ -3771,7 +3776,7 @@ function Folder(props) {
       }
     }), null);
     _$effect((_p$) => {
-      var _v$ = `dialkit-folder ${props.isRoot ? "dialkit-folder-root" : ""}`, _v$2 = `dialkit-folder-header ${props.isRoot ? "dialkit-panel-header" : ""}`, _v$3 = props.hint ? "true" : void 0, _v$4 = props.hint ? props.hintId : void 0;
+      var _v$ = `dialkit-folder ${props.isRoot ? "dialkit-folder-root" : ""}`, _v$2 = `dialkit-folder-header ${props.isRoot ? "dialkit-panel-header" : ""} ${props.collapsible === false ? "dialkit-folder-header-static" : ""}`, _v$3 = props.hint ? "true" : void 0, _v$4 = props.hint ? props.hintId : void 0;
       _v$ !== _p$.e && _$className(_el$, _p$.e = _v$);
       _v$2 !== _p$.t && _$className(_el$2, _p$.t = _v$2);
       _v$3 !== _p$.a && _$setAttribute(_el$2, "data-hint", _p$.a = _v$3);
@@ -5910,7 +5915,7 @@ import { delegateEvents as _$delegateEvents10 } from "solid-js/web";
 import { memo as _$memo9 } from "solid-js/web";
 import { createComponent as _$createComponent12 } from "solid-js/web";
 import { setStyleProperty as _$setStyleProperty5 } from "solid-js/web";
-import { addEventListener as _$addEventListener } from "solid-js/web";
+import { addEventListener as _$addEventListener2 } from "solid-js/web";
 import { use as _$use7 } from "solid-js/web";
 import { style as _$style3 } from "solid-js/web";
 import { setAttribute as _$setAttribute10 } from "solid-js/web";
@@ -6220,16 +6225,16 @@ function ColorPickerPanel(props) {
   };
   return (() => {
     var _el$7 = _tmpl$62(), _el$8 = _el$7.firstChild, _el$9 = _el$8.firstChild, _el$0 = _el$8.nextSibling, _el$1 = _el$0.firstChild, _el$13 = _el$0.nextSibling;
-    _$addEventListener(_el$8, "pointercancel", svDrag.onPointerCancel);
-    _$addEventListener(_el$8, "pointerup", svDrag.onPointerUp, true);
-    _$addEventListener(_el$8, "pointermove", svDrag.onPointerMove, true);
-    _$addEventListener(_el$8, "pointerdown", svDrag.onPointerDown, true);
+    _$addEventListener2(_el$8, "pointercancel", svDrag.onPointerCancel);
+    _$addEventListener2(_el$8, "pointerup", svDrag.onPointerUp, true);
+    _$addEventListener2(_el$8, "pointermove", svDrag.onPointerMove, true);
+    _$addEventListener2(_el$8, "pointerdown", svDrag.onPointerDown, true);
     var _ref$ = svDrag.ref;
     typeof _ref$ === "function" ? _$use7(_ref$, _el$8) : svDrag.ref = _el$8;
-    _$addEventListener(_el$0, "pointercancel", hueDrag.onPointerCancel);
-    _$addEventListener(_el$0, "pointerup", hueDrag.onPointerUp, true);
-    _$addEventListener(_el$0, "pointermove", hueDrag.onPointerMove, true);
-    _$addEventListener(_el$0, "pointerdown", hueDrag.onPointerDown, true);
+    _$addEventListener2(_el$0, "pointercancel", hueDrag.onPointerCancel);
+    _$addEventListener2(_el$0, "pointerup", hueDrag.onPointerUp, true);
+    _$addEventListener2(_el$0, "pointermove", hueDrag.onPointerMove, true);
+    _$addEventListener2(_el$0, "pointerdown", hueDrag.onPointerDown, true);
     var _ref$2 = hueDrag.ref;
     typeof _ref$2 === "function" ? _$use7(_ref$2, _el$0) : hueDrag.ref = _el$0;
     _$insert13(_el$7, _$createComponent12(Show10, {
@@ -6238,10 +6243,10 @@ function ColorPickerPanel(props) {
       },
       get children() {
         var _el$10 = _tmpl$44(), _el$11 = _el$10.firstChild, _el$12 = _el$11.nextSibling;
-        _$addEventListener(_el$10, "pointercancel", alphaDrag.onPointerCancel);
-        _$addEventListener(_el$10, "pointerup", alphaDrag.onPointerUp, true);
-        _$addEventListener(_el$10, "pointermove", alphaDrag.onPointerMove, true);
-        _$addEventListener(_el$10, "pointerdown", alphaDrag.onPointerDown, true);
+        _$addEventListener2(_el$10, "pointercancel", alphaDrag.onPointerCancel);
+        _$addEventListener2(_el$10, "pointerup", alphaDrag.onPointerUp, true);
+        _$addEventListener2(_el$10, "pointermove", alphaDrag.onPointerMove, true);
+        _$addEventListener2(_el$10, "pointerdown", alphaDrag.onPointerDown, true);
         var _ref$3 = alphaDrag.ref;
         typeof _ref$3 === "function" ? _$use7(_ref$3, _el$10) : alphaDrag.ref = _el$10;
         _$effect13((_p$) => {
@@ -6666,7 +6671,7 @@ import { delegateEvents as _$delegateEvents12 } from "solid-js/web";
 import { insert as _$insert15 } from "solid-js/web";
 import { memo as _$memo11 } from "solid-js/web";
 import { createComponent as _$createComponent14 } from "solid-js/web";
-import { addEventListener as _$addEventListener2 } from "solid-js/web";
+import { addEventListener as _$addEventListener3 } from "solid-js/web";
 import { setStyleProperty as _$setStyleProperty7 } from "solid-js/web";
 import { effect as _$effect15 } from "solid-js/web";
 import { use as _$use9 } from "solid-js/web";
@@ -6803,7 +6808,7 @@ function GradientTransformPad(props) {
           _el$4.addEventListener("pointercancel", onHandleUp);
           _el$4.$$pointerup = onHandleUp;
           _el$4.$$pointermove = onHandleMove;
-          _$addEventListener2(_el$4, "pointerdown", onHandleDown("major"), true);
+          _$addEventListener3(_el$4, "pointerdown", onHandleDown("major"), true);
           _$effect15((_p$) => {
             var _v$5 = `${major().x}px`, _v$6 = `${major().y}px`;
             _v$5 !== _p$.e && _$setStyleProperty7(_el$4, "left", _p$.e = _v$5);
@@ -6820,7 +6825,7 @@ function GradientTransformPad(props) {
           _el$5.addEventListener("pointercancel", onHandleUp);
           _el$5.$$pointerup = onHandleUp;
           _el$5.$$pointermove = onHandleMove;
-          _$addEventListener2(_el$5, "pointerdown", onHandleDown("minor"), true);
+          _$addEventListener3(_el$5, "pointerdown", onHandleDown("minor"), true);
           _$effect15((_p$) => {
             var _v$7 = `${minor().x}px`, _v$8 = `${minor().y}px`;
             _v$7 !== _p$.e && _$setStyleProperty7(_el$5, "left", _p$.e = _v$7);
@@ -6861,7 +6866,7 @@ function GradientTransformPad(props) {
           _el$7.addEventListener("pointercancel", onHandleUp);
           _el$7.$$pointerup = onHandleUp;
           _el$7.$$pointermove = onHandleMove;
-          _$addEventListener2(_el$7, "pointerdown", onHandleDown("angle"), true);
+          _$addEventListener3(_el$7, "pointerdown", onHandleDown("angle"), true);
           _$effect15((_p$) => {
             var _v$11 = `${angleHandle().x}px`, _v$12 = `${angleHandle().y}px`;
             _v$11 !== _p$.e && _$setStyleProperty7(_el$7, "left", _p$.e = _v$11);
@@ -6885,7 +6890,7 @@ function GradientTransformPad(props) {
         _el$8.addEventListener("pointercancel", onHandleUp);
         _el$8.$$pointerup = onHandleUp;
         _el$8.$$pointermove = onHandleMove;
-        _$addEventListener2(_el$8, "pointerdown", onHandleDown("center"), true);
+        _$addEventListener3(_el$8, "pointerdown", onHandleDown("center"), true);
         _$effect15((_p$) => {
           var _v$13 = `${clamp5(cxPx(), 5, size().w - 5)}px`, _v$14 = `${clamp5(cyPx(), 5, size().h - 5)}px`;
           _v$13 !== _p$.e && _$setStyleProperty7(_el$8, "left", _p$.e = _v$13);
@@ -7872,6 +7877,9 @@ function ControlRenderer(props) {
           get defaultOpen() {
             return control.defaultOpen ?? true;
           },
+          get collapsible() {
+            return control.collapsible ?? true;
+          },
           get hint() {
             return control.hint;
           },
@@ -8652,7 +8660,7 @@ function DialRoot(props) {
 // src/solid/components/Timeline/DialTimeline.tsx
 import { template as _$template25 } from "solid-js/web";
 import { delegateEvents as _$delegateEvents20 } from "solid-js/web";
-import { addEventListener as _$addEventListener3 } from "solid-js/web";
+import { addEventListener as _$addEventListener4 } from "solid-js/web";
 import { style as _$style7 } from "solid-js/web";
 import { setStyleProperty as _$setStyleProperty12 } from "solid-js/web";
 import { setAttribute as _$setAttribute19 } from "solid-js/web";
@@ -8866,7 +8874,7 @@ function PlayPauseButton(props) {
 function ReplayButton(props) {
   return (() => {
     var _el$0 = _tmpl$65(), _el$1 = _el$0.firstChild;
-    _$addEventListener3(_el$0, "click", props.onReplay, true);
+    _$addEventListener4(_el$0, "click", props.onReplay, true);
     _$insert24(_el$1, _$createComponent24(For9, {
       each: ICON_REPLAY,
       children: (path) => (() => {
@@ -9788,7 +9796,7 @@ function ClipPopover(props) {
           var _ref$4 = ref;
           typeof _ref$4 === "function" ? _$use15(_ref$4, _el$69) : ref = _el$69;
           _$insert24(_el$71, () => presentation().title);
-          _$addEventListener3(_el$72, "click", props.onClose, true);
+          _$addEventListener4(_el$72, "click", props.onClose, true);
           _$insert24(_el$73, _$createComponent24(ControlRenderer, {
             get panelId() {
               return props.panelId;
@@ -10174,7 +10182,7 @@ function Module(props) {
 // src/solid/components/ButtonGroup.tsx
 import { template as _$template27 } from "solid-js/web";
 import { delegateEvents as _$delegateEvents21 } from "solid-js/web";
-import { addEventListener as _$addEventListener4 } from "solid-js/web";
+import { addEventListener as _$addEventListener5 } from "solid-js/web";
 import { insert as _$insert26 } from "solid-js/web";
 import { createComponent as _$createComponent26 } from "solid-js/web";
 import { For as For10 } from "solid-js";
@@ -10189,7 +10197,7 @@ function ButtonGroup(props) {
       },
       children: (button) => (() => {
         var _el$2 = _tmpl$223();
-        _$addEventListener4(_el$2, "click", button.onClick, true);
+        _$addEventListener5(_el$2, "click", button.onClick, true);
         _$insert26(_el$2, () => button.label);
         return _el$2;
       })()

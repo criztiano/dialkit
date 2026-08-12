@@ -366,6 +366,8 @@ type ControlMeta = {
     defaultOpen?: boolean;
     /** Folder declared `_enabled` — renders as a module whose header switch drives `<path>._enabled`. */
     module?: boolean;
+    /** Folder declared `_collapsible: false` — plain section header, no caret, body always open. */
+    collapsible?: boolean;
     options?: (string | {
         value: string;
         label: string;

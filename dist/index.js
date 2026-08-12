@@ -657,7 +657,7 @@ function resolveDialValues(config, flatValues) {
 function resolveConfigValues(config, flatValues, prefix) {
   const result = {};
   for (const [key, configValue] of Object.entries(config)) {
-    if (key === "_collapsed") continue;
+    if (key === "_collapsed" || key === "_collapsible") continue;
     const path = prefix ? `${prefix}.${key}` : key;
     if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === "number") {
       result[key] = flatValues[path] ?? configValue[0];
@@ -1017,7 +1017,7 @@ var DialStoreClass = class {
     let changed = false;
     const visit = (cfg, prefix) => {
       for (const [key, value] of Object.entries(cfg)) {
-        if (key === "_collapsed") continue;
+        if (key === "_collapsed" || key === "_collapsible") continue;
         const path = prefix ? `${prefix}.${key}` : key;
         if (this.isCurveConfig(value)) {
           const control = this.findControlByPath(panel.controls, path);
@@ -1218,7 +1218,7 @@ var DialStoreClass = class {
   }
   initTransitionModes(config, prefix, values) {
     for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed") continue;
+      if (key === "_collapsed" || key === "_collapsible") continue;
       const path = prefix ? `${prefix}.${key}` : key;
       if (this.isEasingConfig(value)) {
         values[`${path}.__mode`] = "easing";
@@ -1234,7 +1234,7 @@ var DialStoreClass = class {
   parseConfig(config, prefix, shortcuts) {
     const controls = [];
     for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed" || key === "_enabled") continue;
+      if (key === "_collapsed" || key === "_collapsible" || key === "_enabled") continue;
       const path = prefix ? `${prefix}.${key}` : key;
       const label = this.formatLabel(key);
       const shortcut = shortcuts?.[path];
@@ -1324,13 +1324,16 @@ var DialStoreClass = class {
         }
       } else if (typeof value === "object" && value !== null) {
         const folderConfig = value;
-        const defaultOpen = "_collapsed" in folderConfig ? !folderConfig._collapsed : true;
+        const module = "_enabled" in folderConfig ? true : void 0;
+        const collapsible = !module && folderConfig._collapsible === false ? false : void 0;
+        const defaultOpen = collapsible === false ? true : "_collapsed" in folderConfig ? !folderConfig._collapsed : true;
         controls.push({
           type: "folder",
           path,
           label,
           defaultOpen,
-          module: "_enabled" in folderConfig ? true : void 0,
+          collapsible,
+          module,
           children: this.parseConfig(folderConfig, path, shortcuts)
         });
       }
@@ -1340,7 +1343,7 @@ var DialStoreClass = class {
   flattenValues(config, prefix) {
     const values = {};
     for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed") continue;
+      if (key === "_collapsed" || key === "_collapsible") continue;
       const path = prefix ? `${prefix}.${key}` : key;
       if (Array.isArray(value) && value.length <= 4 && typeof value[0] === "number") {
         values[path] = value[0];
@@ -1825,7 +1828,7 @@ function useDialKit(name, config, options) {
 function buildResolvedValues(config, flatValues, prefix) {
   const result = {};
   for (const [key, configValue] of Object.entries(config)) {
-    if (key === "_collapsed") continue;
+    if (key === "_collapsed" || key === "_collapsible") continue;
     const path = prefix ? `${prefix}.${key}` : key;
     if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === "number") {
       result[key] = flatValues[path] ?? configValue[0];
@@ -2255,9 +2258,9 @@ var ICON_PANEL = {
 
 // src/components/Folder.tsx
 import { jsx, jsxs } from "react/jsx-runtime";
-function Folder({ title, children, defaultOpen = true, isRoot = false, inline = false, onOpenChange, toolbar, hint, hintId }) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
-  const [isCollapsed, setIsCollapsed] = useState(!defaultOpen);
+function Folder({ title, children, defaultOpen = true, collapsible = true, isRoot = false, inline = false, onOpenChange, toolbar, hint, hintId }) {
+  const [isOpen, setIsOpen] = useState(collapsible ? defaultOpen : true);
+  const [isCollapsed, setIsCollapsed] = useState(collapsible ? !defaultOpen : false);
   const contentRef = useRef3(null);
   const [contentHeight, setContentHeight] = useState(void 0);
   const [windowHeight, setWindowHeight] = useState(typeof window !== "undefined" ? window.innerHeight : 800);
@@ -2280,6 +2283,7 @@ function Folder({ title, children, defaultOpen = true, isRoot = false, inline = 
     return () => ro.disconnect();
   }, [isOpen]);
   const handleToggle = () => {
+    if (!collapsible) return;
     if (inline && isRoot) return;
     const next = !isOpen;
     setIsOpen(next);
@@ -2294,8 +2298,8 @@ function Folder({ title, children, defaultOpen = true, isRoot = false, inline = 
     /* @__PURE__ */ jsxs(
       "div",
       {
-        className: `dialkit-folder-header ${isRoot ? "dialkit-panel-header" : ""}`,
-        onClick: handleToggle,
+        className: `dialkit-folder-header ${isRoot ? "dialkit-panel-header" : ""} ${collapsible ? "" : "dialkit-folder-header-static"}`,
+        onClick: collapsible ? handleToggle : void 0,
         "data-hint": hint ? "true" : void 0,
         "aria-describedby": hint ? hintId : void 0,
         children: [
@@ -2313,7 +2317,7 @@ function Folder({ title, children, defaultOpen = true, isRoot = false, inline = 
                 ]
               }
             ),
-            !isRoot && /* @__PURE__ */ jsx(
+            !isRoot && collapsible && /* @__PURE__ */ jsx(
               motion.svg,
               {
                 className: "dialkit-folder-icon",
@@ -6414,6 +6418,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           {
             title: control.label,
             defaultOpen: control.defaultOpen ?? true,
+            collapsible: control.collapsible ?? true,
             hint: control.hint,
             hintId: hintDomId(panelId, control.path),
             children: control.children?.map(renderControl)

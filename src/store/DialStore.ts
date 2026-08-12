@@ -404,6 +404,8 @@ export type ControlMeta = {
   defaultOpen?: boolean;
   /** Folder declared `_enabled` — renders as a module whose header switch drives `<path>._enabled`. */
   module?: boolean;
+  /** Folder declared `_collapsible: false` — plain section header, no caret, body always open. */
+  collapsible?: boolean;
   options?: (string | { value: string; label: string })[];
   placeholder?: string;
   items?: GalleryItem[];
@@ -628,7 +630,7 @@ function resolveConfigValues(
   const result: Record<string, unknown> = {};
 
   for (const [key, configValue] of Object.entries(config)) {
-    if (key === '_collapsed') continue;
+    if (key === '_collapsed' || key === '_collapsible') continue;
     const path = prefix ? `${prefix}.${key}` : key;
 
     if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === 'number') {
@@ -1064,7 +1066,7 @@ class DialStoreClass {
     let changed = false;
     const visit = (cfg: DialConfig, prefix: string): void => {
       for (const [key, value] of Object.entries(cfg)) {
-        if (key === '_collapsed') continue;
+        if (key === '_collapsed' || key === '_collapsible') continue;
         const path = prefix ? `${prefix}.${key}` : key;
 
         if (this.isCurveConfig(value)) {
@@ -1313,7 +1315,7 @@ class DialStoreClass {
 
   private initTransitionModes(config: DialConfig, prefix: string, values: Record<string, DialValue>): void {
     for (const [key, value] of Object.entries(config)) {
-      if (key === '_collapsed') continue;
+      if (key === '_collapsed' || key === '_collapsible') continue;
       const path = prefix ? `${prefix}.${key}` : key;
 
       if (this.isEasingConfig(value)) {
@@ -1336,7 +1338,7 @@ class DialStoreClass {
       // `_collapsed` is UI-only metadata; `_enabled` IS a value (it lives in the
       // folder's flat values) but renders as the module header switch, never as
       // a child control row.
-      if (key === '_collapsed' || key === '_enabled') continue;
+      if (key === '_collapsed' || key === '_collapsible' || key === '_enabled') continue;
       const path = prefix ? `${prefix}.${key}` : key;
       const label = this.formatLabel(key);
       const shortcut = shortcuts?.[path];
@@ -1429,13 +1431,20 @@ class DialStoreClass {
       } else if (typeof value === 'object' && value !== null) {
         // Nested object becomes a folder
         const folderConfig = value as DialConfig;
-        const defaultOpen = '_collapsed' in folderConfig ? !(folderConfig._collapsed as boolean) : true;
+        const module = '_enabled' in folderConfig ? true : undefined;
+        // `_collapsible: false` renders a plain always-open section header.
+        // Module collapse is functional (the switch), so modules ignore it.
+        const collapsible = !module && folderConfig._collapsible === false ? false : undefined;
+        const defaultOpen = collapsible === false
+          ? true
+          : '_collapsed' in folderConfig ? !(folderConfig._collapsed as boolean) : true;
         controls.push({
           type: 'folder',
           path,
           label,
           defaultOpen,
-          module: '_enabled' in folderConfig ? true : undefined,
+          collapsible,
+          module,
           children: this.parseConfig(folderConfig, path, shortcuts),
         });
       }
@@ -1448,7 +1457,7 @@ class DialStoreClass {
     const values: Record<string, DialValue> = {};
 
     for (const [key, value] of Object.entries(config)) {
-      if (key === '_collapsed') continue;
+      if (key === '_collapsed' || key === '_collapsible') continue;
       const path = prefix ? `${prefix}.${key}` : key;
 
       if (Array.isArray(value) && value.length <= 4 && typeof value[0] === 'number') {

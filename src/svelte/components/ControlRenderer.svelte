@@ -61,6 +61,7 @@
   <Folder
     title={control.label}
     defaultOpen={control.defaultOpen ?? true}
+    collapsible={control.collapsible ?? true}
     hint={control.hint}
     hintId={hintId}
   >

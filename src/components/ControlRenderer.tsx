@@ -143,6 +143,7 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             key={control.path}
             title={control.label}
             defaultOpen={control.defaultOpen ?? true}
+            collapsible={control.collapsible ?? true}
             hint={control.hint}
             hintId={hintDomId(panelId, control.path)}
           >

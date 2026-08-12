@@ -2,6 +2,8 @@ import type { Snippet } from 'svelte';
 type $$ComponentProps = {
     title: string;
     defaultOpen?: boolean;
+    /** `false` renders a plain section header: no caret, no click-to-collapse, body always open. */
+    collapsible?: boolean;
     isRoot?: boolean;
     inline?: boolean;
     onOpenChange?: (isOpen: boolean) => void;

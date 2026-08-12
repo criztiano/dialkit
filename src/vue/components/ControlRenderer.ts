@@ -113,6 +113,7 @@ export const ControlRenderer = defineComponent({
             key: control.path,
             title: control.label,
             defaultOpen: control.defaultOpen ?? true,
+            collapsible: control.collapsible ?? true,
             hint: control.hint,
             hintId: hintId(control),
           }, { default: () => (control.children ?? []).map(renderControl) });
