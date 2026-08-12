@@ -432,6 +432,38 @@ type Preset = {
     name: string;
     values: Record<string, DialValue>;
 };
+type PresetProviderPreset = {
+    id: string;
+    label: string;
+    /** Read-only rows (e.g. factory presets) show no delete affordance. */
+    readonly?: boolean;
+};
+/**
+ * Host-owned backing for the panel toolbar's preset UI. When a provider is set
+ * the toolbar renders the host's list instead of the built-in snapshots: the
+ * store never captures or restores values itself — the host applies them in
+ * `onSelect` (e.g. via `DialStore.updateValues`) and owns persistence. The
+ * stock auto-save-to-active-preset behavior is off because the store's own
+ * active-preset state is never engaged in provider mode.
+ */
+type PresetProvider = {
+    presets: PresetProviderPreset[];
+    activeId?: string | null;
+    onSelect(id: string): void | Promise<void>;
+    /** "+" pressed; receives a suggested label ("Preset N"). */
+    onCreate(suggestedLabel: string): void | Promise<void>;
+    /** Omit to hide the delete affordance entirely. */
+    onDelete?(id: string): void | Promise<void>;
+};
+/**
+ * What the toolbar renders per dropdown row — one shape for both modes, so the
+ * framework components never branch on where a preset came from.
+ */
+type PresetItem = {
+    id: string;
+    name: string;
+    deletable: boolean;
+};
 type DialKitPersistOptions = boolean | {
     key?: string;
     storage?: 'localStorage' | 'sessionStorage';
@@ -477,6 +509,7 @@ declare class DialStoreClass {
     private controlStateListeners;
     private presets;
     private activePreset;
+    private presetProviders;
     private baseValues;
     private persistTargets;
     registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, options?: DialStorePanelOptions): void;
@@ -523,6 +556,30 @@ declare class DialStoreClass {
     getPresets(panelId: string): Preset[];
     getActivePresetId(panelId: string): string | null;
     clearActivePreset(panelId: string): void;
+    /**
+     * Install (or clear) a host-owned preset provider. Safe to call on every
+     * host render: the object is always swapped so `onSelect`/`onCreate`/
+     * `onDelete` never close over stale host state, but listeners are only
+     * notified when the visible data (list, active id) actually changed.
+     */
+    setPresetProvider(panelId: string, provider: PresetProvider | null | undefined): void;
+    getPresetProvider(panelId: string): PresetProvider | null;
+    /** Provider mode hides the implicit "Version 1" base row — the host owns the whole list. */
+    hasPresetProvider(panelId: string): boolean;
+    /** The dropdown rows in host order, from the provider when one is set. */
+    getPresetItems(panelId: string): PresetItem[];
+    /**
+     * Row clicked. Stock mode loads the snapshot (null = back to base values);
+     * provider mode hands the id to the host, which applies values itself.
+     */
+    selectPreset(panelId: string, presetId: string | null): void;
+    /**
+     * "+" pressed. Stock mode snapshots into "Version N" (N counts the implicit
+     * base as version 1); provider mode suggests the matching "Preset N" label.
+     */
+    createPreset(panelId: string): void;
+    /** Trash icon pressed on a row (only rendered when the item is deletable). */
+    removePreset(panelId: string, presetId: string): void;
     resolveShortcutTarget(key: string, modifier?: 'alt' | 'shift' | 'meta'): {
         panelId: string;
         path: string;
@@ -578,6 +635,11 @@ interface UseDialOptions {
     affordances?: Record<string, AffordanceConfig>;
     /** Display label by control path, overriding the key-derived name. */
     labels?: Record<string, string>;
+    /**
+     * Host-owned backing for the toolbar's preset UI (see PresetProvider).
+     * Reactive `presets`/`activeId` sources are tracked through the watcher.
+     */
+    presets?: PresetProvider;
 }
 declare function useDialKit<T extends DialConfig>(name: string, config: T, options?: UseDialOptions): ComputedRef<ResolvedValues<T>>;
 
@@ -2710,19 +2772,29 @@ declare const XYControl: vue.DefineComponent<vue.ExtractPropTypes<{
     showValues: boolean;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
+type PresetRow = {
+    id: string;
+    name: string;
+    deletable?: boolean;
+};
 declare const PresetManager: vue.DefineComponent<vue.ExtractPropTypes<{
     panelId: {
         type: StringConstructor;
         required: true;
     };
     presets: {
-        type: PropType<Preset[]>;
+        type: PropType<PresetRow[]>;
         required: true;
     };
     activePresetId: {
         type: PropType<string | null>;
         required: false;
         default: null;
+    };
+    /** Host-provider mode: the implicit "Version 1" base row is hidden. */
+    providerMode: {
+        type: BooleanConstructor;
+        default: boolean;
     };
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
@@ -2732,7 +2804,7 @@ declare const PresetManager: vue.DefineComponent<vue.ExtractPropTypes<{
         required: true;
     };
     presets: {
-        type: PropType<Preset[]>;
+        type: PropType<PresetRow[]>;
         required: true;
     };
     activePresetId: {
@@ -2740,8 +2812,14 @@ declare const PresetManager: vue.DefineComponent<vue.ExtractPropTypes<{
         required: false;
         default: null;
     };
+    /** Host-provider mode: the implicit "Version 1" base row is hidden. */
+    providerMode: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
 }>> & Readonly<{}>, {
     activePresetId: string | null;
+    providerMode: boolean;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
-export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, type DialConfig, type DialKitDirectiveOptions, type DialKitDirectiveValue, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, DialTimeline, type DialTimelineValues, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, Folder, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientType, type GradientValue, MIN_STOPS, Module, type PanelConfig, type Preset, PresetManager, RangeSlider, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, ShortcutKey, ShortcutListener, type ShortcutState, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, TimelineToggleButton, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type UseDialTimelineOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYValue, addStop, colorAtPosition, gradientToCss, moveStop, normalizeGradient, removeStop, setGradientAngle, setGradientType, setStopColor, useDialKit, useDialTimeline, useShortcutContext, vDialKit };
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, type DialConfig, type DialKitDirectiveOptions, type DialKitDirectiveValue, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, DialTimeline, type DialTimelineValues, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, Folder, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientType, type GradientValue, MIN_STOPS, Module, type PanelConfig, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, RangeSlider, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, ShortcutKey, ShortcutListener, type ShortcutState, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, TimelineToggleButton, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type UseDialTimelineOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYValue, addStop, colorAtPosition, gradientToCss, moveStop, normalizeGradient, removeStop, setGradientAngle, setGradientType, setStopColor, useDialKit, useDialTimeline, useShortcutContext, vDialKit };

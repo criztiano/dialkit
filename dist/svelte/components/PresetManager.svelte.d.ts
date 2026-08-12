@@ -1,8 +1,14 @@
-import type { Preset } from 'dialkit/store';
+type PresetRow = {
+    id: string;
+    name: string;
+    deletable?: boolean;
+};
 type $$ComponentProps = {
     panelId: string;
-    presets: Preset[];
+    presets: PresetRow[];
     activePresetId: string | null;
+    /** Host-provider mode: the implicit "Version 1" base row is hidden. */
+    providerMode?: boolean;
 };
 declare const PresetManager: import("svelte").Component<$$ComponentProps, {}, "">;
 type PresetManager = ReturnType<typeof PresetManager>;

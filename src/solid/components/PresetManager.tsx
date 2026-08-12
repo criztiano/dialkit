@@ -3,13 +3,16 @@ import { Portal } from 'solid-js/web';
 import { animate } from 'motion';
 import { ICON_CHEVRON, ICON_TRASH } from '../../icons';
 import { DialStore } from '../../store/DialStore';
-import type { Preset } from '../../store/DialStore';
 
 interface PresetManagerProps {
   panelId: string;
-  presets: Preset[];
+  // Structural on purpose: stock Preset[] and provider-derived PresetItem[]
+  // both fit. `deletable` defaults to true so stock callers stay unchanged.
+  presets: { id: string; name: string; deletable?: boolean }[];
   activePresetId: string | null;
   onAdd: () => void;
+  /** Host-provider mode: the implicit "Version 1" base row is hidden. */
+  providerMode?: boolean;
 }
 
 export function PresetManager(props: PresetManagerProps) {
@@ -102,14 +105,13 @@ export function PresetManager(props: PresetManagerProps) {
   });
 
   const handleSelect = (presetId: string | null) => {
-    if (presetId) DialStore.loadPreset(props.panelId, presetId);
-    else DialStore.clearActivePreset(props.panelId);
+    DialStore.selectPreset(props.panelId, presetId);
     closeDropdown();
   };
 
   const handleDelete = (e: MouseEvent, presetId: string) => {
     e.stopPropagation();
-    DialStore.deletePreset(props.panelId, presetId);
+    DialStore.removePreset(props.panelId, presetId);
   };
 
   return (
@@ -123,7 +125,7 @@ export function PresetManager(props: PresetManagerProps) {
         data-disabled={String(!hasPresets())}
       >
         <span class="dialkit-preset-label">
-          {activePreset() ? activePreset()!.name : 'Version 1'}
+          {activePreset() ? activePreset()!.name : props.providerMode ? 'Presets' : 'Version 1'}
         </span>
         <svg
           ref={chevronRef}
@@ -159,13 +161,15 @@ export function PresetManager(props: PresetManagerProps) {
                 'min-width': `${pos().width}px`,
               }}
             >
-              <div
-                class="dialkit-preset-item"
-                data-active={String(!props.activePresetId)}
-                onClick={() => handleSelect(null)}
-              >
-                <span class="dialkit-preset-name">Version 1</span>
-              </div>
+              <Show when={!props.providerMode}>
+                <div
+                  class="dialkit-preset-item"
+                  data-active={String(!props.activePresetId)}
+                  onClick={() => handleSelect(null)}
+                >
+                  <span class="dialkit-preset-name">Version 1</span>
+                </div>
+              </Show>
 
               <For each={props.presets}>
                 {(preset) => (
@@ -175,19 +179,21 @@ export function PresetManager(props: PresetManagerProps) {
                     onClick={() => handleSelect(preset.id)}
                   >
                     <span class="dialkit-preset-name">{preset.name}</span>
-                    <button
-                      class="dialkit-preset-delete"
-                      onClick={(e) => handleDelete(e, preset.id)}
-                      title="Delete preset"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d={ICON_TRASH[0]} />
-                        <path d={ICON_TRASH[1]} />
-                        <path d={ICON_TRASH[2]} />
-                        <path d={ICON_TRASH[3]} />
-                        <path d={ICON_TRASH[4]} />
-                      </svg>
-                    </button>
+                    <Show when={preset.deletable ?? true}>
+                      <button
+                        class="dialkit-preset-delete"
+                        onClick={(e) => handleDelete(e, preset.id)}
+                        title="Delete preset"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d={ICON_TRASH[0]} />
+                          <path d={ICON_TRASH[1]} />
+                          <path d={ICON_TRASH[2]} />
+                          <path d={ICON_TRASH[3]} />
+                          <path d={ICON_TRASH[4]} />
+                        </svg>
+                      </button>
+                    </Show>
                   </div>
                 )}
               </For>

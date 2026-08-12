@@ -1,6 +1,6 @@
-import { createSignal, createMemo, onMount, onCleanup, createUniqueId, type Accessor } from 'solid-js';
+import { createSignal, createMemo, createEffect, onMount, onCleanup, createUniqueId, type Accessor } from 'solid-js';
 import { DialStore } from '../store/DialStore';
-import type { DialConfig, ResolvedValues, DialValue, SpringConfig, SelectConfig, ColorConfig, GradientConfig, TextConfig, ActionConfig, ShortcutConfig, AffordanceConfig } from '../store/DialStore';
+import type { DialConfig, ResolvedValues, DialValue, SpringConfig, SelectConfig, ColorConfig, GradientConfig, TextConfig, ActionConfig, ShortcutConfig, AffordanceConfig, PresetProvider } from '../store/DialStore';
 import { normalizeGradient, DEFAULT_GRADIENT } from '../gradient-core';
 
 export interface CreateDialOptions {
@@ -12,6 +12,11 @@ export interface CreateDialOptions {
   affordances?: Record<string, AffordanceConfig>;
   /** Display label by control path, overriding the key-derived name. */
   labels?: Record<string, string>;
+  /**
+   * Host-owned backing for the toolbar's preset UI (see PresetProvider).
+   * Back `presets`/`activeId` with signal-read getters to keep the list live.
+   */
+  presets?: PresetProvider;
 }
 
 export function createDialKit<T extends DialConfig>(
@@ -44,6 +49,15 @@ export function createDialKit<T extends DialConfig>(
       unsubActions?.();
       DialStore.unregisterPanel(panelId);
     });
+  });
+
+  // Track the provider's visible data (signal-backed getters register here via
+  // the stringify read) and push swaps into the store; setPresetProvider only
+  // notifies when that data changed.
+  createEffect(() => {
+    const provider = options?.presets ?? null;
+    if (provider) JSON.stringify(provider);
+    DialStore.setPresetProvider(panelId, provider);
   });
 
   return createMemo(() => buildResolvedValues(config, values(), '') as ResolvedValues<T>);

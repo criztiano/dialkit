@@ -19,6 +19,7 @@ import type {
   SwatchConfig,
   TextConfig,
   AffordanceConfig,
+  PresetProvider,
 } from 'dialkit/store';
 
 export interface CreateDialOptions {
@@ -32,6 +33,11 @@ export interface CreateDialOptions {
   affordances?: Record<string, AffordanceConfig>;
   /** Display label by control path, overriding the key-derived name. */
   labels?: Record<string, string>;
+  /**
+   * Host-owned backing for the toolbar's preset UI (see PresetProvider).
+   * Back `presets`/`activeId` with $state-read getters to keep the list live.
+   */
+  presets?: PresetProvider;
   /** Stable id shares one panel/persistence target across mounts. */
   id?: string;
   /** Persist values per machine (see DialKitPersistOptions). */
@@ -81,6 +87,15 @@ export function createDialKit<T extends DialConfig>(
       unsubEvents?.();
       DialStore.unregisterPanel(panelId);
     };
+  });
+
+  // Track the provider's visible data ($state-backed getters register here via
+  // the stringify read) and push swaps into the store; setPresetProvider only
+  // notifies when that data changed.
+  $effect(() => {
+    const provider = options?.presets ?? null;
+    if (provider) JSON.stringify(provider);
+    DialStore.setPresetProvider(panelId, provider);
   });
 
   return values;

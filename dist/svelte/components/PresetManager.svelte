@@ -2,14 +2,19 @@
   import { Spring } from 'svelte/motion';
   import Portal from '../Portal.svelte';
   import { DialStore } from 'dialkit/store';
-  import type { Preset } from 'dialkit/store';
   import { dropdownTransition } from './transitions';
   import { ICON_CHEVRON, ICON_TRASH } from '../../icons';
 
-  let { panelId, presets, activePresetId } = $props<{
+  // Structural on purpose: stock Preset[] and provider-derived PresetItem[]
+  // both fit. `deletable` defaults to true so stock callers stay unchanged.
+  type PresetRow = { id: string; name: string; deletable?: boolean };
+
+  let { panelId, presets, activePresetId, providerMode = false } = $props<{
     panelId: string;
-    presets: Preset[];
+    presets: PresetRow[];
     activePresetId: string | null;
+    /** Host-provider mode: the implicit "Version 1" base row is hidden. */
+    providerMode?: boolean;
   }>();
 
   let isOpen = $state(false);
@@ -22,7 +27,7 @@
   const chevronOpacity = new Spring(0.25, { stiffness: 0.2, damping: 0.6 });
 
   const hasPresets = $derived(presets.length > 0);
-  const activePreset = $derived(presets.find((p: Preset) => p.id === activePresetId));
+  const activePreset = $derived(presets.find((p: PresetRow) => p.id === activePresetId));
 
   const updatePos = () => {
     const rect = triggerRef?.getBoundingClientRect();
@@ -73,14 +78,13 @@
   });
 
   const handleSelect = (presetId: string | null) => {
-    if (presetId) DialStore.loadPreset(panelId, presetId);
-    else DialStore.clearActivePreset(panelId);
+    DialStore.selectPreset(panelId, presetId);
     closeDropdown();
   };
 
   const handleDelete = (e: MouseEvent, presetId: string) => {
     e.stopPropagation();
-    DialStore.deletePreset(panelId, presetId);
+    DialStore.removePreset(panelId, presetId);
   };
 </script>
 
@@ -94,7 +98,7 @@
     data-disabled={String(!hasPresets)}
   >
     <span class="dialkit-preset-label">
-      {activePreset ? activePreset.name : 'Version 1'}
+      {activePreset ? activePreset.name : providerMode ? 'Presets' : 'Version 1'}
     </span>
     <svg
       class="dialkit-select-chevron"
@@ -120,13 +124,15 @@
           style={`position:fixed;top:${pos.top}px;left:${pos.left}px;min-width:${pos.width}px;`}
           transition:dropdownTransition={{ above: false }}
         >
-          <div
-            class="dialkit-preset-item"
-            data-active={String(!activePresetId)}
-            onclick={() => handleSelect(null)}
-          >
-            <span class="dialkit-preset-name">Version 1</span>
-          </div>
+          {#if !providerMode}
+            <div
+              class="dialkit-preset-item"
+              data-active={String(!activePresetId)}
+              onclick={() => handleSelect(null)}
+            >
+              <span class="dialkit-preset-name">Version 1</span>
+            </div>
+          {/if}
 
           {#each presets as preset (preset.id)}
             <div
@@ -135,19 +141,21 @@
               onclick={() => handleSelect(preset.id)}
             >
               <span class="dialkit-preset-name">{preset.name}</span>
-              <button
-                class="dialkit-preset-delete"
-                onclick={(e) => handleDelete(e, preset.id)}
-                title="Delete preset"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d={ICON_TRASH[0]} />
-                  <path d={ICON_TRASH[1]} />
-                  <path d={ICON_TRASH[2]} />
-                  <path d={ICON_TRASH[3]} />
-                  <path d={ICON_TRASH[4]} />
-                </svg>
-              </button>
+              {#if preset.deletable ?? true}
+                <button
+                  class="dialkit-preset-delete"
+                  onclick={(e) => handleDelete(e, preset.id)}
+                  title="Delete preset"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d={ICON_TRASH[0]} />
+                    <path d={ICON_TRASH[1]} />
+                    <path d={ICON_TRASH[2]} />
+                    <path d={ICON_TRASH[3]} />
+                    <path d={ICON_TRASH[4]} />
+                  </svg>
+                </button>
+              {/if}
             </div>
           {/each}
         </div>

@@ -1,5 +1,5 @@
 // src/solid/createDialKit.ts
-import { createSignal, createMemo, onMount, onCleanup, createUniqueId } from "solid-js";
+import { createSignal, createMemo, createEffect, onMount, onCleanup, createUniqueId } from "solid-js";
 
 // src/color-core.ts
 var LONG_PRESS_MS = 500;
@@ -672,6 +672,11 @@ var DialStoreClass = class {
     this.controlStateListeners = /* @__PURE__ */ new Map();
     this.presets = /* @__PURE__ */ new Map();
     this.activePreset = /* @__PURE__ */ new Map();
+    // Host-owned preset providers. The serialized form (functions drop out of
+    // JSON, leaving list + activeId) decides whether a swap is visible: adapters
+    // replace the object on every host render so callbacks never go stale, and
+    // only a data change should notify.
+    this.presetProviders = /* @__PURE__ */ new Map();
     this.baseValues = /* @__PURE__ */ new Map();
     // Resolved storage target per panel (null = persistence off). Absent = not
     // yet registered.
@@ -761,6 +766,7 @@ var DialStoreClass = class {
     this.snapshots.delete(id);
     this.baseValues.delete(id);
     this.persistTargets.delete(id);
+    this.presetProviders.delete(id);
     this.notifyGlobal();
   }
   // Overlay saved values onto freshly-computed defaults, in place. Only keys
@@ -1009,6 +1015,8 @@ var DialStoreClass = class {
     return this.presets.get(panelId) ?? [];
   }
   getActivePresetId(panelId) {
+    const provider = this.getPresetProvider(panelId);
+    if (provider) return provider.activeId ?? null;
     return this.activePreset.get(panelId) ?? null;
   }
   clearActivePreset(panelId) {
@@ -1020,6 +1028,81 @@ var DialStoreClass = class {
     }
     this.activePreset.set(panelId, null);
     this.notify(panelId);
+  }
+  /**
+   * Install (or clear) a host-owned preset provider. Safe to call on every
+   * host render: the object is always swapped so `onSelect`/`onCreate`/
+   * `onDelete` never close over stale host state, but listeners are only
+   * notified when the visible data (list, active id) actually changed.
+   */
+  setPresetProvider(panelId, provider) {
+    const entry = this.presetProviders.get(panelId);
+    if (!provider) {
+      if (!entry) return;
+      this.presetProviders.delete(panelId);
+    } else {
+      const serialized = JSON.stringify(provider);
+      this.presetProviders.set(panelId, { provider, serialized });
+      if (entry?.serialized === serialized) return;
+    }
+    const panel = this.panels.get(panelId);
+    if (panel) {
+      this.snapshots.set(panelId, { ...panel.values });
+    }
+    this.notify(panelId);
+  }
+  getPresetProvider(panelId) {
+    return this.presetProviders.get(panelId)?.provider ?? null;
+  }
+  /** Provider mode hides the implicit "Version 1" base row — the host owns the whole list. */
+  hasPresetProvider(panelId) {
+    return this.presetProviders.has(panelId);
+  }
+  /** The dropdown rows in host order, from the provider when one is set. */
+  getPresetItems(panelId) {
+    const provider = this.getPresetProvider(panelId);
+    if (provider) {
+      return provider.presets.map((p) => ({
+        id: p.id,
+        name: p.label,
+        deletable: !!provider.onDelete && !p.readonly
+      }));
+    }
+    return this.getPresets(panelId).map((p) => ({ id: p.id, name: p.name, deletable: true }));
+  }
+  /**
+   * Row clicked. Stock mode loads the snapshot (null = back to base values);
+   * provider mode hands the id to the host, which applies values itself.
+   */
+  selectPreset(panelId, presetId) {
+    const provider = this.getPresetProvider(panelId);
+    if (provider) {
+      if (presetId) void provider.onSelect(presetId);
+      return;
+    }
+    if (presetId) this.loadPreset(panelId, presetId);
+    else this.clearActivePreset(panelId);
+  }
+  /**
+   * "+" pressed. Stock mode snapshots into "Version N" (N counts the implicit
+   * base as version 1); provider mode suggests the matching "Preset N" label.
+   */
+  createPreset(panelId) {
+    const provider = this.getPresetProvider(panelId);
+    if (provider) {
+      void provider.onCreate(`Preset ${provider.presets.length + 1}`);
+      return;
+    }
+    this.savePreset(panelId, `Version ${this.getPresets(panelId).length + 2}`);
+  }
+  /** Trash icon pressed on a row (only rendered when the item is deletable). */
+  removePreset(panelId, presetId) {
+    const provider = this.getPresetProvider(panelId);
+    if (provider) {
+      void provider.onDelete?.(presetId);
+      return;
+    }
+    this.deletePreset(panelId, presetId);
   }
   resolveShortcutTarget(key, modifier) {
     for (const panel of this.panels.values()) {
@@ -1573,6 +1656,11 @@ function createDialKit(name, config, options) {
       DialStore.unregisterPanel(panelId);
     });
   });
+  createEffect(() => {
+    const provider = options?.presets ?? null;
+    if (provider) JSON.stringify(provider);
+    DialStore.setPresetProvider(panelId, provider);
+  });
   return createMemo(() => buildResolvedValues(config, values(), ""));
 }
 function buildResolvedValues(config, flatValues, prefix) {
@@ -1630,7 +1718,7 @@ function getFirstOptionValue(options) {
 }
 
 // src/solid/createDialTimeline.ts
-import { createEffect, createMemo as createMemo2, createSignal as createSignal2, createUniqueId as createUniqueId2, onCleanup as onCleanup2, onMount as onMount2 } from "solid-js";
+import { createEffect as createEffect2, createMemo as createMemo2, createSignal as createSignal2, createUniqueId as createUniqueId2, onCleanup as onCleanup2, onMount as onMount2 } from "solid-js";
 import { isServer } from "solid-js/web";
 
 // src/store/TimelineStore.ts
@@ -2952,7 +3040,7 @@ function createDialTimeline(name, config, options) {
       DialStore.unregisterPanel(panelId);
     });
   });
-  createEffect(() => {
+  createEffect2(() => {
     const currentParsed = parsed();
     const currentStatic = staticTimeline();
     if (!mounted) return;
@@ -3313,7 +3401,7 @@ import { setAttribute as _$setAttribute16 } from "solid-js/web";
 import { effect as _$effect21 } from "solid-js/web";
 import { use as _$use14 } from "solid-js/web";
 import { createComponent as _$createComponent21 } from "solid-js/web";
-import { createSignal as createSignal21, createEffect as createEffect13, onMount as onMount12, onCleanup as onCleanup17 } from "solid-js";
+import { createSignal as createSignal21, createEffect as createEffect14, onMount as onMount12, onCleanup as onCleanup17 } from "solid-js";
 import { animate as animate8 } from "motion";
 
 // src/icons.ts
@@ -3386,7 +3474,7 @@ import { createComponent as _$createComponent2 } from "solid-js/web";
 import { insert as _$insert } from "solid-js/web";
 import { memo as _$memo } from "solid-js/web";
 import { use as _$use } from "solid-js/web";
-import { createSignal as createSignal4, createEffect as createEffect2, onCleanup as onCleanup4, Show } from "solid-js";
+import { createSignal as createSignal4, createEffect as createEffect3, onCleanup as onCleanup4, Show } from "solid-js";
 import { animate } from "motion";
 var _tmpl$ = /* @__PURE__ */ _$template(`<div class=dialkit-panel-toolbar>`);
 var _tmpl$2 = /* @__PURE__ */ _$template(`<span class=dialkit-hint role=tooltip>`);
@@ -3417,7 +3505,7 @@ function Folder(props) {
   let chevronInitialized = false;
   let panelTapAnim = null;
   let contentRef;
-  createEffect2(() => {
+  createEffect3(() => {
     if (!props.isRoot || !isOpen()) return;
     const el = contentRef;
     if (!el) return;
@@ -3428,7 +3516,7 @@ function Folder(props) {
     ro.observe(el);
     onCleanup4(() => ro.disconnect());
   });
-  createEffect2(() => {
+  createEffect3(() => {
     if (props.isRoot || !folderChevronRef) return;
     const open = isOpen();
     chevronAnim?.stop();
@@ -3647,7 +3735,7 @@ function Folder(props) {
     let rootPanelAnim = null;
     let rootPanelInitialized = false;
     let lastRootOpen = isOpen();
-    createEffect2(() => {
+    createEffect3(() => {
       if (!panelRef || isOpen()) return;
       const handler = (e) => {
         e.stopPropagation();
@@ -3656,7 +3744,7 @@ function Folder(props) {
       panelRef.addEventListener("click", handler);
       onCleanup4(() => panelRef.removeEventListener("click", handler));
     });
-    createEffect2(() => {
+    createEffect3(() => {
       if (!panelRef) return;
       const open = isOpen();
       const measuredOpenHeight = contentHeight() !== void 0 ? Math.min(contentHeight() + 10, windowHeight() - 32) : panelRef.getBoundingClientRect().height;
@@ -3784,7 +3872,7 @@ import { effect as _$effect2 } from "solid-js/web";
 import { insert as _$insert2 } from "solid-js/web";
 import { createComponent as _$createComponent3 } from "solid-js/web";
 import { use as _$use2 } from "solid-js/web";
-import { createSignal as createSignal5, createEffect as createEffect3, For, Show as Show2 } from "solid-js";
+import { createSignal as createSignal5, createEffect as createEffect4, For, Show as Show2 } from "solid-js";
 var _tmpl$10 = /* @__PURE__ */ _$template2(`<div class=dialkit-segmented>`);
 var _tmpl$22 = /* @__PURE__ */ _$template2(`<div class=dialkit-segmented-pill>`);
 var _tmpl$32 = /* @__PURE__ */ _$template2(`<button class=dialkit-segmented-button>`);
@@ -3801,7 +3889,7 @@ function SegmentedControl(props) {
       width: activeButton.offsetWidth
     });
   };
-  createEffect3(() => {
+  createEffect4(() => {
     void props.value;
     void props.options.length;
     measure();
@@ -3924,7 +4012,7 @@ import { createComponent as _$createComponent5 } from "solid-js/web";
 import { setAttribute as _$setAttribute4 } from "solid-js/web";
 import { effect as _$effect4 } from "solid-js/web";
 import { insert as _$insert4 } from "solid-js/web";
-import { createEffect as createEffect4, createSignal as createSignal7, onCleanup as onCleanup5, Show as Show4 } from "solid-js";
+import { createEffect as createEffect5, createSignal as createSignal7, onCleanup as onCleanup5, Show as Show4 } from "solid-js";
 import { Dynamic, Portal } from "solid-js/web";
 
 // src/affordance-core.ts
@@ -3958,7 +4046,7 @@ function ControlShell(props) {
   const [portalTarget, setPortalTarget] = createSignal7(null);
   let dotEl;
   let popoverEl;
-  createEffect4(() => {
+  createEffect5(() => {
     const panelId = props.panelId;
     const path = props.path;
     if (!panelId || !path) return;
@@ -3969,7 +4057,7 @@ function ControlShell(props) {
     read();
     onCleanup5(DialStore.subscribeControlState(panelId, read));
   });
-  createEffect4(() => {
+  createEffect5(() => {
     if (!dotEl) return;
     setPortalTarget(dotEl.closest(".dialkit-root") ?? document.body);
   });
@@ -3979,7 +4067,7 @@ function ControlShell(props) {
     const next = placePopover(rect, popoverEl?.offsetHeight ?? 0, window.innerHeight);
     setPos((cur) => cur && cur.top === next.top && cur.left === next.left ? cur : next);
   };
-  createEffect4(() => {
+  createEffect5(() => {
     if (!open()) {
       setPos(null);
       return;
@@ -4006,10 +4094,10 @@ function ControlShell(props) {
       document.removeEventListener("keydown", onKeyDown);
     });
   });
-  createEffect4(() => {
+  createEffect5(() => {
     if (open() && pos() && popoverEl) place();
   });
-  createEffect4(() => {
+  createEffect5(() => {
     if (!open() || !popoverEl) return;
     const first = popoverEl.querySelector('input, button, select, textarea, [tabindex]:not([tabindex="-1"])');
     (first ?? popoverEl).focus();
@@ -4132,7 +4220,7 @@ import { effect as _$effect5 } from "solid-js/web";
 import { insert as _$insert5 } from "solid-js/web";
 import { use as _$use4 } from "solid-js/web";
 import { setStyleProperty as _$setStyleProperty3 } from "solid-js/web";
-import { createSignal as createSignal8, createEffect as createEffect5, onMount as onMount4, onCleanup as onCleanup6, Show as Show5 } from "solid-js";
+import { createSignal as createSignal8, createEffect as createEffect6, onMount as onMount4, onCleanup as onCleanup6, Show as Show5 } from "solid-js";
 import { animate as animate2, motionValue } from "motion";
 var _tmpl$13 = /* @__PURE__ */ _$template5(`<div class=dialkit-slider-hashmark>`);
 var _tmpl$25 = /* @__PURE__ */ _$template5(`<span>`);
@@ -4193,7 +4281,7 @@ function Slider(props) {
     handleRef.style.opacity = String(handleOpacityMv.get());
     handleRef.style.transform = `translateY(-50%) scaleX(${handleScaleXMv.get()}) scaleY(${handleScaleYMv.get()})`;
   };
-  createEffect5(() => {
+  createEffect6(() => {
     if (!isInteracting() && !snapAnim) {
       fillPercent.jump((props.value - min()) / (max() - min()) * 100);
     }
@@ -4311,7 +4399,7 @@ function Slider(props) {
   const handlePointerCancel = () => {
     cancelInteraction();
   };
-  createEffect5(() => {
+  createEffect6(() => {
     const hovered = isValueHovered();
     const editing = showInput();
     const editable = isValueEditable();
@@ -4352,7 +4440,7 @@ function Slider(props) {
       unsubHandleScaleY();
     });
   });
-  createEffect5(() => {
+  createEffect6(() => {
     if (showInput() && inputRef) {
       inputRef.focus();
       inputRef.select();
@@ -4408,7 +4496,7 @@ function Slider(props) {
     if (isDragging()) return 0.9;
     return 0.5;
   };
-  createEffect5(() => {
+  createEffect6(() => {
     const targetOpacity = handleOpacity();
     const targetScaleX = isActive() ? 1 : 0.25;
     const targetScaleY = isActive() && valueDodge() ? 0.75 : 1;
@@ -4547,7 +4635,7 @@ import { createComponent as _$createComponent7 } from "solid-js/web";
 import { effect as _$effect6 } from "solid-js/web";
 import { insert as _$insert6 } from "solid-js/web";
 import { use as _$use5 } from "solid-js/web";
-import { createSignal as createSignal9, createEffect as createEffect6, onMount as onMount5, onCleanup as onCleanup7, Show as Show6 } from "solid-js";
+import { createSignal as createSignal9, createEffect as createEffect7, onMount as onMount5, onCleanup as onCleanup7, Show as Show6 } from "solid-js";
 import { animate as animate3, motionValue as motionValue2 } from "motion";
 var _tmpl$14 = /* @__PURE__ */ _$template6(`<input type=text class=dialkit-range-slider-input>`);
 var _tmpl$26 = /* @__PURE__ */ _$template6(`<div class=dialkit-range-slider-wrapper><div><div class=dialkit-range-slider-fill></div><div class=dialkit-range-slider-handle style=transform:translateY(-50%);opacity:0.35></div><div class=dialkit-range-slider-handle style=transform:translateY(-50%);opacity:0.35></div><span class=dialkit-range-slider-label>`);
@@ -4619,7 +4707,7 @@ function RangeSlider(props) {
     lowMotion.jump(percentFromValue(next.min));
     highMotion.jump(percentFromValue(next.max));
   };
-  createEffect6(() => {
+  createEffect7(() => {
     if (!isInteracting() && !lowSnapAnim && !highSnapAnim) {
       lowMotion.jump(lowPercent());
       highMotion.jump(highPercent());
@@ -4747,7 +4835,7 @@ function RangeSlider(props) {
   const applyHighHandleOpacity = () => {
     if (highHandleRef) highHandleRef.style.opacity = String(highOpacityMv.get());
   };
-  createEffect6(() => {
+  createEffect7(() => {
     const active = isActive();
     const dragging = isDragging();
     const target = dragTarget();
@@ -4782,7 +4870,7 @@ function RangeSlider(props) {
     lowOpacityAnim?.stop();
     highOpacityAnim?.stop();
   });
-  createEffect6(() => {
+  createEffect7(() => {
     if (editing() && inputRef) {
       inputRef.focus();
       inputRef.select();
@@ -5176,7 +5264,7 @@ import { memo as _$memo7 } from "solid-js/web";
 import { createSignal as createSignal12, Show as Show8 } from "solid-js";
 
 // src/solid/primitives.ts
-import { createEffect as createEffect7, createSignal as createSignal11, from, onCleanup as onCleanup9 } from "solid-js";
+import { createEffect as createEffect8, createSignal as createSignal11, from, onCleanup as onCleanup9 } from "solid-js";
 import { isServer as isServer2 } from "solid-js/web";
 function fromStore(read, subscribe) {
   if (isServer2) return read;
@@ -5544,7 +5632,7 @@ import { setAttribute as _$setAttribute9 } from "solid-js/web";
 import { memo as _$memo8 } from "solid-js/web";
 import { insert as _$insert12 } from "solid-js/web";
 import { use as _$use6 } from "solid-js/web";
-import { createSignal as createSignal13, createEffect as createEffect8, onMount as onMount7, onCleanup as onCleanup10, Show as Show9, For as For2 } from "solid-js";
+import { createSignal as createSignal13, createEffect as createEffect9, onMount as onMount7, onCleanup as onCleanup10, Show as Show9, For as For2 } from "solid-js";
 import { Portal as Portal2 } from "solid-js/web";
 import { animate as animate4 } from "motion";
 var _tmpl$21 = /* @__PURE__ */ _$template13(`<div class=dialkit-select-dropdown>`);
@@ -5582,7 +5670,7 @@ function SelectControl(props) {
       chevronAnim?.stop();
     });
   });
-  createEffect8(() => {
+  createEffect9(() => {
     if (!chevronRef) return;
     const open = isOpen();
     chevronAnim?.stop();
@@ -5636,7 +5724,7 @@ function SelectControl(props) {
       }
     });
   };
-  createEffect8(() => {
+  createEffect9(() => {
     if (!isOpen()) return;
     const handleViewportChange = () => updatePos();
     const handleClick = (e) => {
@@ -5750,7 +5838,7 @@ import { setAttribute as _$setAttribute11 } from "solid-js/web";
 import { effect as _$effect14 } from "solid-js/web";
 import { use as _$use8 } from "solid-js/web";
 import { insert as _$insert14 } from "solid-js/web";
-import { createSignal as createSignal15, createEffect as createEffect10, onMount as onMount8, onCleanup as onCleanup12, Show as Show11 } from "solid-js";
+import { createSignal as createSignal15, createEffect as createEffect11, onMount as onMount8, onCleanup as onCleanup12, Show as Show11 } from "solid-js";
 import { Portal as Portal3 } from "solid-js/web";
 import { animate as animate5 } from "motion";
 
@@ -5766,7 +5854,7 @@ import { style as _$style3 } from "solid-js/web";
 import { setAttribute as _$setAttribute10 } from "solid-js/web";
 import { insert as _$insert13 } from "solid-js/web";
 import { effect as _$effect13 } from "solid-js/web";
-import { createSignal as createSignal14, createEffect as createEffect9, onCleanup as onCleanup11, Show as Show10, For as For3 } from "solid-js";
+import { createSignal as createSignal14, createEffect as createEffect10, onCleanup as onCleanup11, Show as Show10, For as For3 } from "solid-js";
 
 // src/color-palette-store.ts
 var cache = null;
@@ -6016,14 +6104,14 @@ function ColorPickerPanel(props) {
   const [format, setFormat] = createSignal14(stickyFormat);
   const [slots, setSlots] = createSignal14(props.palette ? loadPalette() : emptyPalette());
   let lastEmitted = props.value;
-  createEffect9(() => {
+  createEffect10(() => {
     const value = props.value;
     if (value === lastEmitted) return;
     lastEmitted = value;
     const rgba2 = parseHex(value);
     if (rgba2) setHsva(rgbToHsv(rgba2));
   });
-  createEffect9(() => {
+  createEffect10(() => {
     if (!palette()) return;
     onCleanup11(subscribePalette((s) => setSlots(s)));
   });
@@ -6248,7 +6336,7 @@ function ColorControl(props) {
   let pickerRef;
   let closeAnim = null;
   const rgba = () => parseHex(props.value);
-  createEffect10(() => {
+  createEffect11(() => {
     const value = props.value;
     if (!isEditing()) {
       setEditValue(bareHex(value));
@@ -6315,7 +6403,7 @@ function ColorControl(props) {
       }
     });
   };
-  createEffect10(() => {
+  createEffect11(() => {
     if (!isOpen()) return;
     const handleViewportChange = () => updatePos();
     const handleMouseDown = (e) => {
@@ -6495,7 +6583,7 @@ import { createComponent as _$createComponent16 } from "solid-js/web";
 import { memo as _$memo12 } from "solid-js/web";
 import { use as _$use11 } from "solid-js/web";
 import { insert as _$insert17 } from "solid-js/web";
-import { createSignal as createSignal18, createEffect as createEffect11, onMount as onMount10, onCleanup as onCleanup15, Show as Show14 } from "solid-js";
+import { createSignal as createSignal18, createEffect as createEffect12, onMount as onMount10, onCleanup as onCleanup15, Show as Show14 } from "solid-js";
 import { Portal as Portal4 } from "solid-js/web";
 import { animate as animate6 } from "motion";
 
@@ -7147,7 +7235,7 @@ function GradientControl(props) {
       }
     });
   };
-  createEffect11(() => {
+  createEffect12(() => {
     if (!isOpen()) return;
     void props.value.type;
     const handleViewportChange = () => updatePos();
@@ -7876,18 +7964,20 @@ _$delegateEvents16(["click"]);
 import { template as _$template21 } from "solid-js/web";
 import { delegateEvents as _$delegateEvents17 } from "solid-js/web";
 import { setStyleProperty as _$setStyleProperty11 } from "solid-js/web";
-import { effect as _$effect20 } from "solid-js/web";
 import { createComponent as _$createComponent20 } from "solid-js/web";
+import { effect as _$effect20 } from "solid-js/web";
 import { setAttribute as _$setAttribute15 } from "solid-js/web";
 import { insert as _$insert20 } from "solid-js/web";
 import { memo as _$memo14 } from "solid-js/web";
 import { use as _$use13 } from "solid-js/web";
-import { createSignal as createSignal20, createEffect as createEffect12, onMount as onMount11, onCleanup as onCleanup16, Show as Show16, For as For6 } from "solid-js";
+import { createSignal as createSignal20, createEffect as createEffect13, onMount as onMount11, onCleanup as onCleanup16, Show as Show16, For as For6 } from "solid-js";
 import { Portal as Portal5 } from "solid-js/web";
 import { animate as animate7 } from "motion";
-var _tmpl$50 = /* @__PURE__ */ _$template21(`<div class="dialkit-root dialkit-preset-dropdown"style=position:fixed><div class=dialkit-preset-item><span class=dialkit-preset-name>Version 1`);
-var _tmpl$217 = /* @__PURE__ */ _$template21(`<div class=dialkit-preset-manager><button class=dialkit-preset-trigger><span class=dialkit-preset-label></span><svg class=dialkit-select-chevron viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
-var _tmpl$313 = /* @__PURE__ */ _$template21(`<div class=dialkit-preset-item><span class=dialkit-preset-name></span><button class=dialkit-preset-delete title="Delete preset"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round><path></path><path></path><path></path><path></path><path>`);
+var _tmpl$50 = /* @__PURE__ */ _$template21(`<div class=dialkit-preset-item><span class=dialkit-preset-name>Version 1`);
+var _tmpl$217 = /* @__PURE__ */ _$template21(`<div class="dialkit-root dialkit-preset-dropdown"style=position:fixed>`);
+var _tmpl$313 = /* @__PURE__ */ _$template21(`<div class=dialkit-preset-manager><button class=dialkit-preset-trigger><span class=dialkit-preset-label></span><svg class=dialkit-select-chevron viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
+var _tmpl$410 = /* @__PURE__ */ _$template21(`<button class=dialkit-preset-delete title="Delete preset"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round><path></path><path></path><path></path><path></path><path>`);
+var _tmpl$55 = /* @__PURE__ */ _$template21(`<div class=dialkit-preset-item><span class=dialkit-preset-name>`);
 function PresetManager(props) {
   const [isOpen, setIsOpen] = createSignal20(false);
   const [mounted, setMounted] = createSignal20(false);
@@ -7916,7 +8006,7 @@ function PresetManager(props) {
       chevronAnim?.stop();
     });
   });
-  createEffect12(() => {
+  createEffect13(() => {
     if (!chevronRef) return;
     const open = isOpen();
     const has = hasPresets();
@@ -7972,7 +8062,7 @@ function PresetManager(props) {
     if (isOpen()) closeDropdown();
     else openDropdown();
   };
-  createEffect12(() => {
+  createEffect13(() => {
     if (!isOpen()) return;
     const handleViewportChange = () => updatePos();
     const handler = (e) => {
@@ -7991,22 +8081,21 @@ function PresetManager(props) {
     });
   });
   const handleSelect = (presetId) => {
-    if (presetId) DialStore.loadPreset(props.panelId, presetId);
-    else DialStore.clearActivePreset(props.panelId);
+    DialStore.selectPreset(props.panelId, presetId);
     closeDropdown();
   };
   const handleDelete = (e, presetId) => {
     e.stopPropagation();
-    DialStore.deletePreset(props.panelId, presetId);
+    DialStore.removePreset(props.panelId, presetId);
   };
   return (() => {
-    var _el$ = _tmpl$217(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild;
+    var _el$ = _tmpl$313(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild;
     _el$2.$$click = toggle;
     var _ref$ = triggerRef;
     typeof _ref$ === "function" ? _$use13(_ref$, _el$2) : triggerRef = _el$2;
     _$insert20(_el$3, (() => {
       var _c$ = _$memo14(() => !!activePreset());
-      return () => _c$() ? activePreset().name : "Version 1";
+      return () => _c$() ? activePreset().name : props.providerMode ? "Presets" : "Version 1";
     })());
     var _ref$2 = chevronRef;
     typeof _ref$2 === "function" ? _$use13(_ref$2, _el$4) : chevronRef = _el$4;
@@ -8026,7 +8115,7 @@ function PresetManager(props) {
                 return mounted();
               },
               get children() {
-                var _el$6 = _tmpl$50(), _el$7 = _el$6.firstChild;
+                var _el$6 = _tmpl$217();
                 _$use13((el) => {
                   dropdownRef = el;
                   animate7(el, {
@@ -8039,48 +8128,64 @@ function PresetManager(props) {
                     bounce: 0
                   });
                 }, _el$6);
-                _el$7.$$click = () => handleSelect(null);
+                _$insert20(_el$6, _$createComponent20(Show16, {
+                  get when() {
+                    return !props.providerMode;
+                  },
+                  get children() {
+                    var _el$7 = _tmpl$50();
+                    _el$7.$$click = () => handleSelect(null);
+                    _$effect20(() => _$setAttribute15(_el$7, "data-active", String(!props.activePresetId)));
+                    return _el$7;
+                  }
+                }), null);
                 _$insert20(_el$6, _$createComponent20(For6, {
                   get each() {
                     return props.presets;
                   },
                   children: (preset) => (() => {
-                    var _el$8 = _tmpl$313(), _el$9 = _el$8.firstChild, _el$0 = _el$9.nextSibling, _el$1 = _el$0.firstChild, _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$11.nextSibling, _el$13 = _el$12.nextSibling, _el$14 = _el$13.nextSibling;
+                    var _el$8 = _tmpl$55(), _el$9 = _el$8.firstChild;
                     _el$8.$$click = () => handleSelect(preset.id);
                     _$insert20(_el$9, () => preset.name);
-                    _el$0.$$click = (e) => handleDelete(e, preset.id);
-                    _$effect20((_p$) => {
-                      var _v$8 = String(preset.id === props.activePresetId), _v$9 = ICON_TRASH[0], _v$0 = ICON_TRASH[1], _v$1 = ICON_TRASH[2], _v$10 = ICON_TRASH[3], _v$11 = ICON_TRASH[4];
-                      _v$8 !== _p$.e && _$setAttribute15(_el$8, "data-active", _p$.e = _v$8);
-                      _v$9 !== _p$.t && _$setAttribute15(_el$10, "d", _p$.t = _v$9);
-                      _v$0 !== _p$.a && _$setAttribute15(_el$11, "d", _p$.a = _v$0);
-                      _v$1 !== _p$.o && _$setAttribute15(_el$12, "d", _p$.o = _v$1);
-                      _v$10 !== _p$.i && _$setAttribute15(_el$13, "d", _p$.i = _v$10);
-                      _v$11 !== _p$.n && _$setAttribute15(_el$14, "d", _p$.n = _v$11);
-                      return _p$;
-                    }, {
-                      e: void 0,
-                      t: void 0,
-                      a: void 0,
-                      o: void 0,
-                      i: void 0,
-                      n: void 0
-                    });
+                    _$insert20(_el$8, _$createComponent20(Show16, {
+                      get when() {
+                        return preset.deletable ?? true;
+                      },
+                      get children() {
+                        var _el$0 = _tmpl$410(), _el$1 = _el$0.firstChild, _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$11.nextSibling, _el$13 = _el$12.nextSibling, _el$14 = _el$13.nextSibling;
+                        _el$0.$$click = (e) => handleDelete(e, preset.id);
+                        _$effect20((_p$) => {
+                          var _v$7 = ICON_TRASH[0], _v$8 = ICON_TRASH[1], _v$9 = ICON_TRASH[2], _v$0 = ICON_TRASH[3], _v$1 = ICON_TRASH[4];
+                          _v$7 !== _p$.e && _$setAttribute15(_el$10, "d", _p$.e = _v$7);
+                          _v$8 !== _p$.t && _$setAttribute15(_el$11, "d", _p$.t = _v$8);
+                          _v$9 !== _p$.a && _$setAttribute15(_el$12, "d", _p$.a = _v$9);
+                          _v$0 !== _p$.o && _$setAttribute15(_el$13, "d", _p$.o = _v$0);
+                          _v$1 !== _p$.i && _$setAttribute15(_el$14, "d", _p$.i = _v$1);
+                          return _p$;
+                        }, {
+                          e: void 0,
+                          t: void 0,
+                          a: void 0,
+                          o: void 0,
+                          i: void 0
+                        });
+                        return _el$0;
+                      }
+                    }), null);
+                    _$effect20(() => _$setAttribute15(_el$8, "data-active", String(preset.id === props.activePresetId)));
                     return _el$8;
                   })()
                 }), null);
                 _$effect20((_p$) => {
-                  var _v$ = `${pos().top}px`, _v$2 = `${pos().left}px`, _v$3 = `${pos().width}px`, _v$4 = String(!props.activePresetId);
+                  var _v$ = `${pos().top}px`, _v$2 = `${pos().left}px`, _v$3 = `${pos().width}px`;
                   _v$ !== _p$.e && _$setStyleProperty11(_el$6, "top", _p$.e = _v$);
                   _v$2 !== _p$.t && _$setStyleProperty11(_el$6, "left", _p$.t = _v$2);
                   _v$3 !== _p$.a && _$setStyleProperty11(_el$6, "min-width", _p$.a = _v$3);
-                  _v$4 !== _p$.o && _$setAttribute15(_el$7, "data-active", _p$.o = _v$4);
                   return _p$;
                 }, {
                   e: void 0,
                   t: void 0,
-                  a: void 0,
-                  o: void 0
+                  a: void 0
                 });
                 return _el$6;
               }
@@ -8090,10 +8195,10 @@ function PresetManager(props) {
       }
     }), null);
     _$effect20((_p$) => {
-      var _v$5 = String(isOpen()), _v$6 = String(!!activePreset()), _v$7 = String(!hasPresets());
-      _v$5 !== _p$.e && _$setAttribute15(_el$2, "data-open", _p$.e = _v$5);
-      _v$6 !== _p$.t && _$setAttribute15(_el$2, "data-has-preset", _p$.t = _v$6);
-      _v$7 !== _p$.a && _$setAttribute15(_el$2, "data-disabled", _p$.a = _v$7);
+      var _v$4 = String(isOpen()), _v$5 = String(!!activePreset()), _v$6 = String(!hasPresets());
+      _v$4 !== _p$.e && _$setAttribute15(_el$2, "data-open", _p$.e = _v$4);
+      _v$5 !== _p$.t && _$setAttribute15(_el$2, "data-has-preset", _p$.t = _v$5);
+      _v$6 !== _p$.a && _$setAttribute15(_el$2, "data-disabled", _p$.a = _v$6);
       return _p$;
     }, {
       e: void 0,
@@ -8113,8 +8218,9 @@ function Panel(props) {
   const [copied, setCopied] = createSignal21(false);
   const [isPanelOpen, setIsPanelOpen] = createSignal21(props.defaultOpen ?? true);
   const [values, setValues] = createSignal21(DialStore.getValues(props.panel.id));
-  const [presets, setPresets] = createSignal21(DialStore.getPresets(props.panel.id));
+  const [presets, setPresets] = createSignal21(DialStore.getPresetItems(props.panel.id));
   const [activePresetId, setActivePresetId] = createSignal21(DialStore.getActivePresetId(props.panel.id));
+  const [providerMode, setProviderMode] = createSignal21(DialStore.hasPresetProvider(props.panel.id));
   let addButtonRef;
   let copyButtonRef;
   let copyClipboardIconRef;
@@ -8132,8 +8238,9 @@ function Panel(props) {
   onMount12(() => {
     const unsub = DialStore.subscribe(props.panel.id, () => {
       setValues(DialStore.getValues(props.panel.id));
-      setPresets(DialStore.getPresets(props.panel.id));
+      setPresets(DialStore.getPresetItems(props.panel.id));
       setActivePresetId(DialStore.getActivePresetId(props.panel.id));
+      setProviderMode(DialStore.hasPresetProvider(props.panel.id));
     });
     if (copyClipboardIconRef && copyCheckIconRef) {
       copyClipboardIconRef.style.transformOrigin = "50% 50%";
@@ -8148,10 +8255,7 @@ function Panel(props) {
     }
     onCleanup17(unsub);
   });
-  const handleAddPreset = () => {
-    const nextNum = presets().length + 2;
-    DialStore.savePreset(props.panel.id, `Version ${nextNum}`);
-  };
+  const handleAddPreset = () => DialStore.createPreset(props.panel.id);
   const handleCopy = () => {
     const jsonStr = JSON.stringify(values(), null, 2);
     const instruction = `Update the createDialKit configuration for "${props.panel.name}" with these values:
@@ -8165,7 +8269,7 @@ Apply these values as the new defaults in the createDialKit call.`;
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
-  createEffect13(() => {
+  createEffect14(() => {
     const isCopied = copied();
     if (!copyClipboardIconRef || !copyCheckIconRef) return;
     copyClipboardAnim?.stop();
@@ -8267,7 +8371,10 @@ Apply these values as the new defaults in the createDialKit call.`;
     get activePresetId() {
       return activePresetId();
     },
-    onAdd: handleAddPreset
+    onAdd: handleAddPreset,
+    get providerMode() {
+      return providerMode();
+    }
   }), (() => {
     var _el$8 = _tmpl$218(), _el$9 = _el$8.firstChild, _el$0 = _el$9.firstChild, _el$1 = _el$0.firstChild, _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$11.nextSibling, _el$13 = _el$0.nextSibling, _el$14 = _el$13.firstChild, _el$15 = _el$14.firstChild;
     _el$8.addEventListener("pointerleave", handleCopyTapEnd);
@@ -8327,13 +8434,13 @@ import { effect as _$effect22 } from "solid-js/web";
 import { insert as _$insert22 } from "solid-js/web";
 import { createComponent as _$createComponent22 } from "solid-js/web";
 import { For as For7 } from "solid-js";
-var _tmpl$55 = /* @__PURE__ */ _$template23(`<button class="dialkit-toolbar-add dialkit-timeline-toolbar-toggle"><svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
+var _tmpl$56 = /* @__PURE__ */ _$template23(`<button class="dialkit-toolbar-add dialkit-timeline-toolbar-toggle"><svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
 var _tmpl$219 = /* @__PURE__ */ _$template23(`<svg><path fill=currentColor></svg>`, false, true, false);
 function TimelineToggleButton() {
   const visible = fromStore(() => TimelineUiStore.getVisible(), (notify2) => TimelineUiStore.subscribe(notify2));
   const label = () => visible() ? "Hide timeline" : "Show timeline";
   return (() => {
-    var _el$ = _tmpl$55(), _el$2 = _el$.firstChild;
+    var _el$ = _tmpl$56(), _el$2 = _el$.firstChild;
     _el$.$$click = () => TimelineUiStore.toggle();
     _$insert22(_el$2, _$createComponent22(For7, {
       each: ICON_TIMELINE,
@@ -8362,7 +8469,7 @@ function TimelineToggleButton() {
 _$delegateEvents19(["click"]);
 
 // src/solid/components/DialRoot.tsx
-var _tmpl$56 = /* @__PURE__ */ _$template24(`<div class=dialkit-root><div class=dialkit-panel>`);
+var _tmpl$57 = /* @__PURE__ */ _$template24(`<div class=dialkit-root><div class=dialkit-panel>`);
 var _tmpl$220 = /* @__PURE__ */ _$template24(`<div class=dialkit-timeline-toolkit-only>Timeline`);
 var _tmpl$315 = /* @__PURE__ */ _$template24(`<div class=dialkit-panel-wrapper>`);
 var isDevDefault2 = typeof process !== "undefined" && process?.env?.NODE_ENV ? process.env.NODE_ENV !== "production" : typeof import.meta !== "undefined" && import.meta.env?.MODE ? import.meta.env.MODE !== "production" : true;
@@ -8390,7 +8497,7 @@ function DialRoot(props) {
   const timelineToggle = () => timelineCount() > 0 ? _$createComponent23(TimelineToggleButton, {}) : null;
   const content = () => _$createComponent23(ShortcutListener, {
     get children() {
-      var _el$ = _tmpl$56(), _el$2 = _el$.firstChild;
+      var _el$ = _tmpl$57(), _el$2 = _el$.firstChild;
       _$insert23(_el$2, _$createComponent23(Show17, {
         get when() {
           return panels().length > 0;
@@ -8492,13 +8599,13 @@ import { insert as _$insert24 } from "solid-js/web";
 import { use as _$use15 } from "solid-js/web";
 import { memo as _$memo17 } from "solid-js/web";
 import { createComponent as _$createComponent24 } from "solid-js/web";
-import { For as For9, Show as Show18, createEffect as createEffect14, createMemo as createMemo3, createSignal as createSignal23, onCleanup as onCleanup19, onMount as onMount14 } from "solid-js";
+import { For as For9, Show as Show18, createEffect as createEffect15, createMemo as createMemo3, createSignal as createSignal23, onCleanup as onCleanup19, onMount as onMount14 } from "solid-js";
 import { Portal as Portal7 } from "solid-js/web";
-var _tmpl$57 = /* @__PURE__ */ _$template25(`<div class="dialkit-root dialkit-timeline"><div class=dialkit-timeline-resize-handle role=separator aria-label="Resize timeline height"aria-orientation=horizontal title="Drag to resize timeline"></div><div class=dialkit-timeline-dock>`);
+var _tmpl$58 = /* @__PURE__ */ _$template25(`<div class="dialkit-root dialkit-timeline"><div class=dialkit-timeline-resize-handle role=separator aria-label="Resize timeline height"aria-orientation=horizontal title="Drag to resize timeline"></div><div class=dialkit-timeline-dock>`);
 var _tmpl$221 = /* @__PURE__ */ _$template25(`<svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
 var _tmpl$316 = /* @__PURE__ */ _$template25(`<button class=dialkit-toolbar-add><span style=position:relative;width:16px;height:16px>`);
-var _tmpl$410 = /* @__PURE__ */ _$template25(`<svg viewBox="0 0 24 24"fill=none aria-hidden=true><path fill=currentColor>`);
-var _tmpl$58 = /* @__PURE__ */ _$template25(`<svg><path fill=currentColor></svg>`, false, true, false);
+var _tmpl$411 = /* @__PURE__ */ _$template25(`<svg viewBox="0 0 24 24"fill=none aria-hidden=true><path fill=currentColor>`);
+var _tmpl$59 = /* @__PURE__ */ _$template25(`<svg><path fill=currentColor></svg>`, false, true, false);
 var _tmpl$65 = /* @__PURE__ */ _$template25(`<button class=dialkit-toolbar-add title=Replay aria-label=Replay><svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
 var _tmpl$72 = /* @__PURE__ */ _$template25(`<div class=dialkit-timeline-overview title="Drag to scrub the full timeline"><div class=dialkit-timeline-overview-viewport></div><div class=dialkit-timeline-overview-progress></div><div class=dialkit-timeline-overview-playhead>`);
 var _tmpl$82 = /* @__PURE__ */ _$template25(`<div class=dialkit-timeline-playhead-control role=slider aria-label="Timeline current time"aria-valuemin=0 title="Drag to scrub the timeline"><div class=dialkit-timeline-playhead-stem></div><div class=dialkit-timeline-playhead-anchor><div class=dialkit-timeline-playhead-flag>`);
@@ -8569,7 +8676,7 @@ function DialTimelineDock(props) {
     });
     onCleanup19(unregister);
   });
-  createEffect14(() => {
+  createEffect15(() => {
     TimelineUiStore.updateController(controllerId, {
       visible: props.visible,
       defaultVisible: props.defaultVisible ?? true,
@@ -8612,7 +8719,7 @@ function DialTimelineDock(props) {
           return document.body;
         },
         get children() {
-          var _el$ = _tmpl$57(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling;
+          var _el$ = _tmpl$58(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling;
           _el$2.$$pointerdown = handleResizePointerDown;
           var _ref$ = dockRef;
           typeof _ref$ === "function" ? _$use15(_ref$, _el$3) : dockRef = _el$3;
@@ -8662,7 +8769,7 @@ function PlayPauseButton(props) {
       },
       get fallback() {
         return (() => {
-          var _el$7 = _tmpl$410(), _el$8 = _el$7.firstChild;
+          var _el$7 = _tmpl$411(), _el$8 = _el$7.firstChild;
           _$setAttribute19(_el$8, "d", ICON_PLAY);
           _$effect24((_$p) => _$style7(_el$7, iconStyle, _$p));
           return _el$7;
@@ -8673,7 +8780,7 @@ function PlayPauseButton(props) {
         _$insert24(_el$6, _$createComponent24(For9, {
           each: ICON_PAUSE,
           children: (path) => (() => {
-            var _el$9 = _tmpl$58();
+            var _el$9 = _tmpl$59();
             _$setAttribute19(_el$9, "d", path);
             return _el$9;
           })()
@@ -8701,7 +8808,7 @@ function ReplayButton(props) {
     _$insert24(_el$1, _$createComponent24(For9, {
       each: ICON_REPLAY,
       children: (path) => (() => {
-        var _el$10 = _tmpl$58();
+        var _el$10 = _tmpl$59();
         _$setAttribute19(_el$10, "d", path);
         return _el$10;
       })()
@@ -8867,7 +8974,7 @@ function TimelineSection(props) {
   let laneAreaRef;
   let horizontalScrollRef;
   const [laneWidth, setLaneWidth] = createSignal23(0);
-  createEffect14(() => {
+  createEffect15(() => {
     if (!open() || !laneAreaRef) return;
     const measure = () => {
       if (laneAreaRef) setLaneWidth(laneAreaRef.getBoundingClientRect().width);
@@ -8882,15 +8989,15 @@ function TimelineSection(props) {
   const viewEnd = () => safeViewStart() + visibleDuration();
   const pxPerSecond = () => visibleDuration() > 0 && laneWidth() > 0 ? laneWidth() / visibleDuration() : 0;
   const maxZoom = () => Math.max(MIN_TIMELINE_MAX_ZOOM, laneWidth() > 0 && props.meta.duration > 0 ? MAJOR_TICK_TARGET_PX * props.meta.duration / (MILLISECOND_STEP * 10 * laneWidth()) : MIN_TIMELINE_MAX_ZOOM);
-  createEffect14(() => setZoom((current) => clamp4(current, 1, maxZoom())));
-  createEffect14(() => setViewStart((current) => clampViewStart(current, props.meta.duration, props.meta.duration / zoom())));
-  createEffect14(() => {
+  createEffect15(() => setZoom((current) => clamp4(current, 1, maxZoom())));
+  createEffect15(() => setViewStart((current) => clampViewStart(current, props.meta.duration, props.meta.duration / zoom())));
+  createEffect15(() => {
     const scroller = horizontalScrollRef;
     const next = safeViewStart() * pxPerSecond();
     if (!scroller || pxPerSecond() <= 0) return;
     if (Math.abs(scroller.scrollLeft - next) > 0.5) scroller.scrollLeft = next;
   });
-  createEffect14(() => {
+  createEffect15(() => {
     if (!props.dockVisible) setPopover(null);
   });
   const centerViewAt = (time) => {
@@ -9977,7 +10084,7 @@ import { effect as _$effect25 } from "solid-js/web";
 import { createComponent as _$createComponent25 } from "solid-js/web";
 import { memo as _$memo18 } from "solid-js/web";
 import { insert as _$insert25 } from "solid-js/web";
-var _tmpl$59 = /* @__PURE__ */ _$template26(`<div class=dialkit-module><div class=dialkit-module-header><span class=dialkit-module-title></span><div class=dialkit-module-switch></div></div><div class=dialkit-module-collapse><div class=dialkit-module-collapse-clip><div class=dialkit-module-inner>`);
+var _tmpl$60 = /* @__PURE__ */ _$template26(`<div class=dialkit-module><div class=dialkit-module-header><span class=dialkit-module-title></span><div class=dialkit-module-switch></div></div><div class=dialkit-module-collapse><div class=dialkit-module-collapse-clip><div class=dialkit-module-inner>`);
 var ENABLE_OPTIONS2 = [{
   value: "off",
   label: "Off"
@@ -9987,7 +10094,7 @@ var ENABLE_OPTIONS2 = [{
 }];
 function Module(props) {
   return (() => {
-    var _el$ = _tmpl$59(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$2.nextSibling, _el$6 = _el$5.firstChild, _el$7 = _el$6.firstChild;
+    var _el$ = _tmpl$60(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$2.nextSibling, _el$6 = _el$5.firstChild, _el$7 = _el$6.firstChild;
     _$insert25(_el$3, () => props.title);
     _$insert25(_el$4, _$createComponent25(SegmentedControl, {
       options: ENABLE_OPTIONS2,
@@ -10009,11 +10116,11 @@ import { addEventListener as _$addEventListener4 } from "solid-js/web";
 import { insert as _$insert26 } from "solid-js/web";
 import { createComponent as _$createComponent26 } from "solid-js/web";
 import { For as For10 } from "solid-js";
-var _tmpl$60 = /* @__PURE__ */ _$template27(`<div class=dialkit-button-group>`);
+var _tmpl$61 = /* @__PURE__ */ _$template27(`<div class=dialkit-button-group>`);
 var _tmpl$223 = /* @__PURE__ */ _$template27(`<button class=dialkit-button>`);
 function ButtonGroup(props) {
   return (() => {
-    var _el$ = _tmpl$60();
+    var _el$ = _tmpl$61();
     _$insert26(_el$, _$createComponent26(For10, {
       get each() {
         return props.buttons;
@@ -10431,7 +10538,7 @@ function createWaveformEngine(canvas, get) {
 }
 
 // src/solid/components/WaveformVisualization.tsx
-var _tmpl$61 = /* @__PURE__ */ _$template28(`<button type=button aria-label="Zoom out"><svg viewBox="0 0 16 16"fill=none><path d="M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
+var _tmpl$66 = /* @__PURE__ */ _$template28(`<button type=button aria-label="Zoom out"><svg viewBox="0 0 16 16"fill=none><path d="M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
 var _tmpl$224 = /* @__PURE__ */ _$template28(`<div class=dialkit-waveform-zoom><button type=button aria-label="Zoom in"><svg viewBox="0 0 16 16"fill=none><path d="M8 3.5v9M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
 var _tmpl$318 = /* @__PURE__ */ _$template28(`<div class=dialkit-waveform-viz-wrap><canvas class=dialkit-waveform-viz>`);
 function WaveformVisualization(props) {
@@ -10491,7 +10598,7 @@ function WaveformVisualization(props) {
             return zoom() > 1;
           },
           get children() {
-            var _el$4 = _tmpl$61();
+            var _el$4 = _tmpl$66();
             _el$4.$$click = () => setZoom((z) => Math.max(1, z / 2));
             return _el$4;
           }
@@ -10864,10 +10971,10 @@ function createAnalyserEngine(canvas, get) {
 }
 
 // src/solid/components/AnalyserVisualization.tsx
-var _tmpl$66 = /* @__PURE__ */ _$template29(`<button type=button aria-label=Mute>M`);
+var _tmpl$67 = /* @__PURE__ */ _$template29(`<button type=button aria-label=Mute>M`);
 var _tmpl$225 = /* @__PURE__ */ _$template29(`<button type=button aria-label=Solo>S`);
 var _tmpl$319 = /* @__PURE__ */ _$template29(`<div class=dialkit-analyser-actions>`);
-var _tmpl$411 = /* @__PURE__ */ _$template29(`<div class=dialkit-analyser-viz-wrap><canvas class=dialkit-analyser-viz>`);
+var _tmpl$412 = /* @__PURE__ */ _$template29(`<div class=dialkit-analyser-viz-wrap><canvas class=dialkit-analyser-viz>`);
 function AnalyserVisualization(props) {
   const p = mergeProps2({
     analyser: null,
@@ -10906,7 +11013,7 @@ function AnalyserVisualization(props) {
     onCleanup21(() => engine.destroy());
   });
   return (() => {
-    var _el$ = _tmpl$411(), _el$2 = _el$.firstChild;
+    var _el$ = _tmpl$412(), _el$2 = _el$.firstChild;
     var _ref$ = canvasEl;
     typeof _ref$ === "function" ? _$use17(_ref$, _el$2) : canvasEl = _el$2;
     _$insert28(_el$, _$createComponent28(Show20, {
@@ -10920,7 +11027,7 @@ function AnalyserVisualization(props) {
             return p.onMuteChange;
           },
           get children() {
-            var _el$4 = _tmpl$66();
+            var _el$4 = _tmpl$67();
             _el$4.$$click = () => p.onMuteChange?.(!p.muted);
             _$effect27(() => _$setAttribute21(_el$4, "aria-pressed", p.muted));
             return _el$4;
@@ -11371,12 +11478,12 @@ function triggersCrossed(prevValue, curValue, steps) {
 }
 
 // src/solid/components/CurveComposer.tsx
-var _tmpl$67 = /* @__PURE__ */ _$template30(`<div class=dialkit-cc-wrap><svg class=dialkit-cc><rect class=dialkit-cc-lane rx=8></rect><line class=dialkit-cc-playhead x1=0 x2=0></line><circle class=dialkit-cc-dot cx=0 r=3>`);
+var _tmpl$68 = /* @__PURE__ */ _$template30(`<div class=dialkit-cc-wrap><svg class=dialkit-cc><rect class=dialkit-cc-lane rx=8></rect><line class=dialkit-cc-playhead x1=0 x2=0></line><circle class=dialkit-cc-dot cx=0 r=3>`);
 var _tmpl$226 = /* @__PURE__ */ _$template30(`<svg><line class=dialkit-cc-grid></svg>`, false, true, false);
 var _tmpl$320 = /* @__PURE__ */ _$template30(`<svg><rect class=dialkit-cc-seg-selected rx=8></svg>`, false, true, false);
-var _tmpl$412 = /* @__PURE__ */ _$template30(`<svg><rect class=dialkit-cc-seg-hover rx=8></svg>`, false, true, false);
+var _tmpl$413 = /* @__PURE__ */ _$template30(`<svg><rect class=dialkit-cc-seg-hover rx=8></svg>`, false, true, false);
 var _tmpl$510 = /* @__PURE__ */ _$template30(`<svg><g><line class=dialkit-cc-diagonal></line><path class=dialkit-cc-curve></path><text class=dialkit-cc-label></svg>`, false, true, false);
-var _tmpl$68 = /* @__PURE__ */ _$template30(`<svg><path class=dialkit-cc-connector></svg>`, false, true, false);
+var _tmpl$69 = /* @__PURE__ */ _$template30(`<svg><path class=dialkit-cc-connector></svg>`, false, true, false);
 var _tmpl$73 = /* @__PURE__ */ _$template30(`<svg><line class=dialkit-cc-boundary></svg>`, false, true, false);
 var _tmpl$83 = /* @__PURE__ */ _$template30(`<svg><rect class=dialkit-cc-lane rx=8></svg>`, false, true, false);
 var _tmpl$93 = /* @__PURE__ */ _$template30(`<svg><rect class=dialkit-cc-seg-hover x=0 rx=8></svg>`, false, true, false);
@@ -11627,7 +11734,7 @@ function CurveComposer(props) {
     return lines;
   };
   return (() => {
-    var _el$ = _tmpl$67(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.nextSibling;
+    var _el$ = _tmpl$68(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.nextSibling;
     _el$2.$$dblclick = onDoubleClick;
     _el$2.addEventListener("pointerleave", () => !drag && setHover(null));
     _el$2.addEventListener("pointercancel", onPointerCancel);
@@ -11695,7 +11802,7 @@ function CurveComposer(props) {
           const span = segmentSpan(p.segments, hover().index, p.gap);
           const mr = mainRect();
           return (() => {
-            var _el$8 = _tmpl$412();
+            var _el$8 = _tmpl$413();
             _$effect28((_p$) => {
               var _v$24 = span[0] * W(), _v$25 = mr.y, _v$26 = (span[1] - span[0]) * W(), _v$27 = mr.h;
               _v$24 !== _p$.e && _$setAttribute22(_el$8, "x", _p$.e = _v$24);
@@ -11758,7 +11865,7 @@ function CurveComposer(props) {
             return timelineSlots(p.segments, p.gap).filter((slot) => slot.kind === "gap" && slot.b > slot.a);
           },
           children: (slot) => (() => {
-            var _el$11 = _tmpl$68();
+            var _el$11 = _tmpl$69();
             _$effect28(() => _$setAttribute22(_el$11, "d", connectorPath(slot, samplers(), p.segments.length, mainRect(), W())));
             return _el$11;
           })()

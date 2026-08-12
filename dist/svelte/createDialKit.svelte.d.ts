@@ -1,4 +1,4 @@
-import type { DialConfig, DialEvent, DialKitPersistOptions, ResolvedValues, ShortcutConfig, AffordanceConfig } from 'dialkit/store';
+import type { DialConfig, DialEvent, DialKitPersistOptions, ResolvedValues, ShortcutConfig, AffordanceConfig, PresetProvider } from 'dialkit/store';
 export interface CreateDialOptions {
     onAction?: (action: string) => void;
     /** Non-value events: file picked, chip removed, list mutated. */
@@ -10,6 +10,11 @@ export interface CreateDialOptions {
     affordances?: Record<string, AffordanceConfig>;
     /** Display label by control path, overriding the key-derived name. */
     labels?: Record<string, string>;
+    /**
+     * Host-owned backing for the toolbar's preset UI (see PresetProvider).
+     * Back `presets`/`activeId` with $state-read getters to keep the list live.
+     */
+    presets?: PresetProvider;
     /** Stable id shares one panel/persistence target across mounts. */
     id?: string;
     /** Persist values per machine (see DialKitPersistOptions). */

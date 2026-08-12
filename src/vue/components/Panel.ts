@@ -28,8 +28,9 @@ export const Panel = defineComponent({
   },
   setup(props) {
     const values = ref<Record<string, DialValue>>(DialStore.getValues(props.panel.id));
-    const presets = ref(DialStore.getPresets(props.panel.id));
+    const presets = ref(DialStore.getPresetItems(props.panel.id));
     const activePresetId = ref<string | null>(DialStore.getActivePresetId(props.panel.id));
+    const providerMode = ref(DialStore.hasPresetProvider(props.panel.id));
     const copied = ref(false);
 
     let unsubscribe: (() => void) | undefined;
@@ -38,8 +39,9 @@ export const Panel = defineComponent({
     onMounted(() => {
       unsubscribe = DialStore.subscribe(props.panel.id, () => {
         values.value = DialStore.getValues(props.panel.id);
-        presets.value = DialStore.getPresets(props.panel.id);
+        presets.value = DialStore.getPresetItems(props.panel.id);
         activePresetId.value = DialStore.getActivePresetId(props.panel.id);
+        providerMode.value = DialStore.hasPresetProvider(props.panel.id);
       });
     });
 
@@ -50,10 +52,7 @@ export const Panel = defineComponent({
       }
     });
 
-    const handleAddPreset = () => {
-      const nextNum = presets.value.length + 2;
-      DialStore.savePreset(props.panel.id, `Version ${nextNum}`);
-    };
+    const handleAddPreset = () => DialStore.createPreset(props.panel.id);
 
     const handleCopy = () => {
       const json = JSON.stringify(values.value, null, 2);
@@ -98,6 +97,7 @@ export const Panel = defineComponent({
           panelId: props.panel.id,
           presets: presets.value,
           activePresetId: activePresetId.value,
+          providerMode: providerMode.value,
         }),
         h(motion.button, {
           class: 'dialkit-toolbar-copy',

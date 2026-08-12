@@ -20,8 +20,9 @@ export function Panel(props: PanelProps) {
   const [values, setValues] = createSignal<Record<string, DialValue>>(
     DialStore.getValues(props.panel.id)
   );
-  const [presets, setPresets] = createSignal(DialStore.getPresets(props.panel.id));
+  const [presets, setPresets] = createSignal(DialStore.getPresetItems(props.panel.id));
   const [activePresetId, setActivePresetId] = createSignal(DialStore.getActivePresetId(props.panel.id));
+  const [providerMode, setProviderMode] = createSignal(DialStore.hasPresetProvider(props.panel.id));
   let addButtonRef!: HTMLButtonElement;
   let copyButtonRef!: HTMLButtonElement;
   let copyClipboardIconRef!: HTMLSpanElement;
@@ -41,8 +42,9 @@ export function Panel(props: PanelProps) {
   onMount(() => {
     const unsub = DialStore.subscribe(props.panel.id, () => {
       setValues(DialStore.getValues(props.panel.id));
-      setPresets(DialStore.getPresets(props.panel.id));
+      setPresets(DialStore.getPresetItems(props.panel.id));
       setActivePresetId(DialStore.getActivePresetId(props.panel.id));
+      setProviderMode(DialStore.hasPresetProvider(props.panel.id));
     });
 
     if (copyClipboardIconRef && copyCheckIconRef) {
@@ -60,10 +62,7 @@ export function Panel(props: PanelProps) {
     onCleanup(unsub);
   });
 
-  const handleAddPreset = () => {
-    const nextNum = presets().length + 2;
-    DialStore.savePreset(props.panel.id, `Version ${nextNum}`);
-  };
+  const handleAddPreset = () => DialStore.createPreset(props.panel.id);
 
   const handleCopy = () => {
     const jsonStr = JSON.stringify(values(), null, 2);
@@ -156,6 +155,7 @@ export function Panel(props: PanelProps) {
         presets={presets()}
         activePresetId={activePresetId()}
         onAdd={handleAddPreset}
+        providerMode={providerMode()}
       />
 
       <button

@@ -744,6 +744,11 @@ var DialStoreClass = class {
     this.controlStateListeners = /* @__PURE__ */ new Map();
     this.presets = /* @__PURE__ */ new Map();
     this.activePreset = /* @__PURE__ */ new Map();
+    // Host-owned preset providers. The serialized form (functions drop out of
+    // JSON, leaving list + activeId) decides whether a swap is visible: adapters
+    // replace the object on every host render so callbacks never go stale, and
+    // only a data change should notify.
+    this.presetProviders = /* @__PURE__ */ new Map();
     this.baseValues = /* @__PURE__ */ new Map();
     // Resolved storage target per panel (null = persistence off). Absent = not
     // yet registered.
@@ -833,6 +838,7 @@ var DialStoreClass = class {
     this.snapshots.delete(id);
     this.baseValues.delete(id);
     this.persistTargets.delete(id);
+    this.presetProviders.delete(id);
     this.notifyGlobal();
   }
   // Overlay saved values onto freshly-computed defaults, in place. Only keys
@@ -1081,6 +1087,8 @@ var DialStoreClass = class {
     return this.presets.get(panelId) ?? [];
   }
   getActivePresetId(panelId) {
+    const provider = this.getPresetProvider(panelId);
+    if (provider) return provider.activeId ?? null;
     return this.activePreset.get(panelId) ?? null;
   }
   clearActivePreset(panelId) {
@@ -1092,6 +1100,81 @@ var DialStoreClass = class {
     }
     this.activePreset.set(panelId, null);
     this.notify(panelId);
+  }
+  /**
+   * Install (or clear) a host-owned preset provider. Safe to call on every
+   * host render: the object is always swapped so `onSelect`/`onCreate`/
+   * `onDelete` never close over stale host state, but listeners are only
+   * notified when the visible data (list, active id) actually changed.
+   */
+  setPresetProvider(panelId, provider) {
+    const entry = this.presetProviders.get(panelId);
+    if (!provider) {
+      if (!entry) return;
+      this.presetProviders.delete(panelId);
+    } else {
+      const serialized = JSON.stringify(provider);
+      this.presetProviders.set(panelId, { provider, serialized });
+      if (entry?.serialized === serialized) return;
+    }
+    const panel = this.panels.get(panelId);
+    if (panel) {
+      this.snapshots.set(panelId, { ...panel.values });
+    }
+    this.notify(panelId);
+  }
+  getPresetProvider(panelId) {
+    return this.presetProviders.get(panelId)?.provider ?? null;
+  }
+  /** Provider mode hides the implicit "Version 1" base row — the host owns the whole list. */
+  hasPresetProvider(panelId) {
+    return this.presetProviders.has(panelId);
+  }
+  /** The dropdown rows in host order, from the provider when one is set. */
+  getPresetItems(panelId) {
+    const provider = this.getPresetProvider(panelId);
+    if (provider) {
+      return provider.presets.map((p) => ({
+        id: p.id,
+        name: p.label,
+        deletable: !!provider.onDelete && !p.readonly
+      }));
+    }
+    return this.getPresets(panelId).map((p) => ({ id: p.id, name: p.name, deletable: true }));
+  }
+  /**
+   * Row clicked. Stock mode loads the snapshot (null = back to base values);
+   * provider mode hands the id to the host, which applies values itself.
+   */
+  selectPreset(panelId, presetId) {
+    const provider = this.getPresetProvider(panelId);
+    if (provider) {
+      if (presetId) void provider.onSelect(presetId);
+      return;
+    }
+    if (presetId) this.loadPreset(panelId, presetId);
+    else this.clearActivePreset(panelId);
+  }
+  /**
+   * "+" pressed. Stock mode snapshots into "Version N" (N counts the implicit
+   * base as version 1); provider mode suggests the matching "Preset N" label.
+   */
+  createPreset(panelId) {
+    const provider = this.getPresetProvider(panelId);
+    if (provider) {
+      void provider.onCreate(`Preset ${provider.presets.length + 1}`);
+      return;
+    }
+    this.savePreset(panelId, `Version ${this.getPresets(panelId).length + 2}`);
+  }
+  /** Trash icon pressed on a row (only rendered when the item is deletable). */
+  removePreset(panelId, presetId) {
+    const provider = this.getPresetProvider(panelId);
+    if (provider) {
+      void provider.onDelete?.(presetId);
+      return;
+    }
+    this.deletePreset(panelId, presetId);
   }
   resolveShortcutTarget(key, modifier) {
     for (const panel of this.panels.values()) {
@@ -1644,6 +1727,11 @@ function createDialKit(name, config, options) {
       unsubActions?.();
       DialStore.unregisterPanel(panelId);
     });
+  });
+  (0, import_solid_js.createEffect)(() => {
+    const provider = options?.presets ?? null;
+    if (provider) JSON.stringify(provider);
+    DialStore.setPresetProvider(panelId, provider);
   });
   return (0, import_solid_js.createMemo)(() => buildResolvedValues(config, values(), ""));
 }
@@ -7958,9 +8046,11 @@ var import_web171 = require("solid-js/web");
 var import_solid_js23 = require("solid-js");
 var import_web172 = require("solid-js/web");
 var import_motion7 = require("motion");
-var _tmpl$50 = /* @__PURE__ */ (0, import_web163.template)(`<div class="dialkit-root dialkit-preset-dropdown"style=position:fixed><div class=dialkit-preset-item><span class=dialkit-preset-name>Version 1`);
-var _tmpl$217 = /* @__PURE__ */ (0, import_web163.template)(`<div class=dialkit-preset-manager><button class=dialkit-preset-trigger><span class=dialkit-preset-label></span><svg class=dialkit-select-chevron viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
-var _tmpl$313 = /* @__PURE__ */ (0, import_web163.template)(`<div class=dialkit-preset-item><span class=dialkit-preset-name></span><button class=dialkit-preset-delete title="Delete preset"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round><path></path><path></path><path></path><path></path><path>`);
+var _tmpl$50 = /* @__PURE__ */ (0, import_web163.template)(`<div class=dialkit-preset-item><span class=dialkit-preset-name>Version 1`);
+var _tmpl$217 = /* @__PURE__ */ (0, import_web163.template)(`<div class="dialkit-root dialkit-preset-dropdown"style=position:fixed>`);
+var _tmpl$313 = /* @__PURE__ */ (0, import_web163.template)(`<div class=dialkit-preset-manager><button class=dialkit-preset-trigger><span class=dialkit-preset-label></span><svg class=dialkit-select-chevron viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
+var _tmpl$410 = /* @__PURE__ */ (0, import_web163.template)(`<button class=dialkit-preset-delete title="Delete preset"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round><path></path><path></path><path></path><path></path><path>`);
+var _tmpl$55 = /* @__PURE__ */ (0, import_web163.template)(`<div class=dialkit-preset-item><span class=dialkit-preset-name>`);
 function PresetManager(props) {
   const [isOpen, setIsOpen] = (0, import_solid_js23.createSignal)(false);
   const [mounted, setMounted] = (0, import_solid_js23.createSignal)(false);
@@ -8064,42 +8154,41 @@ function PresetManager(props) {
     });
   });
   const handleSelect = (presetId) => {
-    if (presetId) DialStore.loadPreset(props.panelId, presetId);
-    else DialStore.clearActivePreset(props.panelId);
+    DialStore.selectPreset(props.panelId, presetId);
     closeDropdown();
   };
   const handleDelete = (e, presetId) => {
     e.stopPropagation();
-    DialStore.deletePreset(props.panelId, presetId);
+    DialStore.removePreset(props.panelId, presetId);
   };
   return (() => {
-    var _el$ = _tmpl$217(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild;
+    var _el$ = _tmpl$313(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild;
     _el$2.$$click = toggle;
     var _ref$ = triggerRef;
     typeof _ref$ === "function" ? (0, import_web171.use)(_ref$, _el$2) : triggerRef = _el$2;
     (0, import_web169.insert)(_el$3, (() => {
       var _c$ = (0, import_web170.memo)(() => !!activePreset());
-      return () => _c$() ? activePreset().name : "Version 1";
+      return () => _c$() ? activePreset().name : props.providerMode ? "Presets" : "Version 1";
     })());
     var _ref$2 = chevronRef;
     typeof _ref$2 === "function" ? (0, import_web171.use)(_ref$2, _el$4) : chevronRef = _el$4;
     (0, import_web168.setAttribute)(_el$5, "d", ICON_CHEVRON);
-    (0, import_web169.insert)(_el$, (0, import_web167.createComponent)(import_solid_js23.Show, {
+    (0, import_web169.insert)(_el$, (0, import_web166.createComponent)(import_solid_js23.Show, {
       get when() {
         return !!portalTarget();
       },
       get children() {
-        return (0, import_web167.createComponent)(import_web172.Portal, {
+        return (0, import_web166.createComponent)(import_web172.Portal, {
           get mount() {
             return portalTarget();
           },
           get children() {
-            return (0, import_web167.createComponent)(import_solid_js23.Show, {
+            return (0, import_web166.createComponent)(import_solid_js23.Show, {
               get when() {
                 return mounted();
               },
               get children() {
-                var _el$6 = _tmpl$50(), _el$7 = _el$6.firstChild;
+                var _el$6 = _tmpl$217();
                 (0, import_web171.use)((el) => {
                   dropdownRef = el;
                   (0, import_motion7.animate)(el, {
@@ -8112,48 +8201,64 @@ function PresetManager(props) {
                     bounce: 0
                   });
                 }, _el$6);
-                _el$7.$$click = () => handleSelect(null);
-                (0, import_web169.insert)(_el$6, (0, import_web167.createComponent)(import_solid_js23.For, {
+                (0, import_web169.insert)(_el$6, (0, import_web166.createComponent)(import_solid_js23.Show, {
+                  get when() {
+                    return !props.providerMode;
+                  },
+                  get children() {
+                    var _el$7 = _tmpl$50();
+                    _el$7.$$click = () => handleSelect(null);
+                    (0, import_web167.effect)(() => (0, import_web168.setAttribute)(_el$7, "data-active", String(!props.activePresetId)));
+                    return _el$7;
+                  }
+                }), null);
+                (0, import_web169.insert)(_el$6, (0, import_web166.createComponent)(import_solid_js23.For, {
                   get each() {
                     return props.presets;
                   },
                   children: (preset) => (() => {
-                    var _el$8 = _tmpl$313(), _el$9 = _el$8.firstChild, _el$0 = _el$9.nextSibling, _el$1 = _el$0.firstChild, _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$11.nextSibling, _el$13 = _el$12.nextSibling, _el$14 = _el$13.nextSibling;
+                    var _el$8 = _tmpl$55(), _el$9 = _el$8.firstChild;
                     _el$8.$$click = () => handleSelect(preset.id);
                     (0, import_web169.insert)(_el$9, () => preset.name);
-                    _el$0.$$click = (e) => handleDelete(e, preset.id);
-                    (0, import_web166.effect)((_p$) => {
-                      var _v$8 = String(preset.id === props.activePresetId), _v$9 = ICON_TRASH[0], _v$0 = ICON_TRASH[1], _v$1 = ICON_TRASH[2], _v$10 = ICON_TRASH[3], _v$11 = ICON_TRASH[4];
-                      _v$8 !== _p$.e && (0, import_web168.setAttribute)(_el$8, "data-active", _p$.e = _v$8);
-                      _v$9 !== _p$.t && (0, import_web168.setAttribute)(_el$10, "d", _p$.t = _v$9);
-                      _v$0 !== _p$.a && (0, import_web168.setAttribute)(_el$11, "d", _p$.a = _v$0);
-                      _v$1 !== _p$.o && (0, import_web168.setAttribute)(_el$12, "d", _p$.o = _v$1);
-                      _v$10 !== _p$.i && (0, import_web168.setAttribute)(_el$13, "d", _p$.i = _v$10);
-                      _v$11 !== _p$.n && (0, import_web168.setAttribute)(_el$14, "d", _p$.n = _v$11);
-                      return _p$;
-                    }, {
-                      e: void 0,
-                      t: void 0,
-                      a: void 0,
-                      o: void 0,
-                      i: void 0,
-                      n: void 0
-                    });
+                    (0, import_web169.insert)(_el$8, (0, import_web166.createComponent)(import_solid_js23.Show, {
+                      get when() {
+                        return preset.deletable ?? true;
+                      },
+                      get children() {
+                        var _el$0 = _tmpl$410(), _el$1 = _el$0.firstChild, _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$11.nextSibling, _el$13 = _el$12.nextSibling, _el$14 = _el$13.nextSibling;
+                        _el$0.$$click = (e) => handleDelete(e, preset.id);
+                        (0, import_web167.effect)((_p$) => {
+                          var _v$7 = ICON_TRASH[0], _v$8 = ICON_TRASH[1], _v$9 = ICON_TRASH[2], _v$0 = ICON_TRASH[3], _v$1 = ICON_TRASH[4];
+                          _v$7 !== _p$.e && (0, import_web168.setAttribute)(_el$10, "d", _p$.e = _v$7);
+                          _v$8 !== _p$.t && (0, import_web168.setAttribute)(_el$11, "d", _p$.t = _v$8);
+                          _v$9 !== _p$.a && (0, import_web168.setAttribute)(_el$12, "d", _p$.a = _v$9);
+                          _v$0 !== _p$.o && (0, import_web168.setAttribute)(_el$13, "d", _p$.o = _v$0);
+                          _v$1 !== _p$.i && (0, import_web168.setAttribute)(_el$14, "d", _p$.i = _v$1);
+                          return _p$;
+                        }, {
+                          e: void 0,
+                          t: void 0,
+                          a: void 0,
+                          o: void 0,
+                          i: void 0
+                        });
+                        return _el$0;
+                      }
+                    }), null);
+                    (0, import_web167.effect)(() => (0, import_web168.setAttribute)(_el$8, "data-active", String(preset.id === props.activePresetId)));
                     return _el$8;
                   })()
                 }), null);
-                (0, import_web166.effect)((_p$) => {
-                  var _v$ = `${pos().top}px`, _v$2 = `${pos().left}px`, _v$3 = `${pos().width}px`, _v$4 = String(!props.activePresetId);
+                (0, import_web167.effect)((_p$) => {
+                  var _v$ = `${pos().top}px`, _v$2 = `${pos().left}px`, _v$3 = `${pos().width}px`;
                   _v$ !== _p$.e && (0, import_web165.setStyleProperty)(_el$6, "top", _p$.e = _v$);
                   _v$2 !== _p$.t && (0, import_web165.setStyleProperty)(_el$6, "left", _p$.t = _v$2);
                   _v$3 !== _p$.a && (0, import_web165.setStyleProperty)(_el$6, "min-width", _p$.a = _v$3);
-                  _v$4 !== _p$.o && (0, import_web168.setAttribute)(_el$7, "data-active", _p$.o = _v$4);
                   return _p$;
                 }, {
                   e: void 0,
                   t: void 0,
-                  a: void 0,
-                  o: void 0
+                  a: void 0
                 });
                 return _el$6;
               }
@@ -8162,11 +8267,11 @@ function PresetManager(props) {
         });
       }
     }), null);
-    (0, import_web166.effect)((_p$) => {
-      var _v$5 = String(isOpen()), _v$6 = String(!!activePreset()), _v$7 = String(!hasPresets());
-      _v$5 !== _p$.e && (0, import_web168.setAttribute)(_el$2, "data-open", _p$.e = _v$5);
-      _v$6 !== _p$.t && (0, import_web168.setAttribute)(_el$2, "data-has-preset", _p$.t = _v$6);
-      _v$7 !== _p$.a && (0, import_web168.setAttribute)(_el$2, "data-disabled", _p$.a = _v$7);
+    (0, import_web167.effect)((_p$) => {
+      var _v$4 = String(isOpen()), _v$5 = String(!!activePreset()), _v$6 = String(!hasPresets());
+      _v$4 !== _p$.e && (0, import_web168.setAttribute)(_el$2, "data-open", _p$.e = _v$4);
+      _v$5 !== _p$.t && (0, import_web168.setAttribute)(_el$2, "data-has-preset", _p$.t = _v$5);
+      _v$6 !== _p$.a && (0, import_web168.setAttribute)(_el$2, "data-disabled", _p$.a = _v$6);
       return _p$;
     }, {
       e: void 0,
@@ -8186,8 +8291,9 @@ function Panel(props) {
   const [copied, setCopied] = (0, import_solid_js24.createSignal)(false);
   const [isPanelOpen, setIsPanelOpen] = (0, import_solid_js24.createSignal)(props.defaultOpen ?? true);
   const [values, setValues] = (0, import_solid_js24.createSignal)(DialStore.getValues(props.panel.id));
-  const [presets, setPresets] = (0, import_solid_js24.createSignal)(DialStore.getPresets(props.panel.id));
+  const [presets, setPresets] = (0, import_solid_js24.createSignal)(DialStore.getPresetItems(props.panel.id));
   const [activePresetId, setActivePresetId] = (0, import_solid_js24.createSignal)(DialStore.getActivePresetId(props.panel.id));
+  const [providerMode, setProviderMode] = (0, import_solid_js24.createSignal)(DialStore.hasPresetProvider(props.panel.id));
   let addButtonRef;
   let copyButtonRef;
   let copyClipboardIconRef;
@@ -8205,8 +8311,9 @@ function Panel(props) {
   (0, import_solid_js24.onMount)(() => {
     const unsub = DialStore.subscribe(props.panel.id, () => {
       setValues(DialStore.getValues(props.panel.id));
-      setPresets(DialStore.getPresets(props.panel.id));
+      setPresets(DialStore.getPresetItems(props.panel.id));
       setActivePresetId(DialStore.getActivePresetId(props.panel.id));
+      setProviderMode(DialStore.hasPresetProvider(props.panel.id));
     });
     if (copyClipboardIconRef && copyCheckIconRef) {
       copyClipboardIconRef.style.transformOrigin = "50% 50%";
@@ -8221,10 +8328,7 @@ function Panel(props) {
     }
     (0, import_solid_js24.onCleanup)(unsub);
   });
-  const handleAddPreset = () => {
-    const nextNum = presets().length + 2;
-    DialStore.savePreset(props.panel.id, `Version ${nextNum}`);
-  };
+  const handleAddPreset = () => DialStore.createPreset(props.panel.id);
   const handleCopy = () => {
     const jsonStr = JSON.stringify(values(), null, 2);
     const instruction = `Update the createDialKit configuration for "${props.panel.name}" with these values:
@@ -8340,7 +8444,10 @@ Apply these values as the new defaults in the createDialKit call.`;
     get activePresetId() {
       return activePresetId();
     },
-    onAdd: handleAddPreset
+    onAdd: handleAddPreset,
+    get providerMode() {
+      return providerMode();
+    }
   }), (() => {
     var _el$8 = _tmpl$218(), _el$9 = _el$8.firstChild, _el$0 = _el$9.firstChild, _el$1 = _el$0.firstChild, _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$11.nextSibling, _el$13 = _el$0.nextSibling, _el$14 = _el$13.firstChild, _el$15 = _el$14.firstChild;
     _el$8.addEventListener("pointerleave", handleCopyTapEnd);
@@ -8400,13 +8507,13 @@ var import_web184 = require("solid-js/web");
 var import_web185 = require("solid-js/web");
 var import_web186 = require("solid-js/web");
 var import_solid_js25 = require("solid-js");
-var _tmpl$55 = /* @__PURE__ */ (0, import_web181.template)(`<button class="dialkit-toolbar-add dialkit-timeline-toolbar-toggle"><svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
+var _tmpl$56 = /* @__PURE__ */ (0, import_web181.template)(`<button class="dialkit-toolbar-add dialkit-timeline-toolbar-toggle"><svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
 var _tmpl$219 = /* @__PURE__ */ (0, import_web181.template)(`<svg><path fill=currentColor></svg>`, false, true, false);
 function TimelineToggleButton() {
   const visible = fromStore(() => TimelineUiStore.getVisible(), (notify2) => TimelineUiStore.subscribe(notify2));
   const label = () => visible() ? "Hide timeline" : "Show timeline";
   return (() => {
-    var _el$ = _tmpl$55(), _el$2 = _el$.firstChild;
+    var _el$ = _tmpl$56(), _el$2 = _el$.firstChild;
     _el$.$$click = () => TimelineUiStore.toggle();
     (0, import_web185.insert)(_el$2, (0, import_web186.createComponent)(import_solid_js25.For, {
       each: ICON_TIMELINE,
@@ -8436,7 +8543,7 @@ function TimelineToggleButton() {
 
 // src/solid/components/DialRoot.tsx
 var import_meta2 = {};
-var _tmpl$56 = /* @__PURE__ */ (0, import_web187.template)(`<div class=dialkit-root><div class=dialkit-panel>`);
+var _tmpl$57 = /* @__PURE__ */ (0, import_web187.template)(`<div class=dialkit-root><div class=dialkit-panel>`);
 var _tmpl$220 = /* @__PURE__ */ (0, import_web187.template)(`<div class=dialkit-timeline-toolkit-only>Timeline`);
 var _tmpl$315 = /* @__PURE__ */ (0, import_web187.template)(`<div class=dialkit-panel-wrapper>`);
 var isDevDefault2 = typeof process !== "undefined" && process?.env?.NODE_ENV ? process.env.NODE_ENV !== "production" : typeof import_meta2 !== "undefined" && import_meta2.env?.MODE ? import_meta2.env.MODE !== "production" : true;
@@ -8464,7 +8571,7 @@ function DialRoot(props) {
   const timelineToggle = () => timelineCount() > 0 ? (0, import_web192.createComponent)(TimelineToggleButton, {}) : null;
   const content = () => (0, import_web192.createComponent)(ShortcutListener, {
     get children() {
-      var _el$ = _tmpl$56(), _el$2 = _el$.firstChild;
+      var _el$ = _tmpl$57(), _el$2 = _el$.firstChild;
       (0, import_web191.insert)(_el$2, (0, import_web192.createComponent)(import_solid_js26.Show, {
         get when() {
           return panels().length > 0;
@@ -8568,11 +8675,11 @@ var import_web203 = require("solid-js/web");
 var import_web204 = require("solid-js/web");
 var import_solid_js27 = require("solid-js");
 var import_web205 = require("solid-js/web");
-var _tmpl$57 = /* @__PURE__ */ (0, import_web194.template)(`<div class="dialkit-root dialkit-timeline"><div class=dialkit-timeline-resize-handle role=separator aria-label="Resize timeline height"aria-orientation=horizontal title="Drag to resize timeline"></div><div class=dialkit-timeline-dock>`);
+var _tmpl$58 = /* @__PURE__ */ (0, import_web194.template)(`<div class="dialkit-root dialkit-timeline"><div class=dialkit-timeline-resize-handle role=separator aria-label="Resize timeline height"aria-orientation=horizontal title="Drag to resize timeline"></div><div class=dialkit-timeline-dock>`);
 var _tmpl$221 = /* @__PURE__ */ (0, import_web194.template)(`<svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
 var _tmpl$316 = /* @__PURE__ */ (0, import_web194.template)(`<button class=dialkit-toolbar-add><span style=position:relative;width:16px;height:16px>`);
-var _tmpl$410 = /* @__PURE__ */ (0, import_web194.template)(`<svg viewBox="0 0 24 24"fill=none aria-hidden=true><path fill=currentColor>`);
-var _tmpl$58 = /* @__PURE__ */ (0, import_web194.template)(`<svg><path fill=currentColor></svg>`, false, true, false);
+var _tmpl$411 = /* @__PURE__ */ (0, import_web194.template)(`<svg viewBox="0 0 24 24"fill=none aria-hidden=true><path fill=currentColor>`);
+var _tmpl$59 = /* @__PURE__ */ (0, import_web194.template)(`<svg><path fill=currentColor></svg>`, false, true, false);
 var _tmpl$65 = /* @__PURE__ */ (0, import_web194.template)(`<button class=dialkit-toolbar-add title=Replay aria-label=Replay><svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
 var _tmpl$72 = /* @__PURE__ */ (0, import_web194.template)(`<div class=dialkit-timeline-overview title="Drag to scrub the full timeline"><div class=dialkit-timeline-overview-viewport></div><div class=dialkit-timeline-overview-progress></div><div class=dialkit-timeline-overview-playhead>`);
 var _tmpl$82 = /* @__PURE__ */ (0, import_web194.template)(`<div class=dialkit-timeline-playhead-control role=slider aria-label="Timeline current time"aria-valuemin=0 title="Drag to scrub the timeline"><div class=dialkit-timeline-playhead-stem></div><div class=dialkit-timeline-playhead-anchor><div class=dialkit-timeline-playhead-flag>`);
@@ -8686,7 +8793,7 @@ function DialTimelineDock(props) {
           return document.body;
         },
         get children() {
-          var _el$ = _tmpl$57(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling;
+          var _el$ = _tmpl$58(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling;
           _el$2.$$pointerdown = handleResizePointerDown;
           var _ref$ = dockRef;
           typeof _ref$ === "function" ? (0, import_web202.use)(_ref$, _el$3) : dockRef = _el$3;
@@ -8736,7 +8843,7 @@ function PlayPauseButton(props) {
       },
       get fallback() {
         return (() => {
-          var _el$7 = _tmpl$410(), _el$8 = _el$7.firstChild;
+          var _el$7 = _tmpl$411(), _el$8 = _el$7.firstChild;
           (0, import_web199.setAttribute)(_el$8, "d", ICON_PLAY);
           (0, import_web200.effect)((_$p) => (0, import_web197.style)(_el$7, iconStyle, _$p));
           return _el$7;
@@ -8747,7 +8854,7 @@ function PlayPauseButton(props) {
         (0, import_web201.insert)(_el$6, (0, import_web204.createComponent)(import_solid_js27.For, {
           each: ICON_PAUSE,
           children: (path) => (() => {
-            var _el$9 = _tmpl$58();
+            var _el$9 = _tmpl$59();
             (0, import_web199.setAttribute)(_el$9, "d", path);
             return _el$9;
           })()
@@ -8775,7 +8882,7 @@ function ReplayButton(props) {
     (0, import_web201.insert)(_el$1, (0, import_web204.createComponent)(import_solid_js27.For, {
       each: ICON_REPLAY,
       children: (path) => (() => {
-        var _el$10 = _tmpl$58();
+        var _el$10 = _tmpl$59();
         (0, import_web199.setAttribute)(_el$10, "d", path);
         return _el$10;
       })()
@@ -10051,7 +10158,7 @@ var import_web208 = require("solid-js/web");
 var import_web209 = require("solid-js/web");
 var import_web210 = require("solid-js/web");
 var import_web211 = require("solid-js/web");
-var _tmpl$59 = /* @__PURE__ */ (0, import_web206.template)(`<div class=dialkit-module><div class=dialkit-module-header><span class=dialkit-module-title></span><div class=dialkit-module-switch></div></div><div class=dialkit-module-collapse><div class=dialkit-module-collapse-clip><div class=dialkit-module-inner>`);
+var _tmpl$60 = /* @__PURE__ */ (0, import_web206.template)(`<div class=dialkit-module><div class=dialkit-module-header><span class=dialkit-module-title></span><div class=dialkit-module-switch></div></div><div class=dialkit-module-collapse><div class=dialkit-module-collapse-clip><div class=dialkit-module-inner>`);
 var ENABLE_OPTIONS2 = [{
   value: "off",
   label: "Off"
@@ -10061,7 +10168,7 @@ var ENABLE_OPTIONS2 = [{
 }];
 function Module(props) {
   return (() => {
-    var _el$ = _tmpl$59(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$2.nextSibling, _el$6 = _el$5.firstChild, _el$7 = _el$6.firstChild;
+    var _el$ = _tmpl$60(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$2.nextSibling, _el$6 = _el$5.firstChild, _el$7 = _el$6.firstChild;
     (0, import_web211.insert)(_el$3, () => props.title);
     (0, import_web211.insert)(_el$4, (0, import_web209.createComponent)(SegmentedControl, {
       options: ENABLE_OPTIONS2,
@@ -10083,11 +10190,11 @@ var import_web214 = require("solid-js/web");
 var import_web215 = require("solid-js/web");
 var import_web216 = require("solid-js/web");
 var import_solid_js28 = require("solid-js");
-var _tmpl$60 = /* @__PURE__ */ (0, import_web212.template)(`<div class=dialkit-button-group>`);
+var _tmpl$61 = /* @__PURE__ */ (0, import_web212.template)(`<div class=dialkit-button-group>`);
 var _tmpl$223 = /* @__PURE__ */ (0, import_web212.template)(`<button class=dialkit-button>`);
 function ButtonGroup(props) {
   return (() => {
-    var _el$ = _tmpl$60();
+    var _el$ = _tmpl$61();
     (0, import_web215.insert)(_el$, (0, import_web216.createComponent)(import_solid_js28.For, {
       get each() {
         return props.buttons;
@@ -10505,7 +10612,7 @@ function createWaveformEngine(canvas, get) {
 }
 
 // src/solid/components/WaveformVisualization.tsx
-var _tmpl$61 = /* @__PURE__ */ (0, import_web217.template)(`<button type=button aria-label="Zoom out"><svg viewBox="0 0 16 16"fill=none><path d="M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
+var _tmpl$66 = /* @__PURE__ */ (0, import_web217.template)(`<button type=button aria-label="Zoom out"><svg viewBox="0 0 16 16"fill=none><path d="M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
 var _tmpl$224 = /* @__PURE__ */ (0, import_web217.template)(`<div class=dialkit-waveform-zoom><button type=button aria-label="Zoom in"><svg viewBox="0 0 16 16"fill=none><path d="M8 3.5v9M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
 var _tmpl$318 = /* @__PURE__ */ (0, import_web217.template)(`<div class=dialkit-waveform-viz-wrap><canvas class=dialkit-waveform-viz>`);
 function WaveformVisualization(props) {
@@ -10565,7 +10672,7 @@ function WaveformVisualization(props) {
             return zoom() > 1;
           },
           get children() {
-            var _el$4 = _tmpl$61();
+            var _el$4 = _tmpl$66();
             _el$4.$$click = () => setZoom((z) => Math.max(1, z / 2));
             return _el$4;
           }
@@ -10938,10 +11045,10 @@ function createAnalyserEngine(canvas, get) {
 }
 
 // src/solid/components/AnalyserVisualization.tsx
-var _tmpl$66 = /* @__PURE__ */ (0, import_web224.template)(`<button type=button aria-label=Mute>M`);
+var _tmpl$67 = /* @__PURE__ */ (0, import_web224.template)(`<button type=button aria-label=Mute>M`);
 var _tmpl$225 = /* @__PURE__ */ (0, import_web224.template)(`<button type=button aria-label=Solo>S`);
 var _tmpl$319 = /* @__PURE__ */ (0, import_web224.template)(`<div class=dialkit-analyser-actions>`);
-var _tmpl$411 = /* @__PURE__ */ (0, import_web224.template)(`<div class=dialkit-analyser-viz-wrap><canvas class=dialkit-analyser-viz>`);
+var _tmpl$412 = /* @__PURE__ */ (0, import_web224.template)(`<div class=dialkit-analyser-viz-wrap><canvas class=dialkit-analyser-viz>`);
 function AnalyserVisualization(props) {
   const p = (0, import_solid_js30.mergeProps)({
     analyser: null,
@@ -10980,7 +11087,7 @@ function AnalyserVisualization(props) {
     (0, import_solid_js30.onCleanup)(() => engine.destroy());
   });
   return (() => {
-    var _el$ = _tmpl$411(), _el$2 = _el$.firstChild;
+    var _el$ = _tmpl$412(), _el$2 = _el$.firstChild;
     var _ref$ = canvasEl;
     typeof _ref$ === "function" ? (0, import_web232.use)(_ref$, _el$2) : canvasEl = _el$2;
     (0, import_web227.insert)(_el$, (0, import_web228.createComponent)(import_solid_js30.Show, {
@@ -10994,7 +11101,7 @@ function AnalyserVisualization(props) {
             return p.onMuteChange;
           },
           get children() {
-            var _el$4 = _tmpl$66();
+            var _el$4 = _tmpl$67();
             _el$4.$$click = () => p.onMuteChange?.(!p.muted);
             (0, import_web230.effect)(() => (0, import_web229.setAttribute)(_el$4, "aria-pressed", p.muted));
             return _el$4;
@@ -11445,12 +11552,12 @@ function triggersCrossed(prevValue, curValue, steps) {
 }
 
 // src/solid/components/CurveComposer.tsx
-var _tmpl$67 = /* @__PURE__ */ (0, import_web233.template)(`<div class=dialkit-cc-wrap><svg class=dialkit-cc><rect class=dialkit-cc-lane rx=8></rect><line class=dialkit-cc-playhead x1=0 x2=0></line><circle class=dialkit-cc-dot cx=0 r=3>`);
+var _tmpl$68 = /* @__PURE__ */ (0, import_web233.template)(`<div class=dialkit-cc-wrap><svg class=dialkit-cc><rect class=dialkit-cc-lane rx=8></rect><line class=dialkit-cc-playhead x1=0 x2=0></line><circle class=dialkit-cc-dot cx=0 r=3>`);
 var _tmpl$226 = /* @__PURE__ */ (0, import_web233.template)(`<svg><line class=dialkit-cc-grid></svg>`, false, true, false);
 var _tmpl$320 = /* @__PURE__ */ (0, import_web233.template)(`<svg><rect class=dialkit-cc-seg-selected rx=8></svg>`, false, true, false);
-var _tmpl$412 = /* @__PURE__ */ (0, import_web233.template)(`<svg><rect class=dialkit-cc-seg-hover rx=8></svg>`, false, true, false);
+var _tmpl$413 = /* @__PURE__ */ (0, import_web233.template)(`<svg><rect class=dialkit-cc-seg-hover rx=8></svg>`, false, true, false);
 var _tmpl$510 = /* @__PURE__ */ (0, import_web233.template)(`<svg><g><line class=dialkit-cc-diagonal></line><path class=dialkit-cc-curve></path><text class=dialkit-cc-label></svg>`, false, true, false);
-var _tmpl$68 = /* @__PURE__ */ (0, import_web233.template)(`<svg><path class=dialkit-cc-connector></svg>`, false, true, false);
+var _tmpl$69 = /* @__PURE__ */ (0, import_web233.template)(`<svg><path class=dialkit-cc-connector></svg>`, false, true, false);
 var _tmpl$73 = /* @__PURE__ */ (0, import_web233.template)(`<svg><line class=dialkit-cc-boundary></svg>`, false, true, false);
 var _tmpl$83 = /* @__PURE__ */ (0, import_web233.template)(`<svg><rect class=dialkit-cc-lane rx=8></svg>`, false, true, false);
 var _tmpl$93 = /* @__PURE__ */ (0, import_web233.template)(`<svg><rect class=dialkit-cc-seg-hover x=0 rx=8></svg>`, false, true, false);
@@ -11701,7 +11808,7 @@ function CurveComposer(props) {
     return lines;
   };
   return (() => {
-    var _el$ = _tmpl$67(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.nextSibling;
+    var _el$ = _tmpl$68(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.nextSibling;
     _el$2.$$dblclick = onDoubleClick;
     _el$2.addEventListener("pointerleave", () => !drag && setHover(null));
     _el$2.addEventListener("pointercancel", onPointerCancel);
@@ -11769,7 +11876,7 @@ function CurveComposer(props) {
           const span = segmentSpan(p.segments, hover().index, p.gap);
           const mr = mainRect();
           return (() => {
-            var _el$8 = _tmpl$412();
+            var _el$8 = _tmpl$413();
             (0, import_web237.effect)((_p$) => {
               var _v$24 = span[0] * W(), _v$25 = mr.y, _v$26 = (span[1] - span[0]) * W(), _v$27 = mr.h;
               _v$24 !== _p$.e && (0, import_web235.setAttribute)(_el$8, "x", _p$.e = _v$24);
@@ -11832,7 +11939,7 @@ function CurveComposer(props) {
             return timelineSlots(p.segments, p.gap).filter((slot) => slot.kind === "gap" && slot.b > slot.a);
           },
           children: (slot) => (() => {
-            var _el$11 = _tmpl$68();
+            var _el$11 = _tmpl$69();
             (0, import_web237.effect)(() => (0, import_web235.setAttribute)(_el$11, "d", connectorPath(slot, samplers(), p.segments.length, mainRect(), W())));
             return _el$11;
           })()

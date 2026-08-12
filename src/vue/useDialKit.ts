@@ -13,6 +13,7 @@ import type {
   SpringConfig,
   TextConfig,
   AffordanceConfig,
+  PresetProvider,
 } from '../store/DialStore';
 import { normalizeGradient, DEFAULT_GRADIENT } from '../gradient-core';
 
@@ -25,6 +26,11 @@ export interface UseDialOptions {
   affordances?: Record<string, AffordanceConfig>;
   /** Display label by control path, overriding the key-derived name. */
   labels?: Record<string, string>;
+  /**
+   * Host-owned backing for the toolbar's preset UI (see PresetProvider).
+   * Reactive `presets`/`activeId` sources are tracked through the watcher.
+   */
+  presets?: PresetProvider;
 }
 
 let dialKitInstance = 0;
@@ -49,6 +55,7 @@ export function useDialKit<T extends DialConfig>(
   const register = () => {
     DialStore.registerPanel(panelId, name, configRef.value, shortcutsRef.value, { hints: options?.hints, affordances: options?.affordances,
       labels: options?.labels });
+    DialStore.setPresetProvider(panelId, options?.presets ?? null);
     values.value = DialStore.getValues(panelId);
 
     unsubscribeValues = DialStore.subscribe(panelId, () => {
@@ -66,6 +73,14 @@ export function useDialKit<T extends DialConfig>(
 
   watch(() => options?.shortcuts, (next) => {
     shortcutsRef.value = next;
+  });
+
+  // Serializing in the getter tracks reactive `presets`/`activeId` sources;
+  // setPresetProvider swaps the object and only notifies on a data change.
+  watch(() => JSON.stringify(options?.presets ?? null), () => {
+    if (mounted.value) {
+      DialStore.setPresetProvider(panelId, options?.presets ?? null);
+    }
   });
 
   watch([serializedConfig, serializedShortcuts], () => {

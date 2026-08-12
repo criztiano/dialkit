@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { DialStore, DialConfig, DialValue, DialEvent, ResolvedValues, SpringConfig, EasingConfig, SelectConfig, SliderConfig, ColorConfig, GradientConfig, TextConfig, GalleryConfig, FileConfig, SwatchConfig, ChipsConfig, MultiSelectConfig, ListConfig, ActionConfig, ShortcutConfig, AffordanceConfig, normalizeListItems } from '../store/DialStore';
+import { DialStore, DialConfig, DialValue, DialEvent, ResolvedValues, SpringConfig, EasingConfig, SelectConfig, SliderConfig, ColorConfig, GradientConfig, TextConfig, GalleryConfig, FileConfig, SwatchConfig, ChipsConfig, MultiSelectConfig, ListConfig, ActionConfig, ShortcutConfig, AffordanceConfig, PresetProvider, normalizeListItems } from '../store/DialStore';
 import { useDialStorePanel } from './useDialStorePanel';
 import { normalizeGradient, DEFAULT_GRADIENT } from '../gradient-core';
 
@@ -14,6 +14,12 @@ export interface UseDialOptions {
   affordances?: Record<string, AffordanceConfig>;
   /** Display label by control path, overriding the key-derived name. */
   labels?: Record<string, string>;
+  /**
+   * Host-owned backing for the toolbar's preset UI. The toolbar renders this
+   * list instead of the built-in localStorage snapshots; the host applies
+   * values in `onSelect` and owns persistence (see PresetProvider).
+   */
+  presets?: PresetProvider;
 }
 
 export function useDialKit<T extends DialConfig>(
@@ -33,6 +39,7 @@ export function useDialKit<T extends DialConfig>(
     hints: options?.hints,
     affordances: options?.affordances,
       labels: options?.labels,
+    presets: options?.presets,
   });
 
   // Subscribe to action events

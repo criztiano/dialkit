@@ -31,6 +31,15 @@ export function createDialKit(name, config, options) {
             DialStore.unregisterPanel(panelId);
         };
     });
+    // Track the provider's visible data ($state-backed getters register here via
+    // the stringify read) and push swaps into the store; setPresetProvider only
+    // notifies when that data changed.
+    $effect(() => {
+        const provider = options?.presets ?? null;
+        if (provider)
+            JSON.stringify(provider);
+        DialStore.setPresetProvider(panelId, provider);
+    });
     return values;
 }
 function buildResolvedValues(config, flatValues, prefix) {

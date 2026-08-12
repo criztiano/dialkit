@@ -634,6 +634,31 @@ When the panel is open, the toolbar provides:
 - **Presets** — A version dropdown for saving and loading parameter snapshots. Click "+" to save the current state as a new version. Select a version to load it. Changes auto-save to the active version. "Version 1" always represents the original defaults.
 - **Copy** — Exports the current values as JSON to your clipboard.
 
+### App-backed presets
+
+Apps with their own preset store (files, engine IPC, a server) can back the same toolbar UI with a `PresetProvider` via the `presets` option. dialkit then renders your list in your order, hides its implicit "Version 1" row, and stops snapshotting values itself — you apply values in `onSelect` and own persistence:
+
+```tsx
+const p = useDialKit('Reverb', {
+  size: [0.5, 0, 1],
+  damping: [0.3, 0, 1],
+}, {
+  presets: {
+    presets: myPresets.map((preset) => ({
+      id: preset.id,
+      label: preset.factory ? `★ ${preset.name}` : preset.name,
+      readonly: preset.factory,             // no trash icon on factory presets
+    })),
+    activeId: myActivePresetId,
+    onSelect: (id) => loadMyPreset(id),     // apply values yourself, e.g. via DialStore.updateValues
+    onCreate: (suggestedLabel) => saveMyPreset(suggestedLabel),  // "+" pressed
+    onDelete: (id) => deleteMyPreset(id),   // omit to hide delete entirely
+  },
+});
+```
+
+The provider is plain host state: re-render with a new list or `activeId` and the dropdown follows. Without the option, the built-in version snapshots behave exactly as before. The same option exists on `createDialKit` (Solid and Svelte, where a live list needs signal/`$state`-backed `presets`/`activeId` getters) and Vue's `useDialKit`.
+
 ---
 
 ## Keyboard Shortcuts

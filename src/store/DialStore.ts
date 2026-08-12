@@ -447,6 +447,41 @@ export type Preset = {
   values: Record<string, DialValue>;
 };
 
+export type PresetProviderPreset = {
+  id: string;
+  label: string;
+  /** Read-only rows (e.g. factory presets) show no delete affordance. */
+  readonly?: boolean;
+};
+
+/**
+ * Host-owned backing for the panel toolbar's preset UI. When a provider is set
+ * the toolbar renders the host's list instead of the built-in snapshots: the
+ * store never captures or restores values itself — the host applies them in
+ * `onSelect` (e.g. via `DialStore.updateValues`) and owns persistence. The
+ * stock auto-save-to-active-preset behavior is off because the store's own
+ * active-preset state is never engaged in provider mode.
+ */
+export type PresetProvider = {
+  presets: PresetProviderPreset[];
+  activeId?: string | null;
+  onSelect(id: string): void | Promise<void>;
+  /** "+" pressed; receives a suggested label ("Preset N"). */
+  onCreate(suggestedLabel: string): void | Promise<void>;
+  /** Omit to hide the delete affordance entirely. */
+  onDelete?(id: string): void | Promise<void>;
+};
+
+/**
+ * What the toolbar renders per dropdown row — one shape for both modes, so the
+ * framework components never branch on where a preset came from.
+ */
+export type PresetItem = {
+  id: string;
+  name: string;
+  deletable: boolean;
+};
+
 // Stable empty object for unregistered panels (React 19 useSyncExternalStore requirement)
 const EMPTY_VALUES: Record<string, DialValue> = Object.freeze({});
 
@@ -594,6 +629,11 @@ class DialStoreClass {
   private controlStateListeners: Map<string, Set<Listener>> = new Map();
   private presets: Map<string, Preset[]> = new Map();
   private activePreset: Map<string, string | null> = new Map();
+  // Host-owned preset providers. The serialized form (functions drop out of
+  // JSON, leaving list + activeId) decides whether a swap is visible: adapters
+  // replace the object on every host render so callbacks never go stale, and
+  // only a data change should notify.
+  private presetProviders: Map<string, { provider: PresetProvider; serialized: string }> = new Map();
   private baseValues: Map<string, Record<string, DialValue>> = new Map();
   // Resolved storage target per panel (null = persistence off). Absent = not
   // yet registered.
@@ -709,6 +749,7 @@ class DialStoreClass {
     this.snapshots.delete(id);
     this.baseValues.delete(id);
     this.persistTargets.delete(id);
+    this.presetProviders.delete(id);
     this.notifyGlobal();
   }
 
@@ -1019,6 +1060,8 @@ class DialStoreClass {
   }
 
   getActivePresetId(panelId: string): string | null {
+    const provider = this.getPresetProvider(panelId);
+    if (provider) return provider.activeId ?? null;
     return this.activePreset.get(panelId) ?? null;
   }
 
@@ -1031,6 +1074,93 @@ class DialStoreClass {
     }
     this.activePreset.set(panelId, null);
     this.notify(panelId);
+  }
+
+  /**
+   * Install (or clear) a host-owned preset provider. Safe to call on every
+   * host render: the object is always swapped so `onSelect`/`onCreate`/
+   * `onDelete` never close over stale host state, but listeners are only
+   * notified when the visible data (list, active id) actually changed.
+   */
+  setPresetProvider(panelId: string, provider: PresetProvider | null | undefined): void {
+    const entry = this.presetProviders.get(panelId);
+
+    if (!provider) {
+      if (!entry) return;
+      this.presetProviders.delete(panelId);
+    } else {
+      // No referential fast path: Solid hosts pass one stable object whose
+      // getters yield fresh data, so content must always be re-serialized.
+      const serialized = JSON.stringify(provider);
+      this.presetProviders.set(panelId, { provider, serialized });
+      if (entry?.serialized === serialized) return; // callbacks refreshed silently
+    }
+
+    // Force re-render by creating new snapshot reference
+    const panel = this.panels.get(panelId);
+    if (panel) {
+      this.snapshots.set(panelId, { ...panel.values });
+    }
+    this.notify(panelId);
+  }
+
+  getPresetProvider(panelId: string): PresetProvider | null {
+    return this.presetProviders.get(panelId)?.provider ?? null;
+  }
+
+  /** Provider mode hides the implicit "Version 1" base row — the host owns the whole list. */
+  hasPresetProvider(panelId: string): boolean {
+    return this.presetProviders.has(panelId);
+  }
+
+  /** The dropdown rows in host order, from the provider when one is set. */
+  getPresetItems(panelId: string): PresetItem[] {
+    const provider = this.getPresetProvider(panelId);
+    if (provider) {
+      return provider.presets.map((p) => ({
+        id: p.id,
+        name: p.label,
+        deletable: !!provider.onDelete && !p.readonly,
+      }));
+    }
+    return this.getPresets(panelId).map((p) => ({ id: p.id, name: p.name, deletable: true }));
+  }
+
+  /**
+   * Row clicked. Stock mode loads the snapshot (null = back to base values);
+   * provider mode hands the id to the host, which applies values itself.
+   */
+  selectPreset(panelId: string, presetId: string | null): void {
+    const provider = this.getPresetProvider(panelId);
+    if (provider) {
+      if (presetId) void provider.onSelect(presetId);
+      return;
+    }
+    if (presetId) this.loadPreset(panelId, presetId);
+    else this.clearActivePreset(panelId);
+  }
+
+  /**
+   * "+" pressed. Stock mode snapshots into "Version N" (N counts the implicit
+   * base as version 1); provider mode suggests the matching "Preset N" label.
+   */
+  createPreset(panelId: string): void {
+    const provider = this.getPresetProvider(panelId);
+    if (provider) {
+      void provider.onCreate(`Preset ${provider.presets.length + 1}`);
+      return;
+    }
+    this.savePreset(panelId, `Version ${this.getPresets(panelId).length + 2}`);
+  }
+
+  /** Trash icon pressed on a row (only rendered when the item is deletable). */
+  removePreset(panelId: string, presetId: string): void {
+    const provider = this.getPresetProvider(panelId);
+    if (provider) {
+      void provider.onDelete?.(presetId);
+      return;
+    }
+    this.deletePreset(panelId, presetId);
   }
 
   resolveShortcutTarget(key: string, modifier?: 'alt' | 'shift' | 'meta'): {

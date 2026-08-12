@@ -74,8 +74,9 @@ adjusted to what the inventory actually contains:
 | Windowed range (start/end, low/high) | RangeSlider |
 | On/off | Toggle — but see Module below when the toggle governs a whole group |
 | One-of-N mode | Select (or SegmentedControl for 2–4 options that deserve to be always visible) |
-| Two coupled numbers (position, tilt, vector) | XYPad |
+| Two coupled numbers (position, tilt, vector) | XYPad — only when the two axes are one physical gesture in the user's head (a point, a direction). Two parameters that merely both affect the same curve are NOT a pair; give them their own sliders and show the curve instead |
 | Any curve or shape parameter (easing, envelope, transfer curve, probability distribution) | CurveComposer / EasingVisualization / SpringVisualization — the visual editor, never a row of numeric sliders |
+| Parameters that *indirectly* shape a curve (a shape enum plus width/offset/amount modifiers) | Keep the individual controls, and add a live curve-preview row sampling the resulting curve — the user must SEE what the combination produces |
 | Animation feel | Spring control (visual editor) |
 | Color / gradient | Color control (with `palette` where reuse matters) / Gradient control |
 | Audio or signal level | AudioLevelMeter / AnalyserVisualization |
@@ -99,11 +100,13 @@ shortcuts, dynamic-config reconciliation, value persistence, copy-as-JSON —
 and a hand-built rack forfeits all of them and drifts stylistically over
 time. Instead, *bridge*: keep the app's state as the single source of truth,
 diff the panel's returned values into it, and push app-side changes back with
-`DialStore.updateValue(s)`. Suppress or ignore dialkit subsystems the app
-genuinely supersedes (e.g. its localStorage presets when the app has real
-preset storage) rather than abandoning the panel to avoid them. Standalone
-components are for the *center pane* (visualizations, meters, editors) and
-for the rare control that must live outside the panel.
+`DialStore.updateValue(s)`. When the app has its own preset storage, back
+the panel toolbar's stock preset UI (top dropdown + quick-add) with a
+preset *provider* (`options.presets`) — never hide the toolbar and rebuild
+presets as a folder of select/action rows; presets belong at the top of the
+panel in dialkit's own chrome. Standalone components are for the *center
+pane* (visualizations, meters, editors) and for the rare control that must
+live outside the panel.
 
 ## Phase 3 — Layout doctrine
 
@@ -181,6 +184,8 @@ them wholesale. The panel's theme is the design anchor for the whole window:
 
 - A curve, envelope, or easing edited through bare numeric sliders while a
   curve component exists in the inventory.
+- A selectable curve shape (or its modifiers) with no drawn curve anywhere.
+- An XY pad gluing together two parameters that aren't one gesture.
 - Controls rendered outside the side panel, or a second ad-hoc panel.
 - Visible-but-inert controls for a feature that is switched off.
 - An "Enabled" toggle row inside a group instead of a `_enabled` module-folder
@@ -190,3 +195,5 @@ them wholesale. The panel's theme is the design anchor for the whole window:
 - App chrome styled with its own colors/radii instead of `--dial-*` tokens,
   or a prototype accent color kept alive "for brand identity".
 - A hand-rolled component duplicating something the installed dialkit exports.
+- Presets rebuilt as a folder of select/action rows instead of the toolbar's
+  provider-backed preset UI.

@@ -745,6 +745,11 @@ var DialStoreClass = class {
     this.controlStateListeners = /* @__PURE__ */ new Map();
     this.presets = /* @__PURE__ */ new Map();
     this.activePreset = /* @__PURE__ */ new Map();
+    // Host-owned preset providers. The serialized form (functions drop out of
+    // JSON, leaving list + activeId) decides whether a swap is visible: adapters
+    // replace the object on every host render so callbacks never go stale, and
+    // only a data change should notify.
+    this.presetProviders = /* @__PURE__ */ new Map();
     this.baseValues = /* @__PURE__ */ new Map();
     // Resolved storage target per panel (null = persistence off). Absent = not
     // yet registered.
@@ -834,6 +839,7 @@ var DialStoreClass = class {
     this.snapshots.delete(id);
     this.baseValues.delete(id);
     this.persistTargets.delete(id);
+    this.presetProviders.delete(id);
     this.notifyGlobal();
   }
   // Overlay saved values onto freshly-computed defaults, in place. Only keys
@@ -1082,6 +1088,8 @@ var DialStoreClass = class {
     return this.presets.get(panelId) ?? [];
   }
   getActivePresetId(panelId) {
+    const provider = this.getPresetProvider(panelId);
+    if (provider) return provider.activeId ?? null;
     return this.activePreset.get(panelId) ?? null;
   }
   clearActivePreset(panelId) {
@@ -1093,6 +1101,81 @@ var DialStoreClass = class {
     }
     this.activePreset.set(panelId, null);
     this.notify(panelId);
+  }
+  /**
+   * Install (or clear) a host-owned preset provider. Safe to call on every
+   * host render: the object is always swapped so `onSelect`/`onCreate`/
+   * `onDelete` never close over stale host state, but listeners are only
+   * notified when the visible data (list, active id) actually changed.
+   */
+  setPresetProvider(panelId, provider) {
+    const entry = this.presetProviders.get(panelId);
+    if (!provider) {
+      if (!entry) return;
+      this.presetProviders.delete(panelId);
+    } else {
+      const serialized = JSON.stringify(provider);
+      this.presetProviders.set(panelId, { provider, serialized });
+      if (entry?.serialized === serialized) return;
+    }
+    const panel = this.panels.get(panelId);
+    if (panel) {
+      this.snapshots.set(panelId, { ...panel.values });
+    }
+    this.notify(panelId);
+  }
+  getPresetProvider(panelId) {
+    return this.presetProviders.get(panelId)?.provider ?? null;
+  }
+  /** Provider mode hides the implicit "Version 1" base row — the host owns the whole list. */
+  hasPresetProvider(panelId) {
+    return this.presetProviders.has(panelId);
+  }
+  /** The dropdown rows in host order, from the provider when one is set. */
+  getPresetItems(panelId) {
+    const provider = this.getPresetProvider(panelId);
+    if (provider) {
+      return provider.presets.map((p) => ({
+        id: p.id,
+        name: p.label,
+        deletable: !!provider.onDelete && !p.readonly
+      }));
+    }
+    return this.getPresets(panelId).map((p) => ({ id: p.id, name: p.name, deletable: true }));
+  }
+  /**
+   * Row clicked. Stock mode loads the snapshot (null = back to base values);
+   * provider mode hands the id to the host, which applies values itself.
+   */
+  selectPreset(panelId, presetId) {
+    const provider = this.getPresetProvider(panelId);
+    if (provider) {
+      if (presetId) void provider.onSelect(presetId);
+      return;
+    }
+    if (presetId) this.loadPreset(panelId, presetId);
+    else this.clearActivePreset(panelId);
+  }
+  /**
+   * "+" pressed. Stock mode snapshots into "Version N" (N counts the implicit
+   * base as version 1); provider mode suggests the matching "Preset N" label.
+   */
+  createPreset(panelId) {
+    const provider = this.getPresetProvider(panelId);
+    if (provider) {
+      void provider.onCreate(`Preset ${provider.presets.length + 1}`);
+      return;
+    }
+    this.savePreset(panelId, `Version ${this.getPresets(panelId).length + 2}`);
+  }
+  /** Trash icon pressed on a row (only rendered when the item is deletable). */
+  removePreset(panelId, presetId) {
+    const provider = this.getPresetProvider(panelId);
+    if (provider) {
+      void provider.onDelete?.(presetId);
+      return;
+    }
+    this.deletePreset(panelId, presetId);
   }
   resolveShortcutTarget(key, modifier) {
     for (const panel of this.panels.values()) {
@@ -1641,6 +1724,7 @@ function useDialKit(name, config, options) {
       affordances: options?.affordances,
       labels: options?.labels
     });
+    DialStore.setPresetProvider(panelId, options?.presets ?? null);
     values.value = DialStore.getValues(panelId);
     unsubscribeValues = DialStore.subscribe(panelId, () => {
       values.value = DialStore.getValues(panelId);
@@ -1654,6 +1738,11 @@ function useDialKit(name, config, options) {
   });
   (0, import_vue.watch)(() => options?.shortcuts, (next) => {
     shortcutsRef.value = next;
+  });
+  (0, import_vue.watch)(() => JSON.stringify(options?.presets ?? null), () => {
+    if (mounted.value) {
+      DialStore.setPresetProvider(panelId, options?.presets ?? null);
+    }
   });
   (0, import_vue.watch)([serializedConfig, serializedShortcuts], () => {
     configRef.value = config;
@@ -5914,7 +6003,9 @@ var PresetManager = (0, import_vue24.defineComponent)({
       type: String,
       required: false,
       default: null
-    }
+    },
+    /** Host-provider mode: the implicit "Version 1" base row is hidden. */
+    providerMode: { type: Boolean, default: false }
   },
   setup(props) {
     const isOpen = (0, import_vue24.ref)(false);
@@ -5963,16 +6054,12 @@ var PresetManager = (0, import_vue24.defineComponent)({
       });
     });
     const handleSelect = (presetId) => {
-      if (presetId) {
-        DialStore.loadPreset(props.panelId, presetId);
-      } else {
-        DialStore.clearActivePreset(props.panelId);
-      }
+      DialStore.selectPreset(props.panelId, presetId);
       close();
     };
     const handleDelete = (event, presetId) => {
       event.stopPropagation();
-      DialStore.deletePreset(props.panelId, presetId);
+      DialStore.removePreset(props.panelId, presetId);
     };
     return () => (0, import_vue24.h)("div", { class: "dialkit-preset-manager" }, [
       (0, import_vue24.h)("button", {
@@ -5983,7 +6070,7 @@ var PresetManager = (0, import_vue24.defineComponent)({
         "data-has-preset": String(!!activePreset()),
         "data-disabled": String(!hasPresets())
       }, [
-        (0, import_vue24.h)("span", { class: "dialkit-preset-label" }, activePreset()?.name ?? "Version 1"),
+        (0, import_vue24.h)("span", { class: "dialkit-preset-label" }, activePreset()?.name ?? (props.providerMode ? "Presets" : "Version 1")),
         (0, import_vue24.h)(import_motion_v7.motion.svg, {
           class: "dialkit-select-chevron",
           viewBox: "0 0 24 24",
@@ -6013,11 +6100,11 @@ var PresetManager = (0, import_vue24.defineComponent)({
             exit: { opacity: 0, y: 4, scale: 0.97, pointerEvents: "none" },
             transition: { type: "spring", visualDuration: 0.15, bounce: 0 }
           }, [
-            (0, import_vue24.h)("div", {
+            ...props.providerMode ? [] : [(0, import_vue24.h)("div", {
               class: "dialkit-preset-item",
               "data-active": String(!props.activePresetId),
               onClick: () => handleSelect(null)
-            }, [(0, import_vue24.h)("span", { class: "dialkit-preset-name" }, "Version 1")]),
+            }, [(0, import_vue24.h)("span", { class: "dialkit-preset-name" }, "Version 1")])],
             ...props.presets.map((preset) => (0, import_vue24.h)("div", {
               key: preset.id,
               class: "dialkit-preset-item",
@@ -6025,7 +6112,7 @@ var PresetManager = (0, import_vue24.defineComponent)({
               onClick: () => handleSelect(preset.id)
             }, [
               (0, import_vue24.h)("span", { class: "dialkit-preset-name" }, preset.name),
-              (0, import_vue24.h)("button", {
+              ...preset.deletable ?? true ? [(0, import_vue24.h)("button", {
                 class: "dialkit-preset-delete",
                 onClick: (event) => handleDelete(event, preset.id),
                 title: "Delete preset"
@@ -6038,7 +6125,7 @@ var PresetManager = (0, import_vue24.defineComponent)({
                   "stroke-linecap": "round",
                   "stroke-linejoin": "round"
                 }, ICON_TRASH.map((d) => (0, import_vue24.h)("path", { d })))
-              ])
+              ])] : []
             ]))
           ])] : []
         })
@@ -6069,16 +6156,18 @@ var Panel = (0, import_vue25.defineComponent)({
   },
   setup(props) {
     const values = (0, import_vue25.ref)(DialStore.getValues(props.panel.id));
-    const presets = (0, import_vue25.ref)(DialStore.getPresets(props.panel.id));
+    const presets = (0, import_vue25.ref)(DialStore.getPresetItems(props.panel.id));
     const activePresetId = (0, import_vue25.ref)(DialStore.getActivePresetId(props.panel.id));
+    const providerMode = (0, import_vue25.ref)(DialStore.hasPresetProvider(props.panel.id));
     const copied = (0, import_vue25.ref)(false);
     let unsubscribe;
     let copiedTimeout = null;
     (0, import_vue25.onMounted)(() => {
       unsubscribe = DialStore.subscribe(props.panel.id, () => {
         values.value = DialStore.getValues(props.panel.id);
-        presets.value = DialStore.getPresets(props.panel.id);
+        presets.value = DialStore.getPresetItems(props.panel.id);
         activePresetId.value = DialStore.getActivePresetId(props.panel.id);
+        providerMode.value = DialStore.hasPresetProvider(props.panel.id);
       });
     });
     (0, import_vue25.onUnmounted)(() => {
@@ -6087,10 +6176,7 @@ var Panel = (0, import_vue25.defineComponent)({
         window.clearTimeout(copiedTimeout);
       }
     });
-    const handleAddPreset = () => {
-      const nextNum = presets.value.length + 2;
-      DialStore.savePreset(props.panel.id, `Version ${nextNum}`);
-    };
+    const handleAddPreset = () => DialStore.createPreset(props.panel.id);
     const handleCopy = () => {
       const json = JSON.stringify(values.value, null, 2);
       const instruction = `Update the useDialKit configuration for "${props.panel.name}" with these values:
@@ -6135,7 +6221,8 @@ Apply these values as the new defaults in the useDialKit call.`;
         (0, import_vue25.h)(PresetManager, {
           panelId: props.panel.id,
           presets: presets.value,
-          activePresetId: activePresetId.value
+          activePresetId: activePresetId.value,
+          providerMode: providerMode.value
         }),
         (0, import_vue25.h)(import_motion_v8.motion.button, {
           class: "dialkit-toolbar-copy",

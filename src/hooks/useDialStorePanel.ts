@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useSyncExternalStore } from 'react';
 import { DialStore } from '../store/DialStore';
-import type { AffordanceConfig, DialConfig, DialKitPersistOptions, DialValue, ShortcutConfig } from '../store/DialStore';
+import type { AffordanceConfig, DialConfig, DialKitPersistOptions, DialValue, PresetProvider, ShortcutConfig } from '../store/DialStore';
 
 export interface UseDialStorePanelOptions {
   id?: string;
@@ -10,6 +10,8 @@ export interface UseDialStorePanelOptions {
   affordances?: Record<string, AffordanceConfig>;
   /** Display label by control path, overriding the key-derived name. */
   labels?: Record<string, string>;
+  /** Host-owned backing for the toolbar's preset UI (see PresetProvider). */
+  presets?: PresetProvider;
   kind?: 'timeline';
 }
 
@@ -79,6 +81,14 @@ export function useDialStorePanel(
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasStableId, panelId, name, serializedConfig, serializedShortcuts, serializedPersist, serializedHints, serializedLabels]);
+
+  // Swap the preset provider after every render on purpose: its callbacks
+  // close over host state and must never go stale. setPresetProvider only
+  // notifies when the visible data (list, active id) changed, so this is the
+  // same reconciliation cost profile as the serialized config path above.
+  useEffect(() => {
+    DialStore.setPresetProvider(panelId, optionsRef.current.presets ?? null);
+  });
 
   const subscribe = useCallback(
     (callback: () => void) => DialStore.subscribe(panelId, callback),
