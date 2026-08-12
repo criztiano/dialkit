@@ -465,7 +465,7 @@ type SliderConfig = {
  * holds no value of its own, so nothing lands in ResolvedValues, presets, or
  * persistence. `sample` is a function and therefore invisible to the
  * serialized config diff (like `formatValue`); adapters push replacements
- * through `DialStore.syncCurveSamples` so the drawing tracks the host.
+ * through `DialStore.syncCurveConfigs` so the drawing tracks the host.
  */
 type CurveConfig = {
     type: 'curve';
@@ -473,6 +473,8 @@ type CurveConfig = {
     sample: (t: number) => number;
     /** Fixed y-range to fit. Default: auto-fit each draw with a little headroom. */
     domain?: [number, number];
+    /** Vertical reference lines at these x positions in [0,1]; invalid entries are skipped. */
+    markers?: readonly number[];
     /** Surface height in px, clamped to 32–160. Default 64. */
     height?: number;
     /** `false` = full-bleed row without the label line; a string overrides the key-derived label. */
@@ -699,10 +701,12 @@ type ControlMeta = {
     snap?: boolean;
     returnToCenter?: boolean;
     showValues?: boolean;
-    /** Curve preview's host-supplied sampler — swapped in place by syncCurveSamples. */
+    /** Curve preview's host-supplied sampler — swapped in place by syncCurveConfigs. */
     sample?: (t: number) => number;
     /** Curve preview's fixed y-range; absent = auto-fit per draw. */
     domain?: [number, number];
+    /** Curve preview's vertical reference marker positions — kept fresh by syncCurveConfigs. */
+    markers?: readonly number[];
     /** Curve preview's surface height in px (renderers clamp via clampCurveHeight). */
     height?: number;
     /** Curve preview declared `label: false` — full-bleed row without the label line. */
@@ -875,16 +879,19 @@ declare class DialStoreClass {
     subscribeControlState(panelId: string, listener: Listener$1): () => void;
     private notifyControlState;
     /**
-     * Refresh curve rows' host-supplied sample functions in place. Functions drop
-     * out of the serialized config diff (the `formatValue` precedent), so a host
-     * that rebuilds its config per render would otherwise leave the preview
-     * drawing a stale closure. Adapters call this after every render — the same
-     * contract as setPresetProvider — and only a changed function identity
-     * notifies, on the control-state channel: curve rows are presentation, and
-     * the value snapshot must not churn (a new snapshot would re-render the host,
-     * whose rebuilt closure would notify again, forever).
+     * Refresh curve rows' host-supplied presentation (sample function + markers)
+     * in place. Functions drop out of the serialized config diff (the
+     * `formatValue` precedent), so a host that rebuilds its config per render
+     * would otherwise leave the preview drawing a stale closure; markers ride the
+     * same sync so the whole curve row stays one coherent refresh. Adapters call
+     * this after every render — the same contract as setPresetProvider — and only
+     * an actual change (function identity, marker values) notifies, on the
+     * control-state channel: curve rows are presentation, and the value snapshot
+     * must not churn (a new snapshot would re-render the host, whose rebuilt
+     * closure would notify again, forever). Markers are compared by value, not
+     * identity, because a per-render rebuild remakes the array every time.
      */
-    syncCurveSamples(panelId: string, config: DialConfig): void;
+    syncCurveConfigs(panelId: string, config: DialConfig): void;
     savePreset(panelId: string, name: string): string;
     loadPreset(panelId: string, presetId: string): void;
     deletePreset(panelId: string, presetId: string): void;
@@ -2007,10 +2014,10 @@ interface CurvePreviewProps {
 }
 /**
  * The read-only `{ type: 'curve' }` row: draws the host-supplied sampler on a
- * dial surface. The sampler lives on the ControlMeta and is swapped in place
- * by DialStore.syncCurveSamples (functions are invisible to the config diff),
- * with the swap announced on the control-state channel — so this subscribes
- * there and re-reads the function each snapshot.
+ * dial surface. The sampler and markers live on the ControlMeta and are
+ * swapped in place by DialStore.syncCurveConfigs (functions are invisible to
+ * the config diff; markers ride the same sync), with the swap announced on the
+ * control-state channel — so this subscribes there and re-reads each snapshot.
  */
 declare function CurvePreview({ panelId, control }: CurvePreviewProps): react_jsx_runtime.JSX.Element;
 
@@ -2050,6 +2057,12 @@ declare function plotCurve(sample: (t: number) => number, options?: {
     count?: number;
     domain?: [number, number];
 }): CurvePlot;
+/**
+ * Filter reference markers down to drawable x positions: finite numbers in
+ * [0, 1]. Out-of-range or non-finite entries are skipped, never clamped — a
+ * marker is a reference line, and moving it would lie about where it sits.
+ */
+declare function normalizeCurveMarkers(markers?: readonly number[]): number[];
 /** Map a normalized value (0 = domain min) to a y pixel, inset by `pad`. */
 declare function curveY(v: number, height: number, pad?: number): number;
 /** SVG path data for a plot's segments; each segment is its own subpath. */
@@ -2108,4 +2121,4 @@ interface SpectrumAudioLevelMeterProps extends AudioLevelMeterBaseProps {
 type AudioLevelMeterProps = MonoAudioLevelMeterProps | StereoAudioLevelMeterProps | SpectrumAudioLevelMeterProps;
 declare function AudioLevelMeter(props: AudioLevelMeterProps): ReactElement;
 
-export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, AudioLevelMeter, type AudioLevelMeterColors, type AudioLevelMeterMode, type AudioLevelMeterProps, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_MAX_HEIGHT, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, CurvePreview, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, DialTimeline, type DialTimelineProps, type DialTimelineValues, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, MIN_STOPS, Module, type MonoAudioLevelMeterProps, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpectrumAudioLevelMeterProps, type SpringConfig, SpringControl, SpringVisualization, type StereoAudioLevelMeterProps, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type UseDialTimelineOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, moveStop, nearestHandle, normToValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeValue, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, readComposition, redistributeWeight, removeDriver, removeSegment, removeStop, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, triggerLevels, triggersCrossed, useDialKit, useDialTimeline, valueFromPoint, valueToNorm, valueToPercent };
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, AudioLevelMeter, type AudioLevelMeterColors, type AudioLevelMeterMode, type AudioLevelMeterProps, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_MAX_HEIGHT, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, CurvePreview, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, DialTimeline, type DialTimelineProps, type DialTimelineValues, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, MIN_STOPS, Module, type MonoAudioLevelMeterProps, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpectrumAudioLevelMeterProps, type SpringConfig, SpringControl, SpringVisualization, type StereoAudioLevelMeterProps, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type UseDialTimelineOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, moveStop, nearestHandle, normToValue, normalizeCurveMarkers, normalizeGradient, normalizeHex, normalizeListItems, normalizeValue, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, readComposition, redistributeWeight, removeDriver, removeSegment, removeStop, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, triggerLevels, triggersCrossed, useDialKit, useDialTimeline, valueFromPoint, valueToNorm, valueToPercent };

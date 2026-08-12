@@ -39,15 +39,22 @@ describe('curve config parsing', () => {
   it('produces a curve row carrying the sampler and display options', () => {
     const id = freshId();
     const sample = (t: number) => t * 2;
-    register(id, { arc: curve({ sample, domain: [-1, 1], height: 80 }) });
+    register(id, { arc: curve({ sample, domain: [-1, 1], markers: [0.25, 0.5], height: 80 }) });
 
     const control = DialStore.getPanel(id)!.controls[0];
     expect(control.type).toBe('curve');
     expect(control.label).toBe('Arc');
     expect(control.sample).toBe(sample);
     expect(control.domain).toEqual([-1, 1]);
+    expect(control.markers).toEqual([0.25, 0.5]);
     expect(control.height).toBe(80);
     expect(control.hideLabel).toBeUndefined();
+  });
+
+  it('leaves markers undefined when the config declares none', () => {
+    const id = freshId();
+    register(id, { arc: curve() });
+    expect(DialStore.getPanel(id)!.controls[0].markers).toBeUndefined();
   });
 
   it('label: false marks the row full-bleed; a string overrides the derived label', () => {
@@ -109,7 +116,7 @@ describe('curve rows stay out of the value layer', () => {
   });
 });
 
-describe('syncCurveSamples', () => {
+describe('syncCurveConfigs', () => {
   it('swaps a replaced sampler in place and notifies the control-state channel', () => {
     const id = freshId();
     register(id, { arc: curve() });
@@ -118,7 +125,7 @@ describe('syncCurveSamples', () => {
     const unsubscribe = DialStore.subscribeControlState(id, () => notified++);
 
     const next = (t: number) => 1 - t;
-    DialStore.syncCurveSamples(id, { arc: curve({ sample: next }) });
+    DialStore.syncCurveConfigs(id, { arc: curve({ sample: next }) });
     expect(DialStore.getPanel(id)!.controls[0].sample).toBe(next);
     expect(notified).toBe(1);
 
@@ -133,8 +140,40 @@ describe('syncCurveSamples', () => {
     let notified = 0;
     const unsubscribe = DialStore.subscribeControlState(id, () => notified++);
 
-    DialStore.syncCurveSamples(id, { arc: stable });
+    DialStore.syncCurveConfigs(id, { arc: stable });
     expect(notified).toBe(0);
+
+    unsubscribe();
+  });
+
+  it('updates changed marker values in place and notifies', () => {
+    const id = freshId();
+    const sample = (t: number) => t;
+    register(id, { arc: curve({ sample, markers: [0.5] }) });
+
+    let notified = 0;
+    const unsubscribe = DialStore.subscribeControlState(id, () => notified++);
+
+    DialStore.syncCurveConfigs(id, { arc: curve({ sample, markers: [0.5, 0.75] }) });
+    expect(DialStore.getPanel(id)!.controls[0].markers).toEqual([0.5, 0.75]);
+    expect(notified).toBe(1);
+
+    unsubscribe();
+  });
+
+  it('compares markers by value: a rebuilt-but-equal array is silent', () => {
+    const id = freshId();
+    const sample = (t: number) => t;
+    register(id, { arc: curve({ sample, markers: [0.25, 0.5] }) });
+    const before = DialStore.getPanel(id)!.controls[0].markers;
+
+    let notified = 0;
+    const unsubscribe = DialStore.subscribeControlState(id, () => notified++);
+
+    // The per-render rebuild path: same values, fresh array identity.
+    DialStore.syncCurveConfigs(id, { arc: curve({ sample, markers: [0.25, 0.5] }) });
+    expect(notified).toBe(0);
+    expect(DialStore.getPanel(id)!.controls[0].markers).toBe(before);
 
     unsubscribe();
   });
@@ -144,18 +183,19 @@ describe('syncCurveSamples', () => {
     register(id, { shape: { detail: [0.5, 0, 1], preview: curve() } });
 
     const next = (t: number) => t * t;
-    DialStore.syncCurveSamples(id, { shape: { detail: [0.5, 0, 1], preview: curve({ sample: next }) } });
+    DialStore.syncCurveConfigs(id, { shape: { detail: [0.5, 0, 1], preview: curve({ sample: next, markers: [0.5] }) } });
 
     const folder = DialStore.getPanel(id)!.controls[0];
     const preview = folder.children!.find((c) => c.type === 'curve')!;
     expect(preview.sample).toBe(next);
+    expect(preview.markers).toEqual([0.5]);
   });
 
   it('does not leak the sampler into the value snapshot', () => {
     const id = freshId();
     register(id, { arc: curve() });
     const before = DialStore.getValues(id);
-    DialStore.syncCurveSamples(id, { arc: curve({ sample: (t) => -t }) });
+    DialStore.syncCurveConfigs(id, { arc: curve({ sample: (t) => -t, markers: [0.5] }) });
     // Presentation-only refresh: the value snapshot must not churn.
     expect(DialStore.getValues(id)).toBe(before);
   });

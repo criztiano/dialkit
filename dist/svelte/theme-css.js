@@ -1133,6 +1133,13 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
   stroke-dasharray: 4 4;
 }
 
+/* Vertical reference markers: quieter than the curve stroke, brighter than
+   the dashed baseline where the two would collide. */
+.dialkit-curve-marker {
+  stroke: var(--dial-text-tertiary, rgba(255, 255, 255, 0.4));
+  stroke-width: 1;
+}
+
 .dialkit-curve-stroke {
   stroke: var(--dial-affordance-armed, #818cf8);
   stroke-width: 2;

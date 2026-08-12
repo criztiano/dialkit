@@ -444,13 +444,14 @@ const p = useDialKit('Grain', {
     // Safe self-reference: the panel calls `sample` after this render returns.
     sample: (t) => pitchArc(t, p.arcShape, p.bell, p.offset),
     domain: [-1, 1],   // optional fixed y-range; omit to auto-fit with headroom
+    markers: [0.5],    // optional vertical reference lines at x in [0,1]
     height: 64,        // optional px, clamped 32–160 (default 64)
     label: false,      // false = full-bleed row; a string overrides the derived label
   },
 });
 ```
 
-`sample` is called with `t` in `[0, 1]` and returns the y value at that position. dialkit samples it (~160 points) and strokes the result on a panel surface, with a dashed baseline at `y = 0` whenever the domain spans negative values. Non-finite results (`NaN`, `±Infinity`) are skipped and simply break the stroke.
+`sample` is called with `t` in `[0, 1]` and returns the y value at that position. dialkit samples it (~160 points) and strokes the result on a panel surface, with a dashed baseline at `y = 0` whenever the domain spans negative values. Non-finite results (`NaN`, `±Infinity`) are skipped and simply break the stroke. `markers` draws a thin grey reference line behind the curve at each x position — they are plain data, so rebuilding the config with new positions moves the lines live; out-of-range or non-finite entries are skipped.
 
 The row holds no value: it never appears in the returned values, presets, or persistence. Because the host closes `sample` over its own state and rebuilds the config per render, the preview redraws whenever the function identity changes — turn a modifier slider and the curve follows live. Hints and label overrides apply to the row's path like any other control.
 

@@ -224,6 +224,11 @@ function inferStep(min, max) {
 function isHexColor(value) {
   return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(value);
 }
+function sameMarkers(a, b) {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  return a.every((m, i) => Object.is(m, b[i]));
+}
 function resolveValueHasType(value, type) {
   return typeof value === "object" && value !== null && "type" in value && value.type === type;
 }
@@ -581,16 +586,19 @@ var DialStoreClass = class {
     this.controlStateListeners.get(panelId)?.forEach((fn) => fn());
   }
   /**
-   * Refresh curve rows' host-supplied sample functions in place. Functions drop
-   * out of the serialized config diff (the `formatValue` precedent), so a host
-   * that rebuilds its config per render would otherwise leave the preview
-   * drawing a stale closure. Adapters call this after every render — the same
-   * contract as setPresetProvider — and only a changed function identity
-   * notifies, on the control-state channel: curve rows are presentation, and
-   * the value snapshot must not churn (a new snapshot would re-render the host,
-   * whose rebuilt closure would notify again, forever).
+   * Refresh curve rows' host-supplied presentation (sample function + markers)
+   * in place. Functions drop out of the serialized config diff (the
+   * `formatValue` precedent), so a host that rebuilds its config per render
+   * would otherwise leave the preview drawing a stale closure; markers ride the
+   * same sync so the whole curve row stays one coherent refresh. Adapters call
+   * this after every render — the same contract as setPresetProvider — and only
+   * an actual change (function identity, marker values) notifies, on the
+   * control-state channel: curve rows are presentation, and the value snapshot
+   * must not churn (a new snapshot would re-render the host, whose rebuilt
+   * closure would notify again, forever). Markers are compared by value, not
+   * identity, because a per-render rebuild remakes the array every time.
    */
-  syncCurveSamples(panelId, config) {
+  syncCurveConfigs(panelId, config) {
     const panel = this.panels.get(panelId);
     if (!panel) return;
     let changed = false;
@@ -600,9 +608,15 @@ var DialStoreClass = class {
         const path = prefix ? `${prefix}.${key}` : key;
         if (this.isCurveConfig(value)) {
           const control = this.findControlByPath(panel.controls, path);
-          if (control?.type === "curve" && control.sample !== value.sample) {
-            control.sample = value.sample;
-            changed = true;
+          if (control?.type === "curve") {
+            if (control.sample !== value.sample) {
+              control.sample = value.sample;
+              changed = true;
+            }
+            if (!sameMarkers(control.markers, value.markers)) {
+              control.markers = value.markers;
+              changed = true;
+            }
           }
         } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value)) {
           visit(value, path);
@@ -885,6 +899,7 @@ var DialStoreClass = class {
           hideLabel: value.label === false || void 0,
           sample: value.sample,
           domain: value.domain,
+          markers: value.markers,
           height: value.height
         });
       } else if (typeof value === "string") {

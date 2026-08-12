@@ -162,7 +162,7 @@ type SliderConfig = {
  * holds no value of its own, so nothing lands in ResolvedValues, presets, or
  * persistence. `sample` is a function and therefore invisible to the
  * serialized config diff (like `formatValue`); adapters push replacements
- * through `DialStore.syncCurveSamples` so the drawing tracks the host.
+ * through `DialStore.syncCurveConfigs` so the drawing tracks the host.
  */
 type CurveConfig = {
     type: 'curve';
@@ -170,6 +170,8 @@ type CurveConfig = {
     sample: (t: number) => number;
     /** Fixed y-range to fit. Default: auto-fit each draw with a little headroom. */
     domain?: [number, number];
+    /** Vertical reference lines at these x positions in [0,1]; invalid entries are skipped. */
+    markers?: readonly number[];
     /** Surface height in px, clamped to 32–160. Default 64. */
     height?: number;
     /** `false` = full-bleed row without the label line; a string overrides the key-derived label. */

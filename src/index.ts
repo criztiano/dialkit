@@ -176,6 +176,7 @@ export {
   CURVE_DEFAULT_HEIGHT,
   CURVE_FIT_PADDING,
   clampCurveHeight,
+  normalizeCurveMarkers,
   plotCurve,
   curveY,
   curvePathData,

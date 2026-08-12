@@ -5,6 +5,7 @@ import {
   CURVE_MAX_HEIGHT,
   CURVE_FIT_PADDING,
   clampCurveHeight,
+  normalizeCurveMarkers,
   plotCurve,
   curveY,
   curvePathData,
@@ -21,6 +22,22 @@ describe('clampCurveHeight', () => {
     expect(clampCurveHeight(4)).toBe(CURVE_MIN_HEIGHT);
     expect(clampCurveHeight(90)).toBe(90);
     expect(clampCurveHeight(4000)).toBe(CURVE_MAX_HEIGHT);
+  });
+});
+
+describe('normalizeCurveMarkers', () => {
+  it('is empty when markers are absent or empty', () => {
+    expect(normalizeCurveMarkers()).toEqual([]);
+    expect(normalizeCurveMarkers([])).toEqual([]);
+  });
+
+  it('keeps finite in-range positions, including the edges', () => {
+    expect(normalizeCurveMarkers([0, 0.25, 1])).toEqual([0, 0.25, 1]);
+  });
+
+  it('skips out-of-range and non-finite entries without clamping', () => {
+    expect(normalizeCurveMarkers([-0.1, 0.5, 1.5, NaN, Infinity, -Infinity])).toEqual([0.5]);
+    expect(normalizeCurveMarkers(['0.5' as unknown as number, 0.75])).toEqual([0.75]);
   });
 });
 

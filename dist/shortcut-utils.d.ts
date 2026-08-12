@@ -178,10 +178,12 @@ type ControlMeta = {
     snap?: boolean;
     returnToCenter?: boolean;
     showValues?: boolean;
-    /** Curve preview's host-supplied sampler — swapped in place by syncCurveSamples. */
+    /** Curve preview's host-supplied sampler — swapped in place by syncCurveConfigs. */
     sample?: (t: number) => number;
     /** Curve preview's fixed y-range; absent = auto-fit per draw. */
     domain?: [number, number];
+    /** Curve preview's vertical reference marker positions — kept fresh by syncCurveConfigs. */
+    markers?: readonly number[];
     /** Curve preview's surface height in px (renderers clamp via clampCurveHeight). */
     height?: number;
     /** Curve preview declared `label: false` — full-bleed row without the label line. */

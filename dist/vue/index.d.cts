@@ -197,7 +197,7 @@ type SliderConfig = {
  * holds no value of its own, so nothing lands in ResolvedValues, presets, or
  * persistence. `sample` is a function and therefore invisible to the
  * serialized config diff (like `formatValue`); adapters push replacements
- * through `DialStore.syncCurveSamples` so the drawing tracks the host.
+ * through `DialStore.syncCurveConfigs` so the drawing tracks the host.
  */
 type CurveConfig = {
     type: 'curve';
@@ -205,6 +205,8 @@ type CurveConfig = {
     sample: (t: number) => number;
     /** Fixed y-range to fit. Default: auto-fit each draw with a little headroom. */
     domain?: [number, number];
+    /** Vertical reference lines at these x positions in [0,1]; invalid entries are skipped. */
+    markers?: readonly number[];
     /** Surface height in px, clamped to 32–160. Default 64. */
     height?: number;
     /** `false` = full-bleed row without the label line; a string overrides the key-derived label. */
@@ -408,10 +410,12 @@ type ControlMeta = {
     snap?: boolean;
     returnToCenter?: boolean;
     showValues?: boolean;
-    /** Curve preview's host-supplied sampler — swapped in place by syncCurveSamples. */
+    /** Curve preview's host-supplied sampler — swapped in place by syncCurveConfigs. */
     sample?: (t: number) => number;
     /** Curve preview's fixed y-range; absent = auto-fit per draw. */
     domain?: [number, number];
+    /** Curve preview's vertical reference marker positions — kept fresh by syncCurveConfigs. */
+    markers?: readonly number[];
     /** Curve preview's surface height in px (renderers clamp via clampCurveHeight). */
     height?: number;
     /** Curve preview declared `label: false` — full-bleed row without the label line. */
@@ -578,16 +582,19 @@ declare class DialStoreClass {
     subscribeControlState(panelId: string, listener: Listener$1): () => void;
     private notifyControlState;
     /**
-     * Refresh curve rows' host-supplied sample functions in place. Functions drop
-     * out of the serialized config diff (the `formatValue` precedent), so a host
-     * that rebuilds its config per render would otherwise leave the preview
-     * drawing a stale closure. Adapters call this after every render — the same
-     * contract as setPresetProvider — and only a changed function identity
-     * notifies, on the control-state channel: curve rows are presentation, and
-     * the value snapshot must not churn (a new snapshot would re-render the host,
-     * whose rebuilt closure would notify again, forever).
+     * Refresh curve rows' host-supplied presentation (sample function + markers)
+     * in place. Functions drop out of the serialized config diff (the
+     * `formatValue` precedent), so a host that rebuilds its config per render
+     * would otherwise leave the preview drawing a stale closure; markers ride the
+     * same sync so the whole curve row stays one coherent refresh. Adapters call
+     * this after every render — the same contract as setPresetProvider — and only
+     * an actual change (function identity, marker values) notifies, on the
+     * control-state channel: curve rows are presentation, and the value snapshot
+     * must not churn (a new snapshot would re-render the host, whose rebuilt
+     * closure would notify again, forever). Markers are compared by value, not
+     * identity, because a per-render rebuild remakes the array every time.
      */
-    syncCurveSamples(panelId: string, config: DialConfig): void;
+    syncCurveConfigs(panelId: string, config: DialConfig): void;
     savePreset(panelId: string, name: string): string;
     loadPreset(panelId: string, presetId: string): void;
     deletePreset(panelId: string, presetId: string): void;

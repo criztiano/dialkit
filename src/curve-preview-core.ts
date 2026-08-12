@@ -101,6 +101,16 @@ export function plotCurve(
   return { segments, domain, baseline };
 }
 
+/**
+ * Filter reference markers down to drawable x positions: finite numbers in
+ * [0, 1]. Out-of-range or non-finite entries are skipped, never clamped — a
+ * marker is a reference line, and moving it would lie about where it sits.
+ */
+export function normalizeCurveMarkers(markers?: readonly number[]): number[] {
+  if (!markers) return [];
+  return markers.filter((m) => typeof m === 'number' && Number.isFinite(m) && m >= 0 && m <= 1);
+}
+
 /** Map a normalized value (0 = domain min) to a y pixel, inset by `pad`. */
 export function curveY(v: number, height: number, pad = 0): number {
   return pad + (1 - v) * (height - pad * 2);

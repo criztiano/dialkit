@@ -90,12 +90,13 @@ export function useDialStorePanel(
     DialStore.setPresetProvider(panelId, optionsRef.current.presets ?? null);
   });
 
-  // Curve rows' sample functions get the same after-every-render treatment:
-  // they close over host state and are invisible to the serialized config
-  // diff, so syncCurveSamples swaps them in place and only notifies (on the
-  // control-state channel) when a function identity actually changed.
+  // Curve rows' sample functions and markers get the same after-every-render
+  // treatment: samplers close over host state and are invisible to the
+  // serialized config diff, so syncCurveConfigs swaps them (and any changed
+  // marker values) in place and only notifies (on the control-state channel)
+  // when something actually changed.
   useEffect(() => {
-    DialStore.syncCurveSamples(panelId, configRef.current);
+    DialStore.syncCurveConfigs(panelId, configRef.current);
   });
 
   const subscribe = useCallback(
