@@ -316,7 +316,8 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
    identical behaviour with no per-framework state. The tooltip is always in the
    DOM so \`aria-describedby\` on the host always resolves. */
 .dialkit-control-tip[data-hint],
-.dialkit-folder-header[data-hint] {
+.dialkit-folder-header[data-hint],
+.dialkit-module-header[data-hint] {
   position: relative;
 }
 
@@ -356,7 +357,8 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
    lives only here, so leaving falls back to the base rule's zero delay. */
 .dialkit-control-tip[data-hint]:hover > .dialkit-hint,
 .dialkit-control-tip[data-hint]:focus-within > .dialkit-hint,
-.dialkit-folder-header[data-hint]:hover > .dialkit-hint {
+.dialkit-folder-header[data-hint]:hover > .dialkit-hint,
+.dialkit-module-header[data-hint]:hover > .dialkit-hint {
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
@@ -609,6 +611,12 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
 .dialkit-module-switch {
   flex-shrink: 0;
   width: 84px;
+}
+
+/* Config-level module folders: the header doubles as the open/close toggle
+   (the switch itself stops propagation). */
+.dialkit-module-header-toggle {
+  cursor: pointer;
 }
 
 /* Smooth height collapse via the grid-rows 0fr↔1fr trick — animates the

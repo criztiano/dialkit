@@ -11,6 +11,7 @@ import type {
 import type { GradientValue } from '../../gradient-core';
 import { ColorControl } from './ColorControl';
 import { Folder } from './Folder';
+import { ModuleFolder } from './ModuleFolder';
 import { ControlShell } from './ControlShell';
 import { GradientControl } from './GradientControl';
 import { RangeSlider } from './RangeSlider';
@@ -94,6 +95,20 @@ export const ControlRenderer = defineComponent({
             onChange: (next: TransitionConfig) => DialStore.updateValue(props.panelId, control.path, next),
           });
         case 'folder':
+          // A folder that declared `_enabled` renders as a module: the header
+          // switch drives the `<path>._enabled` value through the store.
+          if (control.module) {
+            const enabledPath = `${control.path}._enabled`;
+            return h(ModuleFolder, {
+              key: control.path,
+              title: control.label,
+              enabled: props.values[enabledPath] as boolean,
+              onEnabledChange: (next: boolean) => DialStore.updateValue(props.panelId, enabledPath, next),
+              defaultOpen: control.defaultOpen ?? true,
+              hint: control.hint,
+              hintId: hintId(control),
+            }, { default: () => (control.children ?? []).map(renderControl) });
+          }
           return h(Folder, {
             key: control.path,
             title: control.label,

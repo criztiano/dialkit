@@ -654,7 +654,7 @@ var DialStoreClass = class {
   parseConfig(config, prefix, shortcuts) {
     const controls = [];
     for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed") continue;
+      if (key === "_collapsed" || key === "_enabled") continue;
       const path = prefix ? `${prefix}.${key}` : key;
       const label = this.formatLabel(key);
       const shortcut = shortcuts?.[path];
@@ -739,6 +739,7 @@ var DialStoreClass = class {
           path,
           label,
           defaultOpen,
+          module: "_enabled" in folderConfig ? true : void 0,
           children: this.parseConfig(folderConfig, path, shortcuts)
         });
       }
@@ -1019,6 +1020,10 @@ var DialStoreClass = class {
     const visit = (nodes) => {
       for (const node of nodes) {
         if (node.type === "folder" && node.children) {
+          if (node.module) {
+            const enabledPath = `${node.path}._enabled`;
+            map.set(enabledPath, { type: "toggle", path: enabledPath, label: "Enabled" });
+          }
           visit(node.children);
           continue;
         }

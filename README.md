@@ -515,6 +515,23 @@ shadow: {
 }
 ```
 
+#### Module folders (`_enabled`)
+
+Add the reserved `_enabled: boolean` key to a folder and it renders as a **module**: the header carries an Off/On switch (the same idiom as the standalone `Module` component below), and when off the body collapses away with a smooth height transition. Unlike `_collapsed`, `_enabled` **is a value** — it appears in your returned values at `<folder>._enabled`, participates in presets and persistence, and toggling the switch updates it through the store. Clicking the header still collapses/expands the section while it's on, and `_collapsed` still controls the initial open state.
+
+```tsx
+const params = useDialKit('Synth', {
+  reverb: {
+    _enabled: true,      // renders the header switch; starts on
+    mix: [0.3, 0, 1],
+    decay: [2.5, 0.1, 10],
+  },
+});
+
+params.reverb._enabled   // boolean — gate your processing on it
+params.reverb.mix        // number
+```
+
 ### Module
 
 A standalone component (advanced usage): a titled group whose header carries an **enable switch**. Use it for parameter blocks that turn on or off as a unit — synth layers, effect sends, optional feature groups — where a plain folder doesn't capture the "this whole block is on/off" state. The switch doubles as the expand control: when off, the body collapses away with a smooth height transition (so off modules don't take up space) and reveals again when on.

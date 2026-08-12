@@ -4,6 +4,7 @@ import type { RangeValue } from '../store/DialStore';
 import type { GradientValue } from '../gradient-core';
 import { ShortcutContext } from './ShortcutListener';
 import { Folder } from './Folder';
+import { ModuleFolder } from './ModuleFolder';
 import { ControlShell } from './ControlShell';
 import { Slider } from './Slider';
 import { RangeSlider } from './RangeSlider';
@@ -117,7 +118,25 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
           />
         );
 
-      case 'folder':
+      case 'folder': {
+        // A folder that declared `_enabled` renders as a module: the header
+        // switch drives the `<path>._enabled` value through the store.
+        if (control.module) {
+          const enabledPath = `${control.path}._enabled`;
+          return (
+            <ModuleFolder
+              key={control.path}
+              title={control.label}
+              enabled={values[enabledPath] as boolean}
+              onEnabledChange={(v) => DialStore.updateValue(panelId, enabledPath, v)}
+              defaultOpen={control.defaultOpen ?? true}
+              hint={control.hint}
+              hintId={hintDomId(panelId, control.path)}
+            >
+              {control.children?.map(renderControl)}
+            </ModuleFolder>
+          );
+        }
         return (
           <Folder
             key={control.path}
@@ -129,6 +148,7 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             {control.children?.map(renderControl)}
           </Folder>
         );
+      }
 
       case 'text':
         return (

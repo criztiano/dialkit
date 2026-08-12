@@ -7,6 +7,7 @@
   import RangeSlider from './RangeSlider.svelte';
   import Toggle from './Toggle.svelte';
   import Folder from './Folder.svelte';
+  import ModuleFolder from './ModuleFolder.svelte';
   import ControlShell from './ControlShell.svelte';
   import SpringControl from './SpringControl.svelte';
   import TransitionControl from './TransitionControl.svelte';
@@ -41,7 +42,22 @@
   );
 </script>
 
-{#if control.type === 'folder'}
+{#if control.type === 'folder' && control.module}
+  <!-- A folder that declared `_enabled` renders as a module: the header
+       switch drives the `<path>._enabled` value through the store. -->
+  <ModuleFolder
+    title={control.label}
+    enabled={values[`${control.path}._enabled`] as boolean}
+    onEnabledChange={(next) => DialStore.updateValue(panelId, `${control.path}._enabled`, next)}
+    defaultOpen={control.defaultOpen ?? true}
+    hint={control.hint}
+    hintId={hintId}
+  >
+    {#each control.children ?? [] as child (child.path)}
+      <ControlRenderer {panelId} control={child} {values} {transitionDuration} />
+    {/each}
+  </ModuleFolder>
+{:else if control.type === 'folder'}
   <Folder
     title={control.label}
     defaultOpen={control.defaultOpen ?? true}

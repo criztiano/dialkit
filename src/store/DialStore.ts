@@ -377,6 +377,8 @@ export type ControlMeta = {
   rangeDefault?: RangeValue;
   children?: ControlMeta[];
   defaultOpen?: boolean;
+  /** Folder declared `_enabled` — renders as a module whose header switch drives `<path>._enabled`. */
+  module?: boolean;
   options?: (string | { value: string; label: string })[];
   placeholder?: string;
   items?: GalleryItem[];
@@ -1112,7 +1114,10 @@ class DialStoreClass {
     const controls: ControlMeta[] = [];
 
     for (const [key, value] of Object.entries(config)) {
-      if (key === '_collapsed') continue;
+      // `_collapsed` is UI-only metadata; `_enabled` IS a value (it lives in the
+      // folder's flat values) but renders as the module header switch, never as
+      // a child control row.
+      if (key === '_collapsed' || key === '_enabled') continue;
       const path = prefix ? `${prefix}.${key}` : key;
       const label = this.formatLabel(key);
       const shortcut = shortcuts?.[path];
@@ -1200,6 +1205,7 @@ class DialStoreClass {
           path,
           label,
           defaultOpen,
+          module: '_enabled' in folderConfig ? true : undefined,
           children: this.parseConfig(folderConfig, path, shortcuts),
         });
       }
@@ -1661,6 +1667,13 @@ class DialStoreClass {
     const visit = (nodes: ControlMeta[]) => {
       for (const node of nodes) {
         if (node.type === 'folder' && node.children) {
+          // A module folder's `_enabled` never parses to a child control, but it
+          // IS a value — register a synthetic toggle so updatePanel reconciles
+          // (preserves) it across dynamic config updates like any boolean.
+          if (node.module) {
+            const enabledPath = `${node.path}._enabled`;
+            map.set(enabledPath, { type: 'toggle', path: enabledPath, label: 'Enabled' });
+          }
           visit(node.children);
           continue;
         }

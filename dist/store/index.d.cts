@@ -343,6 +343,8 @@ type ControlMeta = {
     rangeDefault?: RangeValue;
     children?: ControlMeta[];
     defaultOpen?: boolean;
+    /** Folder declared `_enabled` — renders as a module whose header switch drives `<path>._enabled`. */
+    module?: boolean;
     options?: (string | {
         value: string;
         label: string;

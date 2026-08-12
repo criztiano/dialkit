@@ -129,9 +129,12 @@ Within a group, the primary parameter comes first and stays visible.
 
 **A feature that is off shows no controls.** This is the strongest rule:
 
-- If a whole block turns on/off as a unit, use `Module` — its header switch
-  collapses the body away when off, so disabled features cost zero space and
-  zero attention.
+- If a whole block turns on/off as a unit, make it a **module folder**: give
+  the folder `_enabled: boolean` in the config and its header carries the
+  switch itself — the body collapses away when off, so disabled features cost
+  zero space and zero attention. Never add a separate "Enabled" toggle row
+  inside a group; the switch belongs in the header. (The standalone `Module`
+  component is the same idiom for hand-composed center-pane UI.)
 - If control *visibility* depends on a mode (e.g. a `mode` select that changes
   which parameters exist), use dynamic configs: rebuild the config object from
   app state and let dialkit reconcile — values on surviving paths persist.
@@ -180,6 +183,8 @@ them wholesale. The panel's theme is the design anchor for the whole window:
   curve component exists in the inventory.
 - Controls rendered outside the side panel, or a second ad-hoc panel.
 - Visible-but-inert controls for a feature that is switched off.
+- An "Enabled" toggle row inside a group instead of a `_enabled` module-folder
+  header switch.
 - A flat panel of 20+ ungrouped rows.
 - Auto-inferred slider ranges on real app parameters.
 - App chrome styled with its own colors/radii instead of `--dial-*` tokens,
