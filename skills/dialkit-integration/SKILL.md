@@ -87,6 +87,24 @@ Only after the mapping is complete, look at what's left over. A leftover means
 either a missing dialkit component (build it *in dialkit's idiom*, or flag it)
 or an app concept that should be redesigned to fit the system.
 
+### The fork every integration hits: config-driven panel vs standalone components
+
+dialkit can be consumed two ways: the declarative `useDialKit` config +
+`DialRoot`, or hand-composing the exported standalone components. When the
+app already owns its state (its own store, engine bridge, or preset system),
+composing standalone components looks attractive because it avoids a second
+store. Resist that reasoning for the main control surface. The config-driven
+panel is where dialkit's compounding features live — hints, labels,
+shortcuts, dynamic-config reconciliation, value persistence, copy-as-JSON —
+and a hand-built rack forfeits all of them and drifts stylistically over
+time. Instead, *bridge*: keep the app's state as the single source of truth,
+diff the panel's returned values into it, and push app-side changes back with
+`DialStore.updateValue(s)`. Suppress or ignore dialkit subsystems the app
+genuinely supersedes (e.g. its localStorage presets when the app has real
+preset storage) rather than abandoning the panel to avoid them. Standalone
+components are for the *center pane* (visualizations, meters, editors) and
+for the rare control that must live outside the panel.
+
 ## Phase 3 — Layout doctrine
 
 **All controls live in the side panel.** Mount `DialRoot mode="inline"` inside
@@ -124,8 +142,13 @@ Within a group, the primary parameter comes first and stays visible.
 
 ## Phase 4 — Converge the app on dialkit's design language
 
-Evolve the app toward dialkit, never restyle dialkit toward the app. The
-panel's theme is the design anchor for the whole window:
+Evolve the app toward dialkit, never restyle dialkit toward the app. dialkit
+is integrated into PoCs and prototypes — apps whose existing styling was
+never a considered design decision, just whatever colors and chrome the
+prototype accumulated while the real work was the engine underneath. That
+styling is not a brand and deserves no loyalty: do not preserve the
+prototype's accent color, palette, or visual quirks "for identity". Replace
+them wholesale. The panel's theme is the design anchor for the whole window:
 
 - Reuse the `--dial-*` custom properties (surfaces, borders, text hierarchy,
   radius, row height, shadows) for app-owned chrome — the center pane, status
@@ -159,5 +182,6 @@ panel's theme is the design anchor for the whole window:
 - Visible-but-inert controls for a feature that is switched off.
 - A flat panel of 20+ ungrouped rows.
 - Auto-inferred slider ranges on real app parameters.
-- App chrome styled with its own colors/radii instead of `--dial-*` tokens.
+- App chrome styled with its own colors/radii instead of `--dial-*` tokens,
+  or a prototype accent color kept alive "for brand identity".
 - A hand-rolled component duplicating something the installed dialkit exports.
