@@ -3107,7 +3107,7 @@ var ModuleFolder = (0, import_vue6.defineComponent)({
       props.onEnabledChange?.(enabled);
       if (enabled) isOpen.value = true;
     };
-    return () => (0, import_vue6.h)("div", { class: "dialkit-module" }, [
+    return () => (0, import_vue6.h)("div", { class: "dialkit-module dialkit-module-folder", "data-open": props.enabled && isOpen.value ? "true" : "false" }, [
       (0, import_vue6.h)(
         "div",
         {

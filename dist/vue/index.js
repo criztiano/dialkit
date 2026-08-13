@@ -3039,7 +3039,7 @@ var ModuleFolder = defineComponent5({
       props.onEnabledChange?.(enabled);
       if (enabled) isOpen.value = true;
     };
-    return () => h5("div", { class: "dialkit-module" }, [
+    return () => h5("div", { class: "dialkit-module dialkit-module-folder", "data-open": props.enabled && isOpen.value ? "true" : "false" }, [
       h5(
         "div",
         {

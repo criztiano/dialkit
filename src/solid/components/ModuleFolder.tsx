@@ -37,7 +37,7 @@ export function ModuleFolder(props: ModuleFolderProps) {
   };
 
   return (
-    <div class="dialkit-module">
+    <div class="dialkit-module dialkit-module-folder" data-open={props.enabled && isOpen() ? 'true' : 'false'}>
       <div
         class="dialkit-module-header dialkit-module-header-toggle"
         onClick={() => { if (props.enabled) setIsOpen(open => !open); }}

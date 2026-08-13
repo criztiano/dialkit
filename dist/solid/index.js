@@ -4012,7 +4012,7 @@ _$delegateEvents2(["click"]);
 
 // src/solid/components/ModuleFolder.tsx
 var _tmpl$11 = /* @__PURE__ */ _$template3(`<span class=dialkit-hint role=tooltip>`);
-var _tmpl$23 = /* @__PURE__ */ _$template3(`<div class=dialkit-module><div class="dialkit-module-header dialkit-module-header-toggle"><span class=dialkit-module-title></span><div class=dialkit-module-switch></div></div><div class=dialkit-module-collapse><div class=dialkit-module-collapse-clip><div class=dialkit-module-inner>`);
+var _tmpl$23 = /* @__PURE__ */ _$template3(`<div class="dialkit-module dialkit-module-folder"><div class="dialkit-module-header dialkit-module-header-toggle"><span class=dialkit-module-title></span><div class=dialkit-module-switch></div></div><div class=dialkit-module-collapse><div class=dialkit-module-collapse-clip><div class=dialkit-module-inner>`);
 var ENABLE_OPTIONS = [{
   value: "off",
   label: "Off"
@@ -4053,15 +4053,17 @@ function ModuleFolder(props) {
     }), null);
     _$insert3(_el$8, () => props.children);
     _$effect3((_p$) => {
-      var _v$ = props.hint ? "true" : void 0, _v$2 = props.hint ? props.hintId : void 0, _v$3 = props.enabled && isOpen();
-      _v$ !== _p$.e && _$setAttribute3(_el$2, "data-hint", _p$.e = _v$);
-      _v$2 !== _p$.t && _$setAttribute3(_el$2, "aria-describedby", _p$.t = _v$2);
-      _v$3 !== _p$.a && _$setAttribute3(_el$6, "data-open", _p$.a = _v$3);
+      var _v$ = props.enabled && isOpen() ? "true" : "false", _v$2 = props.hint ? "true" : void 0, _v$3 = props.hint ? props.hintId : void 0, _v$4 = props.enabled && isOpen();
+      _v$ !== _p$.e && _$setAttribute3(_el$, "data-open", _p$.e = _v$);
+      _v$2 !== _p$.t && _$setAttribute3(_el$2, "data-hint", _p$.t = _v$2);
+      _v$3 !== _p$.a && _$setAttribute3(_el$2, "aria-describedby", _p$.a = _v$3);
+      _v$4 !== _p$.o && _$setAttribute3(_el$6, "data-open", _p$.o = _v$4);
       return _p$;
     }, {
       e: void 0,
       t: void 0,
-      a: void 0
+      a: void 0,
+      o: void 0
     });
     return _el$;
   })();

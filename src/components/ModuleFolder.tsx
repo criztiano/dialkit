@@ -37,7 +37,7 @@ export function ModuleFolder({ title, enabled, onEnabledChange, defaultOpen = tr
   };
 
   return (
-    <div className="dialkit-module">
+    <div className="dialkit-module dialkit-module-folder" data-open={enabled && isOpen ? 'true' : 'false'}>
       <div
         className="dialkit-module-header dialkit-module-header-toggle"
         onClick={() => { if (enabled) setIsOpen(open => !open); }}

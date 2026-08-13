@@ -2758,7 +2758,7 @@ function ModuleFolder({ title, enabled, onEnabledChange, defaultOpen = true, hin
     onEnabledChange(next);
     if (next) setIsOpen(true);
   };
-  return /* @__PURE__ */ jsxs3("div", { className: "dialkit-module", children: [
+  return /* @__PURE__ */ jsxs3("div", { className: "dialkit-module dialkit-module-folder", "data-open": enabled && isOpen ? "true" : "false", children: [
     /* @__PURE__ */ jsxs3(
       "div",
       {

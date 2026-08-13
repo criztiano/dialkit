@@ -648,6 +648,36 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
   padding-bottom: 10px;
 }
 
+/* In-panel module folder (a config folder that declared \`_enabled\`) — reuses
+   the module idiom but sits inside the inset panel body, so it aligns to the
+   control-row grid instead of running full bleed like the standalone Module:
+   - the header matches --dial-row-height and takes the rows' 10px right inset
+     (with the labeled-row -6px segmented pull), so the Off/On switch
+     right-aligns with the value column;
+   - closed it is a single compact header row with a hairline under it, so a
+     run of off modules reads like a list of rows at control-row rhythm;
+   - open it drops the divider and gets its breathing room back. */
+.dialkit-module-folder {
+  margin: 0;
+  border-top: none;
+  border-bottom: 1px solid var(--dial-border);
+}
+
+.dialkit-module-folder > .dialkit-module-header {
+  box-sizing: border-box;
+  height: var(--dial-row-height);
+  padding: 0 10px 0 0;
+}
+
+.dialkit-module-folder > .dialkit-module-header > .dialkit-module-switch {
+  margin-right: -6px;
+}
+
+.dialkit-module-folder[data-open='true'] {
+  margin: 4px 0;
+  border-bottom: none;
+}
+
 
 /* Slider */
 .dialkit-slider-wrapper {

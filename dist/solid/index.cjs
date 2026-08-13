@@ -4085,7 +4085,7 @@ function SegmentedControl(props) {
 
 // src/solid/components/ModuleFolder.tsx
 var _tmpl$11 = /* @__PURE__ */ (0, import_web22.template)(`<span class=dialkit-hint role=tooltip>`);
-var _tmpl$23 = /* @__PURE__ */ (0, import_web22.template)(`<div class=dialkit-module><div class="dialkit-module-header dialkit-module-header-toggle"><span class=dialkit-module-title></span><div class=dialkit-module-switch></div></div><div class=dialkit-module-collapse><div class=dialkit-module-collapse-clip><div class=dialkit-module-inner>`);
+var _tmpl$23 = /* @__PURE__ */ (0, import_web22.template)(`<div class="dialkit-module dialkit-module-folder"><div class="dialkit-module-header dialkit-module-header-toggle"><span class=dialkit-module-title></span><div class=dialkit-module-switch></div></div><div class=dialkit-module-collapse><div class=dialkit-module-collapse-clip><div class=dialkit-module-inner>`);
 var ENABLE_OPTIONS = [{
   value: "off",
   label: "Off"
@@ -4126,15 +4126,17 @@ function ModuleFolder(props) {
     }), null);
     (0, import_web28.insert)(_el$8, () => props.children);
     (0, import_web25.effect)((_p$) => {
-      var _v$ = props.hint ? "true" : void 0, _v$2 = props.hint ? props.hintId : void 0, _v$3 = props.enabled && isOpen();
-      _v$ !== _p$.e && (0, import_web24.setAttribute)(_el$2, "data-hint", _p$.e = _v$);
-      _v$2 !== _p$.t && (0, import_web24.setAttribute)(_el$2, "aria-describedby", _p$.t = _v$2);
-      _v$3 !== _p$.a && (0, import_web24.setAttribute)(_el$6, "data-open", _p$.a = _v$3);
+      var _v$ = props.enabled && isOpen() ? "true" : "false", _v$2 = props.hint ? "true" : void 0, _v$3 = props.hint ? props.hintId : void 0, _v$4 = props.enabled && isOpen();
+      _v$ !== _p$.e && (0, import_web24.setAttribute)(_el$, "data-open", _p$.e = _v$);
+      _v$2 !== _p$.t && (0, import_web24.setAttribute)(_el$2, "data-hint", _p$.t = _v$2);
+      _v$3 !== _p$.a && (0, import_web24.setAttribute)(_el$2, "aria-describedby", _p$.a = _v$3);
+      _v$4 !== _p$.o && (0, import_web24.setAttribute)(_el$6, "data-open", _p$.o = _v$4);
       return _p$;
     }, {
       e: void 0,
       t: void 0,
-      a: void 0
+      a: void 0,
+      o: void 0
     });
     return _el$;
   })();

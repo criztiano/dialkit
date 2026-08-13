@@ -38,7 +38,7 @@
   };
 </script>
 
-<div class="dialkit-module">
+<div class="dialkit-module dialkit-module-folder" data-open={enabled && isOpen ? 'true' : 'false'}>
   <div
     class="dialkit-module-header dialkit-module-header-toggle"
     onclick={() => { if (enabled) isOpen = !isOpen; }}

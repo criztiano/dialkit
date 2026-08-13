@@ -29,7 +29,7 @@ export const ModuleFolder = defineComponent({
     };
 
     return () =>
-      h('div', { class: 'dialkit-module' }, [
+      h('div', { class: 'dialkit-module dialkit-module-folder', 'data-open': props.enabled && isOpen.value ? 'true' : 'false' }, [
         h(
           'div',
           {
