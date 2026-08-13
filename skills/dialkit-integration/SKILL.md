@@ -111,7 +111,10 @@ live outside the panel.
 ## Phase 3 — Layout doctrine
 
 **All controls live in the side panel.** Mount `DialRoot mode="inline"` inside
-a fixed-width sidebar (~300px, full height, `overflow: hidden`). The floating
+a fixed-width sidebar (~300px, full height, `overflow: hidden`). The inline
+panel keeps dialkit's card chrome — glass surface, hairline border, rounded
+corners — so give the sidebar container a little padding (~12px) and let the
+card float on the app ground; never strip the panel chrome to make it flush. The floating
 popover mode is for tweaking during development, not for a real app surface.
 Don't scatter individual controls across the app: one panel, one place to
 look, one consistent interaction grammar.

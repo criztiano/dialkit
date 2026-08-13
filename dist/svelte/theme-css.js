@@ -215,9 +215,11 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
   height: 100%;
   max-height: none;
   overflow-y: auto;
+  /* Docked, not floating: no drop shadow — but keep the panel card's glass
+     surface, hairline border, and radius from .dialkit-panel-inner so an
+     inline panel still reads as a dialkit panel. Hosts give the container a
+     little padding so the rounded card breathes. */
   box-shadow: none;
-  border-radius: 0;
-  border: none;
   box-sizing: border-box;
 }
 
