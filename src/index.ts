@@ -38,6 +38,7 @@ export type {
 export { ControlRenderer } from './components/ControlRenderer';
 export { Slider } from './components/Slider';
 export { RangeSlider } from './components/RangeSlider';
+export { Checkbox } from './components/Checkbox';
 export { Toggle } from './components/Toggle';
 export { Folder } from './components/Folder';
 export { ControlShell } from './components/ControlShell';

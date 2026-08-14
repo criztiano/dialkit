@@ -1,5 +1,5 @@
 import { useState, ReactNode } from 'react';
-import { SegmentedControl } from './SegmentedControl';
+import { Checkbox } from './Checkbox';
 
 interface ModuleFolderProps {
   title: string;
@@ -13,11 +13,6 @@ interface ModuleFolderProps {
   hintId?: string;
   children: ReactNode;
 }
-
-const ENABLE_OPTIONS = [
-  { value: 'off' as const, label: 'Off' },
-  { value: 'on' as const, label: 'On' },
-];
 
 /**
  * A config-level module: a folder that declared `_enabled`. Same idiom as the
@@ -44,14 +39,8 @@ export function ModuleFolder({ title, enabled, onEnabledChange, defaultOpen = tr
         data-hint={hint ? 'true' : undefined}
         aria-describedby={hint ? hintId : undefined}
       >
+        <Checkbox checked={enabled} onChange={handleEnabledChange} label={title} />
         <span className="dialkit-module-title">{title}</span>
-        <div className="dialkit-module-switch" onClick={(e) => e.stopPropagation()}>
-          <SegmentedControl
-            options={ENABLE_OPTIONS}
-            value={enabled ? 'on' : 'off'}
-            onChange={(v) => handleEnabledChange(v === 'on')}
-          />
-        </div>
         {hint && (
           <span className="dialkit-hint" id={hintId} role="tooltip">
             {hint}

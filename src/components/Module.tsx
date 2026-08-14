@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { SegmentedControl } from './SegmentedControl';
+import { Checkbox } from './Checkbox';
 
 interface ModuleProps {
   title: string;
@@ -9,11 +9,6 @@ interface ModuleProps {
   onEnabledChange: (enabled: boolean) => void;
   children: ReactNode;
 }
-
-const ENABLE_OPTIONS = [
-  { value: 'off' as const, label: 'Off' },
-  { value: 'on' as const, label: 'On' },
-];
 
 /**
  * A titled module whose header carries an enable switch — for parameter
@@ -25,14 +20,8 @@ export function Module({ title, enabled, onEnabledChange, children }: ModuleProp
   return (
     <div className="dialkit-module">
       <div className="dialkit-module-header">
+        <Checkbox checked={enabled} onChange={onEnabledChange} label={title} />
         <span className="dialkit-module-title">{title}</span>
-        <div className="dialkit-module-switch">
-          <SegmentedControl
-            options={ENABLE_OPTIONS}
-            value={enabled ? 'on' : 'off'}
-            onChange={(v) => onEnabledChange(v === 'on')}
-          />
-        </div>
       </div>
 
       <div className="dialkit-module-collapse" data-open={enabled}>

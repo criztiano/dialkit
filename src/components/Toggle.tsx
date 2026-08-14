@@ -1,4 +1,4 @@
-import { SegmentedControl } from './SegmentedControl';
+import { Checkbox } from './Checkbox';
 import type { ShortcutConfig } from '../store/DialStore';
 import { formatToggleShortcut } from '../shortcut-utils';
 
@@ -12,7 +12,8 @@ interface ToggleProps {
 
 export function Toggle({ label, checked, onChange, shortcut, shortcutActive }: ToggleProps) {
   return (
-    <div className="dialkit-labeled-control">
+    <div className="dialkit-labeled-control dialkit-labeled-control-check">
+      <Checkbox checked={checked} onChange={onChange} label={label} />
       <span className="dialkit-labeled-control-label">
         {label}
         {shortcut && (
@@ -21,14 +22,6 @@ export function Toggle({ label, checked, onChange, shortcut, shortcutActive }: T
           </span>
         )}
       </span>
-      <SegmentedControl
-        options={[
-          { value: 'off' as const, label: 'Off' },
-          { value: 'on' as const, label: 'On' },
-        ]}
-        value={checked ? 'on' : 'off'}
-        onChange={(val) => onChange(val === 'on')}
-      />
     </div>
   );
 }

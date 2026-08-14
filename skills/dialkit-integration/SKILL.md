@@ -72,7 +72,7 @@ adjusted to what the inventory actually contains:
 | Continuous number | Slider `[default, min, max, step]` — always give an explicit range and a sensible step; never rely on auto-inference for real app parameters |
 | Bipolar number (pan, detune, ± amount) | Slider with `bipolar` / `origin` so the fill grows from center |
 | Windowed range (start/end, low/high) | RangeSlider |
-| On/off | Toggle — but see Module below when the toggle governs a whole group |
+| On/off | Toggle (a checkbox, not a two-tab switch) — but see Module below when the toggle governs a whole group |
 | One-of-N mode | Select (or SegmentedControl for 2–4 options that deserve to be always visible) |
 | Two coupled numbers (position, tilt, vector) | XYPad — only when the two axes are one physical gesture in the user's head (a point, a direction). Two parameters that merely both affect the same curve are NOT a pair; give them their own sliders and show the curve instead |
 | Any curve or shape parameter (easing, envelope, transfer curve, probability distribution) | CurveComposer / EasingVisualization / SpringVisualization — the visual editor, never a row of numeric sliders |
@@ -167,6 +167,12 @@ them wholesale. The panel's theme is the design anchor for the whole window:
   deliberate levels; don't invent a fourth.
 - Numeric readouts anywhere in the app use the same monospace treatment as
   panel values.
+- **Never draw your own dividers.** Separation is a property the components
+  already carry: collapsible sections rule themselves off from the next one,
+  and the last section carries none, because a trailing line separates
+  nothing. If a layout looks like it needs a rule between two things, the
+  answer is spacing, a section, or an existing component — not a new border.
+  A hand-added divider is how a surface starts drifting away from the set.
 - Dark glassmorphic surfaces, 1px low-alpha borders, ~8px radius: custom
   canvases (waveforms, diagrams) drawn in the center pane should sample the
   same palette so they look native to the set.
@@ -195,6 +201,7 @@ them wholesale. The panel's theme is the design anchor for the whole window:
   header switch.
 - A flat panel of 20+ ungrouped rows.
 - Auto-inferred slider ranges on real app parameters.
+- A hand-rolled divider, rule, or separator that no dialkit component drew.
 - App chrome styled with its own colors/radii instead of `--dial-*` tokens,
   or a prototype accent color kept alive "for brand identity".
 - A hand-rolled component duplicating something the installed dialkit exports.
