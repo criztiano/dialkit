@@ -34,6 +34,10 @@ export const ICON_CLOSE = 'M6 6L18 18M6 18L18 6';
 
 export const ICON_PLUS = 'M12 5V19M5 12H19';
 
+export const ICON_PENCIL = [
+  'M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z',
+];
+
 // Drag handle — two columns of dots (rendered as <circle> elements).
 export const ICON_GRIP = [
   { cx: '9', cy: '6' }, { cx: '9', cy: '12' }, { cx: '9', cy: '18' },

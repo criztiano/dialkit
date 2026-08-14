@@ -1,4 +1,5 @@
 import type { DialValue } from './store/DialStore';
+import { TAB_PATH } from './store/DialStore';
 
 // The copy-for-agent export shared by the panel toolbar and the timeline dock.
 export function buildCopyInstruction(
@@ -6,7 +7,10 @@ export function buildCopyInstruction(
   panelName: string,
   values: Record<string, DialValue>
 ): string {
-  const jsonStr = JSON.stringify(values, null, 2);
+  // The active tab is where the reader was looking, not a parameter — and it is
+  // keyed by `_tabs`, not `_tab`, in the config it would be pasted back into.
+  const { [TAB_PATH]: _activeTab, ...parameters } = values;
+  const jsonStr = JSON.stringify(parameters, null, 2);
 
   if (hookName === 'useDialTimeline' || hookName === 'createDialTimeline') {
     return `Update the ${hookName} configuration for "${panelName}" with these values:

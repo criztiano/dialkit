@@ -1,13 +1,15 @@
 import { useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { DialStore, PanelConfig } from '../store/DialStore';
+import { DialStore, PanelConfig, ControlMeta, TAB_PATH } from '../store/DialStore';
+import { splitPanelTabs } from '../panel-tabs';
 import { buildCopyInstruction } from '../copy-instruction';
 import { ShortcutsMenu } from './ShortcutsMenu';
 import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../icons';
 import { Folder } from './Folder';
 import { ControlRenderer } from './ControlRenderer';
 import { PresetManager } from './PresetManager';
+import { SegmentedControl } from './SegmentedControl';
 
 interface PanelProps {
   panel: PanelConfig;
@@ -32,7 +34,13 @@ export function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra 
   const activePresetId = DialStore.getActivePresetId(panel.id);
   const providerMode = DialStore.hasPresetProvider(panel.id);
 
-  const handleAddPreset = () => DialStore.createPreset(panel.id);
+  // Bumped per add: the preset manager opens and puts the fresh preset's
+  // name straight into inline edit.
+  const [presetEditSignal, setPresetEditSignal] = useState(0);
+  const handleAddPreset = () => {
+    DialStore.createPreset(panel.id);
+    setPresetEditSignal((n) => n + 1);
+  };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(buildCopyInstruction('useDialKit', panel.name, values));
@@ -40,9 +48,33 @@ export function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra 
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const renderControls = () => (
-    <ControlRenderer panelId={panel.id} controls={panel.controls} values={values} />
+  const { tabs, activeTab, looseControls, pageControls } = splitPanelTabs(panel.controls, values[TAB_PATH]);
+
+  const tabBar = activeTab ? (
+    <SegmentedControl
+      options={tabs.map((tab) => ({ value: tab.path, label: tab.label }))}
+      value={activeTab.path}
+      onChange={(v) => DialStore.updateValue(panel.id, TAB_PATH, v)}
+    />
+  ) : undefined;
+
+  const renderRows = (controls: ControlMeta[]) => (
+    <ControlRenderer panelId={panel.id} controls={controls} values={values} />
   );
+
+  // The page is keyed by tab so switching swaps it outright, rather than
+  // reconciling one tab's rows into the next tab's.
+  const renderControls = () =>
+    activeTab ? (
+      <>
+        {renderRows(looseControls)}
+        <div key={activeTab.path} className="dialkit-panel-tab-page">
+          {renderRows(pageControls)}
+        </div>
+      </>
+    ) : (
+      renderRows(pageControls)
+    );
 
   const iconTransition = { type: 'spring' as const, visualDuration: 0.4, bounce: 0.1 };
 
@@ -68,6 +100,7 @@ export function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra 
         activePresetId={activePresetId}
         onAdd={handleAddPreset}
         providerMode={providerMode}
+        editSignal={presetEditSignal}
       />
 
       <motion.button
@@ -122,7 +155,7 @@ export function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra 
 
   return (
     <div className="dialkit-panel-wrapper">
-      <Folder title={panel.name} defaultOpen={defaultOpen} isRoot={true} inline={inline} onOpenChange={setIsPanelOpen} toolbar={toolbar}>
+      <Folder title={panel.name} defaultOpen={defaultOpen} isRoot={true} inline={inline} onOpenChange={setIsPanelOpen} toolbar={toolbar} tabs={tabBar}>
         {renderControls()}
       </Folder>
     </div>

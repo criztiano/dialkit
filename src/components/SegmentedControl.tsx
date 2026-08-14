@@ -24,7 +24,10 @@ export function SegmentedControl<T extends string>({
     const container = containerRef.current;
     if (!container) return;
     const activeButton = container.querySelector('[data-active="true"]') as HTMLElement | null;
-    if (!activeButton) return;
+    // A zero-width button means layout has not settled — the control is hidden,
+    // or its host is still sizing. Measuring then would pin the pill to the
+    // padding box for good; the resize observer calls back with a real box.
+    if (!activeButton || activeButton.offsetWidth === 0) return;
     // All four edges, not just left/width: a host can let the control wrap onto
     // several rows, and the pill must hug the active button's row.
     setPillStyle({
@@ -38,6 +41,16 @@ export function SegmentedControl<T extends string>({
   useLayoutEffect(() => {
     measure();
   }, [value, options.length, measure]);
+
+  // Buttons that share the row (a full-width tab bar) resize with their host, so
+  // the pill has to follow rather than trust one reading taken at mount.
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver(() => measure());
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [measure]);
 
   // Enable transition after first render
   const shouldAnimate = hasAnimated.current;

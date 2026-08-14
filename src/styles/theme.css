@@ -1337,6 +1337,34 @@
   overflow: hidden;
 }
 
+/* Panel Tabs — the root's tab bar, under the toolbar. It draws no rule of its
+   own: the panel header already carries one. */
+.dialkit-panel-tabs {
+  margin-bottom: 6px;
+}
+
+.dialkit-panel-tabs .dialkit-segmented {
+  background: var(--dial-surface);
+}
+
+/* Tabs share the row evenly, and a long name ellipsizes rather than widening
+   its tab — a 300px panel has no room to spare. */
+.dialkit-panel-tabs .dialkit-segmented-button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 5px 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dialkit-panel-tab-page {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .dialkit-toolbar-add {
   display: flex;
   align-items: center;
@@ -3021,6 +3049,51 @@ input.dialkit-list-item-title:focus {
   height: 14px;
   color: var(--dial-text-focus);
   pointer-events: none;
+}
+
+/* The rename affordance is the delete button's twin, one slot to its left. */
+.dialkit-preset-rename {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.dialkit-preset-item:hover .dialkit-preset-rename {
+  opacity: 0.6;
+}
+
+.dialkit-preset-rename:hover {
+  opacity: 1 !important;
+}
+
+.dialkit-preset-rename svg {
+  width: 13px;
+  height: 13px;
+  color: var(--dial-text-focus);
+  pointer-events: none;
+}
+
+/* Inline rename: the name span swapped for a bare input in the same slot. */
+.dialkit-preset-name-input {
+  flex: 1;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--dial-text-focus);
+  background: var(--dial-surface);
+  border: 1px solid var(--dial-border-hover);
+  border-radius: 6px;
+  padding: 2px 6px;
+  outline: none;
 }
 
 .dialkit-preset-save-btn {

@@ -87,6 +87,8 @@ type SelectConfig = {
         label: string;
     })[];
     default?: string;
+    /** 'segmented' renders the options as an inline segmented control instead of a dropdown. Suits 2–4 short options. */
+    display?: 'dropdown' | 'segmented';
 };
 type ColorConfig = {
     type: 'color';
@@ -285,8 +287,10 @@ type DialValue = number | boolean | string | string[] | XYValue | SpringConfig |
 type DialConfig = {
     [key: string]: DialValue | [number, number, number, number?] | CurveConfig | DialConfig;
 };
+/** UI-only reserved keys: they shape the panel, never resolve to a value. */
+type ReservedKey = '_collapsed' | '_collapsible' | '_tabs';
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T as T[K] extends CurveConfig ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T as T[K] extends CurveConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type DialKitPersistOptions = boolean | {
     key?: string;

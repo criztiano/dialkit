@@ -620,6 +620,13 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
   width: 84px;
 }
 
+/* A folder-header toolbar (e.g. hoisted segmented tabs) sits where the module
+   switch does: right-aligned, compact, never part of the collapse click. */
+.dialkit-folder-toolbar {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
 /* Config-level module folders: the header doubles as the open/close toggle
    (the switch itself stops propagation). */
 .dialkit-module-header-toggle {
@@ -1329,6 +1336,34 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
   margin-bottom: 6px;
   min-width: 0;
   overflow: hidden;
+}
+
+/* Panel Tabs — the root's tab bar, under the toolbar. It draws no rule of its
+   own: the panel header already carries one. */
+.dialkit-panel-tabs {
+  margin-bottom: 6px;
+}
+
+.dialkit-panel-tabs .dialkit-segmented {
+  background: var(--dial-surface);
+}
+
+/* Tabs share the row evenly, and a long name ellipsizes rather than widening
+   its tab — a 300px panel has no room to spare. */
+.dialkit-panel-tabs .dialkit-segmented-button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 5px 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dialkit-panel-tab-page {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .dialkit-toolbar-add {
@@ -3017,6 +3052,51 @@ input.dialkit-list-item-title:focus {
   pointer-events: none;
 }
 
+/* The rename affordance is the delete button's twin, one slot to its left. */
+.dialkit-preset-rename {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.dialkit-preset-item:hover .dialkit-preset-rename {
+  opacity: 0.6;
+}
+
+.dialkit-preset-rename:hover {
+  opacity: 1 !important;
+}
+
+.dialkit-preset-rename svg {
+  width: 13px;
+  height: 13px;
+  color: var(--dial-text-focus);
+  pointer-events: none;
+}
+
+/* Inline rename: the name span swapped for a bare input in the same slot. */
+.dialkit-preset-name-input {
+  flex: 1;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--dial-text-focus);
+  background: var(--dial-surface);
+  border: 1px solid var(--dial-border-hover);
+  border-radius: 6px;
+  padding: 2px 6px;
+  outline: none;
+}
+
 .dialkit-preset-save-btn {
   display: flex;
   align-items: center;
@@ -4461,5 +4541,99 @@ input.dialkit-list-item-title:focus {
   bottom: 0;
   background: rgba(0, 0, 0, 0.16);
   pointer-events: none;
+}
+
+/* ── Checkbox ───────────────────────────────────────────────────────────
+   Replaces the Off/On segmented pair on boolean rows and module headers.
+   One bit does not deserve 84px and two competing labels. Three states:
+   off (empty), on (accent + tick), unavailable (a dash — never a blank
+   box, so "cannot act now" never reads as "off"). */
+
+.dialkit-checkbox {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  color: transparent;
+  background: transparent;
+  border: 1px solid var(--dial-border-hover);
+  border-radius: 4px;
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.dialkit-checkbox:hover:not([data-disabled]) {
+  border-color: var(--dial-text-secondary);
+  background: var(--dial-surface-hover);
+}
+
+.dialkit-checkbox[data-checked] {
+  color: #fff;
+  background: var(--dial-affordance-armed);
+  border-color: var(--dial-affordance-armed);
+}
+
+.dialkit-checkbox[data-checked]:hover {
+  background: var(--dial-affordance-active);
+  border-color: var(--dial-affordance-active);
+}
+
+.dialkit-checkbox[data-disabled] {
+  color: var(--dial-text-tertiary);
+  border-color: var(--dial-border);
+  cursor: default;
+}
+
+/* A checkbox row leads with the box, so the label no longer needs to be
+   pushed to the far edge by space-between. */
+.dialkit-labeled-control-check {
+  justify-content: flex-start;
+  gap: 9px;
+}
+
+/* Module headers lead with the box too. */
+.dialkit-module-header {
+  gap: 9px;
+}
+
+.dialkit-module-title {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Section dividers ───────────────────────────────────────────────────
+   A collapsible section is separated from the next by a single hairline
+   under it. The last section has nothing following it, so it carries no
+   rule — a trailing divider draws a line to nowhere. */
+
+.dialkit-panel-inner > .dialkit-folder,
+.dialkit-panel-inner > .dialkit-module {
+  border-bottom: 1px solid var(--dial-border);
+}
+
+.dialkit-panel-inner > .dialkit-folder:last-child,
+.dialkit-panel-inner > .dialkit-module:last-child {
+  border-bottom: none;
+}
+
+/* ── Hints near the bottom edge ─────────────────────────────────────────
+   A hint drops below its row, and the panel body scrolls — so a hint on
+   the last row was clipped by the scroll container. Flip it above the row
+   there, and leave a little room to scroll into. */
+
+.dialkit-panel-inner > :last-child .dialkit-hint,
+.dialkit-panel-inner > :last-child :last-child .dialkit-hint {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+.dialkit-panel-inner {
+  scroll-padding-bottom: 72px;
 }
 `;

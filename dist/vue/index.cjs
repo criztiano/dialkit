@@ -672,6 +672,7 @@ function clearPersisted(target) {
 }
 
 // src/store/DialStore.ts
+var TAB_PATH = "_tab";
 var EMPTY_VALUES = Object.freeze({});
 function formatLabel(key) {
   return key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()).trim();
@@ -709,7 +710,7 @@ function resolveDialValues(config, flatValues) {
 function resolveConfigValues(config, flatValues, prefix) {
   const result = {};
   for (const [key, configValue] of Object.entries(config)) {
-    if (key === "_collapsed" || key === "_collapsible") continue;
+    if (key === "_collapsed" || key === "_collapsible" || key === "_tabs") continue;
     const path = prefix ? `${prefix}.${key}` : key;
     if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === "number") {
       result[key] = flatValues[path] ?? configValue[0];
@@ -773,6 +774,7 @@ var DialStoreClass = class {
     const controls = this.parseConfig(config, "", shortcuts);
     this.applyControlExtras(controls, options.hints, options.affordances, options.labels);
     const values = this.flattenValues(config, "");
+    this.initTabValue(controls, values);
     this.initTransitionModes(config, "", values);
     this.overlayPersistedValues(target, values);
     this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, kind: options.kind });
@@ -793,6 +795,7 @@ var DialStoreClass = class {
     this.applyControlExtras(controls, hints, affordances, labels);
     const controlsByPath = this.mapControlsByPath(controls);
     const defaultValues = this.flattenValues(config, "");
+    this.initTabValue(controls, defaultValues);
     const nextValues = {};
     for (const [path, defaultValue] of Object.entries(defaultValues)) {
       nextValues[path] = this.normalizePreservedValue(
@@ -1069,7 +1072,7 @@ var DialStoreClass = class {
     let changed = false;
     const visit = (cfg, prefix) => {
       for (const [key, value] of Object.entries(cfg)) {
-        if (key === "_collapsed" || key === "_collapsible") continue;
+        if (key === "_collapsed" || key === "_collapsible" || key === "_tabs") continue;
         const path = prefix ? `${prefix}.${key}` : key;
         if (this.isCurveConfig(value)) {
           const control = this.findControlByPath(panel.controls, path);
@@ -1113,7 +1116,7 @@ var DialStoreClass = class {
     const presets = this.presets.get(panelId) ?? [];
     const preset = presets.find((p) => p.id === presetId);
     if (!preset) return;
-    panel.values = { ...preset.values };
+    this.replaceValues(panel, preset.values);
     this.snapshots.set(panelId, { ...panel.values });
     this.activePreset.set(panelId, presetId);
     this.savePanelValues(panelId);
@@ -1143,7 +1146,7 @@ var DialStoreClass = class {
     const panel = this.panels.get(panelId);
     const base = this.baseValues.get(panelId);
     if (panel && base) {
-      panel.values = { ...base };
+      this.replaceValues(panel, base);
       this.snapshots.set(panelId, { ...panel.values });
     }
     this.activePreset.set(panelId, null);
@@ -1185,10 +1188,11 @@ var DialStoreClass = class {
       return provider.presets.map((p) => ({
         id: p.id,
         name: p.label,
-        deletable: !!provider.onDelete && !p.readonly
+        deletable: !!provider.onDelete && !p.readonly,
+        renamable: !!provider.onRename && !p.readonly
       }));
     }
-    return this.getPresets(panelId).map((p) => ({ id: p.id, name: p.name, deletable: true }));
+    return this.getPresets(panelId).map((p) => ({ id: p.id, name: p.name, deletable: true, renamable: true }));
   }
   /**
    * Row clicked. Stock mode loads the snapshot (null = back to base values);
@@ -1223,6 +1227,23 @@ var DialStoreClass = class {
       return;
     }
     this.deletePreset(panelId, presetId);
+  }
+  /** Rename a preset (toolbar inline edit). Provider mode hands the new name
+   * to the host; stock mode edits the store's own snapshot list. */
+  renamePreset(panelId, presetId, name) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const provider = this.getPresetProvider(panelId);
+    if (provider) {
+      void provider.onRename?.(presetId, trimmed);
+      return;
+    }
+    const preset = (this.presets.get(panelId) ?? []).find((p) => p.id === presetId);
+    if (!preset) return;
+    preset.name = trimmed;
+    const panel = this.panels.get(panelId);
+    if (panel) this.snapshots.set(panelId, { ...panel.values });
+    this.notify(panelId);
   }
   resolveShortcutTarget(key, modifier) {
     for (const panel of this.panels.values()) {
@@ -1270,7 +1291,7 @@ var DialStoreClass = class {
   }
   initTransitionModes(config, prefix, values) {
     for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed" || key === "_collapsible") continue;
+      if (key === "_collapsed" || key === "_collapsible" || key === "_tabs") continue;
       const path = prefix ? `${prefix}.${key}` : key;
       if (this.isEasingConfig(value)) {
         values[`${path}.__mode`] = "easing";
@@ -1286,7 +1307,7 @@ var DialStoreClass = class {
   parseConfig(config, prefix, shortcuts) {
     const controls = [];
     for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed" || key === "_collapsible" || key === "_enabled") continue;
+      if (key === "_collapsed" || key === "_collapsible" || key === "_tabs" || key === "_enabled") continue;
       const path = prefix ? `${prefix}.${key}` : key;
       const label = this.formatLabel(key);
       const shortcut = shortcuts?.[path];
@@ -1325,7 +1346,7 @@ var DialStoreClass = class {
       } else if (this.isActionConfig(value)) {
         controls.push({ type: "action", path, label: value.label || label });
       } else if (this.isSelectConfig(value)) {
-        controls.push({ type: "select", path, label, options: value.options });
+        controls.push({ type: "select", path, label, options: value.options, display: value.display });
       } else if (this.isColorConfig(value)) {
         controls.push({ type: "color", path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {
@@ -1390,12 +1411,51 @@ var DialStoreClass = class {
         });
       }
     }
+    if (prefix === "" && config._tabs === true) {
+      const isFolder = (control) => control.type === "folder";
+      const tabs = controls.filter((control) => isFolder(control) && (control.children?.length ?? 0) > 0);
+      if (tabs.length > 0) {
+        for (const tab of tabs) tab.tab = true;
+        return [
+          {
+            type: "select",
+            path: TAB_PATH,
+            label: "Tab",
+            display: "segmented",
+            tabBar: true,
+            options: tabs.map((tab) => tab.path)
+          },
+          ...controls.filter((control) => !isFolder(control)),
+          ...tabs
+        ];
+      }
+    }
     return controls;
+  }
+  /**
+   * Swaps a panel's whole value map, keeping the open tab. Which tab you are
+   * reading is a place, not a parameter: a preset should change the sound, not
+   * move you to another page of the panel.
+   */
+  replaceValues(panel, values) {
+    const openTab = panel.values[TAB_PATH];
+    panel.values = { ...values };
+    if (openTab !== void 0) panel.values[TAB_PATH] = openTab;
+  }
+  /**
+   * Seeds the active tab. It is a real value, not component state, so a config
+   * rebuild preserves the reader's place — and `normalizePreservedValue` resets
+   * it through the select's options when the tab it named is gone.
+   */
+  initTabValue(controls, values) {
+    const tabBar = controls.find((control) => control.tabBar);
+    if (!tabBar) return;
+    values[TAB_PATH] = tabBar.options?.[0] ?? "";
   }
   flattenValues(config, prefix) {
     const values = {};
     for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed" || key === "_collapsible") continue;
+      if (key === "_collapsed" || key === "_collapsible" || key === "_tabs") continue;
       const path = prefix ? `${prefix}.${key}` : key;
       if (Array.isArray(value) && value.length <= 4 && typeof value[0] === "number") {
         values[path] = value[0];
@@ -7530,7 +7590,8 @@ function buildTimelineValues(staticClips, transport, timelineDuration, loopStart
 
 // src/copy-instruction.ts
 function buildCopyInstruction(hookName, panelName, values) {
-  const jsonStr = JSON.stringify(values, null, 2);
+  const { [TAB_PATH]: _activeTab, ...parameters } = values;
+  const jsonStr = JSON.stringify(parameters, null, 2);
   if (hookName === "useDialTimeline" || hookName === "createDialTimeline") {
     return `Update the ${hookName} configuration for "${panelName}" with these values:
 

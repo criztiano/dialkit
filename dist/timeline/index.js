@@ -1290,8 +1290,10 @@ var TimelineUiStoreClass = class {
 var TimelineUiStore = /* @__PURE__ */ new TimelineUiStoreClass();
 
 // src/copy-instruction.ts
+import { TAB_PATH } from "dialkit/store";
 function buildCopyInstruction(hookName, panelName, values) {
-  const jsonStr = JSON.stringify(values, null, 2);
+  const { [TAB_PATH]: _activeTab, ...parameters } = values;
+  const jsonStr = JSON.stringify(parameters, null, 2);
   if (hookName === "useDialTimeline" || hookName === "createDialTimeline") {
     return `Update the ${hookName} configuration for "${panelName}" with these values:
 

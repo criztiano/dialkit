@@ -87,6 +87,8 @@ type SelectConfig = {
         label: string;
     })[];
     default?: string;
+    /** 'segmented' renders the options as an inline segmented control instead of a dropdown. Suits 2–4 short options. */
+    display?: 'dropdown' | 'segmented';
 };
 type ColorConfig = {
     type: 'color';
@@ -308,8 +310,10 @@ type DialValue = number | boolean | string | string[] | XYValue | SpringConfig |
 type DialConfig = {
     [key: string]: DialValue | [number, number, number, number?] | CurveConfig | DialConfig;
 };
+/** UI-only reserved keys: they shape the panel, never resolve to a value. */
+type ReservedKey = '_collapsed' | '_collapsible' | '_tabs';
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T as T[K] extends CurveConfig ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T as T[K] extends CurveConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -368,10 +372,16 @@ type ControlMeta = {
     module?: boolean;
     /** Folder declared `_collapsible: false` — plain section header, no caret, body always open. */
     collapsible?: boolean;
+    /** Top-level folder under a `_tabs` root — it is a tab, and its children are that tab's page. */
+    tab?: boolean;
+    /** The synthetic segmented select driving `_tab` — it renders as the panel's tab bar, never as a row. */
+    tabBar?: boolean;
     options?: (string | {
         value: string;
         label: string;
     })[];
+    /** Select's rendering mode, from the SelectConfig form. */
+    display?: 'dropdown' | 'segmented';
     placeholder?: string;
     items?: GalleryItem[];
     columns?: number;
@@ -412,6 +422,8 @@ type ControlMeta = {
     hideLabel?: boolean;
     shortcut?: ShortcutConfig;
 };
+/** Flat-value path holding a `_tabs` panel's active tab — the key of that tab's folder. */
+declare const TAB_PATH = "_tab";
 type PanelConfig = {
     id: string;
     name: string;
@@ -475,6 +487,8 @@ type PresetProvider = {
     onCreate(suggestedLabel: string): void | Promise<void>;
     /** Omit to hide the delete affordance entirely. */
     onDelete?(id: string): void | Promise<void>;
+    /** Inline rename committed; omit to hide the rename affordance entirely. */
+    onRename?(id: string, name: string): void | Promise<void>;
 };
 /**
  * What the toolbar renders per dropdown row — one shape for both modes, so the
@@ -484,6 +498,7 @@ type PresetItem = {
     id: string;
     name: string;
     deletable: boolean;
+    renamable: boolean;
 };
 type DialKitPersistOptions = boolean | {
     key?: string;
@@ -634,6 +649,9 @@ declare class DialStoreClass {
     createPreset(panelId: string): void;
     /** Trash icon pressed on a row (only rendered when the item is deletable). */
     removePreset(panelId: string, presetId: string): void;
+    /** Rename a preset (toolbar inline edit). Provider mode hands the new name
+     * to the host; stock mode edits the store's own snapshot list. */
+    renamePreset(panelId: string, presetId: string, name: string): void;
     resolveShortcutTarget(key: string, modifier?: 'alt' | 'shift' | 'meta'): {
         panelId: string;
         path: string;
@@ -650,6 +668,18 @@ declare class DialStoreClass {
     private notifyGlobal;
     private initTransitionModes;
     private parseConfig;
+    /**
+     * Swaps a panel's whole value map, keeping the open tab. Which tab you are
+     * reading is a place, not a parameter: a preset should change the sound, not
+     * move you to another page of the panel.
+     */
+    private replaceValues;
+    /**
+     * Seeds the active tab. It is a real value, not component state, so a config
+     * rebuild preserves the reader's place — and `normalizePreservedValue` resets
+     * it through the select's options when the tab it named is gone.
+     */
+    private initTabValue;
     private flattenValues;
     private isSpringConfig;
     private isEasingConfig;
@@ -703,4 +733,4 @@ declare function defaultListItemParams(schema: Record<string, ListItemField>): R
 declare function normalizeListItems(config: ListConfig): ListItemValue[];
 declare const DialStore: DialStoreClass;
 
-export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type CurveConfig, type DialConfig, type DialEvent, type DialKitPersistOptions, DialStore, type DialStorePanelOptions, type DialValue, type EasingConfig, type FileConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type MultiSelectConfig, type MultiSelectOption, type PanelConfig, type Preset, type PresetItem, type PresetProvider, type PresetProviderPreset, type RangeConfig, type RangeValue, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SwatchConfig, type SwatchOption, type TextConfig, type TransitionConfig, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, formatLabel, groupListFields, hintDomId, inferStep, isEasingConfigValue, isHexColor, isSpringConfigValue, normalizeListItems, parseListItemSchema, resolveDialValues };
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type CurveConfig, type DialConfig, type DialEvent, type DialKitPersistOptions, DialStore, type DialStorePanelOptions, type DialValue, type EasingConfig, type FileConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type MultiSelectConfig, type MultiSelectOption, type PanelConfig, type Preset, type PresetItem, type PresetProvider, type PresetProviderPreset, type RangeConfig, type RangeValue, type ReservedKey, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SwatchConfig, type SwatchOption, TAB_PATH, type TextConfig, type TransitionConfig, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, formatLabel, groupListFields, hintDomId, inferStep, isEasingConfigValue, isHexColor, isSpringConfigValue, normalizeListItems, parseListItemSchema, resolveDialValues };

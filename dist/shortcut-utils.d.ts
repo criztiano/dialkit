@@ -20,6 +20,8 @@ type SelectConfig = {
         label: string;
     })[];
     default?: string;
+    /** 'segmented' renders the options as an inline segmented control instead of a dropdown. Suits 2–4 short options. */
+    display?: 'dropdown' | 'segmented';
 };
 type ColorConfig = {
     type: 'color';
@@ -148,10 +150,16 @@ type ControlMeta = {
     module?: boolean;
     /** Folder declared `_collapsible: false` — plain section header, no caret, body always open. */
     collapsible?: boolean;
+    /** Top-level folder under a `_tabs` root — it is a tab, and its children are that tab's page. */
+    tab?: boolean;
+    /** The synthetic segmented select driving `_tab` — it renders as the panel's tab bar, never as a row. */
+    tabBar?: boolean;
     options?: (string | {
         value: string;
         label: string;
     })[];
+    /** Select's rendering mode, from the SelectConfig form. */
+    display?: 'dropdown' | 'segmented';
     placeholder?: string;
     items?: GalleryItem[];
     columns?: number;

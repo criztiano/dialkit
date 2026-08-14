@@ -196,7 +196,7 @@ export type {
 } from './components/AudioLevelMeter';
 
 // Store (for advanced usage)
-export { DialStore, parseListItemSchema, groupListFields, defaultListItemParams, normalizeListItems, hintDomId } from './store/DialStore';
+export { DialStore, TAB_PATH, parseListItemSchema, groupListFields, defaultListItemParams, normalizeListItems, hintDomId } from './store/DialStore';
 export type {
   SpringConfig,
   EasingConfig,

@@ -1,4 +1,3 @@
-import * as react_jsx_runtime from 'react/jsx-runtime';
 import * as react from 'react';
 import { ReactNode, CSSProperties, ReactElement } from 'react';
 
@@ -390,6 +389,8 @@ type SelectConfig = {
         label: string;
     })[];
     default?: string;
+    /** 'segmented' renders the options as an inline segmented control instead of a dropdown. Suits 2–4 short options. */
+    display?: 'dropdown' | 'segmented';
 };
 type ColorConfig = {
     type: 'color';
@@ -611,8 +612,10 @@ type DialValue = number | boolean | string | string[] | XYValue | SpringConfig |
 type DialConfig = {
     [key: string]: DialValue | [number, number, number, number?] | CurveConfig | DialConfig;
 };
+/** UI-only reserved keys: they shape the panel, never resolve to a value. */
+type ReservedKey = '_collapsed' | '_collapsible' | '_tabs';
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T as T[K] extends CurveConfig ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T as T[K] extends CurveConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -671,10 +674,16 @@ type ControlMeta = {
     module?: boolean;
     /** Folder declared `_collapsible: false` — plain section header, no caret, body always open. */
     collapsible?: boolean;
+    /** Top-level folder under a `_tabs` root — it is a tab, and its children are that tab's page. */
+    tab?: boolean;
+    /** The synthetic segmented select driving `_tab` — it renders as the panel's tab bar, never as a row. */
+    tabBar?: boolean;
     options?: (string | {
         value: string;
         label: string;
     })[];
+    /** Select's rendering mode, from the SelectConfig form. */
+    display?: 'dropdown' | 'segmented';
     placeholder?: string;
     items?: GalleryItem[];
     columns?: number;
@@ -715,6 +724,8 @@ type ControlMeta = {
     hideLabel?: boolean;
     shortcut?: ShortcutConfig;
 };
+/** Flat-value path holding a `_tabs` panel's active tab — the key of that tab's folder. */
+declare const TAB_PATH = "_tab";
 type PanelConfig = {
     id: string;
     name: string;
@@ -778,6 +789,8 @@ type PresetProvider = {
     onCreate(suggestedLabel: string): void | Promise<void>;
     /** Omit to hide the delete affordance entirely. */
     onDelete?(id: string): void | Promise<void>;
+    /** Inline rename committed; omit to hide the rename affordance entirely. */
+    onRename?(id: string, name: string): void | Promise<void>;
 };
 /**
  * What the toolbar renders per dropdown row — one shape for both modes, so the
@@ -787,6 +800,7 @@ type PresetItem = {
     id: string;
     name: string;
     deletable: boolean;
+    renamable: boolean;
 };
 type DialKitPersistOptions = boolean | {
     key?: string;
@@ -924,6 +938,9 @@ declare class DialStoreClass {
     createPreset(panelId: string): void;
     /** Trash icon pressed on a row (only rendered when the item is deletable). */
     removePreset(panelId: string, presetId: string): void;
+    /** Rename a preset (toolbar inline edit). Provider mode hands the new name
+     * to the host; stock mode edits the store's own snapshot list. */
+    renamePreset(panelId: string, presetId: string, name: string): void;
     resolveShortcutTarget(key: string, modifier?: 'alt' | 'shift' | 'meta'): {
         panelId: string;
         path: string;
@@ -940,6 +957,18 @@ declare class DialStoreClass {
     private notifyGlobal;
     private initTransitionModes;
     private parseConfig;
+    /**
+     * Swaps a panel's whole value map, keeping the open tab. Which tab you are
+     * reading is a place, not a parameter: a preset should change the sound, not
+     * move you to another page of the panel.
+     */
+    private replaceValues;
+    /**
+     * Seeds the active tab. It is a real value, not component state, so a config
+     * rebuild preserves the reader's place — and `normalizePreservedValue` resets
+     * it through the select's options when the tab it named is gone.
+     */
+    private initTabValue;
     private flattenValues;
     private isSpringConfig;
     private isEasingConfig;
@@ -1023,7 +1052,7 @@ interface DialRootProps {
     theme?: DialTheme;
     productionEnabled?: boolean;
 }
-declare function DialRoot({ position, defaultOpen, mode, theme, productionEnabled }: DialRootProps): react_jsx_runtime.JSX.Element | null;
+declare function DialRoot({ position, defaultOpen, mode, theme, productionEnabled }: DialRootProps): react.JSX.Element | null;
 
 /**
  * Fail-soft browser persistence shared by DialStore (panel values) and
@@ -1315,7 +1344,7 @@ interface ControlRendererProps {
         step?: number;
     };
 }
-declare function ControlRenderer({ panelId, controls, values, transitionDuration }: ControlRendererProps): react_jsx_runtime.JSX.Element;
+declare function ControlRenderer({ panelId, controls, values, transitionDuration }: ControlRendererProps): react.JSX.Element;
 
 interface SliderProps {
     label: string;
@@ -1349,7 +1378,7 @@ interface SliderProps {
     shortcut?: ShortcutConfig;
     shortcutActive?: boolean;
 }
-declare function Slider({ label, value, onChange, min, max, step, unit, formatValue, valueIcon, origin, bipolar, shortcut, shortcutActive, }: SliderProps): react_jsx_runtime.JSX.Element;
+declare function Slider({ label, value, onChange, min, max, step, unit, formatValue, valueIcon, origin, bipolar, shortcut, shortcutActive, }: SliderProps): react.JSX.Element;
 
 interface RangeSliderProps {
     label: string;
@@ -1363,7 +1392,28 @@ interface RangeSliderProps {
     /** Reset target for a double-click on the track. Falls back to the full {min,max} span. */
     defaultValue?: RangeValue;
 }
-declare function RangeSlider({ label, value: rawValue, onChange, min, max, step, defaultValue, }: RangeSliderProps): react_jsx_runtime.JSX.Element;
+declare function RangeSlider({ label, value: rawValue, onChange, min, max, step, defaultValue, }: RangeSliderProps): react.JSX.Element;
+
+interface CheckboxProps {
+    checked: boolean;
+    onChange: (checked: boolean) => void;
+    /** Accessible name — the visible label is rendered by the caller. */
+    label?: string;
+    /** The control exists but cannot act right now: reads as a dash, not a
+     *  blank box, so "unavailable" never looks like "off". */
+    disabled?: boolean;
+    id?: string;
+}
+/**
+ * A compact tri-state box: on (accent, ticked), off (empty), and disabled
+ * (a dash).
+ *
+ * This replaces the Off/On segmented pair for boolean rows and module
+ * headers. A two-tab switch spends ~84px and a whole row of attention on
+ * one bit; a box spends 16px and reads instantly. The segmented control
+ * stays where it belongs — three or more genuinely different modes.
+ */
+declare function Checkbox({ checked, onChange, label, disabled, id }: CheckboxProps): react.JSX.Element;
 
 interface ToggleProps {
     label: string;
@@ -1372,7 +1422,7 @@ interface ToggleProps {
     shortcut?: ShortcutConfig;
     shortcutActive?: boolean;
 }
-declare function Toggle({ label, checked, onChange, shortcut, shortcutActive }: ToggleProps): react_jsx_runtime.JSX.Element;
+declare function Toggle({ label, checked, onChange, shortcut, shortcutActive }: ToggleProps): react.JSX.Element;
 
 interface FolderProps {
     title: string;
@@ -1384,11 +1434,13 @@ interface FolderProps {
     inline?: boolean;
     onOpenChange?: (isOpen: boolean) => void;
     toolbar?: ReactNode;
+    /** Root only — the tab bar, riding the panel header under the toolbar. */
+    tabs?: ReactNode;
     /** One line of help for the section, revealed on hover over the header. */
     hint?: string;
     hintId?: string;
 }
-declare function Folder({ title, children, defaultOpen, collapsible, isRoot, inline, onOpenChange, toolbar, hint, hintId }: FolderProps): react_jsx_runtime.JSX.Element;
+declare function Folder({ title, children, defaultOpen, collapsible, isRoot, inline, onOpenChange, toolbar, tabs, hint, hintId }: FolderProps): react.JSX.Element;
 
 interface ControlShellProps {
     /** Help text for this control. Without one the tooltip is not rendered. */
@@ -1409,7 +1461,7 @@ interface ControlShellProps {
  * Both are optional, and a control with neither renders just the wrapper plus
  * the config-path tooltip.
  */
-declare function ControlShell({ hint, title, id, affordance, panelId, path, children }: ControlShellProps): react_jsx_runtime.JSX.Element;
+declare function ControlShell({ hint, title, id, affordance, panelId, path, children }: ControlShellProps): react.JSX.Element;
 
 interface ModuleProps {
     title: string;
@@ -1425,7 +1477,7 @@ interface ModuleProps {
  * feature groups). The switch doubles as the expand control: disabling
  * collapses the body away with a smooth height transition.
  */
-declare function Module({ title, enabled, onEnabledChange, children }: ModuleProps): react_jsx_runtime.JSX.Element;
+declare function Module({ title, enabled, onEnabledChange, children }: ModuleProps): react.JSX.Element;
 
 interface SegmentedControlOption<T extends string> {
     value: T;
@@ -1436,7 +1488,7 @@ interface SegmentedControlProps<T extends string> {
     value: T;
     onChange: (value: T) => void;
 }
-declare function SegmentedControl<T extends string>({ options, value, onChange, }: SegmentedControlProps<T>): react_jsx_runtime.JSX.Element;
+declare function SegmentedControl<T extends string>({ options, value, onChange, }: SegmentedControlProps<T>): react.JSX.Element;
 
 interface ButtonGroupProps {
     buttons: Array<{
@@ -1444,7 +1496,7 @@ interface ButtonGroupProps {
         onClick: () => void;
     }>;
 }
-declare function ButtonGroup({ buttons }: ButtonGroupProps): react_jsx_runtime.JSX.Element;
+declare function ButtonGroup({ buttons }: ButtonGroupProps): react.JSX.Element;
 
 interface SpringControlProps {
     panelId: string;
@@ -1453,13 +1505,13 @@ interface SpringControlProps {
     spring: SpringConfig;
     onChange: (spring: SpringConfig) => void;
 }
-declare function SpringControl({ panelId, path, label, spring, onChange }: SpringControlProps): react_jsx_runtime.JSX.Element;
+declare function SpringControl({ panelId, path, label, spring, onChange }: SpringControlProps): react.JSX.Element;
 
 interface SpringVisualizationProps {
     spring: SpringConfig;
     isSimpleMode: boolean;
 }
-declare function SpringVisualization({ spring, isSimpleMode }: SpringVisualizationProps): react_jsx_runtime.JSX.Element;
+declare function SpringVisualization({ spring, isSimpleMode }: SpringVisualizationProps): react.JSX.Element;
 
 interface TransitionControlProps {
     panelId: string;
@@ -1478,12 +1530,12 @@ interface TransitionControlProps {
         step?: number;
     };
 }
-declare function TransitionControl({ panelId, path, label, value, onChange, hideDuration, durationControl, }: TransitionControlProps): react_jsx_runtime.JSX.Element;
+declare function TransitionControl({ panelId, path, label, value, onChange, hideDuration, durationControl, }: TransitionControlProps): react.JSX.Element;
 
 interface EasingVisualizationProps {
     easing: EasingConfig;
 }
-declare function EasingVisualization({ easing }: EasingVisualizationProps): react_jsx_runtime.JSX.Element;
+declare function EasingVisualization({ easing }: EasingVisualizationProps): react.JSX.Element;
 
 type WaveformMode = 'smooth' | 'pixelated';
 /** A loop region over the sample, as normalized 0..1 positions. */
@@ -1545,7 +1597,7 @@ interface WaveformVisualizationProps {
     width?: number;
     height?: number;
 }
-declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, pixelSize, grid, gridSubdivisions, onSeek, loop, onLoopChange, waveColor, playheadColor, autoZoomOnLoop, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
+declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, pixelSize, grid, gridSubdivisions, onSeek, loop, onLoopChange, waveColor, playheadColor, autoZoomOnLoop, width, height, }: WaveformVisualizationProps): react.JSX.Element;
 
 type AnalyserScale = 'log' | 'linear';
 /** `true` enables the default spring; an object overrides stiffness/damping. */
@@ -1609,7 +1661,7 @@ interface AnalyserVisualizationProps {
     width?: number;
     height?: number;
 }
-declare function AnalyserVisualization({ analyser, source, variant, mode, pixelSize, scale, spring, grid, gridSubdivisions, waveColor, fillColor, muted, onMuteChange, soloed, onSoloChange, width, height, }: AnalyserVisualizationProps): react_jsx_runtime.JSX.Element;
+declare function AnalyserVisualization({ analyser, source, variant, mode, pixelSize, scale, spring, grid, gridSubdivisions, waveColor, fillColor, muted, onMuteChange, soloed, onSoloChange, width, height, }: AnalyserVisualizationProps): react.JSX.Element;
 
 /** The curve vocabulary a segment cycles through on quick-click. */
 type CurveType = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'spring';
@@ -1836,7 +1888,7 @@ interface CurveComposerProps {
     /** Height of the main lane; the driver lane adds height below it. */
     height?: number;
 }
-declare function CurveComposer({ segments, driver, direction, onSegmentsChange, onDriverChange, getPhase, phase, mode, triggerSteps, onTrigger, selectedIndex, onSelect, gap, curveColor, playheadColor, grid, gridSubdivisions, width, height, }: CurveComposerProps): react_jsx_runtime.JSX.Element;
+declare function CurveComposer({ segments, driver, direction, onSegmentsChange, onDriverChange, getPhase, phase, mode, triggerSteps, onTrigger, selectedIndex, onSelect, gap, curveColor, playheadColor, grid, gridSubdivisions, width, height, }: CurveComposerProps): react.JSX.Element;
 
 interface TextControlProps {
     label: string;
@@ -1844,7 +1896,7 @@ interface TextControlProps {
     onChange: (value: string) => void;
     placeholder?: string;
 }
-declare function TextControl({ label, value, onChange, placeholder }: TextControlProps): react_jsx_runtime.JSX.Element;
+declare function TextControl({ label, value, onChange, placeholder }: TextControlProps): react.JSX.Element;
 
 type SelectOption = string | {
     value: string;
@@ -1856,7 +1908,7 @@ interface SelectControlProps {
     options: SelectOption[];
     onChange: (value: string) => void;
 }
-declare function SelectControl({ label, value, options, onChange }: SelectControlProps): react_jsx_runtime.JSX.Element;
+declare function SelectControl({ label, value, options, onChange }: SelectControlProps): react.JSX.Element;
 
 interface ColorControlProps {
     label: string;
@@ -1865,7 +1917,7 @@ interface ColorControlProps {
     alpha?: boolean;
     palette?: boolean;
 }
-declare function ColorControl({ label, value, onChange, alpha, palette }: ColorControlProps): react_jsx_runtime.JSX.Element;
+declare function ColorControl({ label, value, onChange, alpha, palette }: ColorControlProps): react.JSX.Element;
 
 interface ColorPickerPanelProps {
     value: string;
@@ -1873,14 +1925,14 @@ interface ColorPickerPanelProps {
     alpha?: boolean;
     palette?: boolean;
 }
-declare function ColorPickerPanel({ value, onChange, alpha, palette }: ColorPickerPanelProps): react_jsx_runtime.JSX.Element;
+declare function ColorPickerPanel({ value, onChange, alpha, palette }: ColorPickerPanelProps): react.JSX.Element;
 
 interface GradientControlProps {
     label: string;
     value: GradientValue;
     onChange: (value: GradientValue) => void;
 }
-declare function GradientControl({ label, value, onChange }: GradientControlProps): react_jsx_runtime.JSX.Element;
+declare function GradientControl({ label, value, onChange }: GradientControlProps): react.JSX.Element;
 
 interface GradientPanelProps {
     value: GradientValue;
@@ -1888,7 +1940,7 @@ interface GradientPanelProps {
     /** Incremental pointer delta while the drag grip is held. */
     onDrag?: (dx: number, dy: number) => void;
 }
-declare function GradientPanel({ value, onChange, onDrag }: GradientPanelProps): react_jsx_runtime.JSX.Element;
+declare function GradientPanel({ value, onChange, onDrag }: GradientPanelProps): react.JSX.Element;
 
 interface XYPadProps {
     label: string;
@@ -1932,7 +1984,7 @@ interface XYPadProps {
  * and return-to-centre comes from a CSS transition that is disabled during drag
  * (via `data-dragging`), keeping drags instant.
  */
-declare function XYPad({ label, value, onChange, x, y, size, grid, density, snap, returnToCenter, showValues, disabled, formatValue, shortcut, shortcutActive, }: XYPadProps): react_jsx_runtime.JSX.Element;
+declare function XYPad({ label, value, onChange, x, y, size, grid, density, snap, returnToCenter, showValues, disabled, formatValue, shortcut, shortcutActive, }: XYPadProps): react.JSX.Element;
 
 interface XYControlProps {
     label: string;
@@ -1953,7 +2005,7 @@ interface XYControlProps {
  * ControlMeta fields and forwards them to the standalone XYPad, mirroring how
  * ColorControl wraps ColorPickerPanel.
  */
-declare function XYControl({ label, value, onChange, x, y, grid, density, snap, returnToCenter, showValues, shortcut, shortcutActive }: XYControlProps): react_jsx_runtime.JSX.Element;
+declare function XYControl({ label, value, onChange, x, y, grid, density, snap, returnToCenter, showValues, shortcut, shortcutActive }: XYControlProps): react.JSX.Element;
 
 interface GalleryControlProps {
     label: string;
@@ -1963,7 +2015,7 @@ interface GalleryControlProps {
     /** Masonry column count for the open grid. Default 2. */
     columns?: number;
 }
-declare function GalleryControl({ label, value, items, onChange, columns }: GalleryControlProps): react_jsx_runtime.JSX.Element;
+declare function GalleryControl({ label, value, items, onChange, columns }: GalleryControlProps): react.JSX.Element;
 
 interface FileControlProps {
     label: string;
@@ -1973,7 +2025,7 @@ interface FileControlProps {
     onChange: (filename: string) => void;
     onPick: (files: FileList) => void;
 }
-declare function FileControl({ label, value, accept, multiple, onChange, onPick }: FileControlProps): react_jsx_runtime.JSX.Element;
+declare function FileControl({ label, value, accept, multiple, onChange, onPick }: FileControlProps): react.JSX.Element;
 
 interface SwatchControlProps {
     label: string;
@@ -1981,7 +2033,7 @@ interface SwatchControlProps {
     options: SwatchOption[];
     onChange: (value: string) => void;
 }
-declare function SwatchControl({ label, value, options, onChange }: SwatchControlProps): react_jsx_runtime.JSX.Element;
+declare function SwatchControl({ label, value, options, onChange }: SwatchControlProps): react.JSX.Element;
 
 interface ChipsControlProps {
     label: string;
@@ -1990,7 +2042,7 @@ interface ChipsControlProps {
     onChange: (value: string) => void;
     onRemove: (value: string) => void;
 }
-declare function ChipsControl({ label, value, options, onChange, onRemove }: ChipsControlProps): react_jsx_runtime.JSX.Element;
+declare function ChipsControl({ label, value, options, onChange, onRemove }: ChipsControlProps): react.JSX.Element;
 
 interface MultiSelectControlProps {
     label: string;
@@ -1998,7 +2050,7 @@ interface MultiSelectControlProps {
     options: MultiSelectOption[];
     onChange: (value: string[]) => void;
 }
-declare function MultiSelectControl({ label, value, options, onChange }: MultiSelectControlProps): react_jsx_runtime.JSX.Element;
+declare function MultiSelectControl({ label, value, options, onChange }: MultiSelectControlProps): react.JSX.Element;
 
 interface ListControlProps {
     label: string;
@@ -2010,7 +2062,7 @@ interface ListControlProps {
     /** Structural signal for engines that bridge list ops imperatively. */
     onEvent: (event: DialEvent) => void;
 }
-declare function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, onEvent }: ListControlProps): react_jsx_runtime.JSX.Element;
+declare function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, onEvent }: ListControlProps): react.JSX.Element;
 
 interface CurvePreviewProps {
     panelId: string;
@@ -2023,7 +2075,7 @@ interface CurvePreviewProps {
  * the config diff; markers ride the same sync), with the swap announced on the
  * control-state channel — so this subscribes there and re-reads each snapshot.
  */
-declare function CurvePreview({ panelId, control }: CurvePreviewProps): react_jsx_runtime.JSX.Element;
+declare function CurvePreview({ panelId, control }: CurvePreviewProps): react.JSX.Element;
 
 type CurvePoint = {
     /** Sample position, 0..1 across the row's width. */
@@ -2078,18 +2130,25 @@ interface PresetManagerProps {
         id: string;
         name: string;
         deletable?: boolean;
+        renamable?: boolean;
     }[];
     activePresetId: string | null;
     onAdd: () => void;
     /** Host-provider mode: the implicit "Version 1" base row is hidden. */
     providerMode?: boolean;
+    /**
+     * Bumped by the host after "+": the dropdown opens and the active preset's
+     * name goes straight into inline edit, so a fresh preset gets its name in
+     * the same gesture that created it.
+     */
+    editSignal?: number;
 }
-declare function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode }: PresetManagerProps): react_jsx_runtime.JSX.Element;
+declare function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode, editSignal }: PresetManagerProps): react.JSX.Element;
 
 interface ShortcutsMenuProps {
     panelId: string;
 }
-declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react_jsx_runtime.JSX.Element | null;
+declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react.JSX.Element | null;
 
 type AudioLevelMeterMode = 'mono' | 'stereo' | 'spectrum';
 type AudioLevelMeterColors = readonly [
@@ -2125,4 +2184,4 @@ interface SpectrumAudioLevelMeterProps extends AudioLevelMeterBaseProps {
 type AudioLevelMeterProps = MonoAudioLevelMeterProps | StereoAudioLevelMeterProps | SpectrumAudioLevelMeterProps;
 declare function AudioLevelMeter(props: AudioLevelMeterProps): ReactElement;
 
-export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, AudioLevelMeter, type AudioLevelMeterColors, type AudioLevelMeterMode, type AudioLevelMeterProps, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_MAX_HEIGHT, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, CurvePreview, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, DialTimeline, type DialTimelineProps, type DialTimelineValues, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, MIN_STOPS, Module, type MonoAudioLevelMeterProps, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpectrumAudioLevelMeterProps, type SpringConfig, SpringControl, SpringVisualization, type StereoAudioLevelMeterProps, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type UseDialTimelineOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, moveStop, nearestHandle, normToValue, normalizeCurveMarkers, normalizeGradient, normalizeHex, normalizeListItems, normalizeValue, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, readComposition, redistributeWeight, removeDriver, removeSegment, removeStop, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, triggerLevels, triggersCrossed, useDialKit, useDialTimeline, valueFromPoint, valueToNorm, valueToPercent };
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, AudioLevelMeter, type AudioLevelMeterColors, type AudioLevelMeterMode, type AudioLevelMeterProps, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_MAX_HEIGHT, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, Checkbox, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, CurvePreview, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DialConfig, type DialEvent, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, DialTimeline, type DialTimelineProps, type DialTimelineValues, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, MIN_STOPS, Module, type MonoAudioLevelMeterProps, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpectrumAudioLevelMeterProps, type SpringConfig, SpringControl, SpringVisualization, type StereoAudioLevelMeterProps, type SwatchConfig, SwatchControl, type SwatchOption, TAB_PATH, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type UseDialTimelineOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, moveStop, nearestHandle, normToValue, normalizeCurveMarkers, normalizeGradient, normalizeHex, normalizeListItems, normalizeValue, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, readComposition, redistributeWeight, removeDriver, removeSegment, removeStop, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, triggerLevels, triggersCrossed, useDialKit, useDialTimeline, valueFromPoint, valueToNorm, valueToPercent };

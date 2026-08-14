@@ -12,12 +12,14 @@ interface FolderProps {
   inline?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
   toolbar?: ReactNode;
+  /** Root only — the tab bar, riding the panel header under the toolbar. */
+  tabs?: ReactNode;
   /** One line of help for the section, revealed on hover over the header. */
   hint?: string;
   hintId?: string;
 }
 
-export function Folder({ title, children, defaultOpen = true, collapsible = true, isRoot = false, inline = false, onOpenChange, toolbar, hint, hintId }: FolderProps) {
+export function Folder({ title, children, defaultOpen = true, collapsible = true, isRoot = false, inline = false, onOpenChange, toolbar, tabs, hint, hintId }: FolderProps) {
   const [isOpen, setIsOpen] = useState(collapsible ? defaultOpen : true);
   const [isCollapsed, setIsCollapsed] = useState(collapsible ? !defaultOpen : false);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -82,6 +84,11 @@ export function Folder({ title, children, defaultOpen = true, collapsible = true
               </span>
             </div>
           )}
+          {!isRoot && toolbar && (
+            <div className="dialkit-folder-toolbar" onClick={(e) => e.stopPropagation()}>
+              {toolbar}
+            </div>
+          )}
           {isRoot && !inline && (
             <svg
               className="dialkit-panel-icon"
@@ -115,6 +122,12 @@ export function Folder({ title, children, defaultOpen = true, collapsible = true
         {isRoot && toolbar && isOpen && (
           <div className="dialkit-panel-toolbar" onClick={(e) => e.stopPropagation()}>
             {toolbar}
+          </div>
+        )}
+
+        {isRoot && tabs && isOpen && (
+          <div className="dialkit-panel-tabs" onClick={(e) => e.stopPropagation()}>
+            {tabs}
           </div>
         )}
 

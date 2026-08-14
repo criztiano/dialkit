@@ -9,6 +9,7 @@ import { ControlShell } from './ControlShell';
 import { Slider } from './Slider';
 import { RangeSlider } from './RangeSlider';
 import { Toggle } from './Toggle';
+import { SegmentedControl } from './SegmentedControl';
 import { SpringControl } from './SpringControl';
 import { TransitionControl } from './TransitionControl';
 import { TextControl } from './TextControl';
@@ -47,6 +48,14 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
 
   const renderControlNode = (control: ControlMeta) => {
     const value = values[control.path];
+
+    // Dynamic configs can drop a path's value one commit before the control
+    // list catches up (values ride the panel subscription, structure rides the
+    // global one). A value-bearing control with no value is that gap — skip it
+    // for the frame instead of handing undefined to a control.
+    if (value === undefined && control.type !== 'folder' && control.type !== 'action' && control.type !== 'curve') {
+      return null;
+    }
 
     switch (control.type) {
       case 'slider':
@@ -138,6 +147,11 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             </ModuleFolder>
           );
         }
+        // A segmented select declared as the folder's FIRST row rides the
+        // header instead — the same idiom as the module switch, for folders
+        // whose body is viewed through a mode (tabs).
+        const [first, ...rest] = control.children ?? [];
+        const headerTabs = first && first.type === 'select' && first.display === 'segmented' ? first : null;
         return (
           <Folder
             key={control.path}
@@ -146,8 +160,19 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             collapsible={control.collapsible ?? true}
             hint={control.hint}
             hintId={hintDomId(panelId, control.path)}
+            toolbar={
+              headerTabs ? (
+                <SegmentedControl
+                  options={(headerTabs.options ?? []).map((o) =>
+                    typeof o === 'string' ? { value: o, label: o } : o
+                  )}
+                  value={values[headerTabs.path] as string}
+                  onChange={(v) => DialStore.updateValue(panelId, headerTabs.path, v)}
+                />
+              ) : undefined
+            }
           >
-            {control.children?.map(renderControl)}
+            {(headerTabs ? rest : control.children)?.map(renderControl)}
           </Folder>
         );
       }
@@ -164,6 +189,20 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
         );
 
       case 'select':
+        if (control.display === 'segmented') {
+          return (
+            <div key={control.path} className="dialkit-labeled-control">
+              <span className="dialkit-labeled-control-label">{control.label}</span>
+              <SegmentedControl
+                options={(control.options ?? []).map((o) =>
+                  typeof o === 'string' ? { value: o, label: o } : o
+                )}
+                value={value as string}
+                onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+              />
+            </div>
+          );
+        }
         return (
           <SelectControl
             key={control.path}

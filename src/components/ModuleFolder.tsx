@@ -24,6 +24,11 @@ interface ModuleFolderProps {
 export function ModuleFolder({ title, enabled, onEnabledChange, defaultOpen = true, hint, hintId, children }: ModuleFolderProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
+  // A module can be nothing but its switch (the header IS the control).
+  // Rendering an empty collapse region would promise content that never
+  // comes, so header-only modules skip the body and the open toggle.
+  const headerOnly = children == null || (Array.isArray(children) && children.length === 0);
+
   const handleEnabledChange = (next: boolean) => {
     onEnabledChange(next);
     // Turning on always reveals the body — a switch that lands on a still-
@@ -32,10 +37,10 @@ export function ModuleFolder({ title, enabled, onEnabledChange, defaultOpen = tr
   };
 
   return (
-    <div className="dialkit-module dialkit-module-folder" data-open={enabled && isOpen ? 'true' : 'false'}>
+    <div className="dialkit-module dialkit-module-folder" data-open={!headerOnly && enabled && isOpen ? 'true' : 'false'}>
       <div
-        className="dialkit-module-header dialkit-module-header-toggle"
-        onClick={() => { if (enabled) setIsOpen(open => !open); }}
+        className={`dialkit-module-header ${headerOnly ? '' : 'dialkit-module-header-toggle'}`}
+        onClick={() => { if (enabled && !headerOnly) setIsOpen(open => !open); }}
         data-hint={hint ? 'true' : undefined}
         aria-describedby={hint ? hintId : undefined}
       >
@@ -48,11 +53,13 @@ export function ModuleFolder({ title, enabled, onEnabledChange, defaultOpen = tr
         )}
       </div>
 
-      <div className="dialkit-module-collapse" data-open={enabled && isOpen}>
-        <div className="dialkit-module-collapse-clip">
-          <div className="dialkit-module-inner">{children}</div>
+      {!headerOnly && (
+        <div className="dialkit-module-collapse" data-open={enabled && isOpen}>
+          <div className="dialkit-module-collapse-clip">
+            <div className="dialkit-module-inner">{children}</div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

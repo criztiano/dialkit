@@ -134,27 +134,36 @@ export function Library() {
   const easingPreview: EasingConfig = { type: 'easing', duration: 0.4, ease: [0.65, -0.4, 0.35, 1.4] };
 
   // The real, live panel — registers into DialStore and powers the preview.
+  // `_tabs: true` turns its top-level folders into the panel's tab bar, so one
+  // panel holds three groups of sections instead of one long column.
   const p = useDialKit(LIVE_PANEL, {
-    size: [120, 60, 200],
-    radius: [28, 0, 100],
-    color: '#6366f1',
-    label: 'Press',
-    variant: { type: 'select' as const, options: ['solid', 'outline', 'ghost'], default: 'solid' },
-    backdrop: { type: 'gradient' as const },
-    glow: true,
-    spring: { type: 'spring' as const, visualDuration: 0.5, bounce: 0.3 },
-    shadow: {
-      blur: [24, 0, 80],
-      opacity: [0.35, 0, 1],
+    _tabs: true,
+    shape: {
+      size: [120, 60, 200],
+      radius: [28, 0, 100],
+      variant: { type: 'select' as const, options: ['solid', 'outline', 'ghost'], default: 'solid' },
+      label: 'Press',
+    },
+    paint: {
+      color: '#6366f1',
+      backdrop: { type: 'gradient' as const },
+      glow: true,
+      shadow: {
+        blur: [24, 0, 80],
+        opacity: [0.35, 0, 1],
+      },
+    },
+    motion: {
+      spring: { type: 'spring' as const, visualDuration: 0.5, bounce: 0.3 },
     },
   }, {
     shortcuts: {
-      size: { key: 's', mode: 'coarse' },
-      glow: { key: 'g' },
+      'shape.size': { key: 's', mode: 'coarse' },
+      'paint.glow': { key: 'g' },
       // Key-gated (not 'scroll-only'): a scroll-only shortcut hijacks every wheel
       // event on the window, which would make this scrollable library page impossible
       // to scroll. Key+scroll only intercepts while R is held.
-      radius: { key: 'r', mode: 'fine' },
+      'shape.radius': { key: 'r', mode: 'fine' },
     },
   });
 
@@ -166,16 +175,16 @@ export function Library() {
 
   // Live preview styling derived from the panel values
   const previewStyle = (() => {
-    const solid = p.variant === 'solid';
-    const ghost = p.variant === 'ghost';
+    const solid = p.shape.variant === 'solid';
+    const ghost = p.shape.variant === 'ghost';
     return {
-      width: p.size,
-      height: p.size,
-      borderRadius: p.radius,
-      background: solid ? p.color : ghost ? 'transparent' : 'transparent',
-      border: solid ? 'none' : `2px solid ${p.color}`,
-      color: solid ? '#fff' : p.color,
-      boxShadow: p.glow ? `0 0 ${p.shadow.blur}px ${withAlpha(p.color, p.shadow.opacity)}` : 'none',
+      width: p.shape.size,
+      height: p.shape.size,
+      borderRadius: p.shape.radius,
+      background: solid ? p.paint.color : ghost ? 'transparent' : 'transparent',
+      border: solid ? 'none' : `2px solid ${p.paint.color}`,
+      color: solid ? '#fff' : p.paint.color,
+      boxShadow: p.paint.glow ? `0 0 ${p.paint.shadow.blur}px ${withAlpha(p.paint.color, p.paint.shadow.opacity)}` : 'none',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -394,14 +403,16 @@ export function Library() {
             </div>
             <p className="lib-section-hint">
               The real DialKit panel, embedded inline and driving the preview — presets, copy,
-              folders, the spring editor, and shortcut pills, exactly as in your app.
+              folders, the spring editor, and shortcut pills, exactly as in your app. This one
+              declares <code>_tabs: true</code>, so its top-level folders become the tab bar in
+              the panel header and only one group of sections shows at a time.
             </p>
           </div>
 
           <div className="lib-live">
             <div className="lib-preview-stage">
-              <GradientFill value={p.backdrop} />
-              <div style={previewStyle}>{p.label}</div>
+              <GradientFill value={p.paint.backdrop} />
+              <div style={previewStyle}>{p.shape.label}</div>
             </div>
             <div className="lib-window">
               <DialRoot mode="inline" theme={theme} productionEnabled />

@@ -563,6 +563,38 @@ params.reverb._enabled   // boolean — gate your processing on it
 params.reverb.mix        // number
 ```
 
+#### Tabbed panels (`_tabs`)
+
+A real instrument runs to a very long column in a 300px sidebar. Add the reserved `_tabs: true` key at the **panel root** and every top-level folder becomes a tab: the folders give up their own headers — a segmented bar in the panel header names them instead — and only the open tab's sections show.
+
+```tsx
+const params = useDialKit('Instrument', {
+  _tabs: true,
+  pattern: {
+    playback: { swing: [0, 0, 1] },   // a section of the Pattern tab
+    fill: { density: [0.5, 0, 1] },
+  },
+  instrument: {
+    shape: { attack: [0.01, 0, 1] },
+  },
+  master: {
+    output: { volume: [0.8, 0, 1] },
+  },
+});
+
+// Tabs are folders, so the values nest exactly as the config reads:
+params.pattern.playback.swing
+params.master.output.volume
+```
+
+Notes:
+
+- Root only. A `_tabs` inside a folder is stripped, not honoured.
+- Like `_collapsed`, `_tabs` is UI-only — it never appears in your values, presets, or persistence.
+- The **open** tab, however, is real state: it survives a config rebuild, and it is saved with the panel when `persist` is on. A tab that disappears from the config drops the panel back to the first one.
+- An empty folder is not shown as a tab — an empty tab should not exist.
+- A loose top-level control (not a folder) still renders, above the tabs, in view from every tab.
+
 ### Module
 
 A standalone component (advanced usage): a titled group whose header carries an **enable switch**. Use it for parameter blocks that turn on or off as a unit — synth layers, effect sends, optional feature groups — where a plain folder doesn't capture the "this whole block is on/off" state. The switch doubles as the expand control: when off, the body collapses away with a smooth height transition (so off modules don't take up space) and reveals again when on.
