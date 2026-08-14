@@ -1457,7 +1457,7 @@ var DialStoreClass = class {
       } else if (this.isSpringConfig(value) || this.isEasingConfig(value)) {
         controls.push({ type: "transition", path, label });
       } else if (this.isActionConfig(value)) {
-        controls.push({ type: "action", path, label: value.label || label });
+        controls.push({ type: "action", path, label: value.label || label, caption: value.caption });
       } else if (this.isSelectConfig(value)) {
         controls.push({ type: "select", path, label, options: value.options, display: value.display });
       } else if (this.isColorConfig(value)) {
@@ -6877,8 +6877,8 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
         );
       case "curve":
         return /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(CurvePreview, { panelId, control }, control.path);
-      case "action":
-        return /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
+      case "action": {
+        const button = /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
           "button",
           {
             className: "dialkit-button",
@@ -6888,6 +6888,12 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           },
           control.path
         );
+        if (control.caption === void 0) return button;
+        return /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "dialkit-labeled-control dialkit-captioned-action", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { className: "dialkit-labeled-control-label", children: control.caption }),
+          button
+        ] }, control.path);
+      }
       default:
         return null;
     }

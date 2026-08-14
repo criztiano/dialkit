@@ -78,7 +78,15 @@ type EasingConfig = {
 type TransitionConfig = SpringConfig | EasingConfig;
 type ActionConfig = {
     type: 'action';
+    /** The button's own text. */
     label?: string;
+    /**
+     * Text at the left of the row, with the button pushed to the right — the
+     * same shape as every other control row. Use it when the button acts ON
+     * something the row should name ("kick … [Load]"). Without it the button
+     * fills the row and carries the meaning alone.
+     */
+    caption?: string;
 };
 type SelectConfig = {
     type: 'select';

@@ -330,8 +330,8 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
       case 'curve':
         return <CurvePreview key={control.path} panelId={panelId} control={control} />;
 
-      case 'action':
-        return (
+      case 'action': {
+        const button = (
           <button
             key={control.path}
             className="dialkit-button"
@@ -343,6 +343,16 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             {control.label}
           </button>
         );
+        // A captioned action reads as a row like any other: what it acts on at
+        // the left, the button at the right.
+        if (control.caption === undefined) return button;
+        return (
+          <div key={control.path} className="dialkit-labeled-control dialkit-captioned-action">
+            <span className="dialkit-labeled-control-label">{control.caption}</span>
+            {button}
+          </div>
+        );
+      }
 
       default:
         return null;

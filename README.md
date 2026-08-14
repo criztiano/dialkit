@@ -430,6 +430,13 @@ const p = useDialKit('Controls', {
 Action buttons trigger callbacks without storing any value. The `label` defaults to the formatted key name (camelCase becomes Title Case). Multiple adjacent actions are grouped vertically.
 Action buttons can be placed at the root or nested inside folders.
 
+Add a `caption` and the action reads as a row like any other control — the caption at the left, a compact button at the right. Use it when the button acts on something the row should name:
+
+```tsx
+sample: { type: 'action', label: 'Load', caption: slotName ?? 'No sample' },
+// renders:  kick                      [ Load ]
+```
+
 ### Curve (read-only preview)
 
 A display-only row that draws an arbitrary curve your own parameters produce — for parameters that shape a curve indirectly, like a pitch arc built from a shape select plus modifier sliders:

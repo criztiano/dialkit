@@ -880,7 +880,7 @@ var DialStoreClass = class {
       } else if (this.isSpringConfig(value) || this.isEasingConfig(value)) {
         controls.push({ type: "transition", path, label });
       } else if (this.isActionConfig(value)) {
-        controls.push({ type: "action", path, label: value.label || label });
+        controls.push({ type: "action", path, label: value.label || label, caption: value.caption });
       } else if (this.isSelectConfig(value)) {
         controls.push({ type: "select", path, label, options: value.options, display: value.display });
       } else if (this.isColorConfig(value)) {

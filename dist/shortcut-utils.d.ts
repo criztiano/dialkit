@@ -150,6 +150,8 @@ type ControlMeta = {
     module?: boolean;
     /** Folder declared `_collapsible: false` — plain section header, no caret, body always open. */
     collapsible?: boolean;
+    /** Action declared a `caption` — the row names what the button acts on. */
+    caption?: string;
     /** Top-level folder under a `_tabs` root — it is a tab, and its children are that tab's page. */
     tab?: boolean;
     /** The synthetic segmented select driving `_tab` — it renders as the panel's tab bar, never as a row. */
