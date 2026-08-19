@@ -177,7 +177,7 @@ export function AnalyserShowcase() {
           {rig ? '■ Stop' : '▶ Play'}
         </button>
         <div className="lib-tabs">
-          {(['frequency', 'waveform'] as const).map((s) => (
+          {(['frequency', 'waveform', 'ekg'] as const).map((s) => (
             <button key={s} type="button" className="lib-tab" data-active={String(source === s)} onClick={() => setSource(s)}>
               {s}
             </button>

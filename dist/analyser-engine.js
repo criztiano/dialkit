@@ -61,6 +61,25 @@ function resampleWaveform(data, out) {
     out[i] = a + (b - a) * (x - j);
   }
 }
+function peakLevel(data) {
+  let mx = 0;
+  for (let i = 0; i < data.length; i++) {
+    const v = Math.abs(byteTimeToUnit(data[i]));
+    if (v > mx) mx = v;
+  }
+  return mx;
+}
+function advanceSweep(history, head, prevLevel, level, dtCols) {
+  const n = history.length;
+  if (!n) return 0;
+  const d = Math.min(dtCols, n);
+  const next = head + d;
+  for (let c = Math.floor(head) + 1; c <= Math.floor(next); c++) {
+    const t = d > 0 ? (c - head) / d : 1;
+    history[(c % n + n) % n] = prevLevel + (level - prevLevel) * t;
+  }
+  return (next % n + n) % n;
+}
 var SPRING_MAX_STEP = 1 / 240;
 function stepSprings(pos, vel, targets, stiffness, damping, dt) {
   let remaining = dt;
@@ -98,6 +117,8 @@ var MUTED_ALPHA = 0.35;
 var FREQ_AMP = 0.92;
 var WAVE_AMP = 0.42;
 var MAX_DT = 0.05;
+var EKG_SCROLL_SECONDS = 2.5;
+var EKG_AMP = 0.85;
 function smoothThrough(ctx, pts) {
   for (let i = 0; i < pts.length - 1; i++) {
     const p0 = pts[i - 1] || pts[i];
@@ -165,7 +186,7 @@ function createAnalyserEngine(canvas, get) {
     ctx.stroke();
     ctx.globalAlpha = 1;
   };
-  const baselineY = (source) => source === "frequency" ? H - Math.round(dpr) : cy;
+  const baselineY = (source) => source === "frequency" ? H - Math.round(dpr) : source === "ekg" ? H - Math.round(3 * dpr) : cy;
   const drawBaseline = (base, source, alpha) => {
     ctx.strokeStyle = base;
     ctx.globalAlpha = 0.15 * alpha;
@@ -261,6 +282,97 @@ function createAnalyserEngine(canvas, get) {
     }
     ctx.globalAlpha = 1;
   };
+  let ekgHistory = new Float32Array(0);
+  let ekgHead = 0;
+  let ekgPrevLevel = 0;
+  const ekgPos = new Float32Array(1);
+  const ekgVel = new Float32Array(1);
+  const ekgTarget = new Float32Array(1);
+  let ekgSeeded = false;
+  const syncEkg = (n) => {
+    if (ekgHistory.length === n) return;
+    ekgHistory = new Float32Array(n);
+    ekgHead = 0;
+    ekgSeeded = false;
+  };
+  const drawEkg = (rt, dt, base, alpha) => {
+    const pixelated = rt.mode === "pixelated";
+    const colW = columnWidth2(pixelated ? rt.pixelSize : 1);
+    const n = Math.max(2, Math.floor(W / colW));
+    syncEkg(n);
+    const raw = peakLevel(bytes);
+    const spring = normalizeSpring(rt.spring);
+    let level = raw;
+    if (spring) {
+      if (!ekgSeeded) {
+        ekgPos[0] = raw;
+        ekgVel[0] = 0;
+        ekgSeeded = true;
+      }
+      ekgTarget[0] = raw;
+      stepSprings(ekgPos, ekgVel, ekgTarget, spring.stiffness, spring.damping, dt);
+      level = ekgPos[0];
+    } else {
+      ekgSeeded = false;
+    }
+    ekgHead = advanceSweep(ekgHistory, ekgHead, ekgPrevLevel, level, dt / EKG_SCROLL_SECONDS * n);
+    ekgPrevLevel = level;
+    const baseY = baselineY("ekg");
+    const toY = (v) => Math.max(0, Math.min(H, baseY - v * (H * EKG_AMP)));
+    const headCol = Math.floor(ekgHead);
+    const colBehind = (k) => ((headCol - k) % n + n) % n;
+    const wave = rt.waveColor || base;
+    const fill = rt.fillColor || wave;
+    if (pixelated) {
+      const penX2 = (n - 1) * colW;
+      const blockY = (v) => Math.max(0, Math.min(H - colW, quantizeToGrid(toY(v) - colW / 2, colW)));
+      ctx.fillStyle = wave;
+      ctx.globalAlpha = alpha;
+      for (let k = 1; k < n; k++) {
+        const x = penX2 - k * colW;
+        const y = blockY(ekgHistory[colBehind(k)]);
+        if (rt.variant === "area") ctx.fillRect(x, y, colW, Math.max(colW, baseY - y));
+        else ctx.fillRect(x, y, colW, colW);
+      }
+      ctx.fillRect(penX2, blockY(level), colW, colW);
+      ctx.globalAlpha = 1;
+      return;
+    }
+    const penX = W - Math.round(3 * dpr);
+    const frac = ekgHead - headCol;
+    const pts = [{ x: penX, y: toY(level) }];
+    for (let k = 0; k < n; k++) {
+      const x = penX - (k + frac) * colW;
+      pts.push({ x, y: toY(ekgHistory[colBehind(k)]) });
+      if (x <= 0) break;
+    }
+    if (rt.variant === "area") {
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.lineTo(pts[pts.length - 1].x, baseY);
+      ctx.lineTo(penX, baseY);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.globalAlpha = AREA_FILL_ALPHA * alpha;
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = wave;
+    ctx.lineWidth = 1.6 * dpr;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+    ctx.fillStyle = wave;
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.arc(penX, toY(level), 2.6 * dpr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  };
   let springActive = false;
   let prevNow = null;
   let raf = 0;
@@ -283,6 +395,10 @@ function createAnalyserEngine(canvas, get) {
     if (bytes.length !== needed) bytes = new Uint8Array(needed);
     if (rt.source === "frequency") an.getByteFrequencyData(bytes);
     else an.getByteTimeDomainData(bytes);
+    if (rt.source === "ekg") {
+      drawEkg(rt, dt, base, alpha);
+      return;
+    }
     const pixelated = rt.mode === "pixelated";
     const n = pixelated ? Math.max(2, Math.ceil(W / columnWidth2(rt.pixelSize))) : SMOOTH_POINTS;
     syncPoints(n);

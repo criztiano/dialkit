@@ -12,6 +12,8 @@ import {
   SPRING_DEFAULT_DAMPING,
   columnWidth,
   quantizeToGrid,
+  peakLevel,
+  advanceSweep,
 } from '../src/analyser-core';
 
 describe('byte conversions', () => {
@@ -196,6 +198,50 @@ describe('normalizeSpring', () => {
   it('clamps into the integrator-stable range', () => {
     expect(normalizeSpring({ stiffness: 1e6, damping: 1e6 })).toEqual({ stiffness: 1000, damping: 100 });
     expect(normalizeSpring({ stiffness: 0, damping: 0 })).toEqual({ stiffness: 1, damping: 1 });
+  });
+});
+
+describe('peakLevel', () => {
+  it('takes the rectified peak of the window', () => {
+    // silence
+    expect(peakLevel(new Uint8Array([128, 128, 128]))).toBe(0);
+    // negative excursion dominates: byte 0 → −1 → |−1| = 1
+    expect(peakLevel(new Uint8Array([128, 0, 192]))).toBe(1);
+    // positive-only: byte 192 → 0.5
+    expect(peakLevel(new Uint8Array([128, 192, 128]))).toBe(0.5);
+    expect(peakLevel(new Uint8Array(0))).toBe(0);
+  });
+});
+
+describe('advanceSweep', () => {
+  it('writes crossed columns, lerping from the previous level', () => {
+    const hist = new Float32Array(8);
+    // head 0.5 → 4.5 crosses columns 1..4, lerped 0 → 1 across the move
+    const head = advanceSweep(hist, 0.5, 0, 1, 4);
+    expect(head).toBeCloseTo(4.5, 10);
+    expect(Array.from(hist.slice(0, 6))).toEqual([0, 0.125, 0.375, 0.625, 0.875, 0]);
+  });
+
+  it('wraps around the ring', () => {
+    const hist = new Float32Array(4);
+    const head = advanceSweep(hist, 3.5, 1, 1, 1);
+    expect(head).toBeCloseTo(0.5, 10);
+    expect(hist[0]).toBe(1); // column 4 → slot 0
+  });
+
+  it('caps a huge delta at one full sweep instead of looping', () => {
+    const hist = new Float32Array(4);
+    const head = advanceSweep(hist, 0, 1, 1, 100);
+    expect(head).toBeGreaterThanOrEqual(0);
+    expect(head).toBeLessThan(4);
+    expect(Array.from(hist)).toEqual([1, 1, 1, 1]);
+  });
+
+  it('writes nothing when the head does not cross a column', () => {
+    const hist = new Float32Array(4);
+    const head = advanceSweep(hist, 1.1, 0, 1, 0.2);
+    expect(head).toBeCloseTo(1.3, 10);
+    expect(Array.from(hist)).toEqual([0, 0, 0, 0]);
   });
 });
 

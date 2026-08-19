@@ -1137,7 +1137,7 @@ type AnalyserSpring = boolean | {
     damping?: number;
 };
 
-type AnalyserSource = 'frequency' | 'waveform';
+type AnalyserSource = 'frequency' | 'waveform' | 'ekg';
 type AnalyserVariant = 'line' | 'area';
 type AnalyserMode = 'smooth' | 'pixelated';
 
