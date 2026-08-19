@@ -12,7 +12,11 @@ interface AnalyserVisualizationProps {
    * window (which the byte data maps onto) stay under the host's control.
    */
   analyser?: AnalyserNode | null;
-  /** 'frequency' — live spectrum (EQ-style). 'waveform' — time-domain oscilloscope. */
+  /**
+   * 'frequency' — live spectrum (EQ-style). 'waveform' — time-domain oscilloscope.
+   * 'ekg' — a medical-monitor trace: a pen dot fixed at the right edge rides the
+   * signal's level while the history it draws streams away to the left.
+   */
   source?: AnalyserSource;
   /** 'area' — translucent fill under the trace plus a crisp outline. 'line' — outline only. */
   variant?: AnalyserVariant;

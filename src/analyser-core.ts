@@ -88,6 +88,39 @@ export function resampleWaveform(data: Uint8Array, out: Float32Array) {
   }
 }
 
+/** Rectified peak of a time-domain byte window → 0..1 (the EKG pen's level). */
+export function peakLevel(data: Uint8Array): number {
+  let mx = 0;
+  for (let i = 0; i < data.length; i++) {
+    const v = Math.abs(byteTimeToUnit(data[i]));
+    if (v > mx) mx = v;
+  }
+  return mx;
+}
+
+// Advance the EKG write head by `dtCols` columns and record the pen level into
+// every column the head crossed, lerping from `prevLevel` so a fast frame stays
+// a continuous trace rather than a stair-step. The ring holds the last `cols`
+// columns of history (head = newest); a delta longer than the whole ring just
+// repaints every column once. Returns the new head position in [0, cols).
+export function advanceSweep(
+  history: Float32Array,
+  head: number,
+  prevLevel: number,
+  level: number,
+  dtCols: number
+): number {
+  const n = history.length;
+  if (!n) return 0;
+  const d = Math.min(dtCols, n);
+  const next = head + d;
+  for (let c = Math.floor(head) + 1; c <= Math.floor(next); c++) {
+    const t = d > 0 ? (c - head) / d : 1;
+    history[((c % n) + n) % n] = prevLevel + (level - prevLevel) * t;
+  }
+  return ((next % n) + n) % n;
+}
+
 // The spring integrator (Hooke + damping, unit mass, semi-implicit Euler — the
 // same scheme as curve-composer-core's springPoints) applied independently per
 // display point. Substepped so a worst-case frame delta stays well inside the

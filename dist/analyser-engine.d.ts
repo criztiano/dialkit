@@ -5,7 +5,7 @@ type AnalyserSpring = boolean | {
     damping?: number;
 };
 
-type AnalyserSource = 'frequency' | 'waveform';
+type AnalyserSource = 'frequency' | 'waveform' | 'ekg';
 type AnalyserVariant = 'line' | 'area';
 type AnalyserMode = 'smooth' | 'pixelated';
 /** Everything the engine reads each frame. Wrappers supply a getter for the live values. */

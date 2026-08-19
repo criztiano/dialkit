@@ -9,6 +9,8 @@ import {
   fillFrequencyTargets,
   fillWaveformMinMax,
   resampleWaveform,
+  peakLevel,
+  advanceSweep,
   stepSprings,
   normalizeSpring,
   columnWidth as coreColumnWidth,
@@ -19,7 +21,7 @@ import {
 
 export type { AnalyserScale, AnalyserSpring } from './analyser-core';
 
-export type AnalyserSource = 'frequency' | 'waveform';
+export type AnalyserSource = 'frequency' | 'waveform' | 'ekg';
 export type AnalyserVariant = 'line' | 'area';
 export type AnalyserMode = 'smooth' | 'pixelated';
 
@@ -59,6 +61,10 @@ const WAVE_AMP = 0.42;
 // Cap on the spring frame delta: rAF pauses while the tab is hidden, so the first
 // delta after resume can be huge — clamping it keeps the springs from exploding.
 const MAX_DT = 0.05;
+// EKG scroll: seconds of signal history across the full width.
+const EKG_SCROLL_SECONDS = 2.5;
+// EKG trace amplitude as a fraction of height (rectified level, drawn upward).
+const EKG_AMP = 0.85;
 
 type Pt = { x: number; y: number };
 
@@ -158,8 +164,10 @@ export function createAnalyserEngine(canvas: HTMLCanvasElement, get: () => Analy
     ctx.globalAlpha = 1;
   };
 
-  // Resting baseline: the bottom edge for a spectrum, the center for a waveform.
-  const baselineY = (source: AnalyserSource) => (source === 'frequency' ? H - Math.round(dpr) : cy);
+  // Resting baseline: the bottom edge for a spectrum, the center for a waveform,
+  // and just above the bottom for the EKG (room for the resting pen dot).
+  const baselineY = (source: AnalyserSource) =>
+    source === 'frequency' ? H - Math.round(dpr) : source === 'ekg' ? H - Math.round(3 * dpr) : cy;
 
   const drawBaseline = (base: string, source: AnalyserSource, alpha: number) => {
     ctx.strokeStyle = base;
@@ -289,6 +297,121 @@ export function createAnalyserEngine(canvas: HTMLCanvasElement, get: () => Analy
     ctx.globalAlpha = 1;
   };
 
+  // EKG state: a ring of level history (head = newest column), the previous pen
+  // level, and a single render-side spring for the pen.
+  let ekgHistory = new Float32Array(0);
+  let ekgHead = 0;
+  let ekgPrevLevel = 0;
+  const ekgPos = new Float32Array(1);
+  const ekgVel = new Float32Array(1);
+  const ekgTarget = new Float32Array(1);
+  let ekgSeeded = false;
+
+  const syncEkg = (n: number) => {
+    if (ekgHistory.length === n) return;
+    ekgHistory = new Float32Array(n);
+    ekgHead = 0;
+    ekgSeeded = false; // blank restart on resize, same one-frame snap as syncPoints
+  };
+
+  // The EKG frame: sample the pen level (rectified peak of the window), record it
+  // into the history ring, then draw the history streaming leftward from a pen
+  // dot fixed at the right edge — the newest signal at the pen, the oldest
+  // falling off the left. Smooth mode strokes one right-to-left path (sub-column
+  // offset from the fractional head keeps the scroll butter-smooth); pixelated
+  // mode is the house block language, one block (or bar, for `area`) per column.
+  const drawEkg = (rt: AnalyserRuntime, dt: number, base: string, alpha: number) => {
+    const pixelated = rt.mode === 'pixelated';
+    const colW = columnWidth(pixelated ? rt.pixelSize : 1);
+    const n = Math.max(2, Math.floor(W / colW));
+    syncEkg(n);
+
+    const raw = peakLevel(bytes);
+    const spring = normalizeSpring(rt.spring);
+    let level = raw;
+    if (spring) {
+      if (!ekgSeeded) {
+        ekgPos[0] = raw;
+        ekgVel[0] = 0;
+        ekgSeeded = true;
+      }
+      ekgTarget[0] = raw;
+      stepSprings(ekgPos, ekgVel, ekgTarget, spring.stiffness, spring.damping, dt);
+      level = ekgPos[0]; // may overshoot below 0 — the dip below baseline is welcome
+    } else {
+      ekgSeeded = false;
+    }
+
+    ekgHead = advanceSweep(ekgHistory, ekgHead, ekgPrevLevel, level, (dt / EKG_SCROLL_SECONDS) * n);
+    ekgPrevLevel = level;
+
+    const baseY = baselineY('ekg');
+    const toY = (v: number) => Math.max(0, Math.min(H, baseY - v * (H * EKG_AMP)));
+    const headCol = Math.floor(ekgHead);
+    // Ring column holding the sample written k columns before the pen.
+    const colBehind = (k: number) => (((headCol - k) % n) + n) % n;
+
+    const wave = rt.waveColor || base;
+    const fill = rt.fillColor || wave;
+
+    if (pixelated) {
+      const penX = (n - 1) * colW;
+      const blockY = (v: number) => Math.max(0, Math.min(H - colW, quantizeToGrid(toY(v) - colW / 2, colW)));
+      ctx.fillStyle = wave;
+      ctx.globalAlpha = alpha;
+      for (let k = 1; k < n; k++) {
+        const x = penX - k * colW;
+        const y = blockY(ekgHistory[colBehind(k)]);
+        if (rt.variant === 'area') ctx.fillRect(x, y, colW, Math.max(colW, baseY - y));
+        else ctx.fillRect(x, y, colW, colW);
+      }
+      // The pen: one block pinned to the rightmost column.
+      ctx.fillRect(penX, blockY(level), colW, colW);
+      ctx.globalAlpha = 1;
+      return;
+    }
+
+    // Pen anchor, inset so the dot stays fully visible at the right edge.
+    const penX = W - Math.round(3 * dpr);
+    const frac = ekgHead - headCol;
+    const pts: Pt[] = [{ x: penX, y: toY(level) }];
+    for (let k = 0; k < n; k++) {
+      const x = penX - (k + frac) * colW;
+      pts.push({ x, y: toY(ekgHistory[colBehind(k)]) });
+      if (x <= 0) break;
+    }
+
+    if (rt.variant === 'area') {
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.lineTo(pts[pts.length - 1].x, baseY);
+      ctx.lineTo(penX, baseY);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.globalAlpha = AREA_FILL_ALPHA * alpha;
+      ctx.fill();
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = wave;
+    ctx.lineWidth = 1.6 * dpr;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.stroke();
+
+    // The pen: a solid dot in the trace color, riding the live level.
+    ctx.fillStyle = wave;
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.arc(penX, toY(level), 2.6 * dpr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  };
+
   let springActive = false;
   let prevNow: number | null = null;
 
@@ -318,6 +441,12 @@ export function createAnalyserEngine(canvas: HTMLCanvasElement, get: () => Analy
     if (bytes.length !== needed) bytes = new Uint8Array(needed);
     if (rt.source === 'frequency') an.getByteFrequencyData(bytes);
     else an.getByteTimeDomainData(bytes);
+
+    // The EKG is its own pipeline: a sweeping level history, not per-point targets.
+    if (rt.source === 'ekg') {
+      drawEkg(rt, dt, base, alpha);
+      return;
+    }
 
     // --- reduce to display targets ---
     const pixelated = rt.mode === 'pixelated';
