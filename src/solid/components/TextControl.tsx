@@ -11,12 +11,12 @@ export function TextControl(props: TextControlProps) {
   const inputId = createUniqueId();
 
   return (
-    <div class="dialkit-text-control">
-      <label class="dialkit-text-label" for={inputId}>{props.label}</label>
+    <div class="tweakers-text-control">
+      <label class="tweakers-text-label" for={inputId}>{props.label}</label>
       <input
         id={inputId}
         type="text"
-        class="dialkit-text-input"
+        class="tweakers-text-input"
         value={props.value}
         onInput={(e) => props.onChange(e.currentTarget.value)}
         placeholder={props.placeholder}

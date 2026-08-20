@@ -10,7 +10,7 @@ const PANEL_HEIGHT_ANGLED = 470;
 const PANEL_HEIGHT_RADIAL = 430;
 
 export const GradientControl = defineComponent({
-  name: 'DialKitGradientControl',
+  name: 'TweakersGradientControl',
   props: {
     label: { type: String, required: true },
     value: { type: Object as PropType<GradientValue>, required: true },
@@ -120,15 +120,15 @@ export const GradientControl = defineComponent({
     });
 
     onMounted(() => {
-      const root = triggerRef.value?.closest('.dialkit-root') as HTMLElement | null;
+      const root = triggerRef.value?.closest('.tweakers-root') as HTMLElement | null;
       portalTarget.value = root ?? document.body;
     });
 
-    return () => h('div', { class: 'dialkit-gradient-control' }, [
-      h('span', { class: 'dialkit-gradient-label' }, props.label),
+    return () => h('div', { class: 'tweakers-gradient-control' }, [
+      h('span', { class: 'tweakers-gradient-label' }, props.label),
       h('button', {
         ref: triggerRef,
-        class: 'dialkit-gradient-preview dialkit-checker',
+        class: 'tweakers-gradient-preview tweakers-checker',
         style: { '--gradient-preview': gradientToCss(props.value) },
         'data-open': String(isOpen.value),
         title: 'Edit gradient',
@@ -142,9 +142,9 @@ export const GradientControl = defineComponent({
           h(AnimatePresence, null, {
             default: () => (isOpen.value && pos.value)
               ? [h(motion.div, {
-                key: 'dialkit-gradient-popover',
+                key: 'tweakers-gradient-popover',
                 ref: setPanelRef,
-                class: 'dialkit-gradient-popover',
+                class: 'tweakers-gradient-popover',
                 initial: { opacity: 0, y: pos.value.above ? 8 : -8, scale: 0.95 },
                 animate: { opacity: 1, y: 0, scale: 1 },
                 exit: { opacity: 0, y: pos.value.above ? 8 : -8, scale: 0.95 },

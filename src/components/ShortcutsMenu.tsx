@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { PresenceMotionDiv } from './PresenceMotionDiv';
-import { DialStore, ShortcutConfig } from '../store/DialStore';
+import { TweakStore, ShortcutConfig } from '../store/TweakStore';
 
 interface ShortcutsMenuProps {
   panelId: string;
@@ -65,7 +65,7 @@ export function ShortcutsMenu({ panelId }: ShortcutsMenuProps) {
     return () => document.removeEventListener('mousedown', handler);
   }, [isOpen, close]);
 
-  const panel = DialStore.getPanel(panelId);
+  const panel = TweakStore.getPanel(panelId);
   if (!panel) return null;
 
   const shortcuts = Object.entries(panel.shortcuts);
@@ -95,7 +95,7 @@ export function ShortcutsMenu({ panelId }: ShortcutsMenuProps) {
     <>
       <motion.button
         ref={triggerRef}
-        className="dialkit-shortcuts-trigger"
+        className="tweakers-shortcuts-trigger"
         onClick={toggle}
         title="Keyboard shortcuts"
         whileTap={{ scale: 0.9 }}
@@ -116,26 +116,26 @@ export function ShortcutsMenu({ panelId }: ShortcutsMenuProps) {
           {isOpen && (
             <PresenceMotionDiv
               divRef={dropdownRef}
-              className="dialkit-root dialkit-shortcuts-dropdown"
+              className="tweakers-root tweakers-shortcuts-dropdown"
               style={{ position: 'fixed', top: pos.top, right: pos.right }}
               initial={{ opacity: 0, y: 4, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 4, scale: 0.97, pointerEvents: 'none' as any }}
               transition={{ type: 'spring', visualDuration: 0.15, bounce: 0 }}
             >
-              <div className="dialkit-shortcuts-title">Keyboard Shortcuts</div>
-              <div className="dialkit-shortcuts-list">
+              <div className="tweakers-shortcuts-title">Keyboard Shortcuts</div>
+              <div className="tweakers-shortcuts-list">
                 {rows.map((row) => (
-                  <div key={row.path} className="dialkit-shortcuts-row">
-                    <span className="dialkit-shortcuts-row-key">
+                  <div key={row.path} className="tweakers-shortcuts-row">
+                    <span className="tweakers-shortcuts-row-key">
                       {formatShortcutKey(row.shortcut)}
                     </span>
-                    <span className="dialkit-shortcuts-row-label">{row.label}</span>
-                    <span className="dialkit-shortcuts-row-mode">{formatInteraction(row.shortcut)}</span>
+                    <span className="tweakers-shortcuts-row-label">{row.label}</span>
+                    <span className="tweakers-shortcuts-row-mode">{formatInteraction(row.shortcut)}</span>
                   </div>
                 ))}
               </div>
-              <div className="dialkit-shortcuts-hint">See pill badges on controls for keys</div>
+              <div className="tweakers-shortcuts-hint">See pill badges on controls for keys</div>
             </PresenceMotionDiv>
           )}
         </AnimatePresence>,

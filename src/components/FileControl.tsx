@@ -27,12 +27,12 @@ export function FileControl({ label, value, accept, multiple = false, onChange, 
   };
 
   return (
-    <div className="dialkit-file-row">
-      <button type="button" className="dialkit-file-trigger" onClick={() => inputRef.current?.click()}>
-        <span className="dialkit-file-label">{label}</span>
-        <span className="dialkit-file-right">
+    <div className="tweakers-file-row">
+      <button type="button" className="tweakers-file-trigger" onClick={() => inputRef.current?.click()}>
+        <span className="tweakers-file-label">{label}</span>
+        <span className="tweakers-file-right">
           <svg
-            className="dialkit-file-icon"
+            className="tweakers-file-icon"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -43,12 +43,12 @@ export function FileControl({ label, value, accept, multiple = false, onChange, 
           >
             <path d={ICON_FILE} />
           </svg>
-          <span className="dialkit-file-name" data-empty={String(!value)}>{value || 'Choose file…'}</span>
+          <span className="tweakers-file-name" data-empty={String(!value)}>{value || 'Choose file…'}</span>
         </span>
       </button>
 
       {value && (
-        <button type="button" className="dialkit-file-clear" onClick={clear} aria-label="Clear file">
+        <button type="button" className="tweakers-file-clear" onClick={clear} aria-label="Clear file">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d={ICON_CLOSE} />
           </svg>
@@ -57,7 +57,7 @@ export function FileControl({ label, value, accept, multiple = false, onChange, 
 
       <input
         ref={inputRef}
-        className="dialkit-file-input"
+        className="tweakers-file-input"
         type="file"
         accept={accept}
         multiple={multiple}

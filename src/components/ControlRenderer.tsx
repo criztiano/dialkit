@@ -1,6 +1,6 @@
 import { useContext } from 'react';
-import { DialStore, hintDomId, ControlMeta, DialValue, SpringConfig, TransitionConfig, ListItemValue, XYValue } from '../store/DialStore';
-import type { RangeValue } from '../store/DialStore';
+import { TweakStore, hintDomId, ControlMeta, TweakValue, SpringConfig, TransitionConfig, ListItemValue, XYValue } from '../store/TweakStore';
+import type { RangeValue } from '../store/TweakStore';
 import type { GradientValue } from '../gradient-core';
 import { ShortcutContext } from './ShortcutListener';
 import { Folder } from './Folder';
@@ -29,7 +29,7 @@ import { CurvePreview } from './CurvePreview';
 interface ControlRendererProps {
   panelId: string;
   controls: ControlMeta[];
-  values: Record<string, DialValue>;
+  values: Record<string, TweakValue>;
   /** Optional timeline-owned duration rendered inside the transition editor. */
   transitionDuration?: {
     value: number;
@@ -40,7 +40,7 @@ interface ControlRendererProps {
   };
 }
 
-// Renders a ControlMeta tree with the full DialKit control set.
+// Renders a ControlMeta tree with the full Tweakers control set.
 // Shared by the panel dock and the timeline clip popover so every control type
 // (including this fork's extras: range, gradient, xy, gallery, file, swatch,
 // chips, list) renders identically in both surfaces.
@@ -65,7 +65,7 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             key={control.path}
             label={control.label}
             value={value as number}
-            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
             min={control.min}
             max={control.max}
             step={control.step}
@@ -85,7 +85,7 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             key={control.path}
             label={control.label}
             value={value as number}
-            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
             min={control.min}
             max={control.max}
             step={control.step}
@@ -105,7 +105,7 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             max={control.max ?? 1}
             step={control.step}
             defaultValue={control.rangeDefault}
-            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
           />
         );
 
@@ -115,7 +115,7 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             key={control.path}
             label={control.label}
             checked={value as boolean}
-            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
             shortcut={control.shortcut}
             shortcutActive={shortcutCtx.activePanelId === panelId && shortcutCtx.activePath === control.path}
           />
@@ -129,7 +129,7 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             path={control.path}
             label={control.label}
             spring={value as SpringConfig}
-            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
           />
         );
 
@@ -141,7 +141,7 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             path={control.path}
             label={control.label}
             value={value as TransitionConfig}
-            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
             durationControl={transitionDuration}
           />
         );
@@ -156,7 +156,7 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
               key={control.path}
               title={control.label}
               enabled={values[enabledPath] as boolean}
-              onEnabledChange={(v) => DialStore.updateValue(panelId, enabledPath, v)}
+              onEnabledChange={(v) => TweakStore.updateValue(panelId, enabledPath, v)}
               defaultOpen={control.defaultOpen ?? true}
               hint={control.hint}
               hintId={hintDomId(panelId, control.path)}
@@ -185,7 +185,7 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
                     typeof o === 'string' ? { value: o, label: o } : o
                   )}
                   value={values[headerTabs.path] as string}
-                  onChange={(v) => DialStore.updateValue(panelId, headerTabs.path, v)}
+                  onChange={(v) => TweakStore.updateValue(panelId, headerTabs.path, v)}
                 />
               ) : undefined
             }
@@ -201,7 +201,7 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             key={control.path}
             label={control.label}
             value={value as string}
-            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
             placeholder={control.placeholder}
           />
         );
@@ -209,14 +209,14 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
       case 'select':
         if (control.display === 'segmented') {
           return (
-            <div key={control.path} className="dialkit-labeled-control">
-              <span className="dialkit-labeled-control-label">{control.label}</span>
+            <div key={control.path} className="tweakers-labeled-control">
+              <span className="tweakers-labeled-control-label">{control.label}</span>
               <SegmentedControl
                 options={(control.options ?? []).map((o) =>
                   typeof o === 'string' ? { value: o, label: o } : o
                 )}
                 value={value as string}
-                onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+                onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
               />
             </div>
           );
@@ -227,7 +227,7 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             label={control.label}
             value={value as string}
             options={control.options ?? []}
-            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
           />
         );
 
@@ -239,7 +239,7 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             value={value as string}
             alpha={control.alpha}
             palette={control.palette}
-            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
           />
         );
 
@@ -249,7 +249,7 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             key={control.path}
             label={control.label}
             value={value as GradientValue}
-            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
           />
         );
 
@@ -268,7 +268,7 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             showValues={control.showValues}
             shortcut={control.shortcut}
             shortcutActive={shortcutCtx.activePanelId === panelId && shortcutCtx.activePath === control.path}
-            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
           />
         );
 
@@ -280,7 +280,7 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             value={value as string}
             items={control.items ?? []}
             columns={control.columns}
-            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
           />
         );
 
@@ -292,8 +292,8 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             value={value as string}
             accept={control.accept}
             multiple={control.multiple}
-            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
-            onPick={(files) => DialStore.emitEvent(panelId, control.path, { kind: 'file', files })}
+            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
+            onPick={(files) => TweakStore.emitEvent(panelId, control.path, { kind: 'file', files })}
           />
         );
 
@@ -304,7 +304,7 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             label={control.label}
             value={value as string}
             options={control.swatchOptions ?? []}
-            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
           />
         );
 
@@ -315,8 +315,8 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             label={control.label}
             value={value as string}
             options={control.chipOptions ?? []}
-            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
-            onRemove={(v) => DialStore.emitEvent(panelId, control.path, { kind: 'remove', value: v })}
+            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
+            onRemove={(v) => TweakStore.emitEvent(panelId, control.path, { kind: 'remove', value: v })}
           />
         );
 
@@ -327,7 +327,7 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             label={control.label}
             value={(value as string[]) ?? []}
             options={control.multiSelectOptions ?? []}
-            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
           />
         );
 
@@ -340,8 +340,8 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             itemTypes={control.itemTypes ?? {}}
             addLabel={control.addLabel}
             maxItems={control.maxItems}
-            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
-            onEvent={(event) => DialStore.emitEvent(panelId, control.path, event)}
+            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
+            onEvent={(event) => TweakStore.emitEvent(panelId, control.path, event)}
           />
         );
 
@@ -352,11 +352,11 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
         const button = (
           <button
             key={control.path}
-            className="dialkit-button"
+            className="tweakers-button"
             // The wrapper greys every control out, but only a real `disabled`
             // takes a button out of the tab order too.
-            disabled={DialStore.isDisabled(panelId, control.path)}
-            onClick={() => DialStore.triggerAction(panelId, control.path)}
+            disabled={TweakStore.isDisabled(panelId, control.path)}
+            onClick={() => TweakStore.triggerAction(panelId, control.path)}
           >
             {control.label}
           </button>
@@ -365,8 +365,8 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
         // the left, the button at the right.
         if (control.caption === undefined) return button;
         return (
-          <div key={control.path} className="dialkit-labeled-control dialkit-captioned-action">
-            <span className="dialkit-labeled-control-label">{control.caption}</span>
+          <div key={control.path} className="tweakers-labeled-control tweakers-captioned-action">
+            <span className="tweakers-labeled-control-label">{control.caption}</span>
             {button}
           </div>
         );

@@ -1,4 +1,4 @@
-import type { SpringConfig } from '../../store/DialStore';
+import type { SpringConfig } from '../../store/TweakStore';
 
 interface SpringVisualizationProps {
   spring: SpringConfig;
@@ -89,7 +89,7 @@ export function SpringVisualization(props: SpringVisualizationProps) {
   };
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} class="dialkit-spring-viz">
+    <svg viewBox={`0 0 ${width} ${height}`} class="tweakers-spring-viz">
       {gridLines()}
       <line
         x1={0}

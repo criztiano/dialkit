@@ -3,8 +3,8 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { useDialTimeline } from './hooks/useDialTimeline';
-import { DialStore } from './store/DialStore';
+import { useTweakTimeline } from './hooks/useTweakTimeline';
+import { TweakStore } from './store/TweakStore';
 import { TimelineStore } from './store/TimelineStore';
 import type { TimelineConfig } from './timeline-core';
 
@@ -22,14 +22,14 @@ function TimelineHarness({
   id: string;
   config: TimelineConfig;
 }) {
-  latest = useDialTimeline('React Timeline Test', config, {
+  latest = useTweakTimeline('React Timeline Test', config, {
     id,
     autoplay: false,
   }) as unknown as TimelineSnapshot;
   return null;
 }
 
-describe('useDialTimeline (React)', () => {
+describe('useTweakTimeline (React)', () => {
   it('extends the registered transport when a live physics edit grows the final clip', () => {
     const id = 'react-timeline-live-duration';
     const config = {
@@ -52,7 +52,7 @@ describe('useDialTimeline (React)', () => {
       assert.equal(TimelineStore.getTransport(id).duration, 2.15);
 
       act(() => {
-        DialStore.updateValue(id, 'dismiss.transition', {
+        TweakStore.updateValue(id, 'dismiss.transition', {
           type: 'spring',
           stiffness: 200,
           damping: 25,
@@ -87,11 +87,11 @@ describe('useDialTimeline (React)', () => {
     });
 
     assert.equal(TimelineStore.getTimelines().filter((timeline) => timeline.id === id).length, 1);
-    assert.equal(DialStore.getPanel(id)?.kind, 'timeline');
+    assert.equal(TweakStore.getPanel(id)?.kind, 'timeline');
 
     act(() => renderer?.unmount());
 
     assert.equal(TimelineStore.getTimeline(id), undefined);
-    assert.equal(DialStore.getPanel(id), undefined);
+    assert.equal(TweakStore.getPanel(id), undefined);
   });
 });

@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { motion, useMotionValue, useTransform, animate } from 'motion/react';
-import type { ShortcutConfig } from '../store/DialStore';
+import type { ShortcutConfig } from '../store/TweakStore';
 import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut } from '../shortcut-utils';
 
 interface SliderProps {
@@ -456,7 +456,7 @@ export function Slider({
         return (
           <div
             key={i}
-            className="dialkit-slider-hashmark"
+            className="tweakers-slider-hashmark"
             style={{ left: `${pct}%` }}
           />
         );
@@ -466,18 +466,18 @@ export function Slider({
         return (
           <div
             key={i}
-            className="dialkit-slider-hashmark"
+            className="tweakers-slider-hashmark"
             style={{ left: `${pct}%` }}
           />
         );
       });
 
   const cardClassName = [
-    'dialkit-slider',
-    isVertical ? 'dialkit-slider-vertical' : '',
-    isActive ? 'dialkit-slider-active' : '',
-    isInteracting ? 'dialkit-slider-engaged' : '',
-    isMetaHeld ? 'dialkit-slider-text-mode' : '',
+    'tweakers-slider',
+    isVertical ? 'tweakers-slider-vertical' : '',
+    isActive ? 'tweakers-slider-active' : '',
+    isInteracting ? 'tweakers-slider-engaged' : '',
+    isMetaHeld ? 'tweakers-slider-text-mode' : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -499,7 +499,7 @@ export function Slider({
     return (
       <div
         ref={wrapperRef}
-        className="dialkit-slider-wrapper dialkit-slider-wrapper-vertical"
+        className="tweakers-slider-wrapper tweakers-slider-wrapper-vertical"
       >
         <motion.div
           className={cardClassName}
@@ -507,9 +507,9 @@ export function Slider({
           {...pointerHandlers}
           style={{ height: rubberBandSize, y: rubberBandShift }}
         >
-          <div className="dialkit-slider-fill-area">
+          <div className="tweakers-slider-fill-area">
             <motion.div
-              className="dialkit-slider-fill-vertical"
+              className="tweakers-slider-fill-vertical"
               style={{ bottom: fillStart, height: fillExtent }}
             />
           </div>
@@ -518,7 +518,7 @@ export function Slider({
             <input
               ref={inputRef}
               type="text"
-              className="dialkit-slider-input dialkit-slider-input-vertical"
+              className="tweakers-slider-input tweakers-slider-input-vertical"
               value={inputValue}
               onChange={handleInputChange}
               onKeyDown={handleInputKeyDown}
@@ -528,7 +528,7 @@ export function Slider({
             />
           ) : (
             <span
-              className={`dialkit-slider-value-vertical ${isValueEditable ? 'dialkit-slider-value-editable' : ''}`}
+              className={`tweakers-slider-value-vertical ${isValueEditable ? 'tweakers-slider-value-editable' : ''}`}
               onMouseEnter={() => setIsValueHovered(true)}
               onMouseLeave={() => setIsValueHovered(false)}
               onClick={handleValueClick}
@@ -536,14 +536,14 @@ export function Slider({
               style={{ cursor: isValueEditable || isMetaHeld ? 'text' : 'default' }}
             >
               {displayValue}
-              {unit && <span className="dialkit-slider-unit">{unit}</span>}
+              {unit && <span className="tweakers-slider-unit">{unit}</span>}
             </span>
           )}
 
-          <span className="dialkit-slider-label-vertical">
+          <span className="tweakers-slider-label-vertical">
             {label}
             {shortcut && (
-              <span className={`dialkit-shortcut-pill${shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`}>
+              <span className={`tweakers-shortcut-pill${shortcutActive ? ' tweakers-shortcut-pill-active' : ''}`}>
                 {formatSliderShortcut(shortcut)}
               </span>
             )}
@@ -554,49 +554,49 @@ export function Slider({
   }
 
   return (
-    <div ref={wrapperRef} className="dialkit-slider-wrapper">
+    <div ref={wrapperRef} className="tweakers-slider-wrapper">
       <motion.div
         className={cardClassName}
         data-origin={hasOrigin ? 'true' : undefined}
         {...pointerHandlers}
         style={{ width: rubberBandSize, x: rubberBandShift }}
       >
-        <div className="dialkit-slider-track">
+        <div className="tweakers-slider-track">
           <motion.div
-            className="dialkit-slider-fill"
+            className="tweakers-slider-fill"
             style={{
               left: fillStart,
               width: fillExtent,
             }}
           />
           <motion.div
-            className="dialkit-slider-handle"
+            className="tweakers-slider-handle"
             style={{ left: handleLeft }}
             animate={{ opacity: isDragging ? 0.9 : 0 }}
             transition={{ opacity: { duration: 0.15 } }}
           />
         </div>
 
-        <div className="dialkit-slider-hashmarks">{hashMarks}</div>
+        <div className="tweakers-slider-hashmarks">{hashMarks}</div>
 
-        <span className="dialkit-slider-label">
+        <span className="tweakers-slider-label">
           {label}
           {shortcut && (
-            <span className={`dialkit-shortcut-pill${shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`}>
+            <span className={`tweakers-shortcut-pill${shortcutActive ? ' tweakers-shortcut-pill-active' : ''}`}>
               {formatSliderShortcut(shortcut)}
             </span>
           )}
         </span>
 
         {valueIcon != null ? (
-          <span className="dialkit-slider-value dialkit-slider-value-icon">
+          <span className="tweakers-slider-value tweakers-slider-value-icon">
             {valueIcon}
           </span>
         ) : showInput ? (
           <input
             ref={inputRef}
             type="text"
-            className="dialkit-slider-input"
+            className="tweakers-slider-input"
             value={inputValue}
             onChange={handleInputChange}
             onKeyDown={handleInputKeyDown}
@@ -606,7 +606,7 @@ export function Slider({
           />
         ) : (
           <span
-            className={`dialkit-slider-value ${isValueEditable ? 'dialkit-slider-value-editable' : ''}`}
+            className={`tweakers-slider-value ${isValueEditable ? 'tweakers-slider-value-editable' : ''}`}
             onMouseEnter={() => setIsValueHovered(true)}
             onMouseLeave={() => setIsValueHovered(false)}
             onClick={handleValueClick}
@@ -614,7 +614,7 @@ export function Slider({
             style={{ cursor: isValueEditable || isMetaHeld ? 'text' : 'default' }}
           >
             {displayValue}
-            {unit && <span className="dialkit-slider-unit">{unit}</span>}
+            {unit && <span className="tweakers-slider-unit">{unit}</span>}
           </span>
         )}
       </motion.div>

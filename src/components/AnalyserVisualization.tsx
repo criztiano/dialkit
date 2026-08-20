@@ -108,10 +108,10 @@ export function AnalyserVisualization({
   }, []);
 
   return (
-    <div className="dialkit-analyser-viz-wrap" style={{ width }}>
-      <canvas ref={canvasRef} className="dialkit-analyser-viz" style={{ width, height }} />
+    <div className="tweakers-analyser-viz-wrap" style={{ width }}>
+      <canvas ref={canvasRef} className="tweakers-analyser-viz" style={{ width, height }} />
       {(onMuteChange || onSoloChange) && (
-        <div className="dialkit-analyser-actions">
+        <div className="tweakers-analyser-actions">
           {onMuteChange && (
             <button type="button" aria-label="Mute" aria-pressed={muted} onClick={() => onMuteChange(!muted)}>
               M

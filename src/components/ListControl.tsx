@@ -16,8 +16,8 @@ import {
   type ListItemValue,
   type ListItemType,
   type ListField,
-  type DialEvent,
-} from '../store/DialStore';
+  type TweakEvent,
+} from '../store/TweakStore';
 
 interface ListControlProps {
   label: string;
@@ -27,7 +27,7 @@ interface ListControlProps {
   maxItems?: number;
   onChange: (value: ListItemValue[]) => void;
   /** Structural signal for engines that bridge list ops imperatively. */
-  onEvent: (event: DialEvent) => void;
+  onEvent: (event: TweakEvent) => void;
 }
 
 type Scalar = number | boolean | string;
@@ -65,7 +65,7 @@ function FieldList({
   onChange: (key: string, value: Scalar) => void;
 }) {
   return (
-    <div className="dialkit-list-item-fields">
+    <div className="tweakers-list-item-fields">
       {fields.map((field) => (
         <ControlShell key={field.key} hint={field.hint} id={hintDomId(rowId, field.key)}>
           <FieldControl
@@ -178,7 +178,7 @@ export function ListControl({ label, value, itemTypes, addLabel, maxItems, onCha
 
   return (
     <Folder title={label} defaultOpen>
-      <div className="dialkit-list-items" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
+      <div className="tweakers-list-items" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
         {value.map((item, index) => {
           const type = itemTypes[item.type];
           if (!type) return null;
@@ -188,7 +188,7 @@ export function ListControl({ label, value, itemTypes, addLabel, maxItems, onCha
           return (
             <div
               key={ids[index]}
-              className="dialkit-list-item"
+              className="tweakers-list-item"
               // A draggable ancestor swallows text selection, so the row stops
               // being draggable while its title is being edited.
               draggable={editing !== index}
@@ -209,10 +209,10 @@ export function ListControl({ label, value, itemTypes, addLabel, maxItems, onCha
               }}
               onDragEnd={() => { armedRef.current = null; setDragIndex(null); setOver(null); }}
             >
-              <div className="dialkit-list-item-head">
+              <div className="tweakers-list-item-head">
                 <button
                   type="button"
-                  className="dialkit-list-drag"
+                  className="tweakers-list-drag"
                   aria-label="Drag to reorder"
                   onMouseDown={() => { armedRef.current = index; }}
                 >
@@ -224,7 +224,7 @@ export function ListControl({ label, value, itemTypes, addLabel, maxItems, onCha
                   // Uncontrolled: the field owns the draft, so Escape can restore
                   // the original and let the shared blur path no-op it away.
                   <input
-                    className="dialkit-list-item-title"
+                    className="tweakers-list-item-title"
                     defaultValue={item.title ?? ''}
                     placeholder={type.label}
                     autoFocus
@@ -241,17 +241,17 @@ export function ListControl({ label, value, itemTypes, addLabel, maxItems, onCha
                 ) : (
                   <button
                     type="button"
-                    className="dialkit-list-item-title"
+                    className="tweakers-list-item-title"
                     aria-label={`Rename ${rowTitle}`}
                     onClick={() => setEditing(index)}
                   >
                     {rowTitle}
                   </button>
                 )}
-                <div className="dialkit-list-item-actions">
+                <div className="tweakers-list-item-actions">
                   <button
                     type="button"
-                    className="dialkit-list-icon-btn dialkit-list-remove"
+                    className="tweakers-list-icon-btn tweakers-list-remove"
                     onClick={() => removeItem(index)}
                     aria-label={`Remove ${rowTitle}`}
                   >
@@ -286,12 +286,12 @@ export function ListControl({ label, value, itemTypes, addLabel, maxItems, onCha
           );
         })}
 
-        {value.length === 0 && !picking && <div className="dialkit-list-empty">No items yet</div>}
+        {value.length === 0 && !picking && <div className="tweakers-list-empty">No items yet</div>}
       </div>
 
       {!atCapacity && (
-        <div className="dialkit-list-add">
-          <button type="button" className="dialkit-list-add-btn" data-open={String(picking)} onClick={handleAdd}>
+        <div className="tweakers-list-add">
+          <button type="button" className="tweakers-list-add-btn" data-open={String(picking)} onClick={handleAdd}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d={ICON_PLUS} />
             </svg>
@@ -299,13 +299,13 @@ export function ListControl({ label, value, itemTypes, addLabel, maxItems, onCha
           </button>
 
           {typeEntries.length > 1 && (
-            <div className="dialkit-list-picker" data-open={String(picking)}>
-              <div className="dialkit-list-picker-inner">
+            <div className="tweakers-list-picker" data-open={String(picking)}>
+              <div className="tweakers-list-picker-inner">
                 {typeEntries.map(([key, type]) => (
                   <button
                     key={key}
                     type="button"
-                    className="dialkit-list-picker-chip"
+                    className="tweakers-list-picker-chip"
                     onClick={() => { addItem(key); setPicking(false); }}
                   >
                     {type.label}

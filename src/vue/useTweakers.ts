@@ -1,0 +1,185 @@
+import { computed, onMounted, onUnmounted, ref, shallowRef, watch, type ComputedRef } from 'vue';
+import { TweakStore } from '../store/TweakStore';
+import type {
+  ActionConfig,
+  ColorConfig,
+  TweakConfig,
+  TweakValue,
+  EasingConfig,
+  GradientConfig,
+  ResolvedValues,
+  SelectConfig,
+  ShortcutConfig,
+  SpringConfig,
+  TextConfig,
+  AffordanceConfig,
+  PresetProvider,
+} from '../store/TweakStore';
+import { normalizeGradient, DEFAULT_GRADIENT } from '../gradient-core';
+
+export interface UseTweakersOptions {
+  onAction?: (action: string) => void;
+  shortcuts?: Record<string, ShortcutConfig>;
+  /** One line of help per control path, revealed on hover or keyboard focus. */
+  hints?: Record<string, string>;
+  /** Companion controls per control path, opened from a dot in the corner. */
+  affordances?: Record<string, AffordanceConfig>;
+  /** Display label by control path, overriding the key-derived name. */
+  labels?: Record<string, string>;
+  /**
+   * Host-owned backing for the toolbar's preset UI (see PresetProvider).
+   * Reactive `presets`/`activeId` sources are tracked through the watcher.
+   */
+  presets?: PresetProvider;
+}
+
+let tweakKitInstance = 0;
+
+export function useTweakers<T extends TweakConfig>(
+  name: string,
+  config: T,
+  options?: UseTweakersOptions
+): ComputedRef<ResolvedValues<T>> {
+  const panelId = `${name}-${++tweakKitInstance}`;
+  const configRef = shallowRef(config);
+  const onActionRef = ref(options?.onAction);
+  const shortcutsRef = shallowRef(options?.shortcuts);
+  const values = ref<Record<string, TweakValue>>(TweakStore.getValues(panelId));
+  const mounted = ref(false);
+  const serializedConfig = computed(() => JSON.stringify(config));
+  const serializedShortcuts = computed(() => JSON.stringify(options?.shortcuts));
+
+  let unsubscribeValues: (() => void) | undefined;
+  let unsubscribeActions: (() => void) | undefined;
+
+  const register = () => {
+    TweakStore.registerPanel(panelId, name, configRef.value, shortcutsRef.value, { hints: options?.hints, affordances: options?.affordances,
+      labels: options?.labels });
+    TweakStore.setPresetProvider(panelId, options?.presets ?? null);
+    values.value = TweakStore.getValues(panelId);
+
+    unsubscribeValues = TweakStore.subscribe(panelId, () => {
+      values.value = TweakStore.getValues(panelId);
+    });
+
+    unsubscribeActions = TweakStore.subscribeActions(panelId, (action) => {
+      onActionRef.value?.(action);
+    });
+  };
+
+  watch(() => options?.onAction, (next) => {
+    onActionRef.value = next;
+  });
+
+  watch(() => options?.shortcuts, (next) => {
+    shortcutsRef.value = next;
+  });
+
+  // Serializing in the getter tracks reactive `presets`/`activeId` sources;
+  // setPresetProvider swaps the object and only notifies on a data change.
+  watch(() => JSON.stringify(options?.presets ?? null), () => {
+    if (mounted.value) {
+      TweakStore.setPresetProvider(panelId, options?.presets ?? null);
+    }
+  });
+
+  watch([serializedConfig, serializedShortcuts], () => {
+    configRef.value = config;
+    shortcutsRef.value = options?.shortcuts;
+    if (mounted.value) {
+      TweakStore.updatePanel(panelId, name, configRef.value, shortcutsRef.value, { hints: options?.hints, affordances: options?.affordances,
+      labels: options?.labels });
+      values.value = TweakStore.getValues(panelId);
+    }
+  });
+
+  onMounted(register);
+  onMounted(() => {
+    mounted.value = true;
+  });
+
+  onUnmounted(() => {
+    unsubscribeValues?.();
+    unsubscribeActions?.();
+    TweakStore.unregisterPanel(panelId);
+  });
+
+  return computed(() => buildResolvedValues(configRef.value, values.value, '') as ResolvedValues<T>);
+}
+
+function buildResolvedValues(
+  config: TweakConfig,
+  flatValues: Record<string, TweakValue>,
+  prefix: string
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+
+  for (const [key, configValue] of Object.entries(config)) {
+    if (key === '_collapsed' || key === '_collapsible') continue;
+    const path = prefix ? `${prefix}.${key}` : key;
+
+    if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === 'number') {
+      result[key] = flatValues[path] ?? configValue[0];
+    } else if (typeof configValue === 'number' || typeof configValue === 'boolean' || typeof configValue === 'string') {
+      result[key] = flatValues[path] ?? configValue;
+    } else if (isSpringConfig(configValue) || isEasingConfig(configValue)) {
+      result[key] = flatValues[path] ?? configValue;
+    } else if (isActionConfig(configValue)) {
+      result[key] = flatValues[path] ?? configValue;
+    } else if (isSelectConfig(configValue)) {
+      const defaultValue = configValue.default ?? getFirstOptionValue(configValue.options);
+      result[key] = flatValues[path] ?? defaultValue;
+    } else if (isColorConfig(configValue)) {
+      result[key] = flatValues[path] ?? configValue.default ?? '#000000';
+    } else if (isGradientConfig(configValue)) {
+      // Gradient config resolves to a normalized GradientValue object. Without
+      // this branch it falls through to the nested-object case below and gets
+      // walked as a folder, resolving to the raw config — which then crashes
+      // gradientToCss with "stops is not iterable".
+      result[key] = flatValues[path] ?? normalizeGradient(configValue.default ?? DEFAULT_GRADIENT);
+    } else if (isTextConfig(configValue)) {
+      result[key] = flatValues[path] ?? configValue.default ?? '';
+    } else if (typeof configValue === 'object' && configValue !== null) {
+      result[key] = buildResolvedValues(configValue as TweakConfig, flatValues, path);
+    }
+  }
+
+  return result;
+}
+
+function hasType(value: unknown, type: string): boolean {
+  return typeof value === 'object' && value !== null && 'type' in value && (value as { type: string }).type === type;
+}
+
+function isSpringConfig(value: unknown): value is SpringConfig {
+  return hasType(value, 'spring');
+}
+
+function isEasingConfig(value: unknown): value is EasingConfig {
+  return hasType(value, 'easing');
+}
+
+function isActionConfig(value: unknown): value is ActionConfig {
+  return hasType(value, 'action');
+}
+
+function isSelectConfig(value: unknown): value is SelectConfig {
+  return hasType(value, 'select') && 'options' in (value as object) && Array.isArray((value as SelectConfig).options);
+}
+
+function isColorConfig(value: unknown): value is ColorConfig {
+  return hasType(value, 'color');
+}
+
+function isGradientConfig(value: unknown): value is GradientConfig {
+  return hasType(value, 'gradient');
+}
+
+function isTextConfig(value: unknown): value is TextConfig {
+  return hasType(value, 'text');
+}
+
+function getFirstOptionValue(options: (string | { value: string; label: string })[]): string {
+  const first = options[0];
+  return typeof first === 'string' ? first : first.value;
+}

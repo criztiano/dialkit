@@ -1,10 +1,10 @@
-import type { ControlMeta, DialValue } from 'dialkit/store';
+import type { ControlMeta, TweakValue } from 'tweakers/store';
 import type { TransitionDurationControl } from './TransitionControl.svelte';
 import ControlRenderer from './ControlRenderer.svelte';
 type $$ComponentProps = {
     panelId: string;
     control: ControlMeta;
-    values: Record<string, DialValue>;
+    values: Record<string, TweakValue>;
     transitionDuration?: TransitionDurationControl;
 };
 declare const ControlRenderer: import("svelte").Component<$$ComponentProps, {}, "">;

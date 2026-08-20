@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { parseListItemSchema, groupListFields, defaultListItemParams } from '../src/store/DialStore';
-import type { ListItemField, SwatchOption } from '../src/store/DialStore';
+import { parseListItemSchema, groupListFields, defaultListItemParams } from '../src/store/TweakStore';
+import type { ListItemField, SwatchOption } from '../src/store/TweakStore';
 
 const PALETTES: SwatchOption[] = [
   { value: 'sunset', label: 'Sunset', colors: ['#ff8a3c', '#c4456b'] },

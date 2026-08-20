@@ -120,9 +120,9 @@ export function NumberControl(props: NumberControlProps) {
 
   const className = () =>
     [
-      'dialkit-number-control',
-      isVertical() ? 'dialkit-number-control-vertical' : '',
-      isScrubbing() ? 'dialkit-number-control-engaged' : '',
+      'tweakers-number-control',
+      isVertical() ? 'tweakers-number-control-vertical' : '',
+      isScrubbing() ? 'tweakers-number-control-engaged' : '',
     ]
       .filter(Boolean)
       .join(' ');
@@ -134,12 +134,12 @@ export function NumberControl(props: NumberControlProps) {
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
     >
-      <span class="dialkit-number-label">{props.label}</span>
+      <span class="tweakers-number-label">{props.label}</span>
       {showInput() ? (
         <input
           ref={inputRef}
           type="text"
-          class="dialkit-number-input"
+          class="tweakers-number-input"
           value={inputValue()}
           onInput={(e) => setInputValue(e.currentTarget.value)}
           onKeyDown={handleInputKeyDown}
@@ -148,9 +148,9 @@ export function NumberControl(props: NumberControlProps) {
           onPointerDown={(e) => e.stopPropagation()}
         />
       ) : (
-        <span class="dialkit-number-value">
+        <span class="tweakers-number-value">
           {displayValue()}
-          {props.unit && <span class="dialkit-number-unit">{props.unit}</span>}
+          {props.unit && <span class="tweakers-number-unit">{props.unit}</span>}
         </span>
       )}
     </div>

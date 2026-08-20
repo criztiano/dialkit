@@ -63,7 +63,7 @@
 
   $effect(() => {
     if (typeof document === 'undefined' || !swatchRef) return;
-    portalTarget = (swatchRef.closest('.dialkit-root') as HTMLElement | null) ?? document.body;
+    portalTarget = (swatchRef.closest('.tweakers-root') as HTMLElement | null) ?? document.body;
   });
 
   $effect(() => {
@@ -127,16 +127,16 @@
   };
 </script>
 
-<div class="dialkit-color-control">
-  <span class="dialkit-color-label">{label}</span>
-  <div class="dialkit-color-inputs">
+<div class="tweakers-color-control">
+  <span class="tweakers-color-label">{label}</span>
+  <div class="tweakers-color-inputs">
     <!-- The whole token (hash included) is the click target for editing. -->
-    <span class="dialkit-color-hex-wrap" onclick={() => (isEditing = true)}>
-      <span class="dialkit-color-hash" aria-hidden="true">#</span>
+    <span class="tweakers-color-hex-wrap" onclick={() => (isEditing = true)}>
+      <span class="tweakers-color-hash" aria-hidden="true">#</span>
       {#if isEditing}
         <input
           type="text"
-          class="dialkit-color-hex-input"
+          class="tweakers-color-hex-input"
           aria-label={`Hex color for ${label}`}
           value={editValue}
           oninput={(e) => (editValue = (e.currentTarget as HTMLInputElement).value)}
@@ -145,20 +145,20 @@
           use:focusOnMount
         />
       {:else}
-        <span class="dialkit-color-hex" aria-label={`Hex color for ${label}`}>
+        <span class="tweakers-color-hex" aria-label={`Hex color for ${label}`}>
           {bareHex(value)}
         </span>
       {/if}
     </span>
     {#if alpha && rgba}
-      <span class="dialkit-color-divider" aria-hidden="true"></span>
-      <span class="dialkit-color-opacity">
-        {opacityPercent(rgba)} <span class="dialkit-color-opacity-unit">%</span>
+      <span class="tweakers-color-divider" aria-hidden="true"></span>
+      <span class="tweakers-color-opacity">
+        {opacityPercent(rgba)} <span class="tweakers-color-opacity-unit">%</span>
       </span>
     {/if}
     <button
       bind:this={swatchRef}
-      class="dialkit-color-swatch"
+      class="tweakers-color-swatch"
       style:--swatch-color={value}
       onclick={() => (isOpen ? (isOpen = false) : openPicker())}
       data-open={String(isOpen)}
@@ -173,7 +173,7 @@
       {#if isOpen && pos}
         <div
           bind:this={pickerRef}
-          class="dialkit-color-picker-popover"
+          class="tweakers-color-picker-popover"
           style={popoverStyle}
           transition:dropdownTransition={{ above: pos.above }}
         >

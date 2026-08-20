@@ -1,6 +1,6 @@
 import { createSignal, Show } from 'solid-js';
-import { DialStore } from '../../store/DialStore';
-import type { EasingConfig, SpringConfig, TransitionConfig } from '../../store/DialStore';
+import { TweakStore } from '../../store/TweakStore';
+import type { EasingConfig, SpringConfig, TransitionConfig } from '../../store/TweakStore';
 import { fromStore } from '../primitives';
 import { EasingVisualization } from './EasingVisualization';
 import { Folder } from './Folder';
@@ -30,8 +30,8 @@ type CurveMode = 'easing' | 'simple' | 'advanced';
 
 export function TransitionControl(props: TransitionControlProps) {
   const mode = fromStore(
-    () => DialStore.getTransitionMode(props.panelId, props.path),
-    (notify) => DialStore.subscribe(props.panelId, notify)
+    () => TweakStore.getTransitionMode(props.panelId, props.path),
+    (notify) => TweakStore.subscribe(props.panelId, notify)
   );
   const [editingEase, setEditingEase] = createSignal(false);
   const [easeDraft, setEaseDraft] = createSignal('');
@@ -66,7 +66,7 @@ export function TransitionControl(props: TransitionControlProps) {
   };
 
   const handleModeChange = (next: CurveMode) => {
-    DialStore.updateTransitionMode(props.panelId, props.path, next);
+    TweakStore.updateTransitionMode(props.panelId, props.path, next);
     props.onChange(next === 'easing' ? cache.easing : next === 'simple' ? cache.simple : cache.advanced);
   };
 
@@ -124,8 +124,8 @@ export function TransitionControl(props: TransitionControlProps) {
           <EasingVisualization easing={easing()} />
         </Show>
 
-        <div class="dialkit-labeled-control">
-          <span class="dialkit-labeled-control-label">Type</span>
+        <div class="tweakers-labeled-control">
+          <span class="tweakers-labeled-control-label">Type</span>
           <SegmentedControl
             options={[
               { value: 'easing', label: 'Easing' },
@@ -142,11 +142,11 @@ export function TransitionControl(props: TransitionControlProps) {
           <Slider label="y1" value={easing().ease[1]} onChange={(value) => updateEase(1, value)} min={-1} max={2} step={0.01} />
           <Slider label="x2" value={easing().ease[2]} onChange={(value) => updateEase(2, value)} min={0} max={1} step={0.01} />
           <Slider label="y2" value={easing().ease[3]} onChange={(value) => updateEase(3, value)} min={-1} max={2} step={0.01} />
-          <div class="dialkit-labeled-control">
-            <span class="dialkit-labeled-control-label">Ease</span>
+          <div class="tweakers-labeled-control">
+            <span class="tweakers-labeled-control-label">Ease</span>
             <input
               type="text"
-              class="dialkit-text-input"
+              class="tweakers-text-input"
               value={editingEase() ? easeDraft() : formatEase(easing().ease)}
               onInput={(event) => setEaseDraft(event.currentTarget.value)}
               onFocus={() => {

@@ -193,7 +193,7 @@ type NumberConfig = {
  * holds no value of its own, so nothing lands in ResolvedValues, presets, or
  * persistence. `sample` is a function and therefore invisible to the
  * serialized config diff (like `formatValue`); adapters push replacements
- * through `DialStore.syncCurveConfigs` so the drawing tracks the host.
+ * through `TweakStore.syncCurveConfigs` so the drawing tracks the host.
  */
 type CurveConfig = {
     type: 'curve';
@@ -312,23 +312,23 @@ type ListConfig = {
     /** Label for the add affordance. Defaults to 'Add'. */
     addLabel?: string;
 };
-type DialValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
-type DialConfig = {
-    [key: string]: DialValue | [number, number, number, number?] | CurveConfig | DialConfig;
+type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
+type TweakConfig = {
+    [key: string]: TweakValue | [number, number, number, number?] | CurveConfig | TweakConfig;
 };
 /** UI-only reserved keys: they shape the panel, never resolve to a value. */
 type ReservedKey = '_collapsed' | '_collapsible' | '_tabs';
-type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T as T[K] extends CurveConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends NumberConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+type ResolvedValues<T extends TweakConfig> = {
+    [K in keyof T as T[K] extends CurveConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends NumberConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends TweakConfig ? ResolvedValues<T[K]> : T[K];
 };
-type DialKitPersistOptions = boolean | {
+type TweakersPersistOptions = boolean | {
     key?: string;
     storage?: 'localStorage' | 'sessionStorage';
     presets?: boolean;
 };
 
 /**
- * Fail-soft browser persistence shared by DialStore (panel values) and
+ * Fail-soft browser persistence shared by TweakStore (panel values) and
  * TimelineStore (loop regions). Kept separate so the stores stay node-safe and
  * side-effect-free: nothing here touches `window` at import time, and every
  * storage access is guarded + try/caught. When storage is unavailable (SSR,
@@ -337,8 +337,8 @@ type DialKitPersistOptions = boolean | {
  *
  * Mirrors the style of color-palette-store.ts.
  */
-/** Structural mirror of DialKitPersistOptions — duplicated here to keep this
- * module free of a DialStore import (avoids a store ↔ persist cycle). */
+/** Structural mirror of TweakersPersistOptions — duplicated here to keep this
+ * module free of a TweakStore import (avoids a store ↔ persist cycle). */
 type PersistConfig = boolean | {
     key?: string;
     storage?: 'localStorage' | 'sessionStorage';
@@ -354,7 +354,7 @@ type TimelineClipMeta = {
     key: string;
     label: string;
     color: string;
-    /** Code-defined playback behavior; intentionally not exposed as a dial. */
+    /** Code-defined playback behavior; intentionally not exposed as a control. */
     loop: 'off' | 'repeat';
     /** Group key when the clip lives inside a nested layer, e.g. "circle". */
     group?: string;
@@ -456,7 +456,7 @@ declare function clamp(value: number, min: number, max: number): number;
 
 type TimelineClipLoop = 'off' | 'repeat';
 type TimelineStepValues = {
-    [key: string]: DialConfig[string] | undefined;
+    [key: string]: TweakConfig[string] | undefined;
 };
 type TimelineStepConfig = {
     duration?: number;
@@ -484,12 +484,12 @@ type TimelineClipBase = {
     loop?: boolean | TimelineClipLoop;
 };
 type TimelineClipConfig = TimelineClipBase & ({
-    from?: DialConfig;
-    to?: DialConfig;
+    from?: TweakConfig;
+    to?: TweakConfig;
     steps?: never;
     props?: never;
 } | {
-    from?: DialConfig;
+    from?: TweakConfig;
     to?: never;
     /** Sequential legs on one row — a segmented bar; boundaries retime legs. */
     steps: TimelineStepConfig[];
@@ -538,31 +538,31 @@ type TimelineClipValues<C extends TimelineClipConfig = TimelineClipConfig> = {
     step: C['steps'] extends TimelineStepConfig[] ? number : undefined;
     from: C['props'] extends Record<string, TimelinePropConfig> ? {
         [K in keyof C['props']]: number | string;
-    } : C['from'] extends DialConfig ? ResolvedValues<C['from']> : undefined;
+    } : C['from'] extends TweakConfig ? ResolvedValues<C['from']> : undefined;
     to: C['props'] extends Record<string, TimelinePropConfig> ? {
         [K in keyof C['props']]: number | string;
-    } : C['steps'] extends TimelineStepConfig[] ? C['from'] extends DialConfig ? ResolvedValues<C['from']> : Record<string, number | string> : C['to'] extends DialConfig ? ResolvedValues<C['to']> : undefined;
+    } : C['steps'] extends TimelineStepConfig[] ? C['from'] extends TweakConfig ? ResolvedValues<C['from']> : Record<string, number | string> : C['to'] extends TweakConfig ? ResolvedValues<C['to']> : undefined;
     /** `to` once the clip has started, `from` before — hand it to Motion's animate.
      * For sequences this is the final merged state; for props clips, per-track
      * endpoint records. */
     animate: C['props'] extends Record<string, TimelinePropConfig> ? {
         [K in keyof C['props']]: number | string;
-    } : C['steps'] extends TimelineStepConfig[] ? C['from'] extends DialConfig ? ResolvedValues<C['from']> : Record<string, number | string> | undefined : C['to'] extends DialConfig ? C['from'] extends DialConfig ? ResolvedValues<C['from']> | ResolvedValues<C['to']> : ResolvedValues<C['to']> | undefined : undefined;
+    } : C['steps'] extends TimelineStepConfig[] ? C['from'] extends TweakConfig ? ResolvedValues<C['from']> : Record<string, number | string> | undefined : C['to'] extends TweakConfig ? C['from'] extends TweakConfig ? ResolvedValues<C['from']> | ResolvedValues<C['to']> : ResolvedValues<C['to']> | undefined : undefined;
     /** The clip's editable curve — single-curve clips only. */
     transition: C['props'] extends Record<string, TimelinePropConfig> ? undefined : C['steps'] extends TimelineStepConfig[] ? undefined : C extends {
         transition: TransitionConfig;
     } | {
-        from: DialConfig;
+        from: TweakConfig;
     } | {
-        to: DialConfig;
+        to: TweakConfig;
     } ? TransitionConfig : undefined;
     /** Duration + timing-function for native CSS transitions — single-curve clips only. */
     css: C['props'] extends Record<string, TimelinePropConfig> ? undefined : C['steps'] extends TimelineStepConfig[] ? undefined : C extends {
         transition: TransitionConfig;
     } | {
-        from: DialConfig;
+        from: TweakConfig;
     } | {
-        to: DialConfig;
+        to: TweakConfig;
     } ? TimelineClipCss : undefined;
     /**
      * Values interpolated through the clip's curves at the current playhead —
@@ -573,12 +573,12 @@ type TimelineClipValues<C extends TimelineClipConfig = TimelineClipConfig> = {
      */
     current: C['props'] extends Record<string, TimelinePropConfig> ? {
         [K in keyof C['props']]: number | string;
-    } : C['steps'] extends TimelineStepConfig[] ? C['from'] extends DialConfig ? ResolvedValues<C['from']> : Record<string, number | string> : C['to'] extends DialConfig ? C['from'] extends DialConfig ? ResolvedValues<C['from']> | ResolvedValues<C['to']> : undefined : undefined;
+    } : C['steps'] extends TimelineStepConfig[] ? C['from'] extends TweakConfig ? ResolvedValues<C['from']> : Record<string, number | string> : C['to'] extends TweakConfig ? C['from'] extends TweakConfig ? ResolvedValues<C['from']> | ResolvedValues<C['to']> : undefined : undefined;
 };
 type TimelineGroupValues<G extends TimelineGroupConfig> = {
     [K in keyof G as G[K] extends TimelineClipConfig ? K : never]: TimelineClipValues<Extract<G[K], TimelineClipConfig>>;
 };
-type DialTimelineValues<T extends TimelineConfig> = {
+type TweakTimelineValues<T extends TimelineConfig> = {
     time: number;
     playing: boolean;
     duration: number;
@@ -594,7 +594,7 @@ type DialTimelineValues<T extends TimelineConfig> = {
 declare const TIMELINE_MIN_CLIP_DURATION = 0.05;
 type ParsedTimeline = {
     duration: number;
-    dialConfig: DialConfig;
+    tweakConfig: TweakConfig;
     clips: TimelineClipMeta[];
 };
 declare function parseTimelineConfig(config: TimelineConfig): ParsedTimeline;
@@ -652,7 +652,7 @@ type TimelineClipStatic = {
     /** Union of every property the clip touches. */
     props?: string[];
 };
-declare function computeStaticClips(parsed: ParsedTimeline, flatValues: Record<string, DialValue>): TimelineClipStatic[];
+declare function computeStaticClips(parsed: ParsedTimeline, flatValues: Record<string, TweakValue>): TimelineClipStatic[];
 type TimelineStaticState = {
     duration: number;
     clips: TimelineClipStatic[];
@@ -664,11 +664,11 @@ type TimelineStaticState = {
  * The parsed duration remains the minimum, so shortening a clip never removes
  * the original editing room.
  */
-declare function computeStaticTimeline(parsed: ParsedTimeline, flatValues: Record<string, DialValue>): TimelineStaticState;
+declare function computeStaticTimeline(parsed: ParsedTimeline, flatValues: Record<string, TweakValue>): TimelineStaticState;
 /** The dock's resolver: the same static model the hook animates with,
  * rebuilt from flat stored values — bars, popovers, and playback can never
  * disagree about geometry. */
-declare function computeClipStaticFromValues(values: Record<string, DialValue>, clip: TimelineClipMeta, timelineDuration: number): TimelineClipStatic;
+declare function computeClipStaticFromValues(values: Record<string, TweakValue>, clip: TimelineClipMeta, timelineDuration: number): TimelineClipStatic;
 /**
  * `time` is the playhead (what the dock shows); `cycleTime` is continuous
  * time across timeline wraps (wraps × duration + time). Looping clips fold
@@ -681,7 +681,7 @@ declare function transitionToCss(transition: TransitionConfig | undefined): Time
 /** Popover display values: swap stored shape-only transitions for their
  * effective configs (duration injected from the bar/segment) so the curve
  * editor shows the transition as it actually runs. */
-declare function timelinePopoverDisplayValues(values: Record<string, DialValue>, clipKey: string, stepKeys?: string[], stepKey?: string): Record<string, DialValue>;
+declare function timelinePopoverDisplayValues(values: Record<string, TweakValue>, clipKey: string, stepKeys?: string[], stepKey?: string): Record<string, TweakValue>;
 /** Dragging a track bar edits the property's phase offset. */
 declare function clampTrackDelay(delay: number, at: number, trackDuration: number, timelineDuration: number): number;
 declare function clampClipMove(at: number, duration: number, timelineDuration: number): number;
@@ -695,14 +695,14 @@ declare function clampClipResizeStart(newAt: number, at: number, duration: numbe
 declare function clampStepResize(duration: number, at: number, otherStepsTotal: number, timelineDuration: number): number;
 /** Copy-for-agent export: strip editor-only state, normalize shape-only
  * transitions, resolve physics durations, and drop zero-value defaults. */
-declare function normalizeTimelineValuesForCopy(values: Record<string, DialValue>, clips: TimelineClipMeta[]): Record<string, DialValue>;
+declare function normalizeTimelineValuesForCopy(values: Record<string, TweakValue>, clips: TimelineClipMeta[]): Record<string, TweakValue>;
 declare function formatClock(time: number, tenths?: boolean): string;
 declare function formatSeconds(value: number): string;
 declare function formatStepLabel(stepKey: string): string;
 
-interface DialTimelineOptions {
+interface TweakTimelineOptions {
     id?: string;
-    persist?: DialKitPersistOptions;
+    persist?: TweakersPersistOptions;
     /** Start playing on mount. Defaults to true. */
     autoplay?: boolean;
     /**
@@ -721,16 +721,16 @@ type TimelineActions = {
     seek: (time: number) => void;
 };
 /** One resolution of the public loop option, shared by every adapter. */
-declare function resolveTimelineLoop(loop: DialTimelineOptions['loop']): {
+declare function resolveTimelineLoop(loop: TweakTimelineOptions['loop']): {
     enabled: boolean;
     start: number;
 };
-declare function buildTimelineMeta(id: string, name: string, duration: number, parsed: ParsedTimeline, loop: DialTimelineOptions['loop']): TimelineMeta;
+declare function buildTimelineMeta(id: string, name: string, duration: number, parsed: ParsedTimeline, loop: TweakTimelineOptions['loop']): TimelineMeta;
 /**
  * Framework-neutral frame pass. Adapters only own lifecycle and reactivity;
  * the value shape and loop-cycle math stay identical everywhere.
  */
-declare function buildTimelineValues<T extends TimelineConfig>(staticClips: TimelineClipStatic[], transport: TimelineTransport, timelineDuration: number, loopStart: number, loopEnd: number, actions: TimelineActions): DialTimelineValues<T>;
+declare function buildTimelineValues<T extends TimelineConfig>(staticClips: TimelineClipStatic[], transport: TimelineTransport, timelineDuration: number, loopStart: number, loopEnd: number, actions: TimelineActions): TweakTimelineValues<T>;
 
 type Listener = () => void;
 type VisibilityController = {
@@ -758,8 +758,8 @@ declare class TimelineUiStoreClass {
 }
 declare const TimelineUiStore: TimelineUiStoreClass;
 
-declare function buildCopyInstruction(hookName: string, panelName: string, values: Record<string, DialValue>): string;
+declare function buildCopyInstruction(hookName: string, panelName: string, values: Record<string, TweakValue>): string;
 
 declare const isDevDefault: boolean;
 
-export { type DialTimelineOptions, type DialTimelineValues, type ParsedTimeline, TIMELINE_CLIP_COLORS, TIMELINE_MIN_CLIP_DURATION, type TimelineActions, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipStatic, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStaticState, type TimelineStepConfig, type TimelineStepStatic, type TimelineStepValues, TimelineStore, type TimelineTrackStatic, type TimelineTransport, TimelineUiStore, buildCopyInstruction, buildTimelineMeta, buildTimelineValues, clamp, clampClipMove, clampClipResizeEnd, clampClipResizeStart, clampStepResize, clampTrackDelay, computeClipState, computeClipStaticFromValues, computeStaticClips, computeStaticTimeline, foldLoopTime, formatClock, formatSeconds, formatStepLabel, isDevDefault, loopSpan, normalizeTimelineValuesForCopy, parseTimelineConfig, resolveTimelineLoop, timelinePopoverDisplayValues, transitionToCss };
+export { type ParsedTimeline, TIMELINE_CLIP_COLORS, TIMELINE_MIN_CLIP_DURATION, type TimelineActions, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipStatic, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStaticState, type TimelineStepConfig, type TimelineStepStatic, type TimelineStepValues, TimelineStore, type TimelineTrackStatic, type TimelineTransport, TimelineUiStore, type TweakTimelineOptions, type TweakTimelineValues, buildCopyInstruction, buildTimelineMeta, buildTimelineValues, clamp, clampClipMove, clampClipResizeEnd, clampClipResizeStart, clampStepResize, clampTrackDelay, computeClipState, computeClipStaticFromValues, computeStaticClips, computeStaticTimeline, foldLoopTime, formatClock, formatSeconds, formatStepLabel, isDevDefault, loopSpan, normalizeTimelineValuesForCopy, parseTimelineConfig, resolveTimelineLoop, timelinePopoverDisplayValues, transitionToCss };

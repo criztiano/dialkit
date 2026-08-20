@@ -2,7 +2,7 @@
   import { tick } from 'svelte';
   import { Spring } from 'svelte/motion';
   import type { Snippet } from 'svelte';
-  import type { ShortcutConfig } from 'dialkit/store';
+  import type { ShortcutConfig } from 'tweakers/store';
   import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut } from '../../shortcut-utils';
 
   let {
@@ -362,11 +362,11 @@
 
   const cardClassName = $derived(
     [
-      'dialkit-slider',
-      isVertical ? 'dialkit-slider-vertical' : '',
-      isActive ? 'dialkit-slider-active' : '',
-      isInteracting ? 'dialkit-slider-engaged' : '',
-      isMetaHeld ? 'dialkit-slider-text-mode' : '',
+      'tweakers-slider',
+      isVertical ? 'tweakers-slider-vertical' : '',
+      isActive ? 'tweakers-slider-active' : '',
+      isInteracting ? 'tweakers-slider-engaged' : '',
+      isMetaHeld ? 'tweakers-slider-text-mode' : '',
     ]
       .filter(Boolean)
       .join(' ')
@@ -397,7 +397,7 @@
 </script>
 
 {#if isVertical}
-  <div bind:this={wrapperRef} class="dialkit-slider-wrapper dialkit-slider-wrapper-vertical">
+  <div bind:this={wrapperRef} class="tweakers-slider-wrapper tweakers-slider-wrapper-vertical">
     <div
       class={cardClassName}
       data-origin={hasOrigin ? 'true' : undefined}
@@ -414,9 +414,9 @@
       }}
       onmouseleave={() => (isHovered = false)}
     >
-      <div class="dialkit-slider-fill-area">
+      <div class="tweakers-slider-fill-area">
         <div
-          class="dialkit-slider-fill-vertical"
+          class="tweakers-slider-fill-vertical"
           style={`bottom:${fillStart};height:${fillExtent};`}
         />
       </div>
@@ -425,7 +425,7 @@
         <input
           bind:this={inputRef}
           type="text"
-          class="dialkit-slider-input dialkit-slider-input-vertical"
+          class="tweakers-slider-input tweakers-slider-input-vertical"
           value={inputValue}
           oninput={(e) => (inputValue = (e.currentTarget as HTMLInputElement).value)}
           onkeydown={handleInputKeydown}
@@ -436,21 +436,21 @@
         />
       {:else}
         <span
-          class={`dialkit-slider-value-vertical ${isValueEditable ? 'dialkit-slider-value-editable' : ''}`}
+          class={`tweakers-slider-value-vertical ${isValueEditable ? 'tweakers-slider-value-editable' : ''}`}
           onmouseenter={() => (isValueHovered = true)}
           onmouseleave={() => (isValueHovered = false)}
           onclick={handleValueClick}
           onpointerdown={(e) => isValueEditable && e.stopPropagation()}
           style:cursor={isValueEditable || isMetaHeld ? 'text' : 'default'}
         >
-          {displayValue}{#if unit}<span class="dialkit-slider-unit">{unit}</span>{/if}
+          {displayValue}{#if unit}<span class="tweakers-slider-unit">{unit}</span>{/if}
         </span>
       {/if}
 
-      <span class="dialkit-slider-label-vertical">
+      <span class="tweakers-slider-label-vertical">
         {label}
         {#if shortcut}
-          <span class={`dialkit-shortcut-pill${shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`}>
+          <span class={`tweakers-shortcut-pill${shortcutActive ? ' tweakers-shortcut-pill-active' : ''}`}>
             {formatSliderShortcut(shortcut)}
           </span>
         {/if}
@@ -458,7 +458,7 @@
     </div>
   </div>
 {:else}
-  <div bind:this={wrapperRef} class="dialkit-slider-wrapper">
+  <div bind:this={wrapperRef} class="tweakers-slider-wrapper">
     <div
       class={cardClassName}
       data-origin={hasOrigin ? 'true' : undefined}
@@ -475,35 +475,35 @@
       }}
       onmouseleave={() => (isHovered = false)}
     >
-      <div class="dialkit-slider-track">
-        <div class="dialkit-slider-fill" style={`left:${fillStart};width:${fillExtent};`} />
-        <div class="dialkit-slider-handle" style={handleStyle} />
+      <div class="tweakers-slider-track">
+        <div class="tweakers-slider-fill" style={`left:${fillStart};width:${fillExtent};`} />
+        <div class="tweakers-slider-handle" style={handleStyle} />
       </div>
 
-      <div class="dialkit-slider-hashmarks">
+      <div class="tweakers-slider-hashmarks">
         {#each hashMarks as mark (mark.key)}
-          <div class="dialkit-slider-hashmark" style:left={`${mark.left}%`} />
+          <div class="tweakers-slider-hashmark" style:left={`${mark.left}%`} />
         {/each}
       </div>
 
-      <span class="dialkit-slider-label">
+      <span class="tweakers-slider-label">
         {label}
         {#if shortcut}
-          <span class={`dialkit-shortcut-pill${shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`}>
+          <span class={`tweakers-shortcut-pill${shortcutActive ? ' tweakers-shortcut-pill-active' : ''}`}>
             {formatSliderShortcut(shortcut)}
           </span>
         {/if}
       </span>
 
       {#if valueIcon}
-        <span class="dialkit-slider-value dialkit-slider-value-icon">
+        <span class="tweakers-slider-value tweakers-slider-value-icon">
           {@render valueIcon()}
         </span>
       {:else if showInput}
         <input
           bind:this={inputRef}
           type="text"
-          class="dialkit-slider-input"
+          class="tweakers-slider-input"
           value={inputValue}
           oninput={(e) => (inputValue = (e.currentTarget as HTMLInputElement).value)}
           onkeydown={handleInputKeydown}
@@ -514,14 +514,14 @@
         />
       {:else}
         <span
-          class={`dialkit-slider-value ${isValueEditable ? 'dialkit-slider-value-editable' : ''}`}
+          class={`tweakers-slider-value ${isValueEditable ? 'tweakers-slider-value-editable' : ''}`}
           onmouseenter={() => (isValueHovered = true)}
           onmouseleave={() => (isValueHovered = false)}
           onclick={handleValueClick}
           onpointerdown={(e) => isValueEditable && e.stopPropagation()}
           style:cursor={isValueEditable || isMetaHeld ? 'text' : 'default'}
         >
-          {displayValue}{#if unit}<span class="dialkit-slider-unit">{unit}</span>{/if}
+          {displayValue}{#if unit}<span class="tweakers-slider-unit">{unit}</span>{/if}
         </span>
       {/if}
     </div>

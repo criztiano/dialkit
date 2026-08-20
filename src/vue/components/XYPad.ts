@@ -1,5 +1,5 @@
 import { computed, defineComponent, h, ref, type PropType } from 'vue';
-import type { ShortcutConfig, XYAxis } from '../../store/DialStore';
+import type { ShortcutConfig, XYAxis } from '../../store/TweakStore';
 import { formatSliderShortcut } from '../../shortcut-utils';
 import {
   resolveAxis,
@@ -44,7 +44,7 @@ function formatComponent(v: number, axis: AxisSpec): string {
  * (via `data-dragging`), keeping drags instant.
  */
 export const XYPad = defineComponent({
-  name: 'DialKitXYPad',
+  name: 'TweakersXYPad',
   props: {
     label: { type: String, required: true },
     value: { type: Object as PropType<XYValue>, required: true },
@@ -280,16 +280,16 @@ export const XYPad = defineComponent({
       const topPct = `${point.y * 100}%`;
 
       return h('div', {
-        class: 'dialkit-xy',
+        class: 'tweakers-xy',
         'data-active': String(active.value),
         'data-disabled': String(props.disabled),
       }, [
-        h('div', { class: 'dialkit-xy-header' }, [
-          h('span', { class: 'dialkit-xy-label' }, [
+        h('div', { class: 'tweakers-xy-header' }, [
+          h('span', { class: 'tweakers-xy-label' }, [
             props.label,
             props.shortcut
               ? h('span', {
-                class: `dialkit-shortcut-pill${props.shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`,
+                class: `tweakers-shortcut-pill${props.shortcutActive ? ' tweakers-shortcut-pill-active' : ''}`,
               }, formatSliderShortcut(props.shortcut))
               : null,
           ]),
@@ -297,7 +297,7 @@ export const XYPad = defineComponent({
 
         h('div', {
           ref: areaRef,
-          class: 'dialkit-xy-area',
+          class: 'tweakers-xy-area',
           // Only the height is fixed (from `size`); width is fluid (CSS width:100%),
           // so the pad grows to fill the container and is no longer forced square.
           style: { height: `${props.size}px` },
@@ -327,22 +327,22 @@ export const XYPad = defineComponent({
         }, [
           showGrid
             ? h('div', {
-              class: 'dialkit-xy-grid',
+              class: 'tweakers-xy-grid',
               'aria-hidden': 'true',
               style: {
-                '--dial-xy-grid-step-x': `${100 / gridX}%`,
-                '--dial-xy-grid-step-y': `${100 / gridY}%`,
+                '--tweak-xy-grid-step-x': `${100 / gridX}%`,
+                '--tweak-xy-grid-step-y': `${100 / gridY}%`,
               },
             })
             : null,
           // Live axis labels, decorative (aria-valuetext owns the accessible string):
           // X along the bottom edge, Y up the left edge.
-          h('div', { class: 'dialkit-xy-axis dialkit-xy-axis-x', 'aria-hidden': 'true' }, xVisual),
-          h('div', { class: 'dialkit-xy-axis dialkit-xy-axis-y', 'aria-hidden': 'true' }, yVisual),
+          h('div', { class: 'tweakers-xy-axis tweakers-xy-axis-x', 'aria-hidden': 'true' }, xVisual),
+          h('div', { class: 'tweakers-xy-axis tweakers-xy-axis-y', 'aria-hidden': 'true' }, yVisual),
           // Crosshair guides tracking the thumb, revealed on data-active.
-          h('div', { class: 'dialkit-xy-guide dialkit-xy-guide-v', 'aria-hidden': 'true', style: { left: leftPct } }),
-          h('div', { class: 'dialkit-xy-guide dialkit-xy-guide-h', 'aria-hidden': 'true', style: { top: topPct } }),
-          h('div', { class: 'dialkit-xy-thumb', 'aria-hidden': 'true', style: { left: leftPct, top: topPct } }),
+          h('div', { class: 'tweakers-xy-guide tweakers-xy-guide-v', 'aria-hidden': 'true', style: { left: leftPct } }),
+          h('div', { class: 'tweakers-xy-guide tweakers-xy-guide-h', 'aria-hidden': 'true', style: { top: topPct } }),
+          h('div', { class: 'tweakers-xy-thumb', 'aria-hidden': 'true', style: { left: leftPct, top: topPct } }),
         ]),
       ]);
     };

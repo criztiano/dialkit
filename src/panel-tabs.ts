@@ -1,4 +1,4 @@
-import type { ControlMeta, DialValue } from './store/DialStore';
+import type { ControlMeta, TweakValue } from './store/TweakStore';
 
 /**
  * How a tabbed panel divides its controls. A `_tabs` root promotes every
@@ -21,7 +21,7 @@ export type PanelTabs = {
  * `_tab`; a value naming no live tab falls back to the first, so a panel is
  * never left on a blank page.
  */
-export function splitPanelTabs(controls: ControlMeta[], activeValue: DialValue | undefined): PanelTabs {
+export function splitPanelTabs(controls: ControlMeta[], activeValue: TweakValue | undefined): PanelTabs {
   const tabs = controls.filter((control) => control.tab);
 
   if (!controls.some((control) => control.tabBar) || tabs.length === 0) {

@@ -61,37 +61,37 @@ export function Folder({ title, children, defaultOpen = true, collapsible = true
   };
 
   const folderContent = (
-    <div ref={isRoot ? contentRef : undefined} className={`dialkit-folder ${isRoot ? 'dialkit-folder-root' : ''}`}>
+    <div ref={isRoot ? contentRef : undefined} className={`tweakers-folder ${isRoot ? 'tweakers-folder-root' : ''}`}>
       <div
-        className={`dialkit-folder-header ${isRoot ? 'dialkit-panel-header' : ''} ${collapsible ? '' : 'dialkit-folder-header-static'}`}
+        className={`tweakers-folder-header ${isRoot ? 'tweakers-panel-header' : ''} ${collapsible ? '' : 'tweakers-folder-header-static'}`}
         onClick={collapsible ? handleToggle : undefined}
         data-hint={hint ? 'true' : undefined}
         aria-describedby={hint ? hintId : undefined}
       >
-        <div className="dialkit-folder-header-top">
+        <div className="tweakers-folder-header-top">
           {isRoot ? (
             isOpen && (
-              <div className="dialkit-folder-title-row">
-                <span className="dialkit-folder-title dialkit-folder-title-root">
+              <div className="tweakers-folder-title-row">
+                <span className="tweakers-folder-title tweakers-folder-title-root">
                   {title}
                 </span>
               </div>
             )
           ) : (
-            <div className="dialkit-folder-title-row">
-              <span className="dialkit-folder-title">
+            <div className="tweakers-folder-title-row">
+              <span className="tweakers-folder-title">
                 {title}
               </span>
             </div>
           )}
           {!isRoot && toolbar && (
-            <div className="dialkit-folder-toolbar" onClick={(e) => e.stopPropagation()}>
+            <div className="tweakers-folder-toolbar" onClick={(e) => e.stopPropagation()}>
               {toolbar}
             </div>
           )}
           {isRoot && !inline && (
             <svg
-              className="dialkit-panel-icon"
+              className="tweakers-panel-icon"
               viewBox="0 0 16 16"
               fill="none"
             >
@@ -103,7 +103,7 @@ export function Folder({ title, children, defaultOpen = true, collapsible = true
           )}
           {!isRoot && collapsible && (
             <motion.svg
-              className="dialkit-folder-icon"
+              className="tweakers-folder-icon"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -120,19 +120,19 @@ export function Folder({ title, children, defaultOpen = true, collapsible = true
         </div>
 
         {isRoot && toolbar && isOpen && (
-          <div className="dialkit-panel-toolbar" onClick={(e) => e.stopPropagation()}>
+          <div className="tweakers-panel-toolbar" onClick={(e) => e.stopPropagation()}>
             {toolbar}
           </div>
         )}
 
         {isRoot && tabs && isOpen && (
-          <div className="dialkit-panel-tabs" onClick={(e) => e.stopPropagation()}>
+          <div className="tweakers-panel-tabs" onClick={(e) => e.stopPropagation()}>
             {tabs}
           </div>
         )}
 
         {hint && (
-          <span className="dialkit-hint" id={hintId} role="tooltip">
+          <span className="tweakers-hint" id={hintId} role="tooltip">
             {hint}
           </span>
         )}
@@ -141,14 +141,14 @@ export function Folder({ title, children, defaultOpen = true, collapsible = true
       <AnimatePresence initial={false}>
         {isOpen && (
           <motion.div
-            className="dialkit-folder-content"
+            className="tweakers-folder-content"
             initial={isRoot ? undefined : { height: 0, opacity: 0 }}
             animate={isRoot ? undefined : { height: 'auto', opacity: 1 }}
             exit={isRoot ? undefined : { height: 0, opacity: 0 }}
             transition={isRoot ? undefined : { type: 'spring', visualDuration: 0.35, bounce: 0.1 }}
             style={isRoot ? undefined : { clipPath: 'inset(0 -20px)' }}
           >
-            <div className="dialkit-folder-inner">{children}</div>
+            <div className="tweakers-folder-inner">{children}</div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -158,19 +158,19 @@ export function Folder({ title, children, defaultOpen = true, collapsible = true
   if (isRoot) {
     if (inline) {
       return (
-        <div className="dialkit-panel-inner dialkit-panel-inline">
+        <div className="tweakers-panel-inner tweakers-panel-inline">
           {folderContent}
         </div>
       );
     }
 
     const panelStyle = isOpen
-      ? { width: 280, height: contentHeight !== undefined ? Math.min(contentHeight + 10, windowHeight - 32) : 'auto' as const, borderRadius: 14, boxShadow: 'var(--dial-shadow)', cursor: undefined as string | undefined, overflowY: 'auto' as const }
-      : { width: 42, height: 42, borderRadius: '50%', boxSizing: 'border-box' as const, boxShadow: 'var(--dial-shadow-collapsed)', overflow: 'hidden' as const, cursor: 'pointer' as const };
+      ? { width: 280, height: contentHeight !== undefined ? Math.min(contentHeight + 10, windowHeight - 32) : 'auto' as const, borderRadius: 14, boxShadow: 'var(--tweak-shadow)', cursor: undefined as string | undefined, overflowY: 'auto' as const }
+      : { width: 42, height: 42, borderRadius: '50%', boxSizing: 'border-box' as const, boxShadow: 'var(--tweak-shadow-collapsed)', overflow: 'hidden' as const, cursor: 'pointer' as const };
 
     return (
       <motion.div
-        className="dialkit-panel-inner"
+        className="tweakers-panel-inner"
         style={panelStyle}
         onClick={!isOpen ? handleToggle : undefined}
         data-collapsed={isCollapsed}

@@ -93,7 +93,7 @@ function ChannelField({ spec, value, onCommit }: { spec: ChannelSpec; value: num
   };
 
   return (
-    <label className="dialkit-color-field">
+    <label className="tweakers-color-field">
       <input
         type="text"
         inputMode="decimal"
@@ -115,7 +115,7 @@ function ChannelField({ spec, value, onCommit }: { spec: ChannelSpec; value: num
           }
         }}
       />
-      <span className="dialkit-color-field-label">{spec.label}</span>
+      <span className="tweakers-color-field-label">{spec.label}</span>
     </label>
   );
 }
@@ -132,7 +132,7 @@ function HexField({ value, alpha, onCommit }: { value: string; alpha: boolean; o
   };
 
   return (
-    <label className="dialkit-color-field dialkit-color-field-hex">
+    <label className="tweakers-color-field tweakers-color-field-hex">
       <input
         type="text"
         spellCheck={false}
@@ -154,7 +154,7 @@ function HexField({ value, alpha, onCommit }: { value: string; alpha: boolean; o
           }
         }}
       />
-      <span className="dialkit-color-field-label">HEX</span>
+      <span className="tweakers-color-field-label">HEX</span>
     </label>
   );
 }
@@ -186,7 +186,7 @@ function PaletteSlot({
 
   return (
     <button
-      className="dialkit-color-palette-slot"
+      className="tweakers-color-palette-slot"
       data-filled={String(color !== null)}
       data-holding={String(holding)}
       style={color ? ({ '--swatch-color': color } as React.CSSProperties) : undefined}
@@ -304,9 +304,9 @@ export function ColorPickerPanel({ value, onChange, alpha = false, palette = fal
   };
 
   return (
-    <div className="dialkit-color-picker" style={{ '--picker-hue': hsva.h } as React.CSSProperties}>
+    <div className="tweakers-color-picker" style={{ '--picker-hue': hsva.h } as React.CSSProperties}>
       <div
-        className="dialkit-color-sv"
+        className="tweakers-color-sv"
         ref={svDrag.ref}
         onPointerDown={svDrag.onPointerDown}
         onPointerMove={svDrag.onPointerMove}
@@ -314,13 +314,13 @@ export function ColorPickerPanel({ value, onChange, alpha = false, palette = fal
         onPointerCancel={svDrag.onPointerCancel}
       >
         <div
-          className="dialkit-color-sv-thumb"
+          className="tweakers-color-sv-thumb"
           style={{ left: `${hsva.s * 100}%`, top: `${(1 - hsva.v) * 100}%`, background: opaqueHex }}
         />
       </div>
 
       <div
-        className="dialkit-color-slider dialkit-color-hue"
+        className="tweakers-color-slider tweakers-color-hue"
         ref={hueDrag.ref}
         onPointerDown={hueDrag.onPointerDown}
         onPointerMove={hueDrag.onPointerMove}
@@ -328,14 +328,14 @@ export function ColorPickerPanel({ value, onChange, alpha = false, palette = fal
         onPointerCancel={hueDrag.onPointerCancel}
       >
         <div
-          className="dialkit-color-slider-thumb"
+          className="tweakers-color-slider-thumb"
           style={{ left: `${(hsva.h / 360) * 100}%`, background: `hsl(${hsva.h} 100% 50%)` }}
         />
       </div>
 
       {alpha && (
         <div
-          className="dialkit-color-slider dialkit-color-alpha dialkit-checker"
+          className="tweakers-color-slider tweakers-color-alpha tweakers-checker"
           ref={alphaDrag.ref}
           onPointerDown={alphaDrag.onPointerDown}
           onPointerMove={alphaDrag.onPointerMove}
@@ -343,11 +343,11 @@ export function ColorPickerPanel({ value, onChange, alpha = false, palette = fal
           onPointerCancel={alphaDrag.onPointerCancel}
         >
           <div
-            className="dialkit-color-alpha-gradient"
+            className="tweakers-color-alpha-gradient"
             style={{ background: `linear-gradient(to right, transparent, ${opaqueHex})` }}
           />
           <div
-            className="dialkit-color-slider-thumb"
+            className="tweakers-color-slider-thumb"
             style={{ left: `${hsva.a * 100}%`, background: opaqueHex, opacity: Math.max(hsva.a, 0.15) }}
           />
         </div>
@@ -362,7 +362,7 @@ export function ColorPickerPanel({ value, onChange, alpha = false, palette = fal
         }}
       />
 
-      <div className="dialkit-color-fields" data-format={format}>
+      <div className="tweakers-color-fields" data-format={format}>
         {format === 'hex' ? (
           <>
             <HexField value={currentHex} alpha={alpha} onCommit={applyHex} />
@@ -382,7 +382,7 @@ export function ColorPickerPanel({ value, onChange, alpha = false, palette = fal
       </div>
 
       {palette && (
-        <div className="dialkit-color-palette">
+        <div className="tweakers-color-palette">
           {Array.from({ length: PALETTE_SIZE }, (_, i) => (
             <PaletteSlot
               key={i}

@@ -1,16 +1,16 @@
 // Core API
-export { createDialKit } from './createDialKit.svelte';
-export type { CreateDialOptions, DialKitValues } from './createDialKit.svelte';
+export { createTweakers } from './createTweakers.svelte';
+export type { CreateTweakersOptions, TweakersValues } from './createTweakers.svelte';
 
 // Root component
-export { default as DialRoot } from './components/DialRoot.svelte';
-export type { DialPosition, DialMode, DialTheme } from './components/DialRoot.svelte';
+export { default as TweakRoot } from './components/TweakRoot.svelte';
+export type { TweakPosition, TweakMode, TweakTheme } from './components/TweakRoot.svelte';
 
 // Timeline (prototype)
-export { createDialTimeline } from './createDialTimeline.svelte';
-export type { CreateDialTimelineOptions } from './createDialTimeline.svelte';
-export { default as DialTimeline } from './components/Timeline/DialTimeline.svelte';
-export { formatClock, TimelineStore } from 'dialkit/timeline';
+export { createTweakTimeline } from './createTweakTimeline.svelte';
+export type { CreateTweakTimelineOptions } from './createTweakTimeline.svelte';
+export { default as TweakTimeline } from './components/Timeline/TweakTimeline.svelte';
+export { formatClock, TimelineStore } from 'tweakers/timeline';
 export type {
   TimelineClipConfig,
   TimelineClipCss,
@@ -23,12 +23,12 @@ export type {
   TimelinePropStepConfig,
   TimelineStepConfig,
   TimelineStepValues,
-  DialTimelineValues,
+  TweakTimelineValues,
   TimelineMeta,
   TimelineClipMeta,
   TimelineClipTrackMeta,
   TimelineTransport,
-} from 'dialkit/timeline';
+} from 'tweakers/timeline';
 
 // Shortcut components
 export { default as ShortcutListener } from './components/ShortcutListener.svelte';
@@ -58,7 +58,7 @@ export type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, Anal
 export { default as CurveComposer } from './components/CurveComposer.svelte';
 // The editing + sampling helpers, mirroring what is re-exported for gradients
 // below: a host app driving its own composition state needs them, and they are
-// otherwise reachable only from the React entry. `dialkit/curve-composer-core`
+// otherwise reachable only from the React entry. `tweakers/curve-composer-core`
 // serves the same functions to code that must stay framework-free.
 export {
   defaultComposition,
@@ -121,8 +121,8 @@ export { default as ChipsControl } from './components/ChipsControl.svelte';
 export { default as ListControl } from './components/ListControl.svelte';
 export { default as PresetManager } from './components/PresetManager.svelte';
 
-// Store exports (via dialkit/store subpath — svelte-package doesn't bundle, so relative paths to src/store would break in dist)
-export { DialStore, parseListItemSchema, groupListFields, defaultListItemParams, normalizeListItems, hintDomId } from 'dialkit/store';
+// Store exports (via tweakers/store subpath — svelte-package doesn't bundle, so relative paths to src/store would break in dist)
+export { TweakStore, parseListItemSchema, groupListFields, defaultListItemParams, normalizeListItems, hintDomId } from 'tweakers/store';
 export type {
   SpringConfig,
   EasingConfig,
@@ -155,10 +155,10 @@ export type {
   PresetProvider,
   PresetProviderPreset,
   PresetItem,
-  DialValue,
-  DialEvent,
-  DialConfig,
+  TweakValue,
+  TweakEvent,
+  TweakConfig,
   ResolvedValues,
   ControlMeta,
   PanelConfig,
-} from 'dialkit/store';
+} from 'tweakers/store';

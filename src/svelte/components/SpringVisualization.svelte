@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { SpringConfig } from 'dialkit/store';
+  import type { SpringConfig } from 'tweakers/store';
 
   let { spring, isSimpleMode } = $props<{ spring: SpringConfig; isSimpleMode: boolean }>();
 
@@ -82,7 +82,7 @@
   });
 </script>
 
-<svg viewBox={`0 0 ${width} ${height}`} class="dialkit-spring-viz">
+<svg viewBox={`0 0 ${width} ${height}`} class="tweakers-spring-viz">
   {#each gridLines as line}
     <line
       x1={line.x1}

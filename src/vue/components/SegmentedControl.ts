@@ -7,7 +7,7 @@ type SegmentedControlOption<T extends string> = {
 };
 
 export const SegmentedControl = defineComponent({
-  name: 'DialKitSegmentedControl',
+  name: 'TweakersSegmentedControl',
   props: {
     options: {
       type: Array as PropType<SegmentedControlOption<string>[]>,
@@ -110,10 +110,10 @@ export const SegmentedControl = defineComponent({
       { flush: 'post' }
     );
 
-    return () => h('div', { ref: containerRef, class: 'dialkit-segmented' }, [
+    return () => h('div', { ref: containerRef, class: 'tweakers-segmented' }, [
       h('div', {
         ref: pillRef,
-        class: 'dialkit-segmented-pill',
+        class: 'tweakers-segmented-pill',
         style: {
           left: '0px',
           width: '0px',
@@ -129,7 +129,7 @@ export const SegmentedControl = defineComponent({
 
           buttonRefs.delete(option.value);
         }) as any,
-        class: 'dialkit-segmented-button',
+        class: 'tweakers-segmented-button',
         'data-active': String(props.value === option.value),
         onClick: () => emit('change', option.value),
       }, option.label)),

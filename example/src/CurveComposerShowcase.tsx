@@ -15,8 +15,8 @@ import {
   buildSamplers,
   readComposition,
   triggerLevels,
-} from 'dialkit';
-import type { CurveSegment, CurveDriver, DriverDirection, CurveComposition } from 'dialkit';
+} from 'tweakers';
+import type { CurveSegment, CurveDriver, DriverDirection, CurveComposition } from 'tweakers';
 
 export function CurveComposerShowcase() {
   const [comp, setComp] = useState<CurveComposition>(() => defaultComposition());
@@ -49,7 +49,7 @@ export function CurveComposerShowcase() {
     el.style.transform = 'translate(-50%, -50%) scale(1.9)';
     window.clearTimeout(blinkTimers.current[index]);
     blinkTimers.current[index] = window.setTimeout(() => {
-      el.style.background = 'var(--dial-text-tertiary)';
+      el.style.background = 'var(--tweak-text-tertiary)';
       el.style.transform = 'translate(-50%, -50%) scale(1)';
     }, 130);
   };
@@ -153,7 +153,7 @@ export function CurveComposerShowcase() {
         height={150}
       />
 
-      <div style={{ fontSize: 12, color: 'var(--dial-text-secondary)' }}>
+      <div style={{ fontSize: 12, color: 'var(--tweak-text-secondary)' }}>
         {segments.length} segment{segments.length > 1 ? 's' : ''} · click a curve's header to select it (Split / Flip /
         Remove act on it) · click the body to change shape · drag — sideways for energy, up/down for steepness (→ expo) ·
         divider to retime · double-click to split
@@ -161,7 +161,7 @@ export function CurveComposerShowcase() {
 
       {/* output track: the continuous dot travels along it (position = value). In trigger mode,
           evenly-spaced markers sit along the track and blink as the dot crosses each one. */}
-      <div style={{ position: 'relative', height: 22, background: 'var(--dial-surface)', borderRadius: 8 }}>
+      <div style={{ position: 'relative', height: 22, background: 'var(--tweak-surface)', borderRadius: 8 }}>
         {/* moving continuous dot (behind), so the markers' flash always reads on top of it */}
         <div
           ref={demoRef}
@@ -172,7 +172,7 @@ export function CurveComposerShowcase() {
             width: 16,
             height: 16,
             borderRadius: '50%',
-            background: mode === 'trigger' ? 'var(--dial-text-tertiary)' : playheadColor,
+            background: mode === 'trigger' ? 'var(--tweak-text-tertiary)' : playheadColor,
             willChange: 'transform',
           }}
         />
@@ -190,7 +190,7 @@ export function CurveComposerShowcase() {
                 width: 7,
                 height: 7,
                 borderRadius: '50%',
-                background: 'var(--dial-text-tertiary)',
+                background: 'var(--tweak-text-tertiary)',
                 transform: 'translate(-50%, -50%) scale(1)',
                 transition: 'background 120ms ease, transform 120ms ease',
               }}
@@ -198,7 +198,7 @@ export function CurveComposerShowcase() {
           ))}
       </div>
       {mode === 'trigger' && (
-        <div style={{ fontSize: 12, color: 'var(--dial-text-secondary)' }}>
+        <div style={{ fontSize: 12, color: 'var(--tweak-text-secondary)' }}>
           {triggerSteps} triggers, evenly spaced along the signal · the dot crosses them unevenly when the curve isn't linear
         </div>
       )}
@@ -224,8 +224,8 @@ export function CurveComposerShowcase() {
         </button>
       </div>
 
-      <div className="dialkit-labeled-control">
-        <span className="dialkit-labeled-control-label">Signal</span>
+      <div className="tweakers-labeled-control">
+        <span className="tweakers-labeled-control-label">Signal</span>
         <SegmentedControl
           options={[
             { value: 'continuous' as const, label: 'Continuous' },
@@ -237,8 +237,8 @@ export function CurveComposerShowcase() {
       </div>
 
       {mode === 'trigger' && (
-        <div className="dialkit-labeled-control">
-          <span className="dialkit-labeled-control-label">Triggers</span>
+        <div className="tweakers-labeled-control">
+          <span className="tweakers-labeled-control-label">Triggers</span>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button type="button" className="lib-tab" onClick={() => setTriggerSteps((s) => Math.max(2, s - 1))}>
               −
@@ -251,8 +251,8 @@ export function CurveComposerShowcase() {
         </div>
       )}
 
-      <div className="dialkit-labeled-control">
-        <span className="dialkit-labeled-control-label">Direction</span>
+      <div className="tweakers-labeled-control">
+        <span className="tweakers-labeled-control-label">Direction</span>
         <SegmentedControl
           options={[
             { value: 'forward' as const, label: 'Forward' },

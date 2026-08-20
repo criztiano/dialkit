@@ -1,5 +1,5 @@
 import type { Snippet } from 'svelte';
-import type { PanelConfig } from 'dialkit/store';
+import type { PanelConfig } from 'tweakers/store';
 type $$ComponentProps = {
     panel: PanelConfig;
     defaultOpen?: boolean;

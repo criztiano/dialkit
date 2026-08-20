@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback } from 'react';
 import type { CSSProperties } from 'react';
-import type { ShortcutConfig, XYAxis } from '../store/DialStore';
+import type { ShortcutConfig, XYAxis } from '../store/TweakStore';
 import { formatSliderShortcut } from '../shortcut-utils';
 import {
   resolveAxis,
@@ -297,12 +297,12 @@ export function XYPad({
   const topPct = `${point.y * 100}%`;
 
   return (
-    <div className="dialkit-xy" data-active={String(active)} data-disabled={String(disabled)}>
-      <div className="dialkit-xy-header">
-        <span className="dialkit-xy-label">
+    <div className="tweakers-xy" data-active={String(active)} data-disabled={String(disabled)}>
+      <div className="tweakers-xy-header">
+        <span className="tweakers-xy-label">
           {label}
           {shortcut && (
-            <span className={`dialkit-shortcut-pill${shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`}>
+            <span className={`tweakers-shortcut-pill${shortcutActive ? ' tweakers-shortcut-pill-active' : ''}`}>
               {formatSliderShortcut(shortcut)}
             </span>
           )}
@@ -311,7 +311,7 @@ export function XYPad({
 
       <div
         ref={areaRef}
-        className="dialkit-xy-area"
+        className="tweakers-xy-area"
         // Only the height is fixed (from `size`); width is fluid (CSS width:100%),
         // so the pad grows to fill the container and is no longer forced square.
         style={{ height: size } as CSSProperties}
@@ -341,22 +341,22 @@ export function XYPad({
       >
         {showGrid && (
           <div
-            className="dialkit-xy-grid"
+            className="tweakers-xy-grid"
             aria-hidden="true"
             style={{
-              '--dial-xy-grid-step-x': `${100 / gridX}%`,
-              '--dial-xy-grid-step-y': `${100 / gridY}%`,
+              '--tweak-xy-grid-step-x': `${100 / gridX}%`,
+              '--tweak-xy-grid-step-y': `${100 / gridY}%`,
             } as CSSProperties}
           />
         )}
         {/* Live axis labels, decorative (aria-valuetext owns the accessible string):
             X along the bottom edge, Y up the left edge. */}
-        <div className="dialkit-xy-axis dialkit-xy-axis-x" aria-hidden="true">{xVisual}</div>
-        <div className="dialkit-xy-axis dialkit-xy-axis-y" aria-hidden="true">{yVisual}</div>
+        <div className="tweakers-xy-axis tweakers-xy-axis-x" aria-hidden="true">{xVisual}</div>
+        <div className="tweakers-xy-axis tweakers-xy-axis-y" aria-hidden="true">{yVisual}</div>
         {/* Crosshair guides tracking the thumb, revealed on data-active. */}
-        <div className="dialkit-xy-guide dialkit-xy-guide-v" aria-hidden="true" style={{ left: leftPct }} />
-        <div className="dialkit-xy-guide dialkit-xy-guide-h" aria-hidden="true" style={{ top: topPct }} />
-        <div className="dialkit-xy-thumb" aria-hidden="true" style={{ left: leftPct, top: topPct }} />
+        <div className="tweakers-xy-guide tweakers-xy-guide-v" aria-hidden="true" style={{ left: leftPct }} />
+        <div className="tweakers-xy-guide tweakers-xy-guide-h" aria-hidden="true" style={{ top: topPct }} />
+        <div className="tweakers-xy-thumb" aria-hidden="true" style={{ left: leftPct, top: topPct }} />
       </div>
     </div>
   );

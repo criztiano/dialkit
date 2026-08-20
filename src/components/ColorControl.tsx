@@ -64,7 +64,7 @@ export function ColorControl({ label, value, onChange, alpha = false, palette = 
   };
 
   useEffect(() => {
-    const root = swatchRef.current?.closest('.dialkit-root') as HTMLElement | null;
+    const root = swatchRef.current?.closest('.tweakers-root') as HTMLElement | null;
     setPortalTarget(root ?? document.body);
   }, []);
 
@@ -119,17 +119,17 @@ export function ColorControl({ label, value, onChange, alpha = false, palette = 
   }
 
   return (
-    <div className="dialkit-color-control">
-      <span className="dialkit-color-label">{label}</span>
-      <div className="dialkit-color-inputs">
+    <div className="tweakers-color-control">
+      <span className="tweakers-color-label">{label}</span>
+      <div className="tweakers-color-inputs">
         {/* The whole token (hash included) is the click target for editing. */}
-        <span className="dialkit-color-hex-wrap" onClick={() => setIsEditing(true)}>
-          <span className="dialkit-color-hash" aria-hidden="true">#</span>
+        <span className="tweakers-color-hex-wrap" onClick={() => setIsEditing(true)}>
+          <span className="tweakers-color-hash" aria-hidden="true">#</span>
           {isEditing ? (
             <input
               ref={hexInputRef}
               type="text"
-              className="dialkit-color-hex-input"
+              className="tweakers-color-hex-input"
               aria-label={`Hex color for ${label}`}
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
@@ -137,22 +137,22 @@ export function ColorControl({ label, value, onChange, alpha = false, palette = 
               onKeyDown={handleKeyDown}
             />
           ) : (
-            <span className="dialkit-color-hex" aria-label={`Hex color for ${label}`}>
+            <span className="tweakers-color-hex" aria-label={`Hex color for ${label}`}>
               {bareHex(value)}
             </span>
           )}
         </span>
         {alpha && rgba && (
           <>
-            <span className="dialkit-color-divider" aria-hidden="true" />
-            <span className="dialkit-color-opacity">
-              {opacityPercent(rgba)} <span className="dialkit-color-opacity-unit">%</span>
+            <span className="tweakers-color-divider" aria-hidden="true" />
+            <span className="tweakers-color-opacity">
+              {opacityPercent(rgba)} <span className="tweakers-color-opacity-unit">%</span>
             </span>
           </>
         )}
         <button
           ref={swatchRef}
-          className="dialkit-color-swatch"
+          className="tweakers-color-swatch"
           style={{ '--swatch-color': value } as React.CSSProperties}
           onClick={() => (isOpen ? setIsOpen(false) : open())}
           data-open={String(isOpen)}
@@ -167,7 +167,7 @@ export function ColorControl({ label, value, onChange, alpha = false, palette = 
           {isOpen && pos && (
             <motion.div
               ref={pickerRef}
-              className="dialkit-color-picker-popover"
+              className="tweakers-color-picker-popover"
               initial={{ opacity: 0, y: pos.above ? 8 : -8, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: pos.above ? 8 : -8, scale: 0.95 }}

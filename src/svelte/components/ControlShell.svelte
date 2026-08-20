@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { DialStore } from 'dialkit/store';
-  import type { AffordanceConfig, AffordanceStatus } from 'dialkit/store';
+  import { TweakStore } from 'tweakers/store';
+  import type { AffordanceConfig, AffordanceStatus } from 'tweakers/store';
   import Portal from '../Portal.svelte';
   import { AFFORDANCE_POPOVER_WIDTH, placePopover } from '../../affordance-core';
 
@@ -36,17 +36,17 @@
   $effect(() => {
     if (!panelId || !path) return;
     const read = () => {
-      status = DialStore.getAffordanceStatus(panelId, path);
-      disabled = DialStore.isDisabled(panelId, path);
+      status = TweakStore.getAffordanceStatus(panelId, path);
+      disabled = TweakStore.isDisabled(panelId, path);
     };
     read();
-    return DialStore.subscribeControlState(panelId, read);
+    return TweakStore.subscribeControlState(panelId, read);
   });
 
   // Resolve the panel root once the dot exists, mirroring SelectControl.
   $effect(() => {
     if (!dotEl) return;
-    portalTarget = (dotEl.closest('.dialkit-root') as HTMLElement | null) ?? document.body;
+    portalTarget = (dotEl.closest('.tweakers-root') as HTMLElement | null) ?? document.body;
   });
 
   // The first pass runs with height 0 (the popover isn't mounted yet); the
@@ -107,7 +107,7 @@
     };
   });
 
-  const setStatus = (next: AffordanceStatus) => DialStore.setAffordanceStatus(panelId!, path!, next);
+  const setStatus = (next: AffordanceStatus) => TweakStore.setAffordanceStatus(panelId!, path!, next);
 </script>
 
 <!--
@@ -118,7 +118,7 @@
   inside the children snippet.
 -->
 <div
-  class="dialkit-control-tip"
+  class="tweakers-control-tip"
   data-hint={hint ? 'true' : undefined}
   data-affordance={hasAffordance ? 'true' : undefined}
   data-affordance-open={open ? 'true' : undefined}
@@ -131,14 +131,14 @@
   {@render children()}
 
   {#if hint}
-    <span class="dialkit-hint" {id} role="tooltip">{hint}</span>
+    <span class="tweakers-hint" {id} role="tooltip">{hint}</span>
   {/if}
 
   {#if hasAffordance}
     <button
       bind:this={dotEl}
       type="button"
-      class="dialkit-affordance-dot"
+      class="tweakers-affordance-dot"
       data-status={status}
       data-open={String(open)}
       aria-label={label}
@@ -154,7 +154,7 @@
   <Portal target={portalTarget}>
     <div
       bind:this={popoverEl}
-      class="dialkit-affordance-popover"
+      class="tweakers-affordance-popover"
       role="dialog"
       aria-label={label}
       tabindex="-1"
@@ -163,7 +163,7 @@
       style:width={`${AFFORDANCE_POPOVER_WIDTH}px`}
       style:visibility={pos ? undefined : 'hidden'}
     >
-      <span class="dialkit-affordance-popover-title">{label}</span>
+      <span class="tweakers-affordance-popover-title">{label}</span>
       {@render affordance.content({ panelId, path, status, setStatus })}
     </div>
   </Portal>

@@ -1,13 +1,13 @@
 import { For } from 'solid-js';
-import { DialStore, hintDomId } from '../../store/DialStore';
+import { TweakStore, hintDomId } from '../../store/TweakStore';
 import type {
   ControlMeta,
-  DialValue,
+  TweakValue,
   RangeValue,
   SpringConfig,
   TransitionConfig,
   XYValue,
-} from '../../store/DialStore';
+} from '../../store/TweakStore';
 import type { GradientValue } from '../../gradient-core';
 import { useShortcutContext } from './ShortcutListener';
 import { Folder } from './Folder';
@@ -28,7 +28,7 @@ import { XYControl } from './XYControl';
 interface ControlRendererProps {
   panelId: string;
   controls: ControlMeta[];
-  values: Record<string, DialValue>;
+  values: Record<string, TweakValue>;
   /** Optional timeline-owned duration rendered inside the transition editor. */
   transitionDuration?: TransitionDurationControl;
 }
@@ -53,7 +53,7 @@ export function ControlRenderer(props: ControlRendererProps) {
           <Slider
             label={control.label}
             value={value() as number}
-            onChange={(next) => DialStore.updateValue(props.panelId, control.path, next)}
+            onChange={(next) => TweakStore.updateValue(props.panelId, control.path, next)}
             min={control.min}
             max={control.max}
             step={control.step}
@@ -72,7 +72,7 @@ export function ControlRenderer(props: ControlRendererProps) {
           <NumberControl
             label={control.label}
             value={value() as number}
-            onChange={(next) => DialStore.updateValue(props.panelId, control.path, next)}
+            onChange={(next) => TweakStore.updateValue(props.panelId, control.path, next)}
             min={control.min}
             max={control.max}
             step={control.step}
@@ -91,7 +91,7 @@ export function ControlRenderer(props: ControlRendererProps) {
             max={control.max ?? 1}
             step={control.step}
             defaultValue={control.rangeDefault}
-            onChange={(next) => DialStore.updateValue(props.panelId, control.path, next)}
+            onChange={(next) => TweakStore.updateValue(props.panelId, control.path, next)}
           />
         );
 
@@ -100,7 +100,7 @@ export function ControlRenderer(props: ControlRendererProps) {
           <Toggle
             label={control.label}
             checked={value() as boolean}
-            onChange={(next) => DialStore.updateValue(props.panelId, control.path, next)}
+            onChange={(next) => TweakStore.updateValue(props.panelId, control.path, next)}
             shortcut={control.shortcut}
             shortcutActive={active()}
           />
@@ -113,7 +113,7 @@ export function ControlRenderer(props: ControlRendererProps) {
             path={control.path}
             label={control.label}
             spring={value() as SpringConfig}
-            onChange={(next) => DialStore.updateValue(props.panelId, control.path, next)}
+            onChange={(next) => TweakStore.updateValue(props.panelId, control.path, next)}
           />
         );
 
@@ -124,7 +124,7 @@ export function ControlRenderer(props: ControlRendererProps) {
             path={control.path}
             label={control.label}
             value={value() as TransitionConfig}
-            onChange={(next) => DialStore.updateValue(props.panelId, control.path, next)}
+            onChange={(next) => TweakStore.updateValue(props.panelId, control.path, next)}
             durationControl={props.transitionDuration}
           />
         );
@@ -138,7 +138,7 @@ export function ControlRenderer(props: ControlRendererProps) {
             <ModuleFolder
               title={control.label}
               enabled={props.values[enabledPath] as boolean}
-              onEnabledChange={(next) => DialStore.updateValue(props.panelId, enabledPath, next)}
+              onEnabledChange={(next) => TweakStore.updateValue(props.panelId, enabledPath, next)}
               defaultOpen={control.defaultOpen ?? true}
               hint={control.hint}
               hintId={hintId(control)}
@@ -164,7 +164,7 @@ export function ControlRenderer(props: ControlRendererProps) {
           <TextControl
             label={control.label}
             value={value() as string}
-            onChange={(next) => DialStore.updateValue(props.panelId, control.path, next)}
+            onChange={(next) => TweakStore.updateValue(props.panelId, control.path, next)}
             placeholder={control.placeholder}
           />
         );
@@ -175,7 +175,7 @@ export function ControlRenderer(props: ControlRendererProps) {
             label={control.label}
             value={value() as string}
             options={control.options ?? []}
-            onChange={(next) => DialStore.updateValue(props.panelId, control.path, next)}
+            onChange={(next) => TweakStore.updateValue(props.panelId, control.path, next)}
           />
         );
 
@@ -184,7 +184,7 @@ export function ControlRenderer(props: ControlRendererProps) {
           <ColorControl
             label={control.label}
             value={value() as string}
-            onChange={(next) => DialStore.updateValue(props.panelId, control.path, next)}
+            onChange={(next) => TweakStore.updateValue(props.panelId, control.path, next)}
             alpha={control.alpha}
             palette={control.palette}
           />
@@ -195,7 +195,7 @@ export function ControlRenderer(props: ControlRendererProps) {
           <GradientControl
             label={control.label}
             value={value() as GradientValue}
-            onChange={(next) => DialStore.updateValue(props.panelId, control.path, next)}
+            onChange={(next) => TweakStore.updateValue(props.panelId, control.path, next)}
           />
         );
 
@@ -204,7 +204,7 @@ export function ControlRenderer(props: ControlRendererProps) {
           <XYControl
             label={control.label}
             value={value() as XYValue}
-            onChange={(next) => DialStore.updateValue(props.panelId, control.path, next)}
+            onChange={(next) => TweakStore.updateValue(props.panelId, control.path, next)}
             x={control.xAxis}
             y={control.yAxis}
             grid={control.grid}
@@ -220,11 +220,11 @@ export function ControlRenderer(props: ControlRendererProps) {
       case 'action':
         return (
           <button
-            class="dialkit-button"
+            class="tweakers-button"
             // The wrapper greys every control out, but only a real `disabled`
             // takes a button out of the tab order too.
-            disabled={DialStore.isDisabled(props.panelId, control.path)}
-            onClick={() => DialStore.triggerAction(props.panelId, control.path)}
+            disabled={TweakStore.isDisabled(props.panelId, control.path)}
+            onClick={() => TweakStore.triggerAction(props.panelId, control.path)}
           >
             {control.label}
           </button>

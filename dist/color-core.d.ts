@@ -87,7 +87,7 @@ declare function rgbaToChannels(rgba: RGBA, format: Exclude<ColorFormat, 'hex'>,
 /** Commits typed channel values: clamps every channel; the OKLCH path gamut-maps. */
 declare function channelsToRgba(values: number[], format: Exclude<ColorFormat, 'hex'>, alphaEnabled: boolean): RGBA;
 declare const PALETTE_SIZE = 8;
-declare const PALETTE_STORAGE_KEY = "dialkit:color-palette";
+declare const PALETTE_STORAGE_KEY = "tweakers:color-palette";
 /** Fixed-size row of saved hex strings (possibly 8-digit); null = empty slot. */
 type PaletteSlots = (string | null)[];
 declare function emptyPalette(): PaletteSlots;

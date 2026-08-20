@@ -298,7 +298,7 @@ export function channelsToRgba(values: number[], format: Exclude<ColorFormat, 'h
 // ── Palette (pure (de)serialization; storage lives in color-palette-store) ──
 
 export const PALETTE_SIZE = 8;
-export const PALETTE_STORAGE_KEY = 'dialkit:color-palette';
+export const PALETTE_STORAGE_KEY = 'tweakers:color-palette';
 
 /** Fixed-size row of saved hex strings (possibly 8-digit); null = empty slot. */
 export type PaletteSlots = (string | null)[];

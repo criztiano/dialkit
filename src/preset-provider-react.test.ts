@@ -4,9 +4,9 @@ import type { ReactTestRenderer, ReactTestInstance } from 'react-test-renderer';
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { Panel } from './components/Panel';
-import { useDialKit } from './hooks/useDialKit';
-import { DialStore } from './store/DialStore';
-import type { PresetProvider } from './store/DialStore';
+import { useTweakers } from './hooks/useTweakers';
+import { TweakStore } from './store/TweakStore';
+import type { PresetProvider } from './store/TweakStore';
 
 // Folder measures window height and the preset dropdown portals to body;
 // node:test has no DOM, so both are stubbed just enough to render.
@@ -46,13 +46,13 @@ const makeProvider = (overrides: Partial<PresetProvider> = {}): PresetProvider =
 });
 
 /**
- * A host component wiring the provider through useDialKit options — the real
+ * A host component wiring the provider through useTweakers options — the real
  * consumer path — plus the Panel that renders the toolbar for that panel.
  */
 function Host({ name, initial }: { name: string; initial?: PresetProvider }) {
   const [provider, setProvider] = useState(initial);
-  const values = useDialKit(name, { gravity: [9.8, 0, 20] }, provider ? { presets: provider } : undefined);
-  const panel = DialStore.getPanels().find((p) => p.name === name);
+  const values = useTweakers(name, { gravity: [9.8, 0, 20] }, provider ? { presets: provider } : undefined);
+  const panel = TweakStore.getPanels().find((p) => p.name === name);
   return createElement(
     'div',
     { className: 'test-host', 'data-gravity': values.gravity, 'data-set-provider': setProvider },
@@ -73,20 +73,20 @@ function renderHost(initial?: PresetProvider) {
   act(() => {});
 
   const root = renderer.root;
-  const trigger = (): ReactTestInstance => root.findByProps({ className: 'dialkit-preset-trigger' });
-  const rows = (): ReactTestInstance[] => root.findAllByProps({ className: 'dialkit-preset-item' });
+  const trigger = (): ReactTestInstance => root.findByProps({ className: 'tweakers-preset-trigger' });
+  const rows = (): ReactTestInstance[] => root.findAllByProps({ className: 'tweakers-preset-item' });
 
   return {
     root,
     trigger,
     rows,
-    rowNames: () => rows().map((r) => r.findByProps({ className: 'dialkit-preset-name' }).props.children),
+    rowNames: () => rows().map((r) => r.findByProps({ className: 'tweakers-preset-name' }).props.children),
     open: () => act(() => trigger().props.onClick()),
     // Both toolbar buttons share the class; the title disambiguates.
     addButton: (): ReactTestInstance => root.findByProps({ title: 'Add preset' }),
     setProvider: (next: PresetProvider) =>
       act(() => root.findByProps({ className: 'test-host' }).props['data-set-provider'](next)),
-    panelId: () => DialStore.getPanels().find((p) => p.name === name)!.id,
+    panelId: () => TweakStore.getPanels().find((p) => p.name === name)!.id,
     unmount: () => act(() => renderer.unmount()),
   };
 }
@@ -95,7 +95,7 @@ describe('preset provider (React)', () => {
   it('renders the host list in order, marks the active row, hides the base row', () => {
     const host = renderHost(makeProvider());
 
-    assert.equal(host.trigger().findByProps({ className: 'dialkit-preset-label' }).props.children, 'Warm');
+    assert.equal(host.trigger().findByProps({ className: 'tweakers-preset-label' }).props.children, 'Warm');
     host.open();
 
     // No implicit "Version 1" base row in provider mode.
@@ -110,8 +110,8 @@ describe('preset provider (React)', () => {
     const host = renderHost(makeProvider());
     host.open();
 
-    assert.equal(host.rows()[0].findAllByProps({ className: 'dialkit-preset-delete' }).length, 0);
-    assert.equal(host.rows()[1].findAllByProps({ className: 'dialkit-preset-delete' }).length, 1);
+    assert.equal(host.rows()[0].findAllByProps({ className: 'tweakers-preset-delete' }).length, 0);
+    assert.equal(host.rows()[1].findAllByProps({ className: 'tweakers-preset-delete' }).length, 1);
 
     host.unmount();
   });
@@ -120,7 +120,7 @@ describe('preset provider (React)', () => {
     const host = renderHost(makeProvider({ onDelete: undefined }));
     host.open();
 
-    assert.equal(host.root.findAllByProps({ className: 'dialkit-preset-delete' }).length, 0);
+    assert.equal(host.root.findAllByProps({ className: 'tweakers-preset-delete' }).length, 0);
 
     host.unmount();
   });
@@ -141,14 +141,14 @@ describe('preset provider (React)', () => {
     host.open();
     act(() =>
       host.rows()[1]
-        .findByProps({ className: 'dialkit-preset-delete' })
+        .findByProps({ className: 'tweakers-preset-delete' })
         .props.onClick({ stopPropagation() {} })
     );
     const onDelete = provider.onDelete as ReturnType<typeof mock.fn>;
     assert.deepEqual(onDelete.mock.calls[0].arguments, ['warm']);
 
     // The store never snapshotted anything of its own.
-    assert.equal(DialStore.getPresets(host.panelId()).length, 0);
+    assert.equal(TweakStore.getPresets(host.panelId()).length, 0);
 
     host.unmount();
   });
@@ -167,7 +167,7 @@ describe('preset provider (React)', () => {
       })
     );
 
-    assert.equal(host.trigger().findByProps({ className: 'dialkit-preset-label' }).props.children, 'Cold');
+    assert.equal(host.trigger().findByProps({ className: 'tweakers-preset-label' }).props.children, 'Cold');
     host.open();
     assert.deepEqual(host.rowNames(), ['★ Factory', 'Warm', 'Cold']);
 
@@ -177,18 +177,18 @@ describe('preset provider (React)', () => {
   it('keeps stock mode unchanged without a provider', () => {
     const host = renderHost();
 
-    assert.equal(host.trigger().findByProps({ className: 'dialkit-preset-label' }).props.children, 'Version 1');
+    assert.equal(host.trigger().findByProps({ className: 'tweakers-preset-label' }).props.children, 'Version 1');
 
     // "+" snapshots into the store, exactly as before.
     act(() => host.addButton().props.onClick());
-    const presets = DialStore.getPresets(host.panelId());
+    const presets = TweakStore.getPresets(host.panelId());
     assert.equal(presets.length, 1);
     assert.equal(presets[0].name, 'Version 2');
 
     host.open();
     // Base row plus the saved version, every saved row deletable.
     assert.deepEqual(host.rowNames(), ['Version 1', 'Version 2']);
-    assert.equal(host.rows()[1].findAllByProps({ className: 'dialkit-preset-delete' }).length, 1);
+    assert.equal(host.rows()[1].findAllByProps({ className: 'tweakers-preset-delete' }).length, 1);
 
     host.unmount();
   });

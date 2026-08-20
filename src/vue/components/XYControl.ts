@@ -1,6 +1,6 @@
 import { defineComponent, h, type PropType } from 'vue';
 import { XYPad } from './XYPad';
-import type { ShortcutConfig, XYAxis, XYValue } from '../../store/DialStore';
+import type { ShortcutConfig, XYAxis, XYValue } from '../../store/TweakStore';
 
 /**
  * Config wrapper for the XY pad — the `{ type: 'xy' }` case. Reads the resolved
@@ -8,7 +8,7 @@ import type { ShortcutConfig, XYAxis, XYValue } from '../../store/DialStore';
  * ColorControl wraps ColorPickerPanel.
  */
 export const XYControl = defineComponent({
-  name: 'DialKitXYControl',
+  name: 'TweakersXYControl',
   props: {
     label: { type: String, required: true },
     value: { type: Object as PropType<XYValue>, required: true },

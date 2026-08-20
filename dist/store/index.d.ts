@@ -193,7 +193,7 @@ type NumberConfig = {
  * holds no value of its own, so nothing lands in ResolvedValues, presets, or
  * persistence. `sample` is a function and therefore invisible to the
  * serialized config diff (like `formatValue`); adapters push replacements
- * through `DialStore.syncCurveConfigs` so the drawing tracks the host.
+ * through `TweakStore.syncCurveConfigs` so the drawing tracks the host.
  */
 type CurveConfig = {
     type: 'curve';
@@ -335,14 +335,14 @@ type ListField = {
     placeholder?: string;
     defaultValue: number | boolean | string;
 };
-type DialValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
-type DialConfig = {
-    [key: string]: DialValue | [number, number, number, number?] | CurveConfig | DialConfig;
+type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
+type TweakConfig = {
+    [key: string]: TweakValue | [number, number, number, number?] | CurveConfig | TweakConfig;
 };
 /** UI-only reserved keys: they shape the panel, never resolve to a value. */
 type ReservedKey = '_collapsed' | '_collapsible' | '_tabs';
-type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T as T[K] extends CurveConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends NumberConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+type ResolvedValues<T extends TweakConfig> = {
+    [K in keyof T as T[K] extends CurveConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends NumberConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends TweakConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -353,16 +353,16 @@ type ShortcutConfig = {
     interaction?: ShortcutInteraction;
 };
 /**
- * How lit the affordance dot is. The app pushes this — dialkit owns only how
+ * How lit the affordance dot is. The app pushes this — tweakers owns only how
  * each state looks, never when it applies.
  */
 type AffordanceStatus = 'off' | 'armed' | 'active';
-/** What dialkit hands a popover so it doesn't have to resolve any of it itself. */
+/** What tweakers hands a popover so it doesn't have to resolve any of it itself. */
 type AffordanceContext = {
     panelId: string;
     path: string;
     status: AffordanceStatus;
-    /** Shorthand for `DialStore.setAffordanceStatus(panelId, path, …)`. */
+    /** Shorthand for `TweakStore.setAffordanceStatus(panelId, path, …)`. */
     setStatus: (status: AffordanceStatus) => void;
 };
 /**
@@ -461,7 +461,7 @@ type PanelConfig = {
     id: string;
     name: string;
     controls: ControlMeta[];
-    values: Record<string, DialValue>;
+    values: Record<string, TweakValue>;
     shortcuts: Record<string, ShortcutConfig>;
     /** Help text by control path, retained so a later updatePanel can restate it. */
     hints?: Record<string, string>;
@@ -478,7 +478,7 @@ type ActionListener = (action: string) => void;
  * Delivered through the generic `onEvent(path, event)` channel so the value layer
  * stays JSON-serializable (a File is never stored — it rides on a file event).
  */
-type DialEvent = {
+type TweakEvent = {
     kind: 'file';
     files: FileList;
 } | {
@@ -492,11 +492,11 @@ type DialEvent = {
     to?: number;
     itemType?: string;
 };
-type EventListener = (path: string, event: DialEvent) => void;
+type EventListener = (path: string, event: TweakEvent) => void;
 type Preset = {
     id: string;
     name: string;
-    values: Record<string, DialValue>;
+    values: Record<string, TweakValue>;
 };
 type PresetProviderPreset = {
     id: string;
@@ -508,7 +508,7 @@ type PresetProviderPreset = {
  * Host-owned backing for the panel toolbar's preset UI. When a provider is set
  * the toolbar renders the host's list instead of the built-in snapshots: the
  * store never captures or restores values itself — the host applies them in
- * `onSelect` (e.g. via `DialStore.updateValues`) and owns persistence. The
+ * `onSelect` (e.g. via `TweakStore.updateValues`) and owns persistence. The
  * stock auto-save-to-active-preset behavior is off because the store's own
  * active-preset state is never engaged in provider mode.
  */
@@ -533,14 +533,14 @@ type PresetItem = {
     deletable: boolean;
     renamable: boolean;
 };
-type DialKitPersistOptions = boolean | {
+type TweakersPersistOptions = boolean | {
     key?: string;
     storage?: 'localStorage' | 'sessionStorage';
     presets?: boolean;
 };
-type DialStorePanelOptions = {
+type TweakStorePanelOptions = {
     retainOnUnmount?: boolean;
-    persist?: DialKitPersistOptions;
+    persist?: TweakersPersistOptions;
     /**
      * Help text by control path — the same keying as `shortcuts`. Keyed rather
      * than declared inline because most controls are bare shorthand
@@ -563,7 +563,7 @@ type DialStorePanelOptions = {
      * persisted entry and its shortcut binding.
      */
     labels?: Record<string, string>;
-    /** Timeline panels render in DialTimeline and are filtered out of the panel dock. */
+    /** Timeline panels render in TweakTimeline and are filtered out of the panel dock. */
     kind?: 'timeline';
 };
 /** camelCase → Title Case, the label rule used everywhere a key becomes UI text. */
@@ -584,8 +584,8 @@ declare function isEasingConfigValue(value: unknown): value is EasingConfig;
  * Shared by the timeline core (timing-only configs). Handles the primitive,
  * spring/easing, select, color, and text config kinds a timeline emits.
  */
-declare function resolveDialValues<T extends DialConfig>(config: T, flatValues: Record<string, DialValue>): ResolvedValues<T>;
-declare class DialStoreClass {
+declare function resolveTweakValues<T extends TweakConfig>(config: T, flatValues: Record<string, TweakValue>): ResolvedValues<T>;
+declare class TweakStoreClass {
     private panels;
     private listeners;
     private globalListeners;
@@ -600,19 +600,19 @@ declare class DialStoreClass {
     private presetProviders;
     private baseValues;
     private persistTargets;
-    registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, options?: DialStorePanelOptions): void;
-    updatePanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, options?: DialStorePanelOptions): void;
+    registerPanel(id: string, name: string, config: TweakConfig, shortcuts?: Record<string, ShortcutConfig>, options?: TweakStorePanelOptions): void;
+    updatePanel(id: string, name: string, config: TweakConfig, shortcuts?: Record<string, ShortcutConfig>, options?: TweakStorePanelOptions): void;
     unregisterPanel(id: string): void;
     private overlayPersistedValues;
     private savePanelValues;
-    updateValue(panelId: string, path: string, value: DialValue): void;
-    updateValues(panelId: string, updates: Record<string, DialValue>): void;
+    updateValue(panelId: string, path: string, value: TweakValue): void;
+    updateValues(panelId: string, updates: Record<string, TweakValue>): void;
     updateSpringMode(panelId: string, path: string, mode: 'simple' | 'advanced'): void;
     getSpringMode(panelId: string, path: string): 'simple' | 'advanced';
     updateTransitionMode(panelId: string, path: string, mode: 'easing' | 'simple' | 'advanced'): void;
     getTransitionMode(panelId: string, path: string): 'easing' | 'simple' | 'advanced';
-    getValue(panelId: string, path: string): DialValue | undefined;
-    getValues(panelId: string): Record<string, DialValue>;
+    getValue(panelId: string, path: string): TweakValue | undefined;
+    getValues(panelId: string): Record<string, TweakValue>;
     getPanels(kind?: 'panel' | 'timeline'): PanelConfig[];
     getPanel(id: string): PanelConfig | undefined;
     subscribe(panelId: string, listener: Listener): () => void;
@@ -620,7 +620,7 @@ declare class DialStoreClass {
     subscribeActions(panelId: string, listener: ActionListener): () => void;
     triggerAction(panelId: string, path: string): void;
     subscribeEvents(panelId: string, listener: EventListener): () => void;
-    emitEvent(panelId: string, path: string, event: DialEvent): void;
+    emitEvent(panelId: string, path: string, event: TweakEvent): void;
     /**
      * How lit a control's affordance dot is. Callers may push this as often as
      * they like — an unchanged status is dropped without notifying, so driving it
@@ -651,7 +651,7 @@ declare class DialStoreClass {
      * closure would notify again, forever). Markers are compared by value, not
      * identity, because a per-render rebuild remakes the array every time.
      */
-    syncCurveConfigs(panelId: string, config: DialConfig): void;
+    syncCurveConfigs(panelId: string, config: TweakConfig): void;
     savePreset(panelId: string, name: string): string;
     loadPreset(panelId: string, presetId: string): void;
     deletePreset(panelId: string, presetId: string): void;
@@ -765,6 +765,6 @@ declare function groupListFields(fields: ListField[]): {
 declare function defaultListItemParams(schema: Record<string, ListItemField>): Record<string, number | boolean | string>;
 /** Materialize a list config's initial rows: drop unknown types, backfill params. */
 declare function normalizeListItems(config: ListConfig): ListItemValue[];
-declare const DialStore: DialStoreClass;
+declare const TweakStore: TweakStoreClass;
 
-export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type CurveConfig, type DialConfig, type DialEvent, type DialKitPersistOptions, DialStore, type DialStorePanelOptions, type DialValue, type EasingConfig, type FileConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type PanelConfig, type Preset, type PresetItem, type PresetProvider, type PresetProviderPreset, type RangeConfig, type RangeValue, type ReservedKey, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SwatchConfig, type SwatchOption, TAB_PATH, type TextConfig, type TransitionConfig, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, formatLabel, groupListFields, hintDomId, inferStep, isEasingConfigValue, isHexColor, isSpringConfigValue, normalizeListItems, parseListItemSchema, resolveDialValues };
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type CurveConfig, type EasingConfig, type FileConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type PanelConfig, type Preset, type PresetItem, type PresetProvider, type PresetProviderPreset, type RangeConfig, type RangeValue, type ReservedKey, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SwatchConfig, type SwatchOption, TAB_PATH, type TextConfig, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakStorePanelOptions, type TweakValue, type TweakersPersistOptions, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, formatLabel, groupListFields, hintDomId, inferStep, isEasingConfigValue, isHexColor, isSpringConfigValue, normalizeListItems, parseListItemSchema, resolveTweakValues };

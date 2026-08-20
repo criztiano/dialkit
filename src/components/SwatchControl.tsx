@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { PresenceMotionDiv } from './PresenceMotionDiv';
 import { ICON_CHEVRON } from '../icons';
-import type { SwatchOption } from '../store/DialStore';
+import type { SwatchOption } from '../store/TweakStore';
 
 interface SwatchControlProps {
   label: string;
@@ -14,9 +14,9 @@ interface SwatchControlProps {
 
 function Preview({ colors }: { colors: string[] }) {
   return (
-    <span className="dialkit-swatch-preview" aria-hidden="true">
+    <span className="tweakers-swatch-preview" aria-hidden="true">
       {colors.map((c, i) => (
-        <span key={i} className="dialkit-swatch-chip" style={{ background: c }} />
+        <span key={i} className="tweakers-swatch-chip" style={{ background: c }} />
       ))}
     </span>
   );
@@ -78,7 +78,7 @@ export function SwatchControl({ label, value, options, onChange }: SwatchControl
   };
 
   useEffect(() => {
-    const root = triggerRef.current?.closest('.dialkit-root') as HTMLElement | null;
+    const root = triggerRef.current?.closest('.tweakers-root') as HTMLElement | null;
     setPortalTarget(root ?? document.body);
   }, []);
 
@@ -102,20 +102,20 @@ export function SwatchControl({ label, value, options, onChange }: SwatchControl
   }, [isOpen, updatePos]);
 
   return (
-    <div className="dialkit-select-row">
+    <div className="tweakers-select-row">
       <button
         ref={triggerRef}
-        className="dialkit-select-trigger"
+        className="tweakers-select-trigger"
         onClick={() => (isOpen ? setIsOpen(false) : open())}
         onKeyDown={onKeyDown}
         data-open={String(isOpen)}
       >
-        <span className="dialkit-select-label">{label}</span>
-        <div className="dialkit-select-right">
+        <span className="tweakers-select-label">{label}</span>
+        <div className="tweakers-select-right">
           {selectedOption && <Preview colors={selectedOption.colors} />}
-          <span className="dialkit-select-value">{selectedOption?.label ?? value}</span>
+          <span className="tweakers-select-value">{selectedOption?.label ?? value}</span>
           <motion.svg
-            className="dialkit-select-chevron"
+            className="tweakers-select-chevron"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -135,7 +135,7 @@ export function SwatchControl({ label, value, options, onChange }: SwatchControl
           {isOpen && pos && (
             <PresenceMotionDiv
               divRef={dropdownRef}
-              className="dialkit-select-dropdown"
+              className="tweakers-select-dropdown"
               initial={{ opacity: 0, y: pos.above ? 8 : -8, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: pos.above ? 8 : -8, scale: 0.95 }}
@@ -152,14 +152,14 @@ export function SwatchControl({ label, value, options, onChange }: SwatchControl
               {options.map((option, i) => (
                 <button
                   key={option.value}
-                  className="dialkit-select-option dialkit-swatch-option"
+                  className="tweakers-select-option tweakers-swatch-option"
                   data-selected={String(option.value === value)}
                   data-highlight={String(i === highlight)}
                   onClick={() => select(option.value)}
                   onMouseEnter={() => setHighlight(i)}
                 >
                   <Preview colors={option.colors} />
-                  <span className="dialkit-swatch-option-label">{option.label}</span>
+                  <span className="tweakers-swatch-option-label">{option.label}</span>
                 </button>
               ))}
             </PresenceMotionDiv>

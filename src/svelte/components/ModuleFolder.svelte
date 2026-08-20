@@ -38,23 +38,23 @@
   };
 </script>
 
-<div class="dialkit-module dialkit-module-folder" data-open={enabled && isOpen ? 'true' : 'false'}>
+<div class="tweakers-module tweakers-module-folder" data-open={enabled && isOpen ? 'true' : 'false'}>
   <div
-    class="dialkit-module-header dialkit-module-header-toggle"
+    class="tweakers-module-header tweakers-module-header-toggle"
     onclick={() => { if (enabled) isOpen = !isOpen; }}
     data-hint={hint ? 'true' : undefined}
     aria-describedby={hint ? hintId : undefined}
   >
     <Checkbox checked={enabled} onChange={handleEnabledChange} label={title} />
-    <span class="dialkit-module-title">{title}</span>
+    <span class="tweakers-module-title">{title}</span>
     {#if hint}
-      <span class="dialkit-hint" id={hintId} role="tooltip">{hint}</span>
+      <span class="tweakers-hint" id={hintId} role="tooltip">{hint}</span>
     {/if}
   </div>
 
-  <div class="dialkit-module-collapse" data-open={enabled && isOpen}>
-    <div class="dialkit-module-collapse-clip">
-      <div class="dialkit-module-inner">{@render children?.()}</div>
+  <div class="tweakers-module-collapse" data-open={enabled && isOpen}>
+    <div class="tweakers-module-collapse-clip">
+      <div class="tweakers-module-inner">{@render children?.()}</div>
     </div>
   </div>
 </div>

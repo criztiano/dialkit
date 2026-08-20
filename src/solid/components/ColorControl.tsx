@@ -43,7 +43,7 @@ export function ColorControl(props: ColorControlProps) {
   });
 
   onMount(() => {
-    const root = swatchRef?.closest('.dialkit-root') as HTMLElement | null;
+    const root = swatchRef?.closest('.tweakers-root') as HTMLElement | null;
     setPortalTarget(root ?? document.body);
 
     onCleanup(() => {
@@ -154,16 +154,16 @@ export function ColorControl(props: ColorControlProps) {
   };
 
   return (
-    <div class="dialkit-color-control">
-      <span class="dialkit-color-label">{props.label}</span>
-      <div class="dialkit-color-inputs">
+    <div class="tweakers-color-control">
+      <span class="tweakers-color-label">{props.label}</span>
+      <div class="tweakers-color-inputs">
         {/* The whole token (hash included) is the click target for editing. */}
-        <span class="dialkit-color-hex-wrap" onClick={() => setIsEditing(true)}>
-          <span class="dialkit-color-hash" aria-hidden="true">#</span>
+        <span class="tweakers-color-hex-wrap" onClick={() => setIsEditing(true)}>
+          <span class="tweakers-color-hash" aria-hidden="true">#</span>
           <Show
             when={isEditing()}
             fallback={
-              <span class="dialkit-color-hex" aria-label={`Hex color for ${props.label}`}>
+              <span class="tweakers-color-hex" aria-label={`Hex color for ${props.label}`}>
                 {bareHex(props.value)}
               </span>
             }
@@ -174,7 +174,7 @@ export function ColorControl(props: ColorControlProps) {
               // focusing a not-yet-connected input is a silent no-op.
               ref={(el) => queueMicrotask(() => { el.focus(); el.select(); })}
               type="text"
-              class="dialkit-color-hex-input"
+              class="tweakers-color-hex-input"
               aria-label={`Hex color for ${props.label}`}
               value={editValue()}
               onInput={(e) => setEditValue(e.currentTarget.value)}
@@ -186,16 +186,16 @@ export function ColorControl(props: ColorControlProps) {
         <Show when={alpha() && rgba()}>
           {(r) => (
             <>
-              <span class="dialkit-color-divider" aria-hidden="true" />
-              <span class="dialkit-color-opacity">
-                {opacityPercent(r())} <span class="dialkit-color-opacity-unit">%</span>
+              <span class="tweakers-color-divider" aria-hidden="true" />
+              <span class="tweakers-color-opacity">
+                {opacityPercent(r())} <span class="tweakers-color-opacity-unit">%</span>
               </span>
             </>
           )}
         </Show>
         <button
           ref={swatchRef}
-          class="dialkit-color-swatch"
+          class="tweakers-color-swatch"
           style={{ '--swatch-color': props.value }}
           onClick={() => (isOpen() ? closePopover() : openPopover())}
           data-open={String(isOpen())}
@@ -218,7 +218,7 @@ export function ColorControl(props: ColorControlProps) {
                   { type: 'spring', visualDuration: 0.15, bounce: 0 }
                 );
               }}
-              class="dialkit-color-picker-popover"
+              class="tweakers-color-picker-popover"
               style={popoverStyle()}
             >
               <ColorPickerPanel

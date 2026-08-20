@@ -74,14 +74,14 @@
   });
 </script>
 
-<div class="dialkit-analyser-viz-wrap" style={`width:${width}px`}>
+<div class="tweakers-analyser-viz-wrap" style={`width:${width}px`}>
   <canvas
     bind:this={canvasEl}
-    class="dialkit-analyser-viz"
+    class="tweakers-analyser-viz"
     style={`width:${width}px;height:${height}px`}
   ></canvas>
   {#if onMuteChange || onSoloChange}
-    <div class="dialkit-analyser-actions">
+    <div class="tweakers-analyser-actions">
       {#if onMuteChange}
         <button type="button" aria-label="Mute" aria-pressed={muted} onclick={() => onMuteChange?.(!muted)}>M</button>
       {/if}

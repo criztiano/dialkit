@@ -27,12 +27,12 @@
   }
 </script>
 
-<div class="dialkit-file-row">
-  <button type="button" class="dialkit-file-trigger" onclick={() => inputRef?.click()}>
-    <span class="dialkit-file-label">{label}</span>
-    <span class="dialkit-file-right">
+<div class="tweakers-file-row">
+  <button type="button" class="tweakers-file-trigger" onclick={() => inputRef?.click()}>
+    <span class="tweakers-file-label">{label}</span>
+    <span class="tweakers-file-right">
       <svg
-        class="dialkit-file-icon"
+        class="tweakers-file-icon"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -43,12 +43,12 @@
       >
         <path d={ICON_FILE} />
       </svg>
-      <span class="dialkit-file-name" data-empty={String(!value)}>{value || 'Choose file…'}</span>
+      <span class="tweakers-file-name" data-empty={String(!value)}>{value || 'Choose file…'}</span>
     </span>
   </button>
 
   {#if value}
-    <button type="button" class="dialkit-file-clear" onclick={clear} aria-label="Clear file">
+    <button type="button" class="tweakers-file-clear" onclick={clear} aria-label="Clear file">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
         <path d={ICON_CLOSE} />
       </svg>
@@ -57,7 +57,7 @@
 
   <input
     bind:this={inputRef}
-    class="dialkit-file-input"
+    class="tweakers-file-input"
     type="file"
     {accept}
     {multiple}

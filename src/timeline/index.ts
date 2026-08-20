@@ -3,7 +3,7 @@ export {
   buildTimelineValues,
   resolveTimelineLoop,
 } from './adapter';
-export type { DialTimelineOptions, TimelineActions } from './adapter';
+export type { TweakTimelineOptions, TimelineActions } from './adapter';
 
 export {
   clampClipMove,
@@ -25,7 +25,7 @@ export {
   TIMELINE_MIN_CLIP_DURATION,
 } from '../timeline-core';
 export type {
-  DialTimelineValues,
+  TweakTimelineValues,
   ParsedTimeline,
   TimelineClipConfig,
   TimelineClipCss,

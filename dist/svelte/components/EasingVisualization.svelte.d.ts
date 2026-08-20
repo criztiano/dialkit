@@ -1,4 +1,4 @@
-import type { EasingConfig } from 'dialkit/store';
+import type { EasingConfig } from 'tweakers/store';
 type $$ComponentProps = {
     easing: EasingConfig;
 };

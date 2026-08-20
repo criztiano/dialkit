@@ -1,6 +1,6 @@
 import { createSignal, Show } from 'solid-js';
 import type { JSX } from 'solid-js';
-import type { ShortcutConfig, XYAxis } from '../../store/DialStore';
+import type { ShortcutConfig, XYAxis } from '../../store/TweakStore';
 import { formatSliderShortcut } from '../../shortcut-utils';
 import {
   resolveAxis,
@@ -279,12 +279,12 @@ export function XYPad(props: XYPadProps) {
   const topPct = () => `${point().y * 100}%`;
 
   return (
-    <div class="dialkit-xy" data-active={String(active())} data-disabled={String(disabled())}>
-      <div class="dialkit-xy-header">
-        <span class="dialkit-xy-label">
+    <div class="tweakers-xy" data-active={String(active())} data-disabled={String(disabled())}>
+      <div class="tweakers-xy-header">
+        <span class="tweakers-xy-label">
           {props.label}
           <Show when={props.shortcut}>
-            <span class={`dialkit-shortcut-pill${props.shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`}>
+            <span class={`tweakers-shortcut-pill${props.shortcutActive ? ' tweakers-shortcut-pill-active' : ''}`}>
               {formatSliderShortcut(props.shortcut!)}
             </span>
           </Show>
@@ -293,7 +293,7 @@ export function XYPad(props: XYPadProps) {
 
       <div
         ref={areaRef}
-        class="dialkit-xy-area"
+        class="tweakers-xy-area"
         // Only the height is fixed (from `size`); width is fluid (CSS width:100%),
         // so the pad grows to fill the container and is no longer forced square.
         style={{ height: `${size()}px` }}
@@ -323,22 +323,22 @@ export function XYPad(props: XYPadProps) {
       >
         <Show when={showGrid()}>
           <div
-            class="dialkit-xy-grid"
+            class="tweakers-xy-grid"
             aria-hidden="true"
             style={{
-              '--dial-xy-grid-step-x': `${100 / gridX()}%`,
-              '--dial-xy-grid-step-y': `${100 / gridY()}%`,
+              '--tweak-xy-grid-step-x': `${100 / gridX()}%`,
+              '--tweak-xy-grid-step-y': `${100 / gridY()}%`,
             } as JSX.CSSProperties}
           />
         </Show>
         {/* Live axis labels, decorative (aria-valuetext owns the accessible string):
             X along the bottom edge, Y up the left edge. */}
-        <div class="dialkit-xy-axis dialkit-xy-axis-x" aria-hidden="true">{xVisual()}</div>
-        <div class="dialkit-xy-axis dialkit-xy-axis-y" aria-hidden="true">{yVisual()}</div>
+        <div class="tweakers-xy-axis tweakers-xy-axis-x" aria-hidden="true">{xVisual()}</div>
+        <div class="tweakers-xy-axis tweakers-xy-axis-y" aria-hidden="true">{yVisual()}</div>
         {/* Crosshair guides tracking the thumb, revealed on data-active. */}
-        <div class="dialkit-xy-guide dialkit-xy-guide-v" aria-hidden="true" style={{ left: leftPct() }} />
-        <div class="dialkit-xy-guide dialkit-xy-guide-h" aria-hidden="true" style={{ top: topPct() }} />
-        <div class="dialkit-xy-thumb" aria-hidden="true" style={{ left: leftPct(), top: topPct() }} />
+        <div class="tweakers-xy-guide tweakers-xy-guide-v" aria-hidden="true" style={{ left: leftPct() }} />
+        <div class="tweakers-xy-guide tweakers-xy-guide-h" aria-hidden="true" style={{ top: topPct() }} />
+        <div class="tweakers-xy-thumb" aria-hidden="true" style={{ left: leftPct(), top: topPct() }} />
       </div>
     </div>
   );

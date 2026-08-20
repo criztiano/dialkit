@@ -122,7 +122,7 @@ export function GradientPanel(props: GradientPanelProps) {
     drag.originY = e.clientY;
     drag.working = props.value;
 
-    const handle = (e.target as HTMLElement).closest('.dialkit-gradient-stop') as HTMLElement | null;
+    const handle = (e.target as HTMLElement).closest('.tweakers-gradient-stop') as HTMLElement | null;
     if (handle) {
       const index = Number(handle.dataset.index);
       setSelectedIndex(index);
@@ -209,12 +209,12 @@ export function GradientPanel(props: GradientPanelProps) {
   };
 
   return (
-    <div class="dialkit-gradient-panel">
-      <div class="dialkit-gradient-toolbar">
+    <div class="tweakers-gradient-panel">
+      <div class="tweakers-gradient-toolbar">
         <button
           ref={gripRef}
           type="button"
-          class="dialkit-gradient-grip"
+          class="tweakers-gradient-grip"
           aria-label="Drag to move"
           title="Drag to move"
           onPointerDown={onGripDown}
@@ -241,7 +241,7 @@ export function GradientPanel(props: GradientPanelProps) {
 
       <div
         ref={stripRef}
-        class="dialkit-gradient-strip"
+        class="tweakers-gradient-strip"
         style={{ '--gradient-ramp': rampCss(previewStops()) }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -254,7 +254,7 @@ export function GradientPanel(props: GradientPanelProps) {
             return (
               <button
                 type="button"
-                class="dialkit-gradient-stop"
+                class="tweakers-gradient-stop"
                 data-index={i()}
                 data-selected={String(i() === safeIndex())}
                 data-holding={String(i() === holdingIndex())}
@@ -272,7 +272,7 @@ export function GradientPanel(props: GradientPanelProps) {
         </For>
       </div>
 
-      <span class="dialkit-gradient-divider" aria-hidden="true" />
+      <span class="tweakers-gradient-divider" aria-hidden="true" />
 
       {/* Keyed Show mirrors React's key={selectedIndex}: the panel is torn down
           and rebuilt whenever the selected stop changes, resetting its internal

@@ -28,7 +28,7 @@ export function GradientControl(props: GradientControlProps) {
   let closeAnim: ReturnType<typeof animate> | null = null;
 
   onMount(() => {
-    const root = triggerRef?.closest('.dialkit-root') as HTMLElement | null;
+    const root = triggerRef?.closest('.tweakers-root') as HTMLElement | null;
     setPortalTarget(root ?? document.body);
 
     onCleanup(() => {
@@ -139,11 +139,11 @@ export function GradientControl(props: GradientControlProps) {
   };
 
   return (
-    <div class="dialkit-gradient-control">
-      <span class="dialkit-gradient-label">{props.label}</span>
+    <div class="tweakers-gradient-control">
+      <span class="tweakers-gradient-label">{props.label}</span>
       <button
         ref={triggerRef}
-        class="dialkit-gradient-preview dialkit-checker"
+        class="tweakers-gradient-preview tweakers-checker"
         style={{ '--gradient-preview': gradientToCss(props.value) }}
         onClick={() => (isOpen() ? closePopover() : openPopover())}
         data-open={String(isOpen())}
@@ -165,7 +165,7 @@ export function GradientControl(props: GradientControlProps) {
                   { type: 'spring', visualDuration: 0.15, bounce: 0 }
                 );
               }}
-              class="dialkit-gradient-popover"
+              class="tweakers-gradient-popover"
               style={popoverStyle()}
             >
               <GradientPanel value={props.value} onChange={(v) => props.onChange(v)} onDrag={onPanelDrag} />

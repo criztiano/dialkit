@@ -6,7 +6,7 @@ export type ButtonGroupButton = {
 };
 
 export const ButtonGroup = defineComponent({
-  name: 'DialKitButtonGroup',
+  name: 'TweakersButtonGroup',
   props: {
     buttons: {
       type: Array as PropType<ButtonGroupButton[]>,
@@ -16,9 +16,9 @@ export const ButtonGroup = defineComponent({
   setup(props) {
     return () => h(
       'div',
-      { class: 'dialkit-button-group' },
+      { class: 'tweakers-button-group' },
       props.buttons.map((button) =>
-        h('button', { class: 'dialkit-button', onClick: button.onClick }, button.label)
+        h('button', { class: 'tweakers-button', onClick: button.onClick }, button.label)
       )
     );
   },

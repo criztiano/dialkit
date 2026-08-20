@@ -1,6 +1,6 @@
 <script lang="ts">
   import Checkbox from './Checkbox.svelte';
-  import type { ShortcutConfig } from 'dialkit/store';
+  import type { ShortcutConfig } from 'tweakers/store';
   import { formatToggleShortcut } from '../../shortcut-utils';
 
   let { label, checked, onChange, shortcut, shortcutActive = false } = $props<{
@@ -12,12 +12,12 @@
   }>();
 </script>
 
-<div class="dialkit-labeled-control dialkit-labeled-control-check">
+<div class="tweakers-labeled-control tweakers-labeled-control-check">
   <Checkbox {checked} {onChange} {label} />
-  <span class="dialkit-labeled-control-label">
+  <span class="tweakers-labeled-control-label">
     {label}
     {#if shortcut}
-      <span class={`dialkit-shortcut-pill${shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`}>
+      <span class={`tweakers-shortcut-pill${shortcutActive ? ' tweakers-shortcut-pill-active' : ''}`}>
         {formatToggleShortcut(shortcut)}
       </span>
     {/if}

@@ -10,7 +10,7 @@ import {
   isOutsideSpan,
   handleLeftStyles,
 } from '../../range-slider-core';
-import type { RangeValue } from '../../store/DialStore';
+import type { RangeValue } from '../../store/TweakStore';
 import { decimalsForStep, roundValue } from '../../shortcut-utils';
 
 interface RangeSliderProps {
@@ -403,10 +403,10 @@ export function RangeSlider(props: RangeSliderProps) {
   const highText = () => value().max.toFixed(decimals());
 
   return (
-    <div ref={wrapperRef} class="dialkit-range-slider-wrapper">
+    <div ref={wrapperRef} class="tweakers-range-slider-wrapper">
       <div
         ref={trackRef}
-        class={`dialkit-range-slider ${isActive() ? 'dialkit-range-slider-active' : ''}`}
+        class={`tweakers-range-slider ${isActive() ? 'tweakers-range-slider-active' : ''}`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -417,13 +417,13 @@ export function RangeSlider(props: RangeSliderProps) {
       >
         <div
           ref={fillRef}
-          class="dialkit-range-slider-fill"
+          class="tweakers-range-slider-fill"
           style={{ left: `${lowPercent()}%`, width: `${Math.max(0, highPercent() - lowPercent())}%` }}
         />
 
         <div
           ref={lowHandleRef}
-          class="dialkit-range-slider-handle"
+          class="tweakers-range-slider-handle"
           style={{
             left: handleLeftStyles(lowPercent(), highPercent()).low,
             transform: 'translateY(-50%)',
@@ -432,7 +432,7 @@ export function RangeSlider(props: RangeSliderProps) {
         />
         <div
           ref={highHandleRef}
-          class="dialkit-range-slider-handle"
+          class="tweakers-range-slider-handle"
           style={{
             left: handleLeftStyles(lowPercent(), highPercent()).high,
             transform: 'translateY(-50%)',
@@ -440,22 +440,22 @@ export function RangeSlider(props: RangeSliderProps) {
           }}
         />
 
-        <span class="dialkit-range-slider-label">{props.label}</span>
+        <span class="tweakers-range-slider-label">{props.label}</span>
 
         <Show
           when={editing() !== null}
           fallback={
-            <span class="dialkit-range-slider-value">
+            <span class="tweakers-range-slider-value">
               <span
-                class="dialkit-range-slider-bound"
+                class="tweakers-range-slider-bound"
                 onClick={(e) => { e.stopPropagation(); openEditor('min'); }}
                 onPointerDown={(e) => e.stopPropagation()}
               >
                 {lowText()}
               </span>
-              <span class="dialkit-range-slider-dash">–</span>
+              <span class="tweakers-range-slider-dash">–</span>
               <span
-                class="dialkit-range-slider-bound"
+                class="tweakers-range-slider-bound"
                 onClick={(e) => { e.stopPropagation(); openEditor('max'); }}
                 onPointerDown={(e) => e.stopPropagation()}
               >
@@ -467,7 +467,7 @@ export function RangeSlider(props: RangeSliderProps) {
           <input
             ref={inputRef}
             type="text"
-            class="dialkit-range-slider-input"
+            class="tweakers-range-slider-input"
             value={inputValue()}
             onInput={(e) => setInputValue(e.currentTarget.value)}
             onKeyDown={handleInputKeyDown}

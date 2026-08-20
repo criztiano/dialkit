@@ -102,16 +102,16 @@ type ShortcutConfig = {
     interaction?: ShortcutInteraction;
 };
 /**
- * How lit the affordance dot is. The app pushes this — dialkit owns only how
+ * How lit the affordance dot is. The app pushes this — tweakers owns only how
  * each state looks, never when it applies.
  */
 type AffordanceStatus = 'off' | 'armed' | 'active';
-/** What dialkit hands a popover so it doesn't have to resolve any of it itself. */
+/** What tweakers hands a popover so it doesn't have to resolve any of it itself. */
 type AffordanceContext = {
     panelId: string;
     path: string;
     status: AffordanceStatus;
-    /** Shorthand for `DialStore.setAffordanceStatus(panelId, path, …)`. */
+    /** Shorthand for `TweakStore.setAffordanceStatus(panelId, path, …)`. */
     setStatus: (status: AffordanceStatus) => void;
 };
 /**

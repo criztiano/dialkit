@@ -6,7 +6,7 @@ import type { animate } from 'motion';
 export type AnimationHandle = ReturnType<typeof animate>;
 
 /**
- * Bridge an external subscribe/read store (DialStore et al.) into a Solid accessor.
+ * Bridge an external subscribe/read store (TweakStore et al.) into a Solid accessor.
  * Subscribes at setup on the client so updates between setup and mount are not
  * missed; on the server it reads directly without subscribing, so per-request
  * renders never leak listeners on the module-level store singleton.

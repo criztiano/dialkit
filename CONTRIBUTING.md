@@ -1,4 +1,4 @@
-# Contributing to DialKit
+# Contributing to Tweakers
 
 Thanks for contributing.
 
@@ -11,7 +11,7 @@ Thanks for contributing.
 ## Project notes
 
 - `src/styles/theme.css` is copied to `dist/styles.css` during build via `tsup` `onSuccess`.
-- `example/photostack` imports `dialkit/styles.css`, which resolves to `dist/styles.css`.
+- `example/photostack` imports `tweakers/styles.css`, which resolves to `dist/styles.css`.
 - `ButtonGroup` actions should remain vertically stacked.
 
 ## Pull request guidelines

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { Spring } from 'svelte/motion';
-  import type { RangeValue } from '../../store/DialStore';
+  import type { RangeValue } from '../../store/TweakStore';
   import {
     clampRange,
     setLow,
@@ -320,7 +320,7 @@
   // approach, the shared helper's min/max keeps them distinct and never crossing.
   // The other ports fade handle opacity over 0.15s via JS motion; Svelte writes
   // opacity straight into the inline style, so add a local CSS transition here to
-  // match. Kept inline (not in the shared .dialkit-range-slider-handle rule) so it
+  // match. Kept inline (not in the shared .tweakers-range-slider-handle rule) so it
   // doesn't conflict with the JS-driven opacity animation in React/Solid/Vue.
   const lowHandleStyle = $derived(
     `left:${handleLeftStyles(lowPercent.current, highPercent.current).low};opacity:${lowOpacity};transform:translateY(-50%);transition:opacity 0.15s ease;`
@@ -330,9 +330,9 @@
   );
 </script>
 
-<div bind:this={wrapperRef} class="dialkit-range-slider-wrapper">
+<div bind:this={wrapperRef} class="tweakers-range-slider-wrapper">
   <div
-    class={`dialkit-range-slider ${isActive ? 'dialkit-range-slider-active' : ''}`}
+    class={`tweakers-range-slider ${isActive ? 'tweakers-range-slider-active' : ''}`}
     onpointerdown={handlePointerDown}
     onpointermove={handlePointerMove}
     onpointerup={handlePointerUp}
@@ -341,18 +341,18 @@
     onmouseenter={() => (isHovered = true)}
     onmouseleave={() => (isHovered = false)}
   >
-    <div class="dialkit-range-slider-fill" style={fillStyle}></div>
+    <div class="tweakers-range-slider-fill" style={fillStyle}></div>
 
-    <div class="dialkit-range-slider-handle" style={lowHandleStyle}></div>
-    <div class="dialkit-range-slider-handle" style={highHandleStyle}></div>
+    <div class="tweakers-range-slider-handle" style={lowHandleStyle}></div>
+    <div class="tweakers-range-slider-handle" style={highHandleStyle}></div>
 
-    <span class="dialkit-range-slider-label">{label}</span>
+    <span class="tweakers-range-slider-label">{label}</span>
 
     {#if editing !== null}
       <input
         bind:this={inputRef}
         type="text"
-        class="dialkit-range-slider-input"
+        class="tweakers-range-slider-input"
         value={inputValue}
         oninput={(e) => (inputValue = (e.currentTarget as HTMLInputElement).value)}
         onkeydown={(e) => {
@@ -364,9 +364,9 @@
         onpointerdown={(e) => e.stopPropagation()}
       />
     {:else}
-      <span class="dialkit-range-slider-value">
+      <span class="tweakers-range-slider-value">
         <span
-          class="dialkit-range-slider-bound"
+          class="tweakers-range-slider-bound"
           onclick={(e) => {
             e.stopPropagation();
             openEditor('min');
@@ -377,9 +377,9 @@
         >
           {lowText}
         </span>
-        <span class="dialkit-range-slider-dash">–</span>
+        <span class="tweakers-range-slider-dash">–</span>
         <span
-          class="dialkit-range-slider-bound"
+          class="tweakers-range-slider-bound"
           onclick={(e) => {
             e.stopPropagation();
             openEditor('max');

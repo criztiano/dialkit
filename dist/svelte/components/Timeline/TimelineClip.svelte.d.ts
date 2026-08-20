@@ -1,4 +1,4 @@
-import type { TimelineClipLoop, TimelineClipMeta, TimelineStepStatic } from 'dialkit/timeline';
+import type { TimelineClipLoop, TimelineClipMeta, TimelineStepStatic } from 'tweakers/timeline';
 type $$ComponentProps = {
     timelineId: string;
     clip: TimelineClipMeta;

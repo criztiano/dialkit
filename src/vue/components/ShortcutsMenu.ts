@@ -1,5 +1,5 @@
 import { defineComponent, h, onMounted, onUnmounted, ref, Teleport, type PropType } from 'vue';
-import { DialStore, ShortcutConfig } from '../../store/DialStore';
+import { TweakStore, ShortcutConfig } from '../../store/TweakStore';
 
 function formatShortcutKey(sc: ShortcutConfig): string {
   if (!sc.key) return '\u2014';
@@ -21,7 +21,7 @@ function formatInteraction(sc: ShortcutConfig): string {
 }
 
 export const ShortcutsMenu = defineComponent({
-  name: 'DialKitShortcutsMenu',
+  name: 'TweakersShortcutsMenu',
   props: {
     panelId: {
       type: String as PropType<string>,
@@ -77,7 +77,7 @@ export const ShortcutsMenu = defineComponent({
     });
 
     return () => {
-      const panel = DialStore.getPanel(props.panelId);
+      const panel = TweakStore.getPanel(props.panelId);
       if (!panel) return null;
 
       const shortcuts = Object.entries(panel.shortcuts);
@@ -111,7 +111,7 @@ export const ShortcutsMenu = defineComponent({
       return [
         h('button', {
           ref: triggerRef,
-          class: 'dialkit-shortcuts-trigger',
+          class: 'tweakers-shortcuts-trigger',
           onClick: toggle,
           title: 'Keyboard shortcuts',
         }, [
@@ -135,24 +135,24 @@ export const ShortcutsMenu = defineComponent({
           ? h(Teleport, { to: 'body' }, [
               h('div', {
                 ref: dropdownRef,
-                class: 'dialkit-root dialkit-shortcuts-dropdown',
+                class: 'tweakers-root tweakers-shortcuts-dropdown',
                 style: {
                   position: 'fixed',
                   top: `${pos.value.top}px`,
                   right: `${pos.value.right}px`,
                 },
               }, [
-                h('div', { class: 'dialkit-shortcuts-title' }, 'Keyboard Shortcuts'),
-                h('div', { class: 'dialkit-shortcuts-list' },
+                h('div', { class: 'tweakers-shortcuts-title' }, 'Keyboard Shortcuts'),
+                h('div', { class: 'tweakers-shortcuts-list' },
                   rows.map((row) =>
-                    h('div', { key: row.path, class: 'dialkit-shortcuts-row' }, [
-                      h('span', { class: 'dialkit-shortcuts-row-key' }, formatShortcutKey(row.shortcut)),
-                      h('span', { class: 'dialkit-shortcuts-row-label' }, row.label),
-                      h('span', { class: 'dialkit-shortcuts-row-mode' }, formatInteraction(row.shortcut)),
+                    h('div', { key: row.path, class: 'tweakers-shortcuts-row' }, [
+                      h('span', { class: 'tweakers-shortcuts-row-key' }, formatShortcutKey(row.shortcut)),
+                      h('span', { class: 'tweakers-shortcuts-row-label' }, row.label),
+                      h('span', { class: 'tweakers-shortcuts-row-mode' }, formatInteraction(row.shortcut)),
                     ])
                   )
                 ),
-                h('div', { class: 'dialkit-shortcuts-hint' }, 'See pill badges on controls for keys'),
+                h('div', { class: 'tweakers-shortcuts-hint' }, 'See pill badges on controls for keys'),
               ]),
             ])
           : null,

@@ -32,7 +32,7 @@ function rampCss(stops: GradientValue['stops']): string {
 }
 
 export const GradientPanel = defineComponent({
-  name: 'DialKitGradientPanel',
+  name: 'TweakersGradientPanel',
   props: {
     value: { type: Object as PropType<GradientValue>, required: true },
   },
@@ -120,7 +120,7 @@ export const GradientPanel = defineComponent({
       drag.originY = e.clientY;
       drag.working = props.value;
 
-      const handle = (e.target as HTMLElement).closest('.dialkit-gradient-stop') as HTMLElement | null;
+      const handle = (e.target as HTMLElement).closest('.tweakers-gradient-stop') as HTMLElement | null;
       if (handle) {
         const index = Number(handle.dataset.index);
         selectedIndex.value = index;
@@ -207,12 +207,12 @@ export const GradientPanel = defineComponent({
         ? value.stops.filter((_, i) => i !== detach.value!.index)
         : value.stops;
 
-      return h('div', { class: 'dialkit-gradient-panel' }, [
-        h('div', { class: 'dialkit-gradient-toolbar' }, [
+      return h('div', { class: 'tweakers-gradient-panel' }, [
+        h('div', { class: 'tweakers-gradient-toolbar' }, [
           h('button', {
             ref: gripRef,
             type: 'button',
-            class: 'dialkit-gradient-grip',
+            class: 'tweakers-gradient-grip',
             'aria-label': 'Drag to move',
             title: 'Drag to move',
             onPointerdown: onGripDown,
@@ -239,7 +239,7 @@ export const GradientPanel = defineComponent({
 
         h('div', {
           ref: stripRef,
-          class: 'dialkit-gradient-strip',
+          class: 'tweakers-gradient-strip',
           style: { '--gradient-ramp': rampCss(previewStops) },
           onPointerdown: onPointerDown,
           onPointermove: onPointerMove,
@@ -250,7 +250,7 @@ export const GradientPanel = defineComponent({
           return h('button', {
             key: i,
             type: 'button',
-            class: 'dialkit-gradient-stop',
+            class: 'tweakers-gradient-stop',
             'data-index': i,
             'data-selected': String(i === safeIndex.value),
             'data-holding': String(i === holdingIndex.value),
@@ -265,7 +265,7 @@ export const GradientPanel = defineComponent({
           });
         })),
 
-        h('span', { class: 'dialkit-gradient-divider', 'aria-hidden': 'true' }),
+        h('span', { class: 'tweakers-gradient-divider', 'aria-hidden': 'true' }),
 
         h(ColorPickerPanel, {
           key: safeIndex.value,

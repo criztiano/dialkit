@@ -5,7 +5,7 @@ import type { WaveformRuntime, WaveformMode, WaveformLoop, WaveformEngine } from
 export type { WaveformMode, WaveformLoop } from '../../waveform-engine';
 
 export const WaveformVisualization = defineComponent({
-  name: 'DialKitWaveformVisualization',
+  name: 'TweakersWaveformVisualization',
   props: {
     buffer: { type: Object as PropType<AudioBuffer | null>, default: null },
     progress: { type: Number, default: 0 },
@@ -73,7 +73,7 @@ export const WaveformVisualization = defineComponent({
       const children = [
         h('canvas', {
           ref: canvasRef,
-          class: 'dialkit-waveform-viz',
+          class: 'tweakers-waveform-viz',
           style: { width: `${props.width}px`, height: `${props.height}px` },
         }),
       ];
@@ -108,9 +108,9 @@ export const WaveformVisualization = defineComponent({
             [plusIcon()]
           )
         );
-        children.push(h('div', { class: 'dialkit-waveform-zoom' }, buttons));
+        children.push(h('div', { class: 'tweakers-waveform-zoom' }, buttons));
       }
-      return h('div', { class: 'dialkit-waveform-viz-wrap', style: { width: `${props.width}px` } }, children);
+      return h('div', { class: 'tweakers-waveform-viz-wrap', style: { width: `${props.width}px` } }, children);
     };
   },
 });

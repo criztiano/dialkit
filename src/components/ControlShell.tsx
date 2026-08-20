@@ -1,8 +1,8 @@
 import { createElement, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { DialStore } from '../store/DialStore';
-import type { AffordanceConfig, AffordanceContext } from '../store/DialStore';
+import { TweakStore } from '../store/TweakStore';
+import type { AffordanceConfig, AffordanceContext } from '../store/TweakStore';
 import { AFFORDANCE_POPOVER_WIDTH, placePopover } from '../affordance-core';
 
 interface ControlShellProps {
@@ -30,18 +30,18 @@ export function ControlShell({ hint, title, id, affordance, panelId, path, child
 
   // One subscription covers every app-pushed presentation change on the panel.
   const readDisabled = useCallback(
-    () => (panelId && path ? DialStore.isDisabled(panelId, path) : false),
+    () => (panelId && path ? TweakStore.isDisabled(panelId, path) : false),
     [panelId, path]
   );
   const disabled = useSyncExternalStore(
-    useCallback((cb) => (panelId ? DialStore.subscribeControlState(panelId, cb) : () => {}), [panelId]),
+    useCallback((cb) => (panelId ? TweakStore.subscribeControlState(panelId, cb) : () => {}), [panelId]),
     readDisabled,
     readDisabled
   );
 
   return (
     <div
-      className="dialkit-control-tip"
+      className="tweakers-control-tip"
       data-hint={hint ? 'true' : undefined}
       data-affordance={affordance ? 'true' : undefined}
       data-affordance-open={open ? 'true' : undefined}
@@ -56,7 +56,7 @@ export function ControlShell({ hint, title, id, affordance, panelId, path, child
       {/* Kept mounted rather than conditional on hover so the id
           `aria-describedby` points at always resolves. */}
       {hint && (
-        <span className="dialkit-hint" id={id} role="tooltip">
+        <span className="tweakers-hint" id={id} role="tooltip">
           {hint}
         </span>
       )}
@@ -95,15 +95,15 @@ function Affordance({ affordance, panelId, path, open, onOpenChange }: Affordanc
   // Status lives outside `values`, so it needs its own subscription — this way a
   // status change re-renders the dot alone, not the panel.
   const status = useSyncExternalStore(
-    useCallback((cb) => DialStore.subscribeControlState(panelId, cb), [panelId]),
-    useCallback(() => DialStore.getAffordanceStatus(panelId, path), [panelId, path]),
-    useCallback(() => DialStore.getAffordanceStatus(panelId, path), [panelId, path])
+    useCallback((cb) => TweakStore.subscribeControlState(panelId, cb), [panelId]),
+    useCallback(() => TweakStore.getAffordanceStatus(panelId, path), [panelId, path]),
+    useCallback(() => TweakStore.getAffordanceStatus(panelId, path), [panelId, path])
   );
 
   // Portal into the panel root so the popover escapes the panel body's scroll
   // clipping — the same escape hatch SelectControl's dropdown uses.
   useEffect(() => {
-    const root = dotRef.current?.closest?.('.dialkit-root') as HTMLElement | null;
+    const root = dotRef.current?.closest?.('.tweakers-root') as HTMLElement | null;
     const target = root ?? (typeof document === 'undefined' ? null : document.body);
     // react-dom throws on a non-element container; falling back to inline
     // rendering keeps the popover usable wherever there isn't a real one.
@@ -177,7 +177,7 @@ function Affordance({ affordance, panelId, path, open, onOpenChange }: Affordanc
   const popover = open ? (
     <div
       ref={popoverRef}
-      className="dialkit-affordance-popover"
+      className="tweakers-affordance-popover"
       role="dialog"
       aria-label={label}
       tabIndex={-1}
@@ -189,14 +189,14 @@ function Affordance({ affordance, panelId, path, open, onOpenChange }: Affordanc
         visibility: pos ? undefined : 'hidden',
       }}
     >
-      <span className="dialkit-affordance-popover-title">{label}</span>
+      <span className="tweakers-affordance-popover-title">{label}</span>
       {/* createElement, not a direct call: the content is a component, and
           invoking it here would file its hooks under Affordance's. */}
       {createElement(affordance.content as ComponentType<AffordanceContext>, {
         panelId,
         path,
         status,
-        setStatus: (next) => DialStore.setAffordanceStatus(panelId, path, next),
+        setStatus: (next) => TweakStore.setAffordanceStatus(panelId, path, next),
       })}
     </div>
   ) : null;
@@ -206,7 +206,7 @@ function Affordance({ affordance, panelId, path, open, onOpenChange }: Affordanc
       <button
         ref={dotRef}
         type="button"
-        className="dialkit-affordance-dot"
+        className="tweakers-affordance-dot"
         data-status={status}
         data-open={String(open)}
         aria-label={label}

@@ -14,7 +14,7 @@ export function TimelineToggleButton() {
 
   return (
     <motion.button
-      className="dialkit-toolbar-add dialkit-timeline-toolbar-toggle"
+      className="tweakers-toolbar-add tweakers-timeline-toolbar-toggle"
       data-active={visible || undefined}
       aria-pressed={visible}
       aria-label={label}

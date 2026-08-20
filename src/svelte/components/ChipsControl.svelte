@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ICON_CLOSE } from '../../icons';
-  import type { ChipOption } from 'dialkit/store';
+  import type { ChipOption } from 'tweakers/store';
 
   let { label, value, options, onChange, onRemove } = $props<{
     label: string;
@@ -11,16 +11,16 @@
   }>();
 </script>
 
-<div class="dialkit-chips">
+<div class="tweakers-chips">
   {#if label}
-    <span class="dialkit-chips-label">{label}</span>
+    <span class="tweakers-chips-label">{label}</span>
   {/if}
-  <div class="dialkit-chips-grid" role="listbox" aria-label={label}>
+  <div class="tweakers-chips-grid" role="listbox" aria-label={label}>
     {#each options as option (option.value)}
-      <div class="dialkit-chip" data-active={String(option.value === value)}>
+      <div class="tweakers-chip" data-active={String(option.value === value)}>
         <button
           type="button"
-          class="dialkit-chip-select"
+          class="tweakers-chip-select"
           role="option"
           aria-selected={option.value === value}
           onclick={() => onChange(option.value)}
@@ -30,7 +30,7 @@
         {#if option.removable}
           <button
             type="button"
-            class="dialkit-chip-remove"
+            class="tweakers-chip-remove"
             aria-label={`Remove ${option.label}`}
             onclick={() => onRemove(option.value)}
           >

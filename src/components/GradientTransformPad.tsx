@@ -152,9 +152,9 @@ export function GradientTransformPad({ value, onChange }: GradientTransformPadPr
   const fill = gradientFillBox(value, w, h);
 
   return (
-    <div ref={padRef} className="dialkit-gradient-pad dialkit-checker">
+    <div ref={padRef} className="tweakers-gradient-pad tweakers-checker">
       <div
-        className="dialkit-gradient-pad-fill"
+        className="tweakers-gradient-pad-fill"
         style={{
           background: fill.background,
           transform: fill.transform,
@@ -168,12 +168,12 @@ export function GradientTransformPad({ value, onChange }: GradientTransformPadPr
       {radial && (
         <>
           <div
-            className="dialkit-gradient-pad-line"
+            className="tweakers-gradient-pad-line"
             style={{ left: cxPx, top: cyPx, width: majorLineLen, transform: `rotate(${majorLineAngle}deg)` }}
           />
           <button
             type="button"
-            className="dialkit-gradient-pad-handle"
+            className="tweakers-gradient-pad-handle"
             data-kind="major"
             aria-label="Gradient size and rotation"
             style={{ left: major.x, top: major.y }}
@@ -181,7 +181,7 @@ export function GradientTransformPad({ value, onChange }: GradientTransformPadPr
           />
           <button
             type="button"
-            className="dialkit-gradient-pad-handle"
+            className="tweakers-gradient-pad-handle"
             data-kind="minor"
             aria-label="Gradient squash"
             style={{ left: minor.x, top: minor.y }}
@@ -192,12 +192,12 @@ export function GradientTransformPad({ value, onChange }: GradientTransformPadPr
       {!radial && (
         <>
           <div
-            className="dialkit-gradient-pad-line"
+            className="tweakers-gradient-pad-line"
             style={{ left: angleOx, top: angleOy, width: angleLineLen, transform: `rotate(${angleLineAngle}deg)` }}
           />
           <button
             type="button"
-            className="dialkit-gradient-pad-handle"
+            className="tweakers-gradient-pad-handle"
             data-kind="angle"
             aria-label="Gradient angle"
             style={{ left: angleHandle.x, top: angleHandle.y }}
@@ -208,7 +208,7 @@ export function GradientTransformPad({ value, onChange }: GradientTransformPadPr
       {(radial || conic) && (
         <button
           type="button"
-          className="dialkit-gradient-pad-handle"
+          className="tweakers-gradient-pad-handle"
           data-kind="center"
           aria-label="Gradient center"
           style={{ left: clamp(cxPx, 5, w - 5), top: clamp(cyPx, 5, h - 5) }}

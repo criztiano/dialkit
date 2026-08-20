@@ -313,10 +313,10 @@
   const segmentSpans = $derived(segments.map((_: CurveSegment, i: number) => segmentSpan(segments, i, gap)));
 </script>
 
-<div class="dialkit-cc-wrap" style={`width:${W}px`}>
+<div class="tweakers-cc-wrap" style={`width:${W}px`}>
   <svg
     bind:this={svgEl}
-    class="dialkit-cc"
+    class="tweakers-cc"
     viewBox={`0 0 ${W} ${totalH}`}
     {width}
     height={totalH}
@@ -331,16 +331,16 @@
     aria-label="Curve composer"
   >
     <!-- main lane -->
-    <rect class="dialkit-cc-lane" x={mainRect.x} y={mainRect.y} width={mainRect.w} height={mainRect.h} rx={8} />
+    <rect class="tweakers-cc-lane" x={mainRect.x} y={mainRect.y} width={mainRect.w} height={mainRect.h} rx={8} />
     {#each laneGrid(mainRect) as gx}
-      <line class="dialkit-cc-grid" x1={gx} y1={mainRect.y} x2={gx} y2={mainRect.y + mainRect.h} />
+      <line class="tweakers-cc-grid" x1={gx} y1={mainRect.y} x2={gx} y2={mainRect.y + mainRect.h} />
     {/each}
 
     <!-- selected segment highlight -->
     {#if selectedIndex != null && selectedIndex >= 0 && selectedIndex < segments.length}
       {@const span = segmentSpan(segments, selectedIndex, gap)}
       <rect
-        class="dialkit-cc-seg-selected"
+        class="tweakers-cc-seg-selected"
         x={span[0] * W}
         y={mainRect.y}
         width={(span[1] - span[0]) * W}
@@ -353,7 +353,7 @@
     {#if hover?.kind === 'segment' && !drag}
       {@const span = segmentSpan(segments, hover.index, gap)}
       <rect
-        class="dialkit-cc-seg-hover"
+        class="tweakers-cc-seg-hover"
         x={span[0] * W}
         y={mainRect.y}
         width={(span[1] - span[0]) * W}
@@ -366,23 +366,23 @@
       {@const span = segmentSpans[i]}
       {@const diag = diagonalLine(mainRect, span, W)}
       <g>
-        <line class="dialkit-cc-diagonal" x1={diag.x1} y1={diag.y1} x2={diag.x2} y2={diag.y2} />
-        <path class="dialkit-cc-curve" d={curvePath(seg, mainRect, span, W)} />
-        <text class="dialkit-cc-label" x={(span[0] + span[1]) * 0.5 * W} y={mainRect.y + 13}>{seg.type}</text>
+        <line class="tweakers-cc-diagonal" x1={diag.x1} y1={diag.y1} x2={diag.x2} y2={diag.y2} />
+        <path class="tweakers-cc-curve" d={curvePath(seg, mainRect, span, W)} />
+        <text class="tweakers-cc-label" x={(span[0] + span[1]) * 0.5 * W} y={mainRect.y + 13}>{seg.type}</text>
       </g>
     {/each}
 
     <!-- gap connectors: faint lines that glide each segment's end down to the next's start -->
     {#if gap > 0}
       {#each timelineSlots(segments, gap).filter((slot) => slot.kind === 'gap' && slot.b > slot.a) as slot}
-        <path class="dialkit-cc-connector" d={connectorPath(slot, samplers, segments.length, mainRect, W)} />
+        <path class="tweakers-cc-connector" d={connectorPath(slot, samplers, segments.length, mainRect, W)} />
       {/each}
     {/if}
 
     <!-- interior boundaries -->
     {#each interior as bx, i}
       <line
-        class="dialkit-cc-boundary"
+        class="tweakers-cc-boundary"
         data-active={String(
           (hover?.kind === 'boundary' && hover.index === i) || (drag?.kind === 'boundary' && drag.index === i)
         )}
@@ -396,7 +396,7 @@
     <!-- series playhead + value dot (rides the curve; this is the signal triggers read) -->
     <line
       bind:this={seriesPlayheadEl}
-      class="dialkit-cc-playhead"
+      class="tweakers-cc-playhead"
       x1={0}
       y1={mainRect.y}
       x2={0}
@@ -405,7 +405,7 @@
     />
     <circle
       bind:this={seriesDotEl}
-      class="dialkit-cc-dot"
+      class="tweakers-cc-dot"
       cx={0}
       cy={mapY(mainRect, 0)}
       r={3}
@@ -414,26 +414,26 @@
 
     <!-- driver lane -->
     {#if driverRect}
-      <rect class="dialkit-cc-lane" x={driverRect.x} y={driverRect.y} width={driverRect.w} height={driverRect.h} rx={8} />
+      <rect class="tweakers-cc-lane" x={driverRect.x} y={driverRect.y} width={driverRect.w} height={driverRect.h} rx={8} />
       {#each laneGrid(driverRect) as gx}
-        <line class="dialkit-cc-grid" x1={gx} y1={driverRect.y} x2={gx} y2={driverRect.y + driverRect.h} />
+        <line class="tweakers-cc-grid" x1={gx} y1={driverRect.y} x2={gx} y2={driverRect.y + driverRect.h} />
       {/each}
       {#if hover?.kind === 'driver' && !drag}
-        <rect class="dialkit-cc-seg-hover" x={0} y={driverRect.y} width={W} height={driverRect.h} rx={8} />
+        <rect class="tweakers-cc-seg-hover" x={0} y={driverRect.y} width={W} height={driverRect.h} rx={8} />
       {/if}
       {@const driverDiag = diagonalLine(driverRect, [0, 1], W)}
       <line
-        class="dialkit-cc-diagonal"
+        class="tweakers-cc-diagonal"
         x1={driverDiag.x1}
         y1={driverDiag.y1}
         x2={driverDiag.x2}
         y2={driverDiag.y2}
       />
-      <path class="dialkit-cc-curve dialkit-cc-curve-driver" d={curvePath(driver!, driverRect, [0, 1], W)} />
-      <text class="dialkit-cc-label" x={W * 0.5} y={driverRect.y + 13}>driver · {driver!.type}</text>
+      <path class="tweakers-cc-curve tweakers-cc-curve-driver" d={curvePath(driver!, driverRect, [0, 1], W)} />
+      <text class="tweakers-cc-label" x={W * 0.5} y={driverRect.y + 13}>driver · {driver!.type}</text>
       <line
         bind:this={driverPlayheadEl}
-        class="dialkit-cc-playhead"
+        class="tweakers-cc-playhead"
         x1={0}
         y1={driverRect.y}
         x2={0}

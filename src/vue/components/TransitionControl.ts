@@ -1,6 +1,6 @@
 import { defineComponent, h, onMounted, onUnmounted, ref, type PropType } from 'vue';
-import { DialStore } from '../../store/DialStore';
-import type { EasingConfig, SpringConfig, TransitionConfig } from '../../store/DialStore';
+import { TweakStore } from '../../store/TweakStore';
+import type { EasingConfig, SpringConfig, TransitionConfig } from '../../store/TweakStore';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
 import { SegmentedControl } from './SegmentedControl';
@@ -30,7 +30,7 @@ function parseEase(value: string): [number, number, number, number] | null {
 }
 
 const EaseTextInput = defineComponent({
-  name: 'DialKitEaseTextInput',
+  name: 'TweakersEaseTextInput',
   props: {
     ease: {
       type: Array as unknown as PropType<[number, number, number, number]>,
@@ -62,11 +62,11 @@ const EaseTextInput = defineComponent({
       }
     };
 
-    return () => h('div', { class: 'dialkit-labeled-control' }, [
-      h('span', { class: 'dialkit-labeled-control-label' }, 'Ease'),
+    return () => h('div', { class: 'tweakers-labeled-control' }, [
+      h('span', { class: 'tweakers-labeled-control-label' }, 'Ease'),
       h('input', {
         type: 'text',
-        class: 'dialkit-text-input',
+        class: 'tweakers-text-input',
         value: editing.value ? draft.value : formatEase(props.ease),
         spellcheck: false,
         onInput: (event: Event) => {
@@ -81,7 +81,7 @@ const EaseTextInput = defineComponent({
 });
 
 export const TransitionControl = defineComponent({
-  name: 'DialKitTransitionControl',
+  name: 'TweakersTransitionControl',
   props: {
     panelId: { type: String, required: true },
     path: { type: String, required: true },
@@ -95,12 +95,12 @@ export const TransitionControl = defineComponent({
   },
   emits: ['change'],
   setup(props, { emit }) {
-    const mode = ref<CurveMode>(DialStore.getTransitionMode(props.panelId, props.path));
+    const mode = ref<CurveMode>(TweakStore.getTransitionMode(props.panelId, props.path));
     let unsub: (() => void) | undefined;
 
     onMounted(() => {
-      unsub = DialStore.subscribe(props.panelId, () => {
-        mode.value = DialStore.getTransitionMode(props.panelId, props.path);
+      unsub = TweakStore.subscribe(props.panelId, () => {
+        mode.value = TweakStore.getTransitionMode(props.panelId, props.path);
       });
     });
 
@@ -131,7 +131,7 @@ export const TransitionControl = defineComponent({
     };
 
     const handleModeChange = (nextMode: CurveMode) => {
-      DialStore.updateTransitionMode(props.panelId, props.path, nextMode);
+      TweakStore.updateTransitionMode(props.panelId, props.path, nextMode);
 
       if (nextMode === 'easing') {
         emit('change', cache.easing);
@@ -186,8 +186,8 @@ export const TransitionControl = defineComponent({
             isEasing
               ? h(EasingVisualization, { easing: currentEasing })
               : h(SpringVisualization, { spring: currentSpring, isSimpleMode: isSimpleSpring }),
-            h('div', { class: 'dialkit-labeled-control' }, [
-              h('span', { class: 'dialkit-labeled-control-label' }, 'Type'),
+            h('div', { class: 'tweakers-labeled-control' }, [
+              h('span', { class: 'tweakers-labeled-control-label' }, 'Type'),
               h(SegmentedControl, {
                 options: [
                   { value: 'easing', label: 'Easing' },

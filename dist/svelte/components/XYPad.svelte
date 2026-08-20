@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ShortcutConfig, XYAxis } from 'dialkit/store';
+  import type { ShortcutConfig, XYAxis } from 'tweakers/store';
   import { formatSliderShortcut } from '../../shortcut-utils';
   import {
     resolveAxis,
@@ -303,12 +303,12 @@
   };
 </script>
 
-<div class="dialkit-xy" data-active={String(active)} data-disabled={String(disabled)}>
-  <div class="dialkit-xy-header">
-    <span class="dialkit-xy-label">
+<div class="tweakers-xy" data-active={String(active)} data-disabled={String(disabled)}>
+  <div class="tweakers-xy-header">
+    <span class="tweakers-xy-label">
       {label}
       {#if shortcut}
-        <span class={`dialkit-shortcut-pill${shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`}>
+        <span class={`tweakers-shortcut-pill${shortcutActive ? ' tweakers-shortcut-pill-active' : ''}`}>
           {formatSliderShortcut(shortcut)}
         </span>
       {/if}
@@ -323,7 +323,7 @@
   -->
   <div
     bind:this={areaRef}
-    class="dialkit-xy-area"
+    class="tweakers-xy-area"
     style="height:{size}px;"
     role="application"
     data-active={String(active)}
@@ -334,18 +334,18 @@
   >
     {#if showGrid}
       <div
-        class="dialkit-xy-grid"
+        class="tweakers-xy-grid"
         aria-hidden="true"
-        style="--dial-xy-grid-step-x:{100 / gridX}%;--dial-xy-grid-step-y:{100 / gridY}%;"
+        style="--tweak-xy-grid-step-x:{100 / gridX}%;--tweak-xy-grid-step-y:{100 / gridY}%;"
       ></div>
     {/if}
     <!-- Live axis labels, decorative (aria-valuetext owns the accessible string):
          X along the bottom edge, Y up the left edge. -->
-    <div class="dialkit-xy-axis dialkit-xy-axis-x" aria-hidden="true">{xVisual}</div>
-    <div class="dialkit-xy-axis dialkit-xy-axis-y" aria-hidden="true">{yVisual}</div>
+    <div class="tweakers-xy-axis tweakers-xy-axis-x" aria-hidden="true">{xVisual}</div>
+    <div class="tweakers-xy-axis tweakers-xy-axis-y" aria-hidden="true">{yVisual}</div>
     <!-- Crosshair guides tracking the thumb, revealed on data-active. -->
-    <div class="dialkit-xy-guide dialkit-xy-guide-v" aria-hidden="true" style="left:{leftPct};"></div>
-    <div class="dialkit-xy-guide dialkit-xy-guide-h" aria-hidden="true" style="top:{topPct};"></div>
-    <div class="dialkit-xy-thumb" aria-hidden="true" style="left:{leftPct};top:{topPct};"></div>
+    <div class="tweakers-xy-guide tweakers-xy-guide-v" aria-hidden="true" style="left:{leftPct};"></div>
+    <div class="tweakers-xy-guide tweakers-xy-guide-h" aria-hidden="true" style="top:{topPct};"></div>
+    <div class="tweakers-xy-thumb" aria-hidden="true" style="left:{leftPct};top:{topPct};"></div>
   </div>
 </div>

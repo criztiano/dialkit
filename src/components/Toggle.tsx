@@ -1,5 +1,5 @@
 import { Checkbox } from './Checkbox';
-import type { ShortcutConfig } from '../store/DialStore';
+import type { ShortcutConfig } from '../store/TweakStore';
 import { formatToggleShortcut } from '../shortcut-utils';
 
 interface ToggleProps {
@@ -12,12 +12,12 @@ interface ToggleProps {
 
 export function Toggle({ label, checked, onChange, shortcut, shortcutActive }: ToggleProps) {
   return (
-    <div className="dialkit-labeled-control dialkit-labeled-control-check">
+    <div className="tweakers-labeled-control tweakers-labeled-control-check">
       <Checkbox checked={checked} onChange={onChange} label={label} />
-      <span className="dialkit-labeled-control-label">
+      <span className="tweakers-labeled-control-label">
         {label}
         {shortcut && (
-          <span className={`dialkit-shortcut-pill${shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`}>
+          <span className={`tweakers-shortcut-pill${shortcutActive ? ' tweakers-shortcut-pill-active' : ''}`}>
             {formatToggleShortcut(shortcut)}
           </span>
         )}

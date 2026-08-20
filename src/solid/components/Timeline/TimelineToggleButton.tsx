@@ -11,7 +11,7 @@ export function TimelineToggleButton() {
   const label = () => visible() ? 'Hide timeline' : 'Show timeline';
   return (
     <button
-      class="dialkit-toolbar-add dialkit-timeline-toolbar-toggle"
+      class="tweakers-toolbar-add tweakers-timeline-toolbar-toggle"
       data-active={visible() || undefined}
       aria-pressed={visible()}
       aria-label={label()}

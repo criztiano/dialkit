@@ -133,31 +133,31 @@ export function Folder(props: FolderProps) {
   const folderContent = () => (
     <div
       ref={(el) => { if (props.isRoot) contentRef = el; }}
-      class={`dialkit-folder ${props.isRoot ? 'dialkit-folder-root' : ''}`}
+      class={`tweakers-folder ${props.isRoot ? 'tweakers-folder-root' : ''}`}
     >
       <div
-        class={`dialkit-folder-header ${props.isRoot ? 'dialkit-panel-header' : ''} ${props.collapsible === false ? 'dialkit-folder-header-static' : ''}`}
+        class={`tweakers-folder-header ${props.isRoot ? 'tweakers-panel-header' : ''} ${props.collapsible === false ? 'tweakers-folder-header-static' : ''}`}
         onClick={props.collapsible === false ? undefined : handleToggle}
         data-hint={props.hint ? 'true' : undefined}
         aria-describedby={props.hint ? props.hintId : undefined}
       >
-        <div class="dialkit-folder-header-top">
+        <div class="tweakers-folder-header-top">
           {props.isRoot ? (
             <Show when={isOpen()}>
-              <div class="dialkit-folder-title-row">
-                <span class="dialkit-folder-title dialkit-folder-title-root">
+              <div class="tweakers-folder-title-row">
+                <span class="tweakers-folder-title tweakers-folder-title-root">
                   {props.title}
                 </span>
               </div>
             </Show>
           ) : (
-            <div class="dialkit-folder-title-row">
-              <span class="dialkit-folder-title">{props.title}</span>
+            <div class="tweakers-folder-title-row">
+              <span class="tweakers-folder-title">{props.title}</span>
             </div>
           )}
 
           {props.isRoot && !props.inline && (
-            <svg class="dialkit-panel-icon" viewBox="0 0 16 16" fill="none">
+            <svg class="tweakers-panel-icon" viewBox="0 0 16 16" fill="none">
               <path
                 opacity="0.5"
                 d={ICON_PANEL.path}
@@ -171,7 +171,7 @@ export function Folder(props: FolderProps) {
           {!props.isRoot && props.collapsible !== false && (
             <svg
               ref={folderChevronRef}
-              class="dialkit-folder-icon"
+              class="tweakers-folder-icon"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -185,13 +185,13 @@ export function Folder(props: FolderProps) {
         </div>
 
         <Show when={props.isRoot && props.toolbar && isOpen()}>
-          <div class="dialkit-panel-toolbar" onClick={(e) => e.stopPropagation()}>
+          <div class="tweakers-panel-toolbar" onClick={(e) => e.stopPropagation()}>
             {props.toolbar}
           </div>
         </Show>
 
         <Show when={props.hint}>
-          <span class="dialkit-hint" id={props.hintId} role="tooltip">
+          <span class="tweakers-hint" id={props.hintId} role="tooltip">
             {props.hint}
           </span>
         </Show>
@@ -220,10 +220,10 @@ export function Folder(props: FolderProps) {
               }
             );
           }}
-          class="dialkit-folder-content"
+          class="tweakers-folder-content"
           style={!props.isRoot ? { 'clip-path': 'inset(0 -20px)' } : undefined}
         >
-          <div class="dialkit-folder-inner">{props.children}</div>
+          <div class="tweakers-folder-inner">{props.children}</div>
         </div>
       </Show>
     </div>
@@ -232,7 +232,7 @@ export function Folder(props: FolderProps) {
   if (props.isRoot) {
     if (props.inline) {
       return (
-        <div class="dialkit-panel-inner dialkit-panel-inline">
+        <div class="tweakers-panel-inner tweakers-panel-inline">
           {folderContent()}
         </div>
       );
@@ -265,8 +265,8 @@ export function Folder(props: FolderProps) {
         height: open ? measuredOpenHeight : 42,
         borderRadius: open ? 14 : 21,
         boxShadow: open
-          ? 'var(--dial-shadow)'
-          : 'var(--dial-shadow-collapsed)',
+          ? 'var(--tweak-shadow)'
+          : 'var(--tweak-shadow-collapsed)',
       };
 
       panelRef.style.cursor = open ? '' : 'pointer';
@@ -309,7 +309,7 @@ export function Folder(props: FolderProps) {
     return (
       <div
         ref={panelRef}
-        class="dialkit-panel-inner"
+        class="tweakers-panel-inner"
         data-collapsed={String(isCollapsed())}
         onPointerDown={() => {
           if (isOpen()) return;

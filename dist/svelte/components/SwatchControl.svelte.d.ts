@@ -1,4 +1,4 @@
-import type { SwatchOption } from 'dialkit/store';
+import type { SwatchOption } from 'tweakers/store';
 type $$ComponentProps = {
     label: string;
     value: string;

@@ -3,8 +3,8 @@
 // Motion's own visualDuration/bounce → stiffness/damping mapping, so a
 // scrubbed position matches what Motion plays.
 
-import { isEasingConfigValue, isSpringConfigValue } from './store/DialStore';
-import type { EasingConfig, SpringConfig, TransitionConfig } from './store/DialStore';
+import { isEasingConfigValue, isSpringConfigValue } from './store/TweakStore';
+import type { EasingConfig, SpringConfig, TransitionConfig } from './store/TweakStore';
 
 export type SpringParams = { stiffness: number; damping: number; mass: number };
 

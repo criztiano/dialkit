@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { DialStore } from 'dialkit/store';
+  import { TweakStore } from 'tweakers/store';
   import {
     clampClipMove,
     clampClipResizeEnd,
@@ -7,8 +7,8 @@
     clampStepResize,
     clampTrackDelay,
     formatSeconds,
-  } from 'dialkit/timeline';
-  import type { TimelineClipLoop, TimelineClipMeta, TimelineStepStatic } from 'dialkit/timeline';
+  } from 'tweakers/timeline';
+  import type { TimelineClipLoop, TimelineClipMeta, TimelineStepStatic } from 'tweakers/timeline';
 
   const DRAG_THRESHOLD_PX = 3;
 
@@ -127,28 +127,28 @@
     if (drag.mode === 'boundary' && steps && drag.stepDurations) {
       const index = drag.boundaryIndex ?? 0;
       const others = drag.stepDurations.reduce((sum, value, stepIndex) => stepIndex === index ? sum : sum + value, 0);
-      DialStore.updateValue(
+      TweakStore.updateValue(
         timelineId,
         `${clip.key}.${steps[index].key ?? ''}.duration`,
         clampStepResize(drag.stepDurations[index] + dt, drag.at, others, timelineDuration)
       );
     } else if (drag.mode === 'move') {
       if (delayMode) {
-        DialStore.updateValue(timelineId, `${clip.key}.delay`, clampTrackDelay(drag.at + dt - baseAt, baseAt, drag.duration, timelineDuration));
+        TweakStore.updateValue(timelineId, `${clip.key}.delay`, clampTrackDelay(drag.at + dt - baseAt, baseAt, drag.duration, timelineDuration));
       } else {
-        DialStore.updateValue(timelineId, `${clip.key}.at`, clampClipMove(drag.at + dt, drag.duration, timelineDuration));
+        TweakStore.updateValue(timelineId, `${clip.key}.at`, clampClipMove(drag.at + dt, drag.duration, timelineDuration));
       }
     } else if (drag.mode === 'end') {
-      DialStore.updateValue(timelineId, `${clip.key}.duration`, clampClipResizeEnd(drag.duration + dt, drag.at, timelineDuration));
+      TweakStore.updateValue(timelineId, `${clip.key}.duration`, clampClipResizeEnd(drag.duration + dt, drag.at, timelineDuration));
     } else if (steps && drag.stepDurations) {
       const next = clampClipResizeStart(Math.max(drag.at + dt, Math.max(baseAt, 0)), drag.at, drag.stepDurations[0]);
-      DialStore.updateValues(timelineId, {
+      TweakStore.updateValues(timelineId, {
         [delayMode ? `${clip.key}.delay` : `${clip.key}.at`]: delayMode ? Math.max(0, next.at - baseAt) : next.at,
         [`${clip.key}.${steps[0].key ?? ''}.duration`]: next.duration,
       });
     } else {
       const next = clampClipResizeStart(Math.max(drag.at + dt, Math.max(baseAt, 0)), drag.at, drag.duration);
-      DialStore.updateValues(timelineId, {
+      TweakStore.updateValues(timelineId, {
         [delayMode ? `${clip.key}.delay` : `${clip.key}.at`]: delayMode ? Math.max(0, next.at - baseAt) : next.at,
         [`${clip.key}.duration`]: next.duration,
       });
@@ -168,7 +168,7 @@
 
 {#each ghostCycles as cycle (cycle.index)}
   <div
-    class="dialkit-timeline-clip-ghost"
+    class="tweakers-timeline-clip-ghost"
     data-steps={isSteps || undefined}
     aria-hidden="true"
     style:left={`${(cycle.start - viewStart) * pxPerSecond + 1}px`}
@@ -176,13 +176,13 @@
     style:background={clip.color}
   >
     {#each steps ?? [] as step, index (step.key ?? index)}
-      <span class="dialkit-timeline-clip-ghost-segment" style:width={`${step.duration * pxPerSecond}px`}></span>
+      <span class="tweakers-timeline-clip-ghost-segment" style:width={`${step.duration * pxPerSecond}px`}></span>
     {/each}
   </div>
 {/each}
 
 <div
-  class="dialkit-timeline-clip"
+  class="tweakers-timeline-clip"
   data-steps={isSteps || undefined}
   data-composite={composite || undefined}
   data-selected={selected || undefined}
@@ -201,33 +201,33 @@
   aria-label={barTitle}
 >
   {#if composite}
-    {#if width > 56}<span class="dialkit-timeline-clip-duration">{durationText}</span>{/if}
+    {#if width > 56}<span class="tweakers-timeline-clip-duration">{durationText}</span>{/if}
   {:else if isSteps}
     {#each steps ?? [] as step, index (step.key ?? index)}
       <div
-        class="dialkit-timeline-clip-segment"
+        class="tweakers-timeline-clip-segment"
         data-step={step.key ?? undefined}
         data-selected={selectedStepKey === step.key || undefined}
         style:width={`${step.duration * pxPerSecond}px`}
       >
         {#if step.duration * pxPerSecond > 52}
-          <span class="dialkit-timeline-clip-duration">{formatSeconds(step.duration)}</span>
+          <span class="tweakers-timeline-clip-duration">{formatSeconds(step.duration)}</span>
         {/if}
       </div>
     {/each}
     {#each steps ?? [] as step, index (step.key ?? index)}
       {#if !step.isPhysics}
-        <div class="dialkit-timeline-clip-handle" data-boundary={index} style:left={`${boundaries[index] * pxPerSecond - 4}px`}></div>
+        <div class="tweakers-timeline-clip-handle" data-boundary={index} style:left={`${boundaries[index] * pxPerSecond - 4}px`}></div>
       {/if}
     {/each}
-    {#if !steps?.[0]?.isPhysics}<div class="dialkit-timeline-clip-handle" data-edge="start"></div>{/if}
+    {#if !steps?.[0]?.isPhysics}<div class="tweakers-timeline-clip-handle" data-edge="start"></div>{/if}
   {:else}
-    {#if resizable}<div class="dialkit-timeline-clip-handle" data-edge="start"></div>{/if}
-    {#if width > 56}<span class="dialkit-timeline-clip-duration">{durationText}</span>{/if}
-    {#if resizable}<div class="dialkit-timeline-clip-handle" data-edge="end"></div>{/if}
+    {#if resizable}<div class="tweakers-timeline-clip-handle" data-edge="start"></div>{/if}
+    {#if width > 56}<span class="tweakers-timeline-clip-duration">{durationText}</span>{/if}
+    {#if resizable}<div class="tweakers-timeline-clip-handle" data-edge="end"></div>{/if}
   {/if}
 </div>
 
 {#if looping}
-  <span class="dialkit-timeline-loop-infinity" aria-hidden="true" title="Repeats indefinitely">∞</span>
+  <span class="tweakers-timeline-loop-infinity" aria-hidden="true" title="Repeats indefinitely">∞</span>
 {/if}

@@ -1,5 +1,5 @@
 import { defineComponent, h, computed, type PropType } from 'vue';
-import type { EasingConfig } from '../../store/DialStore';
+import type { EasingConfig } from '../../store/TweakStore';
 
 export const easingPresets: Record<string, [number, number, number, number]> = {
   linear: [0, 0, 1, 1],
@@ -9,7 +9,7 @@ export const easingPresets: Record<string, [number, number, number, number]> = {
 };
 
 export const EasingVisualization = defineComponent({
-  name: 'DialKitEasingVisualization',
+  name: 'TweakersEasingVisualization',
   props: {
     easing: {
       type: Object as PropType<EasingConfig>,
@@ -38,7 +38,7 @@ export const EasingVisualization = defineComponent({
     return () => h('svg', {
       viewBox: `0 0 ${size} ${size}`,
       preserveAspectRatio: 'xMidYMid slice',
-      class: 'dialkit-spring-viz dialkit-easing-viz',
+      class: 'tweakers-spring-viz tweakers-easing-viz',
     }, [
       h('line', {
         x1: pad + (0 + 0.5) * unit,

@@ -1,6 +1,6 @@
 <script lang="ts">
   import XYPad from './XYPad.svelte';
-  import type { ShortcutConfig, XYAxis, XYValue } from 'dialkit/store';
+  import type { ShortcutConfig, XYAxis, XYValue } from 'tweakers/store';
 
   let { label, value, onChange, x, y, grid, density, snap, returnToCenter, showValues, shortcut, shortcutActive } = $props<{
     label: string;

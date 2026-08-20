@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { PresenceMotionDiv } from './PresenceMotionDiv';
-import { DialStore } from '../store/DialStore';
+import { TweakStore } from '../store/TweakStore';
 import { ICON_CHEVRON, ICON_TRASH, ICON_PENCIL } from '../icons';
 
 interface PresetManagerProps {
@@ -70,13 +70,13 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd, provide
   }, [isOpen, close]);
 
   const handleSelect = (presetId: string | null) => {
-    DialStore.selectPreset(panelId, presetId);
+    TweakStore.selectPreset(panelId, presetId);
     close();
   };
 
   const handleDelete = (e: React.MouseEvent, presetId: string) => {
     e.stopPropagation();
-    DialStore.removePreset(panelId, presetId);
+    TweakStore.removePreset(panelId, presetId);
   };
 
   const startEditing = useCallback((presetId: string, name: string) => {
@@ -86,7 +86,7 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd, provide
 
   const commitEdit = useCallback(() => {
     if (editingId && draftName.trim()) {
-      DialStore.renamePreset(panelId, editingId, draftName);
+      TweakStore.renamePreset(panelId, editingId, draftName);
     }
     setEditingId(null);
   }, [panelId, editingId, draftName]);
@@ -110,20 +110,20 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd, provide
   }, [editingId]);
 
   return (
-    <div className="dialkit-preset-manager">
+    <div className="tweakers-preset-manager">
       <button
         ref={triggerRef}
-        className="dialkit-preset-trigger"
+        className="tweakers-preset-trigger"
         onClick={toggle}
         data-open={String(isOpen)}
         data-has-preset={String(!!activePreset)}
         data-disabled={String(!hasPresets)}
       >
-        <span className="dialkit-preset-label">
+        <span className="tweakers-preset-label">
           {activePreset ? activePreset.name : providerMode ? 'Presets' : 'Version 1'}
         </span>
         <motion.svg
-          className="dialkit-select-chevron"
+          className="tweakers-select-chevron"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -142,7 +142,7 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd, provide
           {isOpen && (
             <PresenceMotionDiv
               divRef={dropdownRef}
-              className="dialkit-root dialkit-preset-dropdown"
+              className="tweakers-root tweakers-preset-dropdown"
               style={{ position: 'fixed', top: pos.top, left: pos.left, minWidth: pos.width }}
               initial={{ opacity: 0, y: 4, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -151,25 +151,25 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd, provide
             >
               {!providerMode && (
                 <div
-                  className="dialkit-preset-item"
+                  className="tweakers-preset-item"
                   data-active={String(!activePresetId)}
                   onClick={() => handleSelect(null)}
                 >
-                  <span className="dialkit-preset-name">Version 1</span>
+                  <span className="tweakers-preset-name">Version 1</span>
                 </div>
               )}
 
               {presets.map((preset) => (
                 <div
                   key={preset.id}
-                  className="dialkit-preset-item"
+                  className="tweakers-preset-item"
                   data-active={String(preset.id === activePresetId)}
                   onClick={editingId === preset.id ? undefined : () => handleSelect(preset.id)}
                 >
                   {editingId === preset.id ? (
                     <input
                       ref={editInputRef}
-                      className="dialkit-preset-name-input"
+                      className="tweakers-preset-name-input"
                       value={draftName}
                       onChange={(e) => setDraftName(e.target.value)}
                       onClick={(e) => e.stopPropagation()}
@@ -181,11 +181,11 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd, provide
                       }}
                     />
                   ) : (
-                    <span className="dialkit-preset-name">{preset.name}</span>
+                    <span className="tweakers-preset-name">{preset.name}</span>
                   )}
                   {editingId !== preset.id && (preset.renamable ?? true) && (
                     <button
-                      className="dialkit-preset-rename"
+                      className="tweakers-preset-rename"
                       onClick={(e) => {
                         e.stopPropagation();
                         startEditing(preset.id, preset.name);
@@ -201,7 +201,7 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd, provide
                   )}
                   {editingId !== preset.id && (preset.deletable ?? true) && (
                     <button
-                      className="dialkit-preset-delete"
+                      className="tweakers-preset-delete"
                       onClick={(e) => handleDelete(e, preset.id)}
                       title="Delete preset"
                     >

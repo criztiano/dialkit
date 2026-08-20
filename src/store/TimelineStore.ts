@@ -1,5 +1,5 @@
-// Playback transport + registry for DialKit timelines.
-// Clip values (at/duration/from/to) live in DialStore under the timeline's
+// Playback transport + registry for Tweakers timelines.
+// Clip values (at/duration/from/to) live in TweakStore under the timeline's
 // panel id — this store only owns time: the clock, play state, and the
 // track/clip structure the dock UI renders.
 
@@ -19,10 +19,10 @@ export type TimelineClipTrackMeta = {
 };
 
 export type TimelineClipMeta = {
-  key: string; // config path; also the DialStore path prefix, e.g. "cardEnter" or "circle.path"
+  key: string; // config path; also the TweakStore path prefix, e.g. "cardEnter" or "circle.path"
   label: string;
   color: string;
-  /** Code-defined playback behavior; intentionally not exposed as a dial. */
+  /** Code-defined playback behavior; intentionally not exposed as a control. */
   loop: 'off' | 'repeat';
   /** Group key when the clip lives inside a nested layer, e.g. "circle". */
   group?: string;
@@ -33,7 +33,7 @@ export type TimelineClipMeta = {
 };
 
 export type TimelineMeta = {
-  id: string; // same id as the DialStore panel
+  id: string; // same id as the TweakStore panel
   name: string;
   duration: number; // seconds
   loop: boolean;
@@ -122,7 +122,7 @@ class TimelineStoreClass {
     const existing = this.timelines.get(meta.id);
     if (existing && existing.name !== meta.name) {
       console.warn(
-        `[dialkit] Timeline id "${meta.id}" is already registered by "${existing.name}"; ` +
+        `[tweakers] Timeline id "${meta.id}" is already registered by "${existing.name}"; ` +
         `"${meta.name}" will share and overwrite that transport.`
       );
     }

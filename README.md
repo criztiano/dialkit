@@ -1,10 +1,13 @@
-# dialkit v1.2.0
+# tweakers v1.2.0
 
-<img src="https://joshpuckett.me/images/dialkit.png" width="100%" />
+Real-time parameter tweaking for React, Solid, Svelte, and Vue.
 
-Real-time parameter tweaking for React, Solid, Svelte, and Vue, created by Josh Puckett.
+## Credit where it's due
 
-To learn more about how I use DialKit, and approach design in general, feel free to check out [Interface Craft](http://interfacecraft.dev/).
+Tweakers began as a fork of [dialkit](https://github.com/joshpuckett/dialkit) by
+[Josh Puckett](https://joshpuckett.me) — the initial inspiration, and the
+foundation everything here grew from. It has since gone its own way: a different
+design language, its own controls, and its own API. The debt to dialkit stands.
 
 ## Contributing
 
@@ -15,20 +18,20 @@ To learn more about how I use DialKit, and approach design in general, feel free
 ## Quick Start
 
 ```bash
-npm install dialkit motion
+npm install tweakers motion
 ```
 
 ```tsx
 // layout.tsx
-import { DialRoot } from 'dialkit';
-import 'dialkit/styles.css';
+import { TweakRoot } from 'tweakers';
+import 'tweakers/styles.css';
 
 export default function Layout({ children }) {
   return (
     <html>
       <body>
         {children}
-        <DialRoot />
+        <TweakRoot />
       </body>
     </html>
   );
@@ -37,10 +40,10 @@ export default function Layout({ children }) {
 
 ```tsx
 // component.tsx
-import { useDialKit } from 'dialkit';
+import { useTweakers } from 'tweakers';
 
 function Card() {
-  const p = useDialKit('Card', {
+  const p = useTweakers('Card', {
     blur: [24, 0, 100],
     scale: 1.2,
     color: '#ff5500',
@@ -62,16 +65,16 @@ function Card() {
 
 ---
 
-## useDialKit
+## useTweakers
 
 ```tsx
-const params = useDialKit(name, config, options?)
+const params = useTweakers(name, config, options?)
 ```
 
 | Param | Type | Description |
 |-------|------|-------------|
 | `name` | `string` | Panel title displayed in the UI |
-| `config` | `DialConfig` | Parameter definitions (see Control Types below) |
+| `config` | `TweakConfig` | Parameter definitions (see Control Types below) |
 | `options.onAction` | `(path: string) => void` | Callback when action buttons are clicked |
 | `options.shortcuts` | `Record<string, ShortcutConfig>` | Keyboard shortcuts for controls (see [Keyboard Shortcuts](#keyboard-shortcuts)) |
 | `options.hints` | `Record<string, string>` | Help text for controls (see [Hints](#hints)) |
@@ -87,7 +90,7 @@ Returns a fully typed object matching your config shape with live values. Updati
 Any control or folder can carry one line of help, revealed on hover or when keyboard focus lands inside it. Hints are keyed by control path — the same keying as `shortcuts` — because most controls are bare shorthand (`gravity: [9.8, 0, 20]`) with nowhere to hang a property.
 
 ```tsx
-const p = useDialKit('Plasticity', {
+const p = useTweakers('Plasticity', {
   gravity: [9.8, 0, 20],
   physics: {
     elastic: [0.5, 0, 1],
@@ -123,7 +126,7 @@ Two limits worth knowing: a folder header isn't focusable, so folder hints revea
 A control's label is derived from its config key (`maxBend` → "Max Bend"). Pass `labels` to override it, keyed by control path like `hints`:
 
 ```tsx
-const p = useDialKit('Motion', {
+const p = useTweakers('Motion', {
   paramA: [0.5, 0, 1],
   paramB: [0.5, 0, 1],
 }, {
@@ -146,7 +149,7 @@ Applies to folders as well as leaf controls. An empty string is ignored rather t
 A control can carry a companion control: an 8px dot in its bottom-right corner, barely visible until something is bound to it, opening a popover your app fills. Like hints, affordances are keyed by control path.
 
 ```tsx
-const p = useDialKit('Plasticity', {
+const p = useTweakers('Plasticity', {
   gravity: [9.8, 0, 20],
 }, {
   affordances: {
@@ -155,7 +158,7 @@ const p = useDialKit('Plasticity', {
 });
 ```
 
-`content` is a **component**, not a node — it's captured once when the panel registers, so a pre-built node could never see current state. dialkit renders it with its own instance, so it keeps its own state and hooks. It receives the context as props:
+`content` is a **component**, not a node — it's captured once when the panel registers, so a pre-built node could never see current state. tweakers renders it with its own instance, so it keeps its own state and hooks. It receives the context as props:
 
 ```tsx
 function MusicBind({ setStatus }: AffordanceContext) {
@@ -175,13 +178,13 @@ function MusicBind({ setStatus }: AffordanceContext) {
 | `panelId` | `string` | The panel this control belongs to. |
 | `path` | `string` | The control's config path. |
 | `status` | `AffordanceStatus` | The dot's current state. |
-| `setStatus` | `(status) => void` | Shorthand for `DialStore.setAffordanceStatus`. |
+| `setStatus` | `(status) => void` | Shorthand for `TweakStore.setAffordanceStatus`. |
 
 Affordances travel as an option rather than in the config because the config is JSON-serialized on every render to detect structure changes, and view code would not survive that.
 
 ### Status
 
-The dot's appearance is pushed by your app — dialkit owns only how each state looks:
+The dot's appearance is pushed by your app — tweakers owns only how each state looks:
 
 | Status | Dot |
 |--------|-----|
@@ -190,7 +193,7 @@ The dot's appearance is pushed by your app — dialkit owns only how each state 
 | `active` | Accent, gently pulsing — the binding is currently driving the value. |
 
 ```tsx
-DialStore.setAffordanceStatus(panelId, 'gravity', 'active');
+TweakStore.setAffordanceStatus(panelId, 'gravity', 'active');
 ```
 
 Pushing the status it already has is dropped without notifying anything, so driving this from an audio callback costs nothing. Status is presentation, not a value: it never reaches the value map, so it isn't persisted or saved into presets.
@@ -206,7 +209,7 @@ Any control type can take an affordance; sliders are the intended case, and what
 Any control can be greyed out and made inert at runtime:
 
 ```tsx
-DialStore.setDisabled(panelId, 'reset', true);
+TweakStore.setDisabled(panelId, 'reset', true);
 ```
 
 Runtime-only by design: a `disabled` flag in the config plus a runtime override would be two sources of truth for the same question, and calling this once covers the static case. Availability is app state — it changes as modes turn on and off — so it belongs where that state lives.
@@ -262,7 +265,7 @@ Sliders support click-to-snap (with spring animation), drag with rubber-band ove
 For bipolar parameters — an envelope amount, a detune, a pan — anchor the fill at a value other than `min` so it grows out from the center in either direction:
 
 ```tsx
-import { Slider } from 'dialkit';
+import { Slider } from 'tweakers';
 
 // fill grows left for negatives, right for positives, from 0
 <Slider label="Amount" value={amount} min={-1} max={1} bipolar onChange={setAmount} />
@@ -341,7 +344,7 @@ The control shows a live gradient strip; clicking it opens the editor: a linear 
 Turn the value into CSS with the exported helper:
 
 ```tsx
-import { gradientToCss } from 'dialkit';
+import { gradientToCss } from 'tweakers';
 
 <div style={{ background: gradientToCss(p.bg) }} />
 ```
@@ -349,7 +352,7 @@ import { gradientToCss } from 'dialkit';
 A CSS radial gradient can't tilt its own axis, so a rotated/squashed radial needs a transform on a clipping layer — and a rotated box exposes its corners. `gradientFillBox(value, widthPx, heightPx)` returns a ready-to-spread style for a fill layer that covers the box with no clipped corners at any rotation (for linear/conic it just matches the box):
 
 ```tsx
-import { gradientFillBox } from 'dialkit';
+import { gradientFillBox } from 'tweakers';
 
 // parent: position: relative; overflow: hidden
 <div style={{ position: 'absolute', ...gradientFillBox(p.bg, width, height) }} />
@@ -403,7 +406,7 @@ Creates a visual spring editor with a live animation curve preview. The editor s
 The returned config object is passed directly to Motion's `transition` prop:
 
 ```tsx
-const p = useDialKit('Card', {
+const p = useTweakers('Card', {
   spring: { type: 'spring', visualDuration: 0.5, bounce: 0.04 },
   x: [0, -200, 200],
 });
@@ -416,7 +419,7 @@ const p = useDialKit('Card', {
 ### Action
 
 ```tsx
-const p = useDialKit('Controls', {
+const p = useTweakers('Controls', {
   shuffle: { type: 'action' },
   reset: { type: 'action', label: 'Reset All' },
 }, {
@@ -442,7 +445,7 @@ sample: { type: 'action', label: 'Load', caption: slotName ?? 'No sample' },
 A display-only row that draws an arbitrary curve your own parameters produce — for parameters that shape a curve indirectly, like a pitch arc built from a shape select plus modifier sliders:
 
 ```tsx
-const p = useDialKit('Grain', {
+const p = useTweakers('Grain', {
   arcShape: { type: 'select', options: ['semicircle', 'gaussian', 'ramp'] },
   bell: [0.5, 0, 1],
   offset: { type: 'slider', default: 0, min: -1, max: 1, bipolar: true },
@@ -458,7 +461,7 @@ const p = useDialKit('Grain', {
 });
 ```
 
-`sample` is called with `t` in `[0, 1]` and returns the y value at that position. dialkit samples it (~160 points) and strokes the result on a panel surface, with a dashed baseline at `y = 0` whenever the domain spans negative values. Non-finite results (`NaN`, `±Infinity`) are skipped and simply break the stroke. `markers` draws a thin grey reference line behind the curve at each x position — they are plain data, so rebuilding the config with new positions moves the lines live; out-of-range or non-finite entries are skipped.
+`sample` is called with `t` in `[0, 1]` and returns the y value at that position. tweakers samples it (~160 points) and strokes the result on a panel surface, with a dashed baseline at `y = 0` whenever the domain spans negative values. Non-finite results (`NaN`, `±Infinity`) are skipped and simply break the stroke. `markers` draws a thin grey reference line behind the curve at each x position — they are plain data, so rebuilding the config with new positions moves the lines live; out-of-range or non-finite entries are skipped.
 
 The row holds no value: it never appears in the returned values, presets, or persistence. Because the host closes `sample` over its own state and rebuilds the config per render, the preview redraws whenever the function identity changes — turn a modifier slider and the curve follows live. Hints and label overrides apply to the row's path like any other control.
 
@@ -558,7 +561,7 @@ Add `_collapsible: false` to render the folder as a plain section header instead
 Add the reserved `_enabled: boolean` key to a folder and it renders as a **module**: the header carries an Off/On switch (the same idiom as the standalone `Module` component below), and when off the body collapses away with a smooth height transition. Unlike `_collapsed`, `_enabled` **is a value** — it appears in your returned values at `<folder>._enabled`, participates in presets and persistence, and toggling the switch updates it through the store. Clicking the header still collapses/expands the section while it's on, and `_collapsed` still controls the initial open state.
 
 ```tsx
-const params = useDialKit('Synth', {
+const params = useTweakers('Synth', {
   reverb: {
     _enabled: true,      // renders the header switch; starts on
     mix: [0.3, 0, 1],
@@ -575,7 +578,7 @@ params.reverb.mix        // number
 A real instrument runs to a very long column in a 300px sidebar. Add the reserved `_tabs: true` key at the **panel root** and every top-level folder becomes a tab: the folders give up their own headers — a segmented bar in the panel header names them instead — and only the open tab's sections show.
 
 ```tsx
-const params = useDialKit('Instrument', {
+const params = useTweakers('Instrument', {
   _tabs: true,
   pattern: {
     playback: { swing: [0, 0, 1] },   // a section of the Pattern tab
@@ -607,7 +610,7 @@ Notes:
 A standalone component (advanced usage): a titled group whose header carries an **enable switch**. Use it for parameter blocks that turn on or off as a unit — synth layers, effect sends, optional feature groups — where a plain folder doesn't capture the "this whole block is on/off" state. The switch doubles as the expand control: when off, the body collapses away with a smooth height transition (so off modules don't take up space) and reveals again when on.
 
 ```tsx
-import { Module, Slider } from 'dialkit';
+import { Module, Slider } from 'tweakers';
 
 function ImpactControls({ layer, onChange }) {
   return (
@@ -631,22 +634,22 @@ function ImpactControls({ layer, onChange }) {
 
 Available in all four frameworks. In Svelte the body is the default slot/snippet; in Vue, the default slot.
 
-DialKit also supports dynamic config updates. If your config shape, defaults, options, or labels change over time, the panel updates while preserving current values where paths still exist.
+Tweakers also supports dynamic config updates. If your config shape, defaults, options, or labels change over time, the panel updates while preserving current values where paths still exist.
 
 Dynamic configs work with both inline objects and memoized configs — no special consumer action needed:
 
 ```tsx
-const values = useDialKit('Controls', {
+const values = useTweakers('Controls', {
   style: { type: 'select', options: dynamicOptions },
 });
 ```
 
 ---
 
-## DialRoot
+## TweakRoot
 
 ```tsx
-<DialRoot position="top-right" />
+<TweakRoot position="top-right" />
 ```
 
 | Prop | Type | Default |
@@ -658,10 +661,10 @@ const values = useDialKit('Controls', {
 
 Mount once at your app root. In the default `popover` mode, the panel renders via a portal on `document.body`. It collapses to a small icon button and expands to 280px wide on click.
 
-DialKit is automatically hidden in production builds. To enable it in production, pass `productionEnabled`:
+Tweakers is automatically hidden in production builds. To enable it in production, pass `productionEnabled`:
 
 ```tsx
-<DialRoot productionEnabled />
+<TweakRoot productionEnabled />
 ```
 
 ### Draggable panel
@@ -670,26 +673,26 @@ In popover mode, the collapsed panel bubble can be dragged to any position on th
 
 ### Inline mode
 
-Use `mode="inline"` to render DialKit directly in your layout instead of as a floating popover. The panel fills its container and scrolls internally, which is useful for embedding in a sidebar or resizable panel. Inline mode works across all frameworks:
+Use `mode="inline"` to render Tweakers directly in your layout instead of as a floating popover. The panel fills its container and scrolls internally, which is useful for embedding in a sidebar or resizable panel. Inline mode works across all frameworks:
 
 **React:**
 ```tsx
 <aside style={{ width: 300, height: '100vh', overflow: 'hidden' }}>
-  <DialRoot mode="inline" />
+  <TweakRoot mode="inline" />
 </aside>
 ```
 
 **Solid:**
 ```tsx
 <aside style={{ width: '300px', height: '100vh', overflow: 'hidden' }}>
-  <DialRoot mode="inline" />
+  <TweakRoot mode="inline" />
 </aside>
 ```
 
 **Svelte:**
 ```svelte
 <aside style:width="300px" style:height="100vh" style:overflow="hidden">
-  <DialRoot mode="inline" />
+  <TweakRoot mode="inline" />
 </aside>
 ```
 
@@ -706,10 +709,10 @@ When the panel is open, the toolbar provides:
 
 ### App-backed presets
 
-Apps with their own preset store (files, engine IPC, a server) can back the same toolbar UI with a `PresetProvider` via the `presets` option. dialkit then renders your list in your order, hides its implicit "Version 1" row, and stops snapshotting values itself — you apply values in `onSelect` and own persistence:
+Apps with their own preset store (files, engine IPC, a server) can back the same toolbar UI with a `PresetProvider` via the `presets` option. tweakers then renders your list in your order, hides its implicit "Version 1" row, and stops snapshotting values itself — you apply values in `onSelect` and own persistence:
 
 ```tsx
-const p = useDialKit('Reverb', {
+const p = useTweakers('Reverb', {
   size: [0.5, 0, 1],
   damping: [0.3, 0, 1],
 }, {
@@ -720,14 +723,14 @@ const p = useDialKit('Reverb', {
       readonly: preset.factory,             // no trash icon on factory presets
     })),
     activeId: myActivePresetId,
-    onSelect: (id) => loadMyPreset(id),     // apply values yourself, e.g. via DialStore.updateValues
+    onSelect: (id) => loadMyPreset(id),     // apply values yourself, e.g. via TweakStore.updateValues
     onCreate: (suggestedLabel) => saveMyPreset(suggestedLabel),  // "+" pressed
     onDelete: (id) => deleteMyPreset(id),   // omit to hide delete entirely
   },
 });
 ```
 
-The provider is plain host state: re-render with a new list or `activeId` and the dropdown follows. Without the option, the built-in version snapshots behave exactly as before. The same option exists on `createDialKit` (Solid and Svelte, where a live list needs signal/`$state`-backed `presets`/`activeId` getters) and Vue's `useDialKit`.
+The provider is plain host state: re-render with a new list or `activeId` and the dropdown follows. Without the option, the built-in version snapshots behave exactly as before. The same option exists on `createTweakers` (Solid and Svelte, where a live list needs signal/`$state`-backed `presets`/`activeId` getters) and Vue's `useTweakers`.
 
 ---
 
@@ -736,7 +739,7 @@ The provider is plain host state: re-render with a new list or `activeId` and th
 Assign keyboard shortcuts to controls so you can adjust values without touching the panel. Pass a `shortcuts` map in the options object:
 
 ```tsx
-const p = useDialKit('Card', {
+const p = useTweakers('Card', {
   blur: [24, 0, 100],
   scale: 1.2,
   opacity: [1, 0, 1],
@@ -820,7 +823,7 @@ Shortcuts are automatically disabled when a text input is focused.
 Values are normalized from `0` to `1`. Mono accepts a number, stereo accepts a left/right tuple, and a spectrum array creates one band per value (up to 12):
 
 ```tsx
-import { AudioLevelMeter } from 'dialkit';
+import { AudioLevelMeter } from 'tweakers';
 
 <AudioLevelMeter levels={0.62} label="Microphone input" />
 
@@ -853,11 +856,11 @@ The visual's accessible alternative includes its label, mode, current clamped pe
 ## Full Example
 
 ```tsx
-import { useDialKit } from 'dialkit';
+import { useTweakers } from 'tweakers';
 import { motion } from 'motion/react';
 
 function PhotoStack() {
-  const p = useDialKit('Photo Stack', {
+  const p = useTweakers('Photo Stack', {
     // Text inputs
     title: 'Japan',
     subtitle: { type: 'text', default: 'December 2025', placeholder: 'Enter subtitle...' },
@@ -915,22 +918,22 @@ function PhotoStack() {
 
 ## Solid
 
-DialKit also works with Solid. Import from `dialkit/solid` instead of `dialkit` — the API mirrors the React version, with `createDialKit` replacing `useDialKit` and `DialRoot` as a Solid component.
+Tweakers also works with Solid. Import from `tweakers/solid` instead of `tweakers` — the API mirrors the React version, with `createTweakers` replacing `useTweakers` and `TweakRoot` as a Solid component.
 
 ```bash
-npm install dialkit solid-js
+npm install tweakers solid-js
 ```
 
 ```tsx
 // App.tsx
-import { DialRoot } from 'dialkit/solid';
-import 'dialkit/styles.css';
+import { TweakRoot } from 'tweakers/solid';
+import 'tweakers/styles.css';
 
 export default function App() {
   return (
     <>
       <MyComponent />
-      <DialRoot />
+      <TweakRoot />
     </>
   );
 }
@@ -938,10 +941,10 @@ export default function App() {
 
 ```tsx
 // component.tsx
-import { createDialKit } from 'dialkit/solid';
+import { createTweakers } from 'tweakers/solid';
 
 function Card() {
-  const params = createDialKit('Card', {
+  const params = createTweakers('Card', {
     blur: [24, 0, 100],
     scale: 1.2,
     color: '#ff5500',
@@ -961,35 +964,35 @@ function Card() {
 }
 ```
 
-`createDialKit` returns an accessor — call `params()` to read the current values. All control types, config shapes, and panel features (presets, copy, folders) work identically to the React version.
+`createTweakers` returns an accessor — call `params()` to read the current values. All control types, config shapes, and panel features (presets, copy, folders) work identically to the React version.
 
 ---
 
 ## Svelte
 
-DialKit works with Svelte 5 (≥5.8.0). Import from `dialkit/svelte` — no extra dependencies needed.
+Tweakers works with Svelte 5 (≥5.8.0). Import from `tweakers/svelte` — no extra dependencies needed.
 
 ```bash
-npm install dialkit
+npm install tweakers
 ```
 
 ```svelte
 <!-- +layout.svelte -->
 <script>
-  import { DialRoot } from 'dialkit/svelte';
+  import { TweakRoot } from 'tweakers/svelte';
   let { children } = $props();
 </script>
 
 {@render children()}
-<DialRoot />
+<TweakRoot />
 ```
 
 ```svelte
 <!-- Card.svelte -->
 <script>
-  import { createDialKit } from 'dialkit/svelte';
+  import { createTweakers } from 'tweakers/svelte';
 
-  const params = createDialKit('Card', {
+  const params = createTweakers('Card', {
     blur: [24, 0, 100],
     scale: 1.2,
     color: '#ff5500',
@@ -1002,23 +1005,23 @@ npm install dialkit
 </div>
 ```
 
-`createDialKit` returns a reactive object — access values directly (e.g. `params.blur`). Styles are injected automatically by `DialRoot` (no CSS import needed). Cleanup is automatic when the component unmounts. All control types, presets, folders, and transitions match the React/Solid entries.
+`createTweakers` returns a reactive object — access values directly (e.g. `params.blur`). Styles are injected automatically by `TweakRoot` (no CSS import needed). Cleanup is automatic when the component unmounts. All control types, presets, folders, and transitions match the React/Solid entries.
 
 ---
 
 ## Vue
 
-DialKit works with Vue 3 (≥3.3.0). Import from `dialkit/vue`.
+Tweakers works with Vue 3 (≥3.3.0). Import from `tweakers/vue`.
 
 ```bash
-npm install dialkit motion-v vue
+npm install tweakers motion-v vue
 ```
 
 ```ts
 // main.ts
 import { createApp } from 'vue';
-import { DialRoot } from 'dialkit/vue';
-import 'dialkit/styles.css';
+import { TweakRoot } from 'tweakers/vue';
+import 'tweakers/styles.css';
 import App from './App.vue';
 
 const app = createApp(App);
@@ -1028,22 +1031,22 @@ app.mount('#app');
 ```vue
 <!-- App.vue -->
 <script setup>
-import { DialRoot } from 'dialkit/vue';
+import { TweakRoot } from 'tweakers/vue';
 import Card from './Card.vue';
 </script>
 
 <template>
   <Card />
-  <DialRoot />
+  <TweakRoot />
 </template>
 ```
 
 ```vue
 <!-- Card.vue -->
 <script setup>
-import { useDialKit } from 'dialkit/vue';
+import { useTweakers } from 'tweakers/vue';
 
-const params = useDialKit('Card', {
+const params = useTweakers('Card', {
   blur: [24, 0, 100],
   scale: 1.2,
   color: '#ff5500',
@@ -1063,7 +1066,7 @@ const params = useDialKit('Card', {
 </template>
 ```
 
-`useDialKit` returns a reactive object. All control types, presets, folders, keyboard shortcuts, and transitions work identically to the other frameworks.
+`useTweakers` returns a reactive object. All control types, presets, folders, keyboard shortcuts, and transitions work identically to the other frameworks.
 
 ---
 
@@ -1089,13 +1092,13 @@ import type {
   AffordanceStatus,
   ShortcutConfig,
   ShortcutMode,
-  DialConfig,
-  DialValue,
+  TweakConfig,
+  TweakValue,
   ResolvedValues,
   ControlMeta,
   PanelConfig,
   Preset,
-} from 'dialkit';
+} from 'tweakers';
 ```
 
 Return values are fully typed: `params.blur` infers as `number`, `params.color` as `string`, `params.spring` as `SpringConfig`, `params.shadow` as a nested object, etc.

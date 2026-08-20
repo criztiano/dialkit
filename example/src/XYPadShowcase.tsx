@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { XYPad, SegmentedControl } from 'dialkit';
-import type { XYValue } from 'dialkit';
+import { XYPad, SegmentedControl } from 'tweakers';
+import type { XYValue } from 'tweakers';
 
 type DemoId = 'hold' | 'bipolar' | 'joystick' | 'grid' | 'range' | 'disabled';
 
@@ -71,8 +71,8 @@ export function XYPadShowcase() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div className="dialkit-labeled-control">
-        <span className="dialkit-labeled-control-label">Example</span>
+      <div className="tweakers-labeled-control">
+        <span className="tweakers-labeled-control-label">Example</span>
         <SegmentedControl
           options={DEMOS.map((d) => ({ value: d.id, label: d.label }))}
           value={demo}
@@ -83,14 +83,14 @@ export function XYPadShowcase() {
       {/* The pad fills the container width (fluid, no longer forced square). */}
       <div>{pad}</div>
 
-      <div style={{ fontSize: 12, color: 'var(--dial-text-secondary)', lineHeight: 1.5 }}>{active.blurb}</div>
+      <div style={{ fontSize: 12, color: 'var(--tweak-text-secondary)', lineHeight: 1.5 }}>{active.blurb}</div>
       <code
         style={{
           fontFamily: "'Geist Mono', monospace",
           fontSize: 11.5,
-          color: 'var(--dial-text-label)',
-          background: 'var(--dial-surface)',
-          border: '1px solid var(--dial-border)',
+          color: 'var(--tweak-text-label)',
+          background: 'var(--tweak-surface)',
+          border: '1px solid var(--tweak-border)',
           borderRadius: 8,
           padding: '8px 10px',
           whiteSpace: 'pre-wrap',

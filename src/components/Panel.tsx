@@ -1,7 +1,7 @@
 import { useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { DialStore, PanelConfig, ControlMeta, TAB_PATH } from '../store/DialStore';
+import { TweakStore, PanelConfig, ControlMeta, TAB_PATH } from '../store/TweakStore';
 import { splitPanelTabs } from '../panel-tabs';
 import { buildCopyInstruction } from '../copy-instruction';
 import { ShortcutsMenu } from './ShortcutsMenu';
@@ -25,25 +25,25 @@ export function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra 
 
   // Subscribe to panel value changes
   const values = useSyncExternalStore(
-    (cb) => DialStore.subscribe(panel.id, cb),
-    () => DialStore.getValues(panel.id),
-    () => DialStore.getValues(panel.id)
+    (cb) => TweakStore.subscribe(panel.id, cb),
+    () => TweakStore.getValues(panel.id),
+    () => TweakStore.getValues(panel.id)
   );
 
-  const presets = DialStore.getPresetItems(panel.id);
-  const activePresetId = DialStore.getActivePresetId(panel.id);
-  const providerMode = DialStore.hasPresetProvider(panel.id);
+  const presets = TweakStore.getPresetItems(panel.id);
+  const activePresetId = TweakStore.getActivePresetId(panel.id);
+  const providerMode = TweakStore.hasPresetProvider(panel.id);
 
   // Bumped per add: the preset manager opens and puts the fresh preset's
   // name straight into inline edit.
   const [presetEditSignal, setPresetEditSignal] = useState(0);
   const handleAddPreset = () => {
-    DialStore.createPreset(panel.id);
+    TweakStore.createPreset(panel.id);
     setPresetEditSignal((n) => n + 1);
   };
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(buildCopyInstruction('useDialKit', panel.name, values));
+    navigator.clipboard.writeText(buildCopyInstruction('useTweakers', panel.name, values));
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -54,7 +54,7 @@ export function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra 
     <SegmentedControl
       options={tabs.map((tab) => ({ value: tab.path, label: tab.label }))}
       value={activeTab.path}
-      onChange={(v) => DialStore.updateValue(panel.id, TAB_PATH, v)}
+      onChange={(v) => TweakStore.updateValue(panel.id, TAB_PATH, v)}
     />
   ) : undefined;
 
@@ -68,7 +68,7 @@ export function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra 
     activeTab ? (
       <>
         {renderRows(looseControls)}
-        <div key={activeTab.path} className="dialkit-panel-tab-page">
+        <div key={activeTab.path} className="tweakers-panel-tab-page">
           {renderRows(pageControls)}
         </div>
       </>
@@ -81,7 +81,7 @@ export function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra 
   const toolbar = (
     <>
       <motion.button
-        className="dialkit-toolbar-add"
+        className="tweakers-toolbar-add"
         onClick={handleAddPreset}
         title="Add preset"
         whileTap={{ scale: 0.9 }}
@@ -104,7 +104,7 @@ export function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra 
       />
 
       <motion.button
-        className="dialkit-toolbar-add"
+        className="tweakers-toolbar-add"
         onClick={handleCopy}
         title="Copy parameters"
         whileTap={{ scale: 0.9 }}
@@ -121,7 +121,7 @@ export function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra 
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                style={{ position: 'absolute', inset: 0, width: 14, height: 14, color: 'var(--dial-text-label)' }}
+                style={{ position: 'absolute', inset: 0, width: 14, height: 14, color: 'var(--tweak-text-label)' }}
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.8, opacity: 0 }}
@@ -134,7 +134,7 @@ export function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra 
                 key="clipboard"
                 viewBox="0 0 24 24"
                 fill="none"
-                style={{ position: 'absolute', inset: 0, width: 14, height: 14, color: 'var(--dial-text-label)' }}
+                style={{ position: 'absolute', inset: 0, width: 14, height: 14, color: 'var(--tweak-text-label)' }}
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.8, opacity: 0 }}
@@ -154,7 +154,7 @@ export function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra 
   );
 
   return (
-    <div className="dialkit-panel-wrapper">
+    <div className="tweakers-panel-wrapper">
       <Folder title={panel.name} defaultOpen={defaultOpen} isRoot={true} inline={inline} onOpenChange={setIsPanelOpen} toolbar={toolbar} tabs={tabBar}>
         {renderControls()}
       </Folder>

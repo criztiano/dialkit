@@ -1,4 +1,4 @@
-import type { SpringConfig } from 'dialkit/store';
+import type { SpringConfig } from 'tweakers/store';
 type $$ComponentProps = {
     panelId: string;
     path: string;

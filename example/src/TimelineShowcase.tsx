@@ -1,18 +1,18 @@
-import { useDialTimeline, DialTimeline } from 'dialkit';
-import type { UseDialTimelineOptions } from 'dialkit';
+import { useTweakTimeline, TweakTimeline } from 'tweakers';
+import type { UseTweakTimelineOptions } from 'tweakers';
 
 // Stable options identity (the hook keys effects off options), plus a stable
 // `id` and `persist` so the timing edits and any loop region survive a reload.
 // No `loop` option: the timeline loops the whole thing by default — drag the
 // ruler to set a loop region, and the loop button clears it.
-const TIMELINE_OPTIONS: UseDialTimelineOptions = { id: 'timeline-demo', persist: true };
+const TIMELINE_OPTIONS: UseTweakTimelineOptions = { id: 'timeline-demo', persist: true };
 
 // A small but representative timeline: an entrance clip (transform + fade with a
 // spring), a looping float that adds a second row and keeps cycling, and a glow
 // clip on an easing curve. Binding each clip's `current` to the card below means
 // scrubbing or playing the dock visibly drives the UI.
 export function TimelineShowcase() {
-  const tl = useDialTimeline(
+  const tl = useTweakTimeline(
     'Timeline',
     {
       duration: 3,
@@ -57,7 +57,7 @@ export function TimelineShowcase() {
           alignItems: 'center',
           justifyContent: 'center',
           borderRadius: 12,
-          background: 'var(--dial-surface-subtle, rgba(127,127,127,0.08))',
+          background: 'var(--tweak-surface-subtle, rgba(127,127,127,0.08))',
           overflow: 'hidden',
         }}
       >
@@ -99,16 +99,16 @@ export function TimelineShowcase() {
         <button type="button" className="lib-tab" onClick={() => tl.replay()}>
           ↻ Replay
         </button>
-        <div style={{ fontSize: 12, color: 'var(--dial-text-secondary)' }}>
+        <div style={{ fontSize: 12, color: 'var(--tweak-text-secondary)' }}>
           {tl.time.toFixed(2)}s / {tl.duration.toFixed(2)}s
         </div>
       </div>
 
-      <div style={{ fontSize: 12, color: 'var(--dial-text-secondary)' }}>
+      <div style={{ fontSize: 12, color: 'var(--tweak-text-secondary)' }}>
         Scrub or play the timeline dock below — every clip drives the card above. Open a clip to tune its values, timing, and curve.
       </div>
 
-      <DialTimeline defaultVisible />
+      <TweakTimeline defaultVisible />
     </div>
   );
 }

@@ -61,7 +61,7 @@ type Drag =
 type Hover = { kind: 'boundary' | 'segment' | 'driver' | 'header'; index: number };
 
 export const CurveComposer = defineComponent({
-  name: 'DialKitCurveComposer',
+  name: 'TweakersCurveComposer',
   props: {
     /** The curve series (controlled). */
     segments: { type: Array as PropType<CurveSegment[]>, required: true },
@@ -327,18 +327,18 @@ export const CurveComposer = defineComponent({
       for (let i = 1; i < n; i++) {
         const gx = (i / n) * W.value;
         lines.push(
-          h('line', { key: `g-${rect.y}-${i}`, class: 'dialkit-cc-grid', x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h })
+          h('line', { key: `g-${rect.y}-${i}`, class: 'tweakers-cc-grid', x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h })
         );
       }
       return lines;
     };
 
     const renderLaneBg = (rect: Rect, key: string): VNode =>
-      h('rect', { key, class: 'dialkit-cc-lane', x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 });
+      h('rect', { key, class: 'tweakers-cc-lane', x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 });
 
     const diagonal = (rect: Rect, span: [number, number], key: string): VNode => {
       const d = diagonalLine(rect, span, W.value);
-      return h('line', { key, class: 'dialkit-cc-diagonal', x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 });
+      return h('line', { key, class: 'tweakers-cc-diagonal', x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 });
     };
 
     return () => {
@@ -371,7 +371,7 @@ export const CurveComposer = defineComponent({
         const span = segmentSpan(props.segments, props.selectedIndex, props.gap);
         children.push(
           h('rect', {
-            class: 'dialkit-cc-seg-selected',
+            class: 'tweakers-cc-seg-selected',
             x: span[0] * W.value,
             y: main.y,
             width: (span[1] - span[0]) * W.value,
@@ -386,7 +386,7 @@ export const CurveComposer = defineComponent({
         const span = segmentSpan(props.segments, hover.value.index, props.gap);
         children.push(
           h('rect', {
-            class: 'dialkit-cc-seg-hover',
+            class: 'tweakers-cc-seg-hover',
             x: span[0] * W.value,
             y: main.y,
             width: (span[1] - span[0]) * W.value,
@@ -402,10 +402,10 @@ export const CurveComposer = defineComponent({
           const span = segmentSpan(props.segments, i, props.gap);
           return h('g', { key: `seg-${i}` }, [
             diagonal(main, span, `diag-${i}`),
-            h('path', { class: 'dialkit-cc-curve', d: curvePath(seg, main, span, W.value) }),
+            h('path', { class: 'tweakers-cc-curve', d: curvePath(seg, main, span, W.value) }),
             h(
               'text',
-              { class: 'dialkit-cc-label', x: (span[0] + span[1]) * 0.5 * W.value, y: main.y + 13 },
+              { class: 'tweakers-cc-label', x: (span[0] + span[1]) * 0.5 * W.value, y: main.y + 13 },
               seg.type
             ),
           ]);
@@ -420,7 +420,7 @@ export const CurveComposer = defineComponent({
             .map((slot) =>
               h('path', {
                 key: `conn-${slot.index}`,
-                class: 'dialkit-cc-connector',
+                class: 'tweakers-cc-connector',
                 d: connectorPath(slot, samplers.value, props.segments.length, main, W.value),
               })
             )
@@ -432,7 +432,7 @@ export const CurveComposer = defineComponent({
         interior.map((bx, i) =>
           h('line', {
             key: `b-${i}`,
-            class: 'dialkit-cc-boundary',
+            class: 'tweakers-cc-boundary',
             'data-active': String(
               (hover.value?.kind === 'boundary' && hover.value.index === i) ||
                 (drag.value?.kind === 'boundary' && drag.value.index === i)
@@ -449,7 +449,7 @@ export const CurveComposer = defineComponent({
       children.push(
         h('line', {
           ref: seriesPlayheadRef,
-          class: 'dialkit-cc-playhead',
+          class: 'tweakers-cc-playhead',
           x1: 0,
           y1: main.y,
           x2: 0,
@@ -460,7 +460,7 @@ export const CurveComposer = defineComponent({
       children.push(
         h('circle', {
           ref: seriesDotRef,
-          class: 'dialkit-cc-dot',
+          class: 'tweakers-cc-dot',
           cx: 0,
           cy: mapY(main, 0),
           r: 3,
@@ -474,20 +474,20 @@ export const CurveComposer = defineComponent({
         children.push(renderLaneGrid(dr));
         if (hover.value?.kind === 'driver' && !drag.value) {
           children.push(
-            h('rect', { class: 'dialkit-cc-seg-hover', x: 0, y: dr.y, width: W.value, height: dr.h, rx: 8 })
+            h('rect', { class: 'tweakers-cc-seg-hover', x: 0, y: dr.y, width: W.value, height: dr.h, rx: 8 })
           );
         }
         children.push(diagonal(dr, [0, 1], 'driver-diag'));
         children.push(
-          h('path', { class: 'dialkit-cc-curve dialkit-cc-curve-driver', d: curvePath(props.driver!, dr, [0, 1], W.value) })
+          h('path', { class: 'tweakers-cc-curve tweakers-cc-curve-driver', d: curvePath(props.driver!, dr, [0, 1], W.value) })
         );
         children.push(
-          h('text', { class: 'dialkit-cc-label', x: W.value * 0.5, y: dr.y + 13 }, `driver · ${props.driver!.type}`)
+          h('text', { class: 'tweakers-cc-label', x: W.value * 0.5, y: dr.y + 13 }, `driver · ${props.driver!.type}`)
         );
         children.push(
           h('line', {
             ref: driverPlayheadRef,
-            class: 'dialkit-cc-playhead',
+            class: 'tweakers-cc-playhead',
             x1: 0,
             y1: dr.y,
             x2: 0,
@@ -497,12 +497,12 @@ export const CurveComposer = defineComponent({
         );
       }
 
-      return h('div', { class: 'dialkit-cc-wrap', style: { width: `${W.value}px` } }, [
+      return h('div', { class: 'tweakers-cc-wrap', style: { width: `${W.value}px` } }, [
         h(
           'svg',
           {
             ref: svgRef,
-            class: 'dialkit-cc',
+            class: 'tweakers-cc',
             viewBox: `0 0 ${W.value} ${totalH.value}`,
             width: W.value,
             height: totalH.value,

@@ -7,7 +7,7 @@ import {
   clearPersisted,
   type PersistTarget,
 } from './store/persist';
-import { DialStore } from './store/DialStore';
+import { TweakStore } from './store/TweakStore';
 
 // Minimal in-memory Storage stand-in — only the methods persist.ts touches.
 function mockStorage() {
@@ -36,11 +36,11 @@ function withMockWindow(run: () => void): void {
 describe('persist helpers', () => {
   it('builds a namespaced+versioned key and honors persist.key / storage', () => {
     const on = resolvePersistTarget('panel', 'abc', true);
-    assert.equal(on?.key, 'dialkit:v1:panel:abc');
+    assert.equal(on?.key, 'tweakers:v1:panel:abc');
     assert.equal(on?.storage, 'localStorage');
 
     const custom = resolvePersistTarget('panel', 'abc', { key: 'custom', storage: 'sessionStorage' });
-    assert.equal(custom?.key, 'dialkit:v1:panel:custom');
+    assert.equal(custom?.key, 'tweakers:v1:panel:custom');
     assert.equal(custom?.storage, 'sessionStorage');
 
     assert.equal(resolvePersistTarget('panel', 'abc', false), null);
@@ -50,7 +50,7 @@ describe('persist helpers', () => {
   });
 
   it('is fail-soft and node-safe when window is undefined', () => {
-    const target: PersistTarget = { key: 'dialkit:v1:panel:x', storage: 'localStorage' };
+    const target: PersistTarget = { key: 'tweakers:v1:panel:x', storage: 'localStorage' };
     assert.equal(loadPersisted(target), null);
     // Neither of these may throw when storage is unavailable.
     savePersisted(target, { a: 1 });
@@ -70,50 +70,50 @@ describe('persist helpers', () => {
   });
 });
 
-describe('DialStore persistence', () => {
+describe('TweakStore persistence', () => {
   it('restores persisted panel values on re-register (simulated reload)', () => {
     withMockWindow(() => {
       const id = 'persist-panel-roundtrip';
-      DialStore.registerPanel(id, 'P', { size: 10, on: false }, undefined, { persist: true });
-      DialStore.updateValue(id, 'size', 42);
-      DialStore.updateValue(id, 'on', true);
-      DialStore.unregisterPanel(id); // reload: tear down…
+      TweakStore.registerPanel(id, 'P', { size: 10, on: false }, undefined, { persist: true });
+      TweakStore.updateValue(id, 'size', 42);
+      TweakStore.updateValue(id, 'on', true);
+      TweakStore.unregisterPanel(id); // reload: tear down…
 
-      DialStore.registerPanel(id, 'P', { size: 10, on: false }, undefined, { persist: true }); // …and mount again
-      const values = DialStore.getValues(id);
+      TweakStore.registerPanel(id, 'P', { size: 10, on: false }, undefined, { persist: true }); // …and mount again
+      const values = TweakStore.getValues(id);
       assert.equal(values.size, 42);
       assert.equal(values.on, true);
-      DialStore.unregisterPanel(id);
+      TweakStore.unregisterPanel(id);
     });
   });
 
   it('does not persist without the persist option', () => {
     withMockWindow(() => {
       const id = 'persist-panel-off';
-      DialStore.registerPanel(id, 'P', { size: 10 }, undefined, {});
-      DialStore.updateValue(id, 'size', 99);
-      DialStore.unregisterPanel(id);
+      TweakStore.registerPanel(id, 'P', { size: 10 }, undefined, {});
+      TweakStore.updateValue(id, 'size', 99);
+      TweakStore.unregisterPanel(id);
 
-      DialStore.registerPanel(id, 'P', { size: 10 }, undefined, {});
-      assert.equal(DialStore.getValues(id).size, 10); // back to the config default
-      DialStore.unregisterPanel(id);
+      TweakStore.registerPanel(id, 'P', { size: 10 }, undefined, {});
+      assert.equal(TweakStore.getValues(id).size, 10); // back to the config default
+      TweakStore.unregisterPanel(id);
     });
   });
 
   it('drops persisted keys the config no longer declares', () => {
     withMockWindow(() => {
       const id = 'persist-panel-drop';
-      DialStore.registerPanel(id, 'P', { a: 1, b: 2 }, undefined, { persist: true });
-      DialStore.updateValue(id, 'a', 9);
-      DialStore.updateValue(id, 'b', 8);
-      DialStore.unregisterPanel(id);
+      TweakStore.registerPanel(id, 'P', { a: 1, b: 2 }, undefined, { persist: true });
+      TweakStore.updateValue(id, 'a', 9);
+      TweakStore.updateValue(id, 'b', 8);
+      TweakStore.unregisterPanel(id);
 
       // Re-register without `b`: its stale saved value must not resurrect.
-      DialStore.registerPanel(id, 'P', { a: 1 }, undefined, { persist: true });
-      const values = DialStore.getValues(id);
+      TweakStore.registerPanel(id, 'P', { a: 1 }, undefined, { persist: true });
+      const values = TweakStore.getValues(id);
       assert.equal(values.a, 9);
       assert.equal('b' in values, false);
-      DialStore.unregisterPanel(id);
+      TweakStore.unregisterPanel(id);
     });
   });
 });

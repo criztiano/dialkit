@@ -1,5 +1,5 @@
 import { defineComponent, h, inject, onMounted, onUnmounted, provide, ref, type InjectionKey, type Ref } from 'vue';
-import { DialStore, ControlMeta, ShortcutConfig } from '../../store/DialStore';
+import { TweakStore, ControlMeta, ShortcutConfig } from '../../store/TweakStore';
 import { getEffectiveStep, applySliderDelta, findControl, isInputFocused, getActiveModifier, DRAG_SENSITIVITY } from '../../shortcut-utils';
 
 export interface ShortcutState {
@@ -7,7 +7,7 @@ export interface ShortcutState {
   activePath: Ref<string | null>;
 }
 
-export const ShortcutKey: InjectionKey<ShortcutState> = Symbol('DialKitShortcut');
+export const ShortcutKey: InjectionKey<ShortcutState> = Symbol('TweakersShortcut');
 
 export function useShortcutContext(): ShortcutState {
   return inject(ShortcutKey, {
@@ -17,7 +17,7 @@ export function useShortcutContext(): ShortcutState {
 }
 
 export const ShortcutListener = defineComponent({
-  name: 'DialKitShortcutListener',
+  name: 'TweakersShortcutListener',
   setup(_, { slots }) {
     const activePanelId = ref<string | null>(null);
     const activePath = ref<string | null>(null);
@@ -31,13 +31,13 @@ export const ShortcutListener = defineComponent({
 
     const resolveActiveTarget = (interaction: string) => {
       for (const key of activeKeys) {
-        const panels = DialStore.getPanels();
+        const panels = TweakStore.getPanels();
         for (const panel of panels) {
           for (const [path, shortcut] of Object.entries(panel.shortcuts)) {
             if (!shortcut.key) continue;
             if (shortcut.key.toLowerCase() !== key) continue;
             if ((shortcut.interaction ?? 'scroll') !== interaction) continue;
-            const control = DialStore.getPanel(panel.id)?.controls
+            const control = TweakStore.getPanel(panel.id)?.controls
               ? findControl(panel.controls, path)
               : null;
             if (control && control.type === 'slider') {
@@ -72,15 +72,15 @@ export const ShortcutListener = defineComponent({
       activeKeys.add(key);
 
       const modifier = getActiveModifier(e);
-      const target = DialStore.resolveShortcutTarget(key, modifier);
+      const target = TweakStore.resolveShortcutTarget(key, modifier);
       if (target) {
         activePanelId.value = target.panelId;
         activePath.value = target.path;
 
         // Toggle: flip on first keydown only (not on key repeat)
         if (!wasAlreadyHeld && target.control.type === 'toggle') {
-          const currentValue = DialStore.getValue(target.panelId, target.path) as boolean;
-          DialStore.updateValue(target.panelId, target.path, !currentValue);
+          const currentValue = TweakStore.getValue(target.panelId, target.path) as boolean;
+          TweakStore.updateValue(target.panelId, target.path, !currentValue);
         }
       }
 
@@ -107,7 +107,7 @@ export const ShortcutListener = defineComponent({
         let found = false;
         for (const remainingKey of activeKeys) {
           const modifier = getActiveModifier(e);
-          const target = DialStore.resolveShortcutTarget(remainingKey, modifier);
+          const target = TweakStore.resolveShortcutTarget(remainingKey, modifier);
           if (target) {
             activePanelId.value = target.panelId;
             activePath.value = target.path;
@@ -131,7 +131,7 @@ export const ShortcutListener = defineComponent({
       // Key+scroll shortcuts
       if (activeKeys.size > 0) {
         for (const key of activeKeys) {
-          const target = DialStore.resolveShortcutTarget(key, modifier);
+          const target = TweakStore.resolveShortcutTarget(key, modifier);
           if (!target) continue;
 
           const { panelId, path, control } = target;
@@ -147,7 +147,7 @@ export const ShortcutListener = defineComponent({
       }
 
       // Scroll-only shortcuts (no key needed)
-      const scrollOnlyTargets = DialStore.resolveScrollOnlyTargets();
+      const scrollOnlyTargets = TweakStore.resolveScrollOnlyTargets();
       for (const { panelId, path, control, shortcut } of scrollOnlyTargets) {
         if (control.type !== 'slider') continue;
 
