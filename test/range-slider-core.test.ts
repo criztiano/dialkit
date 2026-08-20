@@ -312,18 +312,20 @@ describe('handleLeftStyles', () => {
   const geom = (low: number, high: number, W: number) => {
     const styles = handleLeftStyles(low, high);
     return {
-      lowCenter: resolve(styles.low, W) + 1.5, // + half the 3px line width
-      highCenter: resolve(styles.high, W) + 1.5,
+      lowLeft: resolve(styles.low, W),
+      highLeft: resolve(styles.high, W),
+      lowCenter: resolve(styles.low, W) + 1, // + half the 2px tick width
+      highCenter: resolve(styles.high, W) + 1,
       fillLeft: (low / 100) * W,
       fillRight: (high / 100) * W,
     };
   };
 
-  it('resolver self-check: a wide pair resolves to the inside offsets', () => {
-    // 20/80 at W=430: gap 258px -> ramp 0 -> low `20% + 6px`, high `80% - 9px`.
+  it('resolver self-check: a wide pair centers each tick on its own value', () => {
+    // 20/80 at W=430: gap 258px -> ramp 0 -> each tick sits on its bound.
     const g = geom(20, 80, 430);
-    expect(g.lowCenter).toBeCloseTo(0.2 * 430 + 6 + 1.5, 4); // 93.5
-    expect(g.highCenter).toBeCloseTo(0.8 * 430 - 9 + 1.5, 4); // 336.5
+    expect(g.lowCenter).toBeCloseTo(0.2 * 430, 4); // 86
+    expect(g.highCenter).toBeCloseTo(0.8 * 430, 4); // 344
   });
 
   it('never lets the low line cross the high line, across widths and ranges', () => {
@@ -337,24 +339,25 @@ describe('handleLeftStyles', () => {
     }
   });
 
-  it('keeps both handles INSIDE the fill when the range is wide', () => {
+  it('sits each handle ON its fill edge when the range is wide', () => {
     const g = geom(20, 80, 430);
-    expect(g.lowCenter).toBeGreaterThan(g.fillLeft); // low line inside the left edge
-    expect(g.highCenter).toBeLessThan(g.fillRight); // high line inside the right edge
+    expect(g.lowCenter).toBeCloseTo(g.fillLeft, 6);
+    expect(g.highCenter).toBeCloseTo(g.fillRight, 6);
   });
 
-  it('moves both handles OUTSIDE the fill edges when the range is small', () => {
-    // 200-240 on a 0..1000 range at W=430 -> 20%/24% (~17px fill).
-    const g = geom(20, 24, 430);
-    expect(g.lowCenter).toBeLessThan(g.fillLeft); // low line sits left of the fill
-    expect(g.highCenter).toBeGreaterThan(g.fillRight); // high line sits right of the fill
+  it('keeps both handles flush inside the track at the extremes', () => {
+    for (const W of [90, 200, 430, 1000]) {
+      const g = geom(0, 100, W);
+      expect(g.lowLeft).toBeCloseTo(0, 6); // flush with the left edge
+      expect(g.highLeft).toBeCloseTo(W - 2, 6); // flush with the right edge
+    }
   });
 
-  it('frames a collapsed range with symmetric handles ~4.5px outside the point', () => {
+  it('eases the handles apart when the range collapses', () => {
     const W = 430;
     const g = geom(50, 50, W);
     const point = 0.5 * W;
-    expect(point - g.lowCenter).toBeCloseTo(4.5, 6);
-    expect(g.highCenter - point).toBeCloseTo(4.5, 6);
+    expect(point - g.lowCenter).toBeCloseTo(2, 6);
+    expect(g.highCenter - point).toBeCloseTo(2, 6);
   });
 });

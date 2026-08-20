@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import SegmentedControl from './SegmentedControl.svelte';
+  import Checkbox from './Checkbox.svelte';
 
   let {
     title,
@@ -14,23 +14,14 @@
     children?: Snippet;
   }>();
 
-  // The Off/On switch is the expand control: disabling collapses the body
+  // The enable switch is the expand control: disabling collapses the body
   // away (animated via the grid-rows trick — see theme.css).
 </script>
 
 <div class="dialkit-module">
   <div class="dialkit-module-header">
+    <Checkbox checked={enabled} onChange={onEnabledChange} label={title} />
     <span class="dialkit-module-title">{title}</span>
-    <div class="dialkit-module-switch">
-      <SegmentedControl
-        options={[
-          { value: 'off', label: 'Off' },
-          { value: 'on', label: 'On' },
-        ]}
-        value={enabled ? 'on' : 'off'}
-        onChange={(val) => onEnabledChange(val === 'on')}
-      />
-    </div>
   </div>
 
   <div class="dialkit-module-collapse" data-open={enabled}>

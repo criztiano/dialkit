@@ -19,3 +19,6 @@ src/svelte/theme-css.ts
 # Claude notes
 .claude-plan.md
 CLAUDE.md
+
+# Commercial typefaces — host-provided by license, never redistributed
+example/public/fonts/

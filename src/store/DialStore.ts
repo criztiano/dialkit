@@ -135,6 +135,28 @@ export type SliderConfig = {
   origin?: number;
   /** Convenience for `origin: 0` on a symmetric range. */
   bipolar?: boolean;
+  /** `vertical` renders the column card (fill grows bottom-up, label at base). */
+  orientation?: 'horizontal' | 'vertical';
+};
+
+/**
+ * Scrub-anywhere numeric readout. Unlike a slider it has no track — drag the
+ * card to nudge the value, click to type — and bounds are optional, so it is
+ * the control for open-ended quantities (dB trims, sample offsets, seeds).
+ */
+export type NumberConfig = {
+  type: 'number';
+  default: number;
+  min?: number;
+  max?: number;
+  /** Falls back to a step inferred from `default`'s precision when omitted. */
+  step?: number;
+  /** Appended to the displayed value, e.g. ' dB', ' ms', '×'. */
+  unit?: string;
+  /** Override the displayed value text entirely; `unit` is not auto-appended. */
+  formatValue?: (value: number) => string;
+  /** `vertical` stacks the label above a centered value (column card). */
+  orientation?: 'horizontal' | 'vertical';
 };
 
 /**
@@ -307,7 +329,7 @@ export type ListField = {
   defaultValue: number | boolean | string;
 };
 
-export type DialValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
+export type DialValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 
 export type DialConfig = {
   // CurveConfig is not a DialValue: it never enters the value layer, so it
@@ -324,6 +346,8 @@ export type ResolvedValues<T extends DialConfig> = {
   [K in keyof T as T[K] extends CurveConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?]
     ? number
     : T[K] extends SliderConfig
+    ? number
+    : T[K] extends NumberConfig
     ? number
     : T[K] extends MultiSelectConfig
     ? string[]
@@ -402,7 +426,7 @@ export type AffordanceConfig = {
 };
 
 export type ControlMeta = {
-  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve';
+  type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve';
   path: string;
   label: string;
   /** One line of help, revealed on hover or when focus lands inside the control. */
@@ -444,6 +468,8 @@ export type ControlMeta = {
   /** Slider fill anchor, from the explicit SliderConfig form. */
   origin?: number;
   bipolar?: boolean;
+  /** Slider/number layout, from the explicit config forms. */
+  orientation?: 'horizontal' | 'vertical';
   itemTypes?: Record<string, ListItemType>;
   addLabel?: string;
   maxItems?: number;
@@ -1111,7 +1137,7 @@ class DialStoreClass {
               changed = true;
             }
           }
-        } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value)) {
+        } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value)) {
           visit(value as DialConfig, path);
         }
       }
@@ -1374,7 +1400,7 @@ class DialStoreClass {
         const hasPhysics = value.stiffness !== undefined || value.damping !== undefined || value.mass !== undefined;
         const hasTime = value.visualDuration !== undefined || value.bounce !== undefined;
         values[`${path}.__mode`] = hasPhysics && !hasTime ? 'advanced' : 'simple';
-      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isCurveConfig(value)) {
+      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isCurveConfig(value)) {
         this.initTransitionModes(value as DialConfig, path, values);
       }
     }
@@ -1421,6 +1447,20 @@ class DialStoreClass {
           formatValue: value.formatValue,
           origin: value.origin,
           bipolar: value.bipolar,
+          orientation: value.orientation,
+          shortcut,
+        });
+      } else if (this.isNumberConfig(value)) {
+        controls.push({
+          type: 'number',
+          path,
+          label,
+          min: value.min,
+          max: value.max,
+          step: value.step ?? this.inferRange(value.default).step,
+          unit: value.unit,
+          formatValue: value.formatValue,
+          orientation: value.orientation,
           shortcut,
         });
       } else if (typeof value === 'boolean') {
@@ -1560,7 +1600,7 @@ class DialStoreClass {
 
       if (Array.isArray(value) && value.length <= 4 && typeof value[0] === 'number') {
         values[path] = value[0]; // Default value
-      } else if (this.isSliderConfig(value)) {
+      } else if (this.isSliderConfig(value) || this.isNumberConfig(value)) {
         values[path] = value.default;
       } else if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string') {
         values[path] = value;
@@ -1774,6 +1814,16 @@ class DialStoreClass {
     );
   }
 
+  private isNumberConfig(value: unknown): value is NumberConfig {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'type' in value &&
+      (value as NumberConfig).type === 'number' &&
+      typeof (value as NumberConfig).default === 'number'
+    );
+  }
+
   private isCurveConfig(value: unknown): value is CurveConfig {
     return (
       typeof value === 'object' &&
@@ -1840,7 +1890,8 @@ class DialStoreClass {
     }
 
     switch (control.type) {
-      case 'slider': {
+      case 'slider':
+      case 'number': {
         if (typeof existingValue !== 'number' || typeof defaultValue !== 'number') {
           return defaultValue;
         }

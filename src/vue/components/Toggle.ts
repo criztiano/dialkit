@@ -1,5 +1,5 @@
 import { defineComponent, h, type PropType } from 'vue';
-import { SegmentedControl } from './SegmentedControl';
+import { Checkbox } from './Checkbox';
 import type { ShortcutConfig } from '../../store/DialStore';
 import { formatToggleShortcut } from '../../shortcut-utils';
 
@@ -13,7 +13,12 @@ export const Toggle = defineComponent({
   },
   emits: ['change'],
   setup(props, { emit }) {
-    return () => h('div', { class: 'dialkit-labeled-control' }, [
+    return () => h('div', { class: 'dialkit-labeled-control dialkit-labeled-control-check' }, [
+      h(Checkbox, {
+        checked: props.checked,
+        label: props.label,
+        onChange: (next: boolean) => emit('change', next),
+      }),
       h('span', { class: 'dialkit-labeled-control-label' }, [
         props.label,
         props.shortcut
@@ -22,14 +27,6 @@ export const Toggle = defineComponent({
             }, formatToggleShortcut(props.shortcut))
           : null,
       ]),
-      h(SegmentedControl, {
-        options: [
-          { value: 'off', label: 'Off' },
-          { value: 'on', label: 'On' },
-        ],
-        value: props.checked ? 'on' : 'off',
-        onChange: (value: string) => emit('change', value === 'on'),
-      }),
     ]);
   },
 });

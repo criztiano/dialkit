@@ -132,7 +132,7 @@ type AffordanceConfig = {
     label?: string;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve';
+    type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve';
     path: string;
     label: string;
     /** One line of help, revealed on hover or when focus lands inside the control. */
@@ -177,6 +177,8 @@ type ControlMeta = {
     /** Slider fill anchor, from the explicit SliderConfig form. */
     origin?: number;
     bipolar?: boolean;
+    /** Slider/number layout, from the explicit config forms. */
+    orientation?: 'horizontal' | 'vertical';
     itemTypes?: Record<string, ListItemType>;
     addLabel?: string;
     maxItems?: number;

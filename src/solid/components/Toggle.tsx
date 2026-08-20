@@ -1,5 +1,5 @@
 import { Show } from 'solid-js';
-import { SegmentedControl } from './SegmentedControl';
+import { Checkbox } from './Checkbox';
 import type { ShortcutConfig } from '../../store/DialStore';
 import { formatToggleShortcut } from '../../shortcut-utils';
 
@@ -13,7 +13,8 @@ interface ToggleProps {
 
 export function Toggle(props: ToggleProps) {
   return (
-    <div class="dialkit-labeled-control">
+    <div class="dialkit-labeled-control dialkit-labeled-control-check">
+      <Checkbox checked={props.checked} onChange={props.onChange} label={props.label} />
       <span class="dialkit-labeled-control-label">
         {props.label}
         <Show when={props.shortcut}>
@@ -22,14 +23,6 @@ export function Toggle(props: ToggleProps) {
           </span>
         </Show>
       </span>
-      <SegmentedControl
-        options={[
-          { value: 'off' as const, label: 'Off' },
-          { value: 'on' as const, label: 'On' },
-        ]}
-        value={props.checked ? 'on' : 'off'}
-        onChange={(val) => props.onChange(val === 'on')}
-      />
     </div>
   );
 }

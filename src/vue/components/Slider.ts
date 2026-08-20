@@ -7,6 +7,8 @@ const CLICK_THRESHOLD = 3;
 const DEAD_ZONE = 32;
 const MAX_CURSOR_RANGE = 200;
 const MAX_STRETCH = 8;
+/** Half-width of the origin snap zone, in pixels of track travel. */
+const DETENT_PX = 6;
 
 export const Slider = defineComponent({
   name: 'DialKitSlider',
@@ -25,6 +27,11 @@ export const Slider = defineComponent({
     origin: { type: Number, required: false, default: undefined },
     /** Convenience for `origin={0}` on a symmetric range. */
     bipolar: { type: Boolean, default: false },
+    /**
+     * `vertical` renders the column card: fill grows bottom-up, label sits at
+     * the base, and the value readout appears over the fill on hover/drag.
+     */
+    orientation: { type: String as PropType<'horizontal' | 'vertical'>, default: 'horizontal' },
     shortcut: { type: Object as PropType<ShortcutConfig>, default: undefined },
     shortcutActive: { type: Boolean, default: false },
   },
@@ -33,6 +40,7 @@ export const Slider = defineComponent({
     const min = computed(() => props.min ?? 0);
     const max = computed(() => props.max ?? 1);
     const step = computed(() => props.step ?? 0.01);
+    const isVertical = computed(() => props.orientation === 'vertical');
     const resolvedOrigin = computed(() =>
       Math.min(max.value, Math.max(min.value, props.origin ?? (props.bipolar ? 0 : min.value)))
     );
@@ -40,21 +48,18 @@ export const Slider = defineComponent({
     const originPercent = computed(
       () => ((resolvedOrigin.value - min.value) / (max.value - min.value)) * 100
     );
-    /** Half-width of the origin snap zone, in pixels of track travel. */
-    const DETENT_PX = 6;
 
     const wrapperRef = ref<HTMLElement | null>(null);
-    const trackRef = ref<HTMLElement | null>(null);
+    const cardRef = ref<HTMLElement | null>(null);
     const fillRef = ref<HTMLElement | null>(null);
     const handleRef = ref<HTMLElement | null>(null);
-    const labelRef = ref<HTMLElement | null>(null);
-    const valueSpanRef = ref<HTMLElement | null>(null);
     const inputRef = ref<HTMLInputElement | null>(null);
 
     const isInteracting = ref(false);
     const isDragging = ref(false);
     const isHovered = ref(false);
     const isValueHovered = ref(false);
+    const isMetaHeld = ref(false);
     const isValueEditable = ref(false);
     const showInput = ref(false);
     const inputValue = ref('');
@@ -62,8 +67,6 @@ export const Slider = defineComponent({
     const fillPercent = motionValue(((props.value - min.value) / (max.value - min.value)) * 100);
     const rubberStretchPx = motionValue(0);
     const handleOpacityMv = motionValue(0);
-    const handleScaleXMv = motionValue(0.25);
-    const handleScaleYMv = motionValue(1);
 
     const percentage = computed(() => ((props.value - min.value) / (max.value - min.value)) * 100);
     const isActive = computed(() => isInteracting.value || isHovered.value);
@@ -73,120 +76,97 @@ export const Slider = defineComponent({
     let wrapperRect: DOMRect | null = null;
     let scaleVal = 1;
     let hoverTimeout: ReturnType<typeof setTimeout> | null = null;
+    /** Running value for wheel notches, which arrive faster than prop updates. */
+    let wheelValue = props.value;
 
     let snapAnim: ReturnType<typeof animate> | null = null;
     let rubberAnim: ReturnType<typeof animate> | null = null;
     let handleOpacityAnim: ReturnType<typeof animate> | null = null;
-    let handleScaleXAnim: ReturnType<typeof animate> | null = null;
-    let handleScaleYAnim: ReturnType<typeof animate> | null = null;
+
+    // Origin-anchored fill spans between origin and handle; without an origin
+    // it reduces to the classic min-anchored fill.
+    const fillStart = (pct: number) =>
+      hasOrigin.value ? `${Math.min(pct, originPercent.value)}%` : '0%';
+    const fillExtent = (pct: number) =>
+      hasOrigin.value ? `${Math.abs(pct - originPercent.value)}%` : `${pct}%`;
+    const handleLeft = (pct: number) =>
+      `min(calc(100% - 1px), max(0px, calc(${pct}% - 0.5px)))`;
 
     const applyFillStyles = (pct: number) => {
       if (fillRef.value) {
-        // Origin-anchored fill spans between origin and handle; without an
-        // origin it reduces to the classic left-anchored fill.
-        fillRef.value.style.left = hasOrigin.value
-          ? `${Math.min(pct, originPercent.value)}%`
-          : '0%';
-        fillRef.value.style.width = hasOrigin.value
-          ? `${Math.abs(pct - originPercent.value)}%`
-          : `${pct}%`;
+        if (isVertical.value) {
+          fillRef.value.style.bottom = fillStart(pct);
+          fillRef.value.style.height = fillExtent(pct);
+        } else {
+          fillRef.value.style.left = fillStart(pct);
+          fillRef.value.style.width = fillExtent(pct);
+        }
       }
-      if (handleRef.value) handleRef.value.style.left = `max(5px, calc(${pct}% - 9px))`;
+      if (handleRef.value) handleRef.value.style.left = handleLeft(pct);
+    };
+
+    const trackExtent = () => {
+      const el = wrapperRef.value;
+      if (!el) return 0;
+      return isVertical.value ? el.offsetHeight : el.offsetWidth;
     };
 
     // Escapable magnetic snap to the origin while dragging.
     const applyDetent = (v: number) => {
-      if (!hasOrigin.value || !wrapperRef.value) return v;
-      const trackWidth = wrapperRef.value.offsetWidth;
-      if (trackWidth <= 0) return v;
-      const detentValue = (DETENT_PX / trackWidth) * (max.value - min.value);
+      if (!hasOrigin.value) return v;
+      const extent = trackExtent();
+      if (extent <= 0) return v;
+      const detentValue = (DETENT_PX / extent) * (max.value - min.value);
       return Math.abs(v - resolvedOrigin.value) <= detentValue ? resolvedOrigin.value : v;
     };
 
+    // Rubber band maps stretch to width/x horizontally and height/y vertically
+    // (negative stretch = overshoot past the max end: left or top).
     const applyRubberStyles = (stretch: number) => {
-      if (!trackRef.value) return;
-      trackRef.value.style.width = `calc(100% + ${Math.abs(stretch)}px)`;
-      trackRef.value.style.transform = `translateX(${stretch < 0 ? stretch : 0}px)`;
+      if (!cardRef.value) return;
+      const size = `calc(100% + ${Math.abs(stretch)}px)`;
+      const shift = `${stretch < 0 ? stretch : 0}px`;
+      if (isVertical.value) {
+        cardRef.value.style.height = size;
+        cardRef.value.style.transform = `translateY(${shift})`;
+      } else {
+        cardRef.value.style.width = size;
+        cardRef.value.style.transform = `translateX(${shift})`;
+      }
     };
 
-    const applyHandleVisualStyles = () => {
-      if (!handleRef.value) return;
-      handleRef.value.style.opacity = String(handleOpacityMv.get());
-      handleRef.value.style.transform = `translateY(-50%) scaleX(${handleScaleXMv.get()}) scaleY(${handleScaleYMv.get()})`;
+    const applyHandleOpacity = (opacity: number) => {
+      if (handleRef.value) handleRef.value.style.opacity = String(opacity);
     };
 
-    const positionToValue = (clientX: number) => {
+    const positionToValue = (clientX: number, clientY: number) => {
       if (!wrapperRect) return props.value;
-      const screenX = clientX - wrapperRect.left;
-      const sceneX = screenX / scaleVal;
-      const nativeWidth = wrapperRef.value ? wrapperRef.value.offsetWidth : wrapperRect.width;
-      const pct = Math.max(0, Math.min(1, sceneX / nativeWidth));
+      const screenPos = isVertical.value ? clientY - wrapperRect.top : clientX - wrapperRect.left;
+      const scenePos = screenPos / scaleVal;
+      const nativeExtent = trackExtent() || (isVertical.value ? wrapperRect.height : wrapperRect.width);
+      let pct = Math.max(0, Math.min(1, scenePos / nativeExtent));
+      // Vertical: top of the card is max, bottom is min.
+      if (isVertical.value) pct = 1 - pct;
       const rawValue = min.value + pct * (max.value - min.value);
       return Math.max(min.value, Math.min(max.value, rawValue));
     };
 
     const percentFromValue = (value: number) => ((value - min.value) / (max.value - min.value)) * 100;
 
-    const computeRubberStretch = (clientX: number, sign: number) => {
+    const computeRubberStretch = (clientPos: number, sign: number) => {
       if (!wrapperRect) return 0;
-      const distancePast = sign < 0 ? wrapperRect.left - clientX : clientX - wrapperRect.right;
+      const nearEdge = isVertical.value ? wrapperRect.top : wrapperRect.left;
+      const farEdge = isVertical.value ? wrapperRect.bottom : wrapperRect.right;
+      const distancePast = sign < 0 ? nearEdge - clientPos : clientPos - farEdge;
       const overflow = Math.max(0, distancePast - DEAD_ZONE);
       return sign * MAX_STRETCH * Math.sqrt(Math.min(overflow / MAX_CURSOR_RANGE, 1));
     };
 
-    const leftThreshold = () => {
-      const HANDLE_BUFFER = 8;
-      const LABEL_CSS_LEFT = 10;
-      const trackWidth = wrapperRef.value?.offsetWidth;
-      if (trackWidth && labelRef.value) {
-        return ((LABEL_CSS_LEFT + labelRef.value.offsetWidth + HANDLE_BUFFER) / trackWidth) * 100;
-      }
-      return 30;
-    };
-
-    const rightThreshold = () => {
-      const HANDLE_BUFFER = 8;
-      const VALUE_CSS_RIGHT = 10;
-      const trackWidth = wrapperRef.value?.offsetWidth;
-      if (trackWidth && valueSpanRef.value) {
-        return ((trackWidth - VALUE_CSS_RIGHT - valueSpanRef.value.offsetWidth - HANDLE_BUFFER) / trackWidth) * 100;
-      }
-      return 78;
-    };
-
-    const valueDodge = () => percentage.value < leftThreshold() || percentage.value > rightThreshold();
-
-    const handleOpacity = () => {
-      if (!isActive.value) return 0;
-      if (valueDodge()) return 0.1;
-      if (isDragging.value) return 0.9;
-      return 0.5;
-    };
-
-    const animateHandleState = () => {
-      const targetOpacity = handleOpacity();
-      const targetScaleX = isActive.value ? 1 : 0.25;
-      const targetScaleY = isActive.value && valueDodge() ? 0.75 : 1;
-
-      handleOpacityAnim?.stop();
-      handleScaleXAnim?.stop();
-      handleScaleYAnim?.stop();
-
-      handleOpacityAnim = animate(handleOpacityMv, targetOpacity, { duration: 0.15 });
-      handleScaleXAnim = animate(handleScaleXMv, targetScaleX, {
-        type: 'spring',
-        visualDuration: 0.25,
-        bounce: 0.15,
-      });
-      handleScaleYAnim = animate(handleScaleYMv, targetScaleY, {
-        type: 'spring',
-        visualDuration: 0.2,
-        bounce: 0.1,
-      });
-    };
-
     const handlePointerDown = (event: PointerEvent) => {
       if (showInput.value) return;
+      // ⌘ hands the card over to the text: no drag, no preventDefault, so the
+      // browser's own selection starts and a click reaches the value span.
+      if (event.metaKey) return;
       event.preventDefault();
       (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
       pointerDownPos = { x: event.clientX, y: event.clientY };
@@ -195,7 +175,9 @@ export const Slider = defineComponent({
 
       if (wrapperRef.value) {
         wrapperRect = wrapperRef.value.getBoundingClientRect();
-        scaleVal = wrapperRect.width / wrapperRef.value.offsetWidth;
+        const nativeExtent = trackExtent();
+        const rectExtent = isVertical.value ? wrapperRect.height : wrapperRect.width;
+        scaleVal = nativeExtent > 0 ? rectExtent / nativeExtent : 1;
       }
     };
 
@@ -213,16 +195,19 @@ export const Slider = defineComponent({
 
       if (!isClickFlag) {
         if (wrapperRect) {
-          if (event.clientX < wrapperRect.left) {
-            rubberStretchPx.jump(computeRubberStretch(event.clientX, -1));
-          } else if (event.clientX > wrapperRect.right) {
-            rubberStretchPx.jump(computeRubberStretch(event.clientX, 1));
+          const clientPos = isVertical.value ? event.clientY : event.clientX;
+          const nearEdge = isVertical.value ? wrapperRect.top : wrapperRect.left;
+          const farEdge = isVertical.value ? wrapperRect.bottom : wrapperRect.right;
+          if (clientPos < nearEdge) {
+            rubberStretchPx.jump(computeRubberStretch(clientPos, -1));
+          } else if (clientPos > farEdge) {
+            rubberStretchPx.jump(computeRubberStretch(clientPos, 1));
           } else {
             rubberStretchPx.jump(0);
           }
         }
 
-        const nextValue = applyDetent(positionToValue(event.clientX));
+        const nextValue = applyDetent(positionToValue(event.clientX, event.clientY));
         const nextPct = percentFromValue(nextValue);
         if (snapAnim) {
           snapAnim.stop();
@@ -237,7 +222,9 @@ export const Slider = defineComponent({
       if (!isInteracting.value) return;
 
       if (isClickFlag) {
-        const rawValue = positionToValue(event.clientX);
+        // When steps are coarse (≤10 positions), click snaps to the nearest
+        // step. Otherwise, the original decile-magnetic behavior is preserved.
+        const rawValue = positionToValue(event.clientX, event.clientY);
         const discreteSteps = (max.value - min.value) / step.value;
         const snappedValue = discreteSteps <= 10
           ? Math.max(min.value, Math.min(max.value, min.value + Math.round((rawValue - min.value) / step.value) * step.value))
@@ -281,6 +268,50 @@ export const Slider = defineComponent({
       pointerDownPos = null;
     };
 
+    // Wheel over the card adjusts the value — the pointer is already on the
+    // control, so the scroll belongs to it, not to the page behind it. Bound
+    // natively so the listener is non-passive and can preventDefault;
+    // stopPropagation keeps the window-level scroll shortcuts from firing twice.
+    const handleWheel = (event: WheelEvent) => {
+      if (showInput.value) return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      const raw = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+      if (raw === 0) return;
+
+      const stepMultiplier = event.shiftKey ? 10 : event.altKey ? 0.1 : 1;
+      const delta = (raw > 0 ? 1 : -1) * step.value * stepMultiplier;
+      // A trackpad fires several wheel events per frame, all before the value
+      // prop comes back — so each notch reads the running value, not the stale prop.
+      const next = roundValue(
+        Math.max(min.value, Math.min(max.value, wheelValue + delta)),
+        step.value
+      );
+      wheelValue = next;
+
+      if (snapAnim) {
+        snapAnim.stop();
+        snapAnim = null;
+      }
+      fillPercent.jump(percentFromValue(next));
+      emit('change', next);
+    };
+
+    // ⌘ turns the card into text for as long as it is held. Only listened for
+    // while hovered, so an idle panel adds no key handlers.
+    const syncMetaHeld = (event: KeyboardEvent) => {
+      isMetaHeld.value = event.metaKey;
+    };
+    const clearMetaHeld = () => {
+      isMetaHeld.value = false;
+    };
+    const unbindMetaKeys = () => {
+      window.removeEventListener('keydown', syncMetaHeld);
+      window.removeEventListener('keyup', syncMetaHeld);
+      window.removeEventListener('blur', clearMetaHeld);
+    };
+
     const handleInputSubmit = () => {
       const parsed = parseFloat(inputValue.value);
       if (!Number.isNaN(parsed)) {
@@ -293,7 +324,7 @@ export const Slider = defineComponent({
     };
 
     const handleValueClick = (event: MouseEvent) => {
-      if (!isValueEditable.value) return;
+      if (!isValueEditable.value && !event.metaKey) return;
       event.stopPropagation();
       event.preventDefault();
       showInput.value = true;
@@ -309,14 +340,29 @@ export const Slider = defineComponent({
       }
     };
 
-    watch(() => props.value, () => {
+    watch(() => props.value, (next) => {
+      // The wheel accumulates on its own running value, so it must follow the prop.
+      wheelValue = next;
       if (!isInteracting.value && !snapAnim) {
         fillPercent.jump(percentage.value);
       }
     });
 
-    watch([isInteracting, isHovered, isDragging, () => props.value], () => {
-      animateHandleState();
+    watch(isHovered, (hovered) => {
+      if (!hovered) {
+        unbindMetaKeys();
+        isMetaHeld.value = false;
+        return;
+      }
+      window.addEventListener('keydown', syncMetaHeld);
+      window.addEventListener('keyup', syncMetaHeld);
+      window.addEventListener('blur', clearMetaHeld);
+    });
+
+    // The handle only shows while dragging: 0.9 while engaged, hidden at rest.
+    watch(isDragging, (dragging) => {
+      handleOpacityAnim?.stop();
+      handleOpacityAnim = animate(handleOpacityMv, dragging ? 0.9 : 0, { duration: 0.15 });
     });
 
     watch([isValueHovered, showInput, isValueEditable], () => {
@@ -328,7 +374,6 @@ export const Slider = defineComponent({
       if (isValueHovered.value && !showInput.value && !isValueEditable.value) {
         hoverTimeout = setTimeout(() => {
           isValueEditable.value = true;
-          animateHandleState();
         }, 800);
       } else if (!isValueHovered.value && !showInput.value) {
         isValueEditable.value = false;
@@ -342,6 +387,8 @@ export const Slider = defineComponent({
       inputRef.value?.select();
     });
 
+    // The ≤ 10 threshold separates discrete sliders
+    // (like step=2 on a 0–10 range → 5 steps) from continuous ones.
     const discreteSteps = computed(() => (max.value - min.value) / step.value);
     const hashMarks = computed(() => {
       const marks: ReturnType<typeof h>[] = [];
@@ -364,20 +411,17 @@ export const Slider = defineComponent({
     let unsubFill: (() => void) | null = null;
     let unsubRubber: (() => void) | null = null;
     let unsubHandleOpacity: (() => void) | null = null;
-    let unsubHandleScaleX: (() => void) | null = null;
-    let unsubHandleScaleY: (() => void) | null = null;
 
     onMounted(() => {
       unsubFill = fillPercent.on('change', applyFillStyles);
       unsubRubber = rubberStretchPx.on('change', applyRubberStyles);
-      unsubHandleOpacity = handleOpacityMv.on('change', applyHandleVisualStyles);
-      unsubHandleScaleX = handleScaleXMv.on('change', applyHandleVisualStyles);
-      unsubHandleScaleY = handleScaleYMv.on('change', applyHandleVisualStyles);
+      unsubHandleOpacity = handleOpacityMv.on('change', applyHandleOpacity);
 
       applyFillStyles(fillPercent.get());
       applyRubberStyles(rubberStretchPx.get());
-      applyHandleVisualStyles();
-      animateHandleState();
+      applyHandleOpacity(handleOpacityMv.get());
+
+      wrapperRef.value?.addEventListener('wheel', handleWheel, { passive: false });
     });
 
     onUnmounted(() => {
@@ -385,93 +429,139 @@ export const Slider = defineComponent({
       snapAnim?.stop();
       rubberAnim?.stop();
       handleOpacityAnim?.stop();
-      handleScaleXAnim?.stop();
-      handleScaleYAnim?.stop();
+
+      wrapperRef.value?.removeEventListener('wheel', handleWheel);
+      unbindMetaKeys();
 
       unsubFill?.();
       unsubRubber?.();
       unsubHandleOpacity?.();
-      unsubHandleScaleX?.();
-      unsubHandleScaleY?.();
     });
 
-    return () => h('div', { ref: wrapperRef, class: 'dialkit-slider-wrapper' }, [
-      h('div', {
-        ref: trackRef,
-        class: `dialkit-slider ${isActive.value ? 'dialkit-slider-active' : ''}`,
-        onPointerdown: handlePointerDown,
-        onPointermove: handlePointerMove,
-        onPointerup: handlePointerUp,
-        onPointercancel: handlePointerCancel,
+    const cardClassName = computed(() =>
+      [
+        'dialkit-slider',
+        isVertical.value ? 'dialkit-slider-vertical' : '',
+        isActive.value ? 'dialkit-slider-active' : '',
+        isInteracting.value ? 'dialkit-slider-engaged' : '',
+        isMetaHeld.value ? 'dialkit-slider-text-mode' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+    );
+
+    const cardProps = () => ({
+      ref: cardRef,
+      class: cardClassName.value,
+      'data-origin': hasOrigin.value ? 'true' : undefined,
+      onPointerdown: handlePointerDown,
+      onPointermove: handlePointerMove,
+      onPointerup: handlePointerUp,
+      onPointercancel: handlePointerCancel,
+      // Read ⌘ on entry too: the key listeners only exist while hovered, so a
+      // key already held before the pointer arrived would go unseen.
+      onMouseenter: (e: MouseEvent) => {
+        isHovered.value = true;
+        isMetaHeld.value = e.metaKey;
+      },
+      onMouseleave: () => {
+        isHovered.value = false;
+      },
+    });
+
+    const renderInput = (className: string) =>
+      h('input', {
+        ref: inputRef,
+        type: 'text',
+        class: className,
+        value: inputValue.value,
+        onInput: (event: Event) => {
+          inputValue.value = (event.target as HTMLInputElement).value;
+        },
+        onKeydown: handleInputKeydown,
+        onBlur: handleInputSubmit,
+        onClick: (event: MouseEvent) => event.stopPropagation(),
+        onPointerdown: (event: PointerEvent) => event.stopPropagation(),
+      });
+
+    const renderValueSpan = (className: string) =>
+      h('span', {
+        class: `${className} ${isValueEditable.value ? 'dialkit-slider-value-editable' : ''}`,
         onMouseenter: () => {
-          isHovered.value = true;
-          animateHandleState();
+          isValueHovered.value = true;
         },
         onMouseleave: () => {
-          isHovered.value = false;
-          animateHandleState();
+          isValueHovered.value = false;
         },
+        onClick: handleValueClick,
+        onPointerdown: (event: PointerEvent) => {
+          if (isValueEditable.value) event.stopPropagation();
+        },
+        style: { cursor: isValueEditable.value || isMetaHeld.value ? 'text' : 'default' },
       }, [
-        h('div', { class: 'dialkit-slider-hashmarks' }, hashMarks.value),
-        h('div', {
-          ref: fillRef,
-          class: 'dialkit-slider-fill',
-          style: {
-            left: hasOrigin.value
-              ? `${Math.min(fillPercent.get(), originPercent.value)}%`
-              : '0%',
-            width: hasOrigin.value
-              ? `${Math.abs(fillPercent.get() - originPercent.value)}%`
-              : `${fillPercent.get()}%`,
-          },
-        }),
-        h('div', {
-          ref: handleRef,
-          class: 'dialkit-slider-handle',
-          style: {
-            left: `max(5px, calc(${fillPercent.get()}% - 9px))`,
-            transform: 'translateY(-50%) scaleX(0.25) scaleY(1)',
-            opacity: 0,
-          },
-        }),
-        h('span', { ref: labelRef, class: 'dialkit-slider-label' }, [
-          props.label,
-          props.shortcut
-            ? h('span', {
-                class: `dialkit-shortcut-pill${props.shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`,
-              }, formatSliderShortcut(props.shortcut))
-            : null,
+        displayValue.value,
+        props.unit ? h('span', { class: 'dialkit-slider-unit' }, props.unit) : null,
+      ]);
+
+    const renderLabel = (className: string) =>
+      h('span', { class: className }, [
+        props.label,
+        props.shortcut
+          ? h('span', {
+              class: `dialkit-shortcut-pill${props.shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`,
+            }, formatSliderShortcut(props.shortcut))
+          : null,
+      ]);
+
+    return () => {
+      if (isVertical.value) {
+        return h('div', { ref: wrapperRef, class: 'dialkit-slider-wrapper dialkit-slider-wrapper-vertical' }, [
+          h('div', cardProps(), [
+            h('div', { class: 'dialkit-slider-fill-area' }, [
+              h('div', {
+                ref: fillRef,
+                class: 'dialkit-slider-fill-vertical',
+                style: {
+                  bottom: fillStart(fillPercent.get()),
+                  height: fillExtent(fillPercent.get()),
+                },
+              }),
+            ]),
+            showInput.value
+              ? renderInput('dialkit-slider-input dialkit-slider-input-vertical')
+              : renderValueSpan('dialkit-slider-value-vertical'),
+            renderLabel('dialkit-slider-label-vertical'),
+          ]),
+        ]);
+      }
+
+      return h('div', { ref: wrapperRef, class: 'dialkit-slider-wrapper' }, [
+        h('div', cardProps(), [
+          h('div', { class: 'dialkit-slider-track' }, [
+            h('div', {
+              ref: fillRef,
+              class: 'dialkit-slider-fill',
+              style: {
+                left: fillStart(fillPercent.get()),
+                width: fillExtent(fillPercent.get()),
+              },
+            }),
+            h('div', {
+              ref: handleRef,
+              class: 'dialkit-slider-handle',
+              style: {
+                left: handleLeft(fillPercent.get()),
+                opacity: handleOpacityMv.get(),
+              },
+            }),
+          ]),
+          h('div', { class: 'dialkit-slider-hashmarks' }, hashMarks.value),
+          renderLabel('dialkit-slider-label'),
+          showInput.value
+            ? renderInput('dialkit-slider-input')
+            : renderValueSpan('dialkit-slider-value'),
         ]),
-        showInput.value
-          ? h('input', {
-            ref: inputRef,
-            type: 'text',
-            class: 'dialkit-slider-input',
-            value: inputValue.value,
-            onInput: (event: Event) => {
-              inputValue.value = (event.target as HTMLInputElement).value;
-            },
-            onKeydown: handleInputKeydown,
-            onBlur: handleInputSubmit,
-            onClick: (event: MouseEvent) => event.stopPropagation(),
-            onMousedown: (event: MouseEvent) => event.stopPropagation(),
-          })
-          : h('span', {
-            ref: valueSpanRef,
-            class: `dialkit-slider-value ${isValueEditable.value ? 'dialkit-slider-value-editable' : ''}`,
-            onMouseenter: () => {
-              isValueHovered.value = true;
-            },
-            onMouseleave: () => {
-              isValueHovered.value = false;
-            },
-            onClick: handleValueClick,
-            onMousedown: (event: MouseEvent) => {
-              if (isValueEditable.value) event.stopPropagation();
-            },
-            style: { cursor: isValueEditable.value ? 'text' : 'default' },
-          }, displayValue.value),
-      ]),
-    ]);
+      ]);
+    };
   },
 });

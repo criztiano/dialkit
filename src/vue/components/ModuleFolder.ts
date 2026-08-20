@@ -1,5 +1,5 @@
 import { defineComponent, h, ref, type PropType } from 'vue';
-import { SegmentedControl } from './SegmentedControl';
+import { Checkbox } from './Checkbox';
 
 /**
  * A config-level module: a folder that declared `_enabled`. Same idiom as the
@@ -39,17 +39,12 @@ export const ModuleFolder = defineComponent({
             'aria-describedby': props.hint ? props.hintId : undefined,
           },
           [
+            h(Checkbox, {
+              checked: props.enabled,
+              label: props.title,
+              onChange: (next: boolean) => setEnabled(next),
+            }),
             h('span', { class: 'dialkit-module-title' }, props.title),
-            h('div', { class: 'dialkit-module-switch', onClick: (e: MouseEvent) => e.stopPropagation() }, [
-              h(SegmentedControl, {
-                options: [
-                  { value: 'off', label: 'Off' },
-                  { value: 'on', label: 'On' },
-                ],
-                value: props.enabled ? 'on' : 'off',
-                onChange: (value: string) => setEnabled(value === 'on'),
-              }),
-            ]),
             ...(props.hint
               ? [h('span', { class: 'dialkit-hint', id: props.hintId, role: 'tooltip' }, props.hint)]
               : []),

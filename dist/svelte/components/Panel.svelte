@@ -142,7 +142,6 @@
             <path d={ICON_CHECK} />
           </svg>
         </span>
-        Copy
       </button>
 
       {@render toolbarExtra?.()}

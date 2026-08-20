@@ -200,6 +200,27 @@ type SliderConfig = {
     origin?: number;
     /** Convenience for `origin: 0` on a symmetric range. */
     bipolar?: boolean;
+    /** `vertical` renders the column card (fill grows bottom-up, label at base). */
+    orientation?: 'horizontal' | 'vertical';
+};
+/**
+ * Scrub-anywhere numeric readout. Unlike a slider it has no track — drag the
+ * card to nudge the value, click to type — and bounds are optional, so it is
+ * the control for open-ended quantities (dB trims, sample offsets, seeds).
+ */
+type NumberConfig = {
+    type: 'number';
+    default: number;
+    min?: number;
+    max?: number;
+    /** Falls back to a step inferred from `default`'s precision when omitted. */
+    step?: number;
+    /** Appended to the displayed value, e.g. ' dB', ' ms', '×'. */
+    unit?: string;
+    /** Override the displayed value text entirely; `unit` is not auto-appended. */
+    formatValue?: (value: number) => string;
+    /** `vertical` stacks the label above a centered value (column card). */
+    orientation?: 'horizontal' | 'vertical';
 };
 /**
  * A read-only curve preview row. Draws the shape the host's own parameters
@@ -326,14 +347,14 @@ type ListConfig = {
     /** Label for the add affordance. Defaults to 'Add'. */
     addLabel?: string;
 };
-type DialValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
+type DialValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 type DialConfig = {
     [key: string]: DialValue | [number, number, number, number?] | CurveConfig | DialConfig;
 };
 /** UI-only reserved keys: they shape the panel, never resolve to a value. */
 type ReservedKey = '_collapsed' | '_collapsible' | '_tabs';
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T as T[K] extends CurveConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T as T[K] extends CurveConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends NumberConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -374,7 +395,7 @@ type AffordanceConfig = {
     label?: string;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve';
+    type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve';
     path: string;
     label: string;
     /** One line of help, revealed on hover or when focus lands inside the control. */
@@ -419,6 +440,8 @@ type ControlMeta = {
     /** Slider fill anchor, from the explicit SliderConfig form. */
     origin?: number;
     bipolar?: boolean;
+    /** Slider/number layout, from the explicit config forms. */
+    orientation?: 'horizontal' | 'vertical';
     itemTypes?: Record<string, ListItemType>;
     addLabel?: string;
     maxItems?: number;
@@ -698,6 +721,7 @@ declare class DialStoreClass {
     private isChipsConfig;
     private isMultiSelectConfig;
     private isSliderConfig;
+    private isNumberConfig;
     private isCurveConfig;
     private isListConfig;
     private isHexColor;
@@ -1269,6 +1293,14 @@ declare const Slider: vue.DefineComponent<vue.ExtractPropTypes<{
         type: BooleanConstructor;
         default: boolean;
     };
+    /**
+     * `vertical` renders the column card: fill grows bottom-up, label sits at
+     * the base, and the value readout appears over the fill on hover/drag.
+     */
+    orientation: {
+        type: PropType<"horizontal" | "vertical">;
+        default: string;
+    };
     shortcut: {
         type: PropType<ShortcutConfig>;
         default: undefined;
@@ -1319,6 +1351,14 @@ declare const Slider: vue.DefineComponent<vue.ExtractPropTypes<{
         type: BooleanConstructor;
         default: boolean;
     };
+    /**
+     * `vertical` renders the column card: fill grows bottom-up, label sits at
+     * the base, and the value readout appears over the fill on hover/drag.
+     */
+    orientation: {
+        type: PropType<"horizontal" | "vertical">;
+        default: string;
+    };
     shortcut: {
         type: PropType<ShortcutConfig>;
         default: undefined;
@@ -1333,7 +1373,99 @@ declare const Slider: vue.DefineComponent<vue.ExtractPropTypes<{
     origin: number;
     bipolar: boolean;
     shortcut: ShortcutConfig;
+    orientation: "horizontal" | "vertical";
     shortcutActive: boolean;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+/**
+ * Numeric readout card. Drag anywhere on the card to scrub the value
+ * (Shift = ×10, Alt = ×0.1); a plain click opens inline text entry.
+ */
+declare const NumberControl: vue.DefineComponent<vue.ExtractPropTypes<{
+    label: {
+        type: StringConstructor;
+        required: true;
+    };
+    value: {
+        type: NumberConstructor;
+        required: true;
+    };
+    /** Optional bounds. Unlike Slider, an unbounded number is a first-class use. */
+    min: {
+        type: NumberConstructor;
+        required: false;
+        default: undefined;
+    };
+    max: {
+        type: NumberConstructor;
+        required: false;
+        default: undefined;
+    };
+    step: {
+        type: NumberConstructor;
+        required: false;
+    };
+    unit: {
+        type: StringConstructor;
+        required: false;
+    };
+    /** Override the displayed value text; `unit` is not auto-appended. */
+    formatValue: {
+        type: PropType<(value: number) => string>;
+        default: undefined;
+    };
+    /** `vertical` stacks the label above a centered value (column card). */
+    orientation: {
+        type: PropType<"horizontal" | "vertical">;
+        default: string;
+    };
+}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, "change"[], "change", vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    label: {
+        type: StringConstructor;
+        required: true;
+    };
+    value: {
+        type: NumberConstructor;
+        required: true;
+    };
+    /** Optional bounds. Unlike Slider, an unbounded number is a first-class use. */
+    min: {
+        type: NumberConstructor;
+        required: false;
+        default: undefined;
+    };
+    max: {
+        type: NumberConstructor;
+        required: false;
+        default: undefined;
+    };
+    step: {
+        type: NumberConstructor;
+        required: false;
+    };
+    unit: {
+        type: StringConstructor;
+        required: false;
+    };
+    /** Override the displayed value text; `unit` is not auto-appended. */
+    formatValue: {
+        type: PropType<(value: number) => string>;
+        default: undefined;
+    };
+    /** `vertical` stacks the label above a centered value (column card). */
+    orientation: {
+        type: PropType<"horizontal" | "vertical">;
+        default: string;
+    };
+}>> & Readonly<{
+    onChange?: ((...args: any[]) => any) | undefined;
+}>, {
+    min: number;
+    max: number;
+    orientation: "horizontal" | "vertical";
+    formatValue: (value: number) => string;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 declare const RangeSlider: vue.DefineComponent<vue.ExtractPropTypes<{
@@ -1443,6 +1575,68 @@ declare const Toggle: vue.DefineComponent<vue.ExtractPropTypes<{
 }>, {
     shortcut: ShortcutConfig;
     shortcutActive: boolean;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+/**
+ * A compact tri-state box: on (a filled chip), off (a slash), and disabled
+ * (a dash).
+ *
+ * This replaces the Off/On segmented pair for boolean rows and module
+ * headers. A two-tab switch spends ~84px and a whole row of attention on
+ * one bit; a box spends 22px and reads instantly. The segmented control
+ * stays where it belongs — three or more genuinely different modes.
+ *
+ * All three marks are always in the DOM; CSS reveals one from the data
+ * attributes, so the state swap animates without any motion code.
+ */
+declare const Checkbox: vue.DefineComponent<vue.ExtractPropTypes<{
+    checked: {
+        type: BooleanConstructor;
+        required: true;
+    };
+    /** Accessible name — the visible label is rendered by the caller. */
+    label: {
+        type: StringConstructor;
+        default: undefined;
+    };
+    /** The control exists but cannot act right now: reads as a dash, not a
+     *  blank box, so "unavailable" never looks like "off". */
+    disabled: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    id: {
+        type: StringConstructor;
+        default: undefined;
+    };
+}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, "change"[], "change", vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    checked: {
+        type: BooleanConstructor;
+        required: true;
+    };
+    /** Accessible name — the visible label is rendered by the caller. */
+    label: {
+        type: StringConstructor;
+        default: undefined;
+    };
+    /** The control exists but cannot act right now: reads as a dash, not a
+     *  blank box, so "unavailable" never looks like "off". */
+    disabled: {
+        type: BooleanConstructor;
+        default: boolean;
+    };
+    id: {
+        type: StringConstructor;
+        default: undefined;
+    };
+}>> & Readonly<{
+    onChange?: ((...args: any[]) => any) | undefined;
+}>, {
+    label: string;
+    id: string;
+    disabled: boolean;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 declare const Folder: vue.DefineComponent<vue.ExtractPropTypes<{
@@ -2749,13 +2943,13 @@ declare const XYPad: vue.DefineComponent<vue.ExtractPropTypes<{
     shortcut: ShortcutConfig;
     grid: number | boolean;
     size: number;
+    disabled: boolean;
+    formatValue: (value: XYValue) => string;
     shortcutActive: boolean;
     density: number;
     snap: boolean;
     returnToCenter: boolean;
     showValues: boolean;
-    disabled: boolean;
-    formatValue: (value: XYValue) => string;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 /**
@@ -2919,4 +3113,4 @@ declare const PresetManager: vue.DefineComponent<vue.ExtractPropTypes<{
     providerMode: boolean;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
-export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, ButtonGroup, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, type DialConfig, type DialKitDirectiveOptions, type DialKitDirectiveValue, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, DialTimeline, type DialTimelineValues, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, Folder, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientType, type GradientValue, MIN_STOPS, Module, type PanelConfig, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, RangeSlider, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, ShortcutKey, ShortcutListener, type ShortcutState, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, TimelineToggleButton, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type UseDialTimelineOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYValue, addStop, colorAtPosition, gradientToCss, moveStop, normalizeGradient, removeStop, setGradientAngle, setGradientType, setStopColor, useDialKit, useDialTimeline, useShortcutContext, vDialKit };
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, ButtonGroup, Checkbox, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, type DialConfig, type DialKitDirectiveOptions, type DialKitDirectiveValue, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, DialTimeline, type DialTimelineValues, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, Folder, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientType, type GradientValue, MIN_STOPS, Module, NumberControl, type PanelConfig, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, RangeSlider, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, ShortcutKey, ShortcutListener, type ShortcutState, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, TimelineToggleButton, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type UseDialTimelineOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYValue, addStop, colorAtPosition, gradientToCss, moveStop, normalizeGradient, removeStop, setGradientAngle, setGradientType, setStopColor, useDialKit, useDialTimeline, useShortcutContext, vDialKit };

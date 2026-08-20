@@ -1,5 +1,3 @@
-import { motion } from 'motion/react';
-
 interface CheckboxProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
@@ -12,13 +10,16 @@ interface CheckboxProps {
 }
 
 /**
- * A compact tri-state box: on (accent, ticked), off (empty), and disabled
+ * A compact tri-state box: on (a filled chip), off (a slash), and disabled
  * (a dash).
  *
  * This replaces the Off/On segmented pair for boolean rows and module
  * headers. A two-tab switch spends ~84px and a whole row of attention on
- * one bit; a box spends 16px and reads instantly. The segmented control
+ * one bit; a box spends 22px and reads instantly. The segmented control
  * stays where it belongs — three or more genuinely different modes.
+ *
+ * All three marks are always in the DOM; CSS reveals one from the data
+ * attributes, so the state swap animates without any motion code.
  */
 export function Checkbox({ checked, onChange, label, disabled = false, id }: CheckboxProps) {
   return (
@@ -37,30 +38,10 @@ export function Checkbox({ checked, onChange, label, disabled = false, id }: Che
         if (!disabled) onChange(!checked);
       }}
     >
-      <svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true">
-        {disabled ? (
-          <motion.path
-            d="M3.5 8h9"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-          />
-        ) : (
-          <motion.path
-            d="M2.5 8.5 6.5 12.5 13.5 3.5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            initial={false}
-            animate={{ pathLength: checked ? 1 : 0, opacity: checked ? 1 : 0 }}
-            transition={{ duration: 0.15, ease: 'easeOut' }}
-          />
-        )}
+      <svg viewBox="0 0 22 22" width="22" height="22" aria-hidden="true">
+        <path className="dialkit-checkbox-slash" d="M6 16 16 6" fill="none" />
+        <rect className="dialkit-checkbox-chip" x="5" y="5" width="12" height="12" rx="2" />
+        <path className="dialkit-checkbox-dash" d="M6 11h10" fill="none" />
       </svg>
     </button>
   );

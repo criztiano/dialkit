@@ -29,8 +29,10 @@ export { TimelineToggleButton } from './components/Timeline/TimelineToggleButton
 
 // Component exports
 export { Slider } from './components/Slider';
+export { NumberControl } from './components/NumberControl';
 export { RangeSlider } from './components/RangeSlider';
 export { Toggle } from './components/Toggle';
+export { Checkbox } from './components/Checkbox';
 export { Folder } from './components/Folder';
 export { ControlShell } from './components/ControlShell';
 export { Module } from './components/Module';

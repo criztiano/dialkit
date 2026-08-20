@@ -4,7 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DialKit Example</title>
-    <style>body { margin: 0; overflow: hidden; }</style>
+    <style>
+      /* System85 is host-provided by design (licensing) — the example app is
+         the host here, so it loads the real faces the kit's tokens ask for. */
+      @font-face {
+        font-family: 'System85 Pro';
+        src: url('/fonts/system85-regular-pro.ttf') format('truetype');
+        font-weight: 400;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'System85 Mono Pro';
+        src: url('/fonts/system85-mono-regular-pro.ttf') format('truetype');
+        font-weight: 400;
+        font-style: normal;
+        font-display: swap;
+      }
+      body { margin: 0; overflow: hidden; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

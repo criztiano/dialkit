@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Slider,
+  NumberControl,
   RangeSlider,
   SelectControl,
   Toggle,
@@ -108,6 +109,11 @@ export function Library() {
 
   const [sliderTab, setSliderTab] = useState<string>(SLIDER_TABS[0].id);
   const [sliderValues, setSliderValues] = useState<Record<string, number>>(() => Object.fromEntries(SLIDER_TABS.map((t) => [t.id, t.value])));
+  const [verticalValues, setVerticalValues] = useState({ dly: 0.4, rvb: 0.7, adsr: 0.25, pan: 0 });
+  const setVerticalValue = (key: keyof typeof verticalValues, v: number) => setVerticalValues((s) => ({ ...s, [key]: v }));
+  const [numberTrim, setNumberTrim] = useState(0);
+  const [numberStages, setNumberStages] = useState({ a: 0, b: -6, c: 3 });
+  const setNumberStage = (key: 'a' | 'b' | 'c', v: number) => setNumberStages((s) => ({ ...s, [key]: v }));
   const [selectValue, setSelectValue] = useState('stack');
   const [toggleValue, setToggleValue] = useState(true);
   const [textValue, setTextValue] = useState('Japan');
@@ -262,7 +268,39 @@ export function Library() {
           </Card>
         </Section>
 
-        <Section index="02" title="Range" hint="Two handles for a {min,max} pair. Drag either handle · drag the fill to move the whole span · click the empty track to jump the nearest handle · click a number to type it · double-click to reset." single>
+        <Section index="02" title="Vertical sliders" hint="The column variant — drag anywhere on the card; the fill grows from the bottom. Hover to see the value, keep hovering it to type." single>
+          <Card
+            title="Column cards"
+            desc="orientation: 'vertical' on the same Slider — meant to sit shoulder to shoulder in a flex row. The last one is bipolar."
+            code="delay: { type: 'slider', default: 0.4, min: 0, max: 1, orientation: 'vertical' }"
+          >
+            <div style={{ display: 'flex', gap: 6 }}>
+              <Slider label="dly" value={verticalValues.dly} onChange={(v) => setVerticalValue('dly', v)} min={0} max={1} step={0.01} orientation="vertical" />
+              <Slider label="rvb" value={verticalValues.rvb} onChange={(v) => setVerticalValue('rvb', v)} min={0} max={1} step={0.01} orientation="vertical" />
+              <Slider label="adsr" value={verticalValues.adsr} onChange={(v) => setVerticalValue('adsr', v)} min={0} max={1} step={0.01} orientation="vertical" />
+              <Slider label="pan" value={verticalValues.pan} onChange={(v) => setVerticalValue('pan', v)} min={-1} max={1} step={0.01} bipolar orientation="vertical" formatValue={(v) => `${v > 0 ? '+' : ''}${v.toFixed(2)}`} />
+            </div>
+          </Card>
+        </Section>
+
+        <Section index="03" title="Number" hint="A trackless numeric card — drag anywhere to scrub (Shift = ×10, Alt = ×0.1), click to type. Bounds are optional." single>
+          <Card
+            title="Scrub input"
+            desc="Horizontal rows and the stacked vertical variant. The first is unbounded below, the vertical trio mirrors a channel strip."
+            code="trim: { type: 'number', default: 0, max: 12, step: 0.1, unit: 'db' }"
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <NumberControl label="stage" value={numberTrim} onChange={setNumberTrim} max={12} step={0.1} unit="db" />
+              <div style={{ display: 'flex', gap: 6 }}>
+                {(['a', 'b', 'c'] as const).map((k) => (
+                  <NumberControl key={k} label="stage" value={numberStages[k]} onChange={(v) => setNumberStage(k, v)} min={-60} max={12} step={0.1} unit="db" orientation="vertical" />
+                ))}
+              </div>
+            </div>
+          </Card>
+        </Section>
+
+        <Section index="04" title="Range" hint="Two handles for a {min,max} pair. Drag either handle · drag the fill to move the whole span · click the empty track to jump the nearest handle · click a number to type it · double-click to reset." single>
           <Card
             title="Dual handle"
             desc={`Handles can't cross; the fill spans between them. Live value ▸ { min: ${priceRange.min}, max: ${priceRange.max} }`}
@@ -272,25 +310,25 @@ export function Library() {
           </Card>
         </Section>
 
-        <Section index="03" title="Selector" hint="Click the row to open its dropdown — it repositions to stay on screen." single>
+        <Section index="05" title="Selector" hint="Click the row to open its dropdown — it repositions to stay on screen." single>
           <Card title="String options" desc="Plain strings are auto Title-Cased for display." code="options: ['stack', 'fan', 'grid']">
             <SelectControl label="layout" value={selectValue} options={['stack', 'fan', 'grid']} onChange={setSelectValue} />
           </Card>
         </Section>
 
-        <Section index="04" title="Toggle" hint="A boolean becomes an Off / On segmented control with a spring pill." single>
+        <Section index="06" title="Toggle" hint="A boolean becomes an Off / On segmented control with a spring pill." single>
           <Card title="On state" desc="The active segment animates with a spring-driven pill." code="darkMode: true">
             <Toggle label="darkMode" checked={toggleValue} onChange={setToggleValue} />
           </Card>
         </Section>
 
-        <Section index="05" title="Text" hint="Inline text input — click to edit, with optional placeholder." single>
+        <Section index="07" title="Text" hint="Inline text input — click to edit, with optional placeholder." single>
           <Card title="With value" desc="Non-hex strings auto-detect as text inputs." code="title: 'Japan'">
             <TextControl label="title" value={textValue} onChange={setTextValue} />
           </Card>
         </Section>
 
-        <Section index="06" title="Color" count={3} hint="Hex strings become a color row — click the swatch for the full picker: SV area, hue, optional alpha, HEX / RGB / HSL / OKLCH, and a saved palette.">
+        <Section index="08" title="Color" count={3} hint="Hex strings become a color row — click the swatch for the full picker: SV area, hue, optional alpha, HEX / RGB / HSL / OKLCH, and a saved palette.">
           <Card title="Basic" desc="A hex string auto-detects as a color control. The picker emits plain #rrggbb." code="color: '#6366f1'">
             <ColorControl label="color" value={colorBasic} onChange={setColorBasic} />
           </Card>
@@ -302,7 +340,7 @@ export function Library() {
           </Card>
         </Section>
 
-        <Section index="06" title="Gradient" hint="A gradient control — click the strip to open the editor: linear / radial / conic, an angle, and draggable color stops that each open the full color picker. Click the strip to add a stop, drag to move, drag it off or long-press to remove (minimum two)." single>
+        <Section index="09" title="Gradient" hint="A gradient control — click the strip to open the editor: linear / radial / conic, an angle, and draggable color stops that each open the full color picker. Click the strip to add a stop, drag to move, drag it off or long-press to remove (minimum two)." single>
           <Card title="Stop editor" desc="Click an empty spot on the ramp to add a stop (seeded with the color under the cursor); drag stops to reposition (they swap past each other live); drag a stop off the strip or long-press it to remove. The selected stop opens the alpha-enabled color picker below. Emits a { type, angle, stops } object; gradientToCss turns it into a ready CSS string." code="bg: { type: 'gradient', default }">
             <div className="lib-gradient-demo">
               <div className="lib-gradient-swatch">
@@ -313,13 +351,13 @@ export function Library() {
           </Card>
         </Section>
 
-        <Section index="07" title="Gallery" hint="Tap the trigger to reveal a masonry grid; scroll it (the edges rubber-band). Pick a tile to select it; tap the trigger again to close." single>
+        <Section index="10" title="Gallery" hint="Tap the trigger to reveal a masonry grid; scroll it (the edges rubber-band). Pick a tile to select it; tap the trigger again to close." single>
           <Card title="Masonry picker" desc="A trigger expands a 3:4 surface of masonry items and stays lit while open. Scrolling overshoots and springs at the edges; images load through a shimmer skeleton then blur-fade in. Mixes real photos with custom gradient tiles." code="cover: { type: 'gallery', items, default }">
             <GalleryControl label="cover" value={galleryValue} items={GALLERY_ITEMS} onChange={setGalleryValue} columns={3} />
           </Card>
         </Section>
 
-        <Section index="08" title="Actions & Structure" count={5} hint="Action buttons fire callbacks; folders group controls; visualizations preview motion.">
+        <Section index="11" title="Actions & Structure" count={5} hint="Action buttons fire callbacks; folders group controls; visualizations preview motion.">
           <Card title="Action button" desc="A single { type: 'action' } fires a callback with no stored value." code="shuffle: { type: 'action' }">
             <ButtonGroup buttons={[{ label: 'Shuffle', onClick: () => setLastAction('shuffle') }]} />
             <ActionLog value={lastAction} />
@@ -349,7 +387,7 @@ export function Library() {
           </Card>
         </Section>
 
-        <Section index="09" title="Motion editors" count={2} hint="Spring and transition editors with a live animation-curve preview. Toggle their modes.">
+        <Section index="12" title="Motion editors" count={2} hint="Spring and transition editors with a live animation-curve preview. Toggle their modes.">
           {liveId ? (
             <>
               <Card title="SpringControl" desc="Time (visualDuration + bounce) or Physics (stiffness, damping, mass)." code="{ type: 'spring', bounce: 0.25 }">
@@ -364,31 +402,31 @@ export function Library() {
           )}
         </Section>
 
-        <Section index="10" title="Waveform" hint="The whole waveform of a sample, drawn once and fixed — a playhead sweeps across it at the display's refresh rate. Press Play, then toggle smooth / pixelated, the 3-band EQ split, the grid, and zoom in (top-right). Click the waveform to set the playhead; drag to mark a loop." single>
+        <Section index="13" title="Waveform" hint="The whole waveform of a sample, drawn once and fixed — a playhead sweeps across it at the display's refresh rate. Press Play, then toggle smooth / pixelated, the 3-band EQ split, the grid, and zoom in (top-right). Click the waveform to set the playhead; drag to mark a loop." single>
           <Card title="WaveformVisualization" desc="Renders a decoded AudioBuffer's entire waveform (fixed); the playhead marks the play position. Smooth is a simplified, interpolated solid fill (or translucent + outline via the border prop); pixelated is chunky per-column bars. EQ bands splits into low/mid/high, color-coded purple/cyan/lime. The top-right + / − buttons zoom the time axis (the window follows the playhead); grid overlays gridSubdivisions vertical time-lines. With onSeek/onLoopChange wired, click sets the playhead and drag defines a loop — drag either edge to resize it, click clears it. waveColor and playheadColor are themable (the loop band derives from the playhead color); autoZoomOnLoop frames the loop on selection." code="<WaveformVisualization buffer loop onSeek onLoopChange waveColor playheadColor autoZoomOnLoop />">
             <WaveformShowcase />
           </Card>
         </Section>
 
-        <Section index="11" title="Analyser" hint="A real-time trace of streaming audio, read from a Web Audio AnalyserNode every frame. Press Play to start two live channels (a drone and a blip loop), then flip frequency / waveform / ekg, area / line, smooth / pixelated, log / linear, and the spring. The top-right buttons mute or solo a channel — the demo wires them to the channel gains." single>
+        <Section index="14" title="Analyser" hint="A real-time trace of streaming audio, read from a Web Audio AnalyserNode every frame. Press Play to start two live channels (a drone and a blip loop), then flip frequency / waveform / ekg, area / line, smooth / pixelated, log / linear, and the spring. The top-right buttons mute or solo a channel — the demo wires them to the channel gains." single>
           <Card title="AnalyserVisualization" desc="Displays a live spectrum (frequency), oscilloscope (waveform), or medical-monitor trace (ekg — a pen dot fixed at the right edge rides the signal's level while its history streams left) from an AnalyserNode it only ever reads — fftSize, smoothingTimeConstant, and the dB window stay yours. Area fills the trace translucently with a crisp outline — under the spectrum, around the waveform's min/max band; line is the trace alone. Smooth is an interpolated curve; pixelated is chunky blocks in the waveform visualizer's pixel language (pixelSize 1/2/4/6). The spring option smooths movement render-side and can overshoot — it composes with the analyser's own data-side smoothing. muted/soloed are controlled props with onMuteChange/onSoloChange callbacks (buttons appear only when wired); the host owns the actual gain routing. waveColor and fillColor are themable; with no analyser it rests at a baseline." code="<AnalyserVisualization analyser source variant mode spring muted onMuteChange soloed onSoloChange />">
             <AnalyserShowcase />
           </Card>
         </Section>
 
-        <Section index="12" title="Curve Composer" hint="Compose several curves into one. Split divides the time axis into more segments; quick-click a segment to cycle its shape (linear → easeIn → easeOut → easeInOut → spring); drag a segment's middle for curvature; drag a divider to retime neighbors. Add a driver — a stacked lane below that re-paces the reading — and set Direction (forward / mirror / reverse)." single>
+        <Section index="15" title="Curve Composer" hint="Compose several curves into one. Split divides the time axis into more segments; quick-click a segment to cycle its shape (linear → easeIn → easeOut → easeInOut → spring); drag a segment's middle for curvature; drag a divider to retime neighbors. Add a driver — a stacked lane below that re-paces the reading — and set Direction (forward / mirror / reverse)." single>
           <Card title="CurveComposer" desc="An editable curve series with an optional time-warping driver lane. Each segment owns a slice of the horizontal time axis (its relative duration); quick-click cycles its curve type, dragging its body changes the curvature amount, and dragging a shared divider trades duration between neighbors. Double-click splits a segment in two. The driver is a single stacked curve below that remaps the reading pace of the series above; Direction reverses or ping-pongs the whole composition. Curves are SVG, themed via currentColor; curveColor and playheadColor are overridable." code="<CurveComposer segments driver direction onSegmentsChange onDriverChange getPhase />">
             <CurveComposerShowcase />
           </Card>
         </Section>
 
-        <Section index="13" title="XY Pad" hint="A draggable point in a fluid landscape pad that fills the container width — X and Y each map to a range, with the axis names labelled inside the pad (X along the bottom, Y up the left; add showValues to also print the live number). Press to place and grab, drag to set live, Shift for fine. Focus it and arrow around (Shift = coarse, Alt = fine, Page/Home/End jump); double-click or Alt-click resets. Switch examples to see bipolar axes, the return-to-center joystick, grid density, custom ranges, and the disabled state." single>
+        <Section index="16" title="XY Pad" hint="A draggable point in a fluid landscape pad that fills the container width — X and Y each map to a range, with the axis names labelled inside the pad (X along the bottom, Y up the left; add showValues to also print the live number). Press to place and grab, drag to set live, Shift for fine. Focus it and arrow around (Shift = coarse, Alt = fine, Page/Home/End jump); double-click or Alt-click resets. Switch examples to see bipolar axes, the return-to-center joystick, grid density, custom ranges, and the disabled state." single>
           <Card title="XYPad" desc="A 2D value control that holds position by default, or springs back to center with returnToCenter (joystick). It grows to fill the container width (size sets its height, not forced square). Per-axis objects set range, step, origin, and bipolar independently; snap quantizes to the step; the grid is a 5×5 by default (density multiplies it for a denser grid, or grid={false} hides it). The axis names render inside the pad — X along the bottom, Y up the left; showValues prints the live number next to each. Full keyboard + screen-reader support: the point announces both axes via aria-valuetext regardless of showValues. The grid stays faintly visible and strengthens on hover/focus/drag, while the crosshair guides reveal only on interaction." code="<XYPad label value onChange x y grid density snap returnToCenter showValues />">
             <XYPadShowcase />
           </Card>
         </Section>
 
-        <Section index="14" title="Timeline" hint="Define an animation in code, then preview and tune its timing, values, and curves in the dock. Press Play or scrub the playhead — every clip drives the card. Each named clip is one row: an entrance (spring), a looping float (a second row that keeps cycling), and a glow (easing). Open a clip to edit its from/to values, transition, and timing; resize a bar to retime a curve." single>
+        <Section index="17" title="Timeline" hint="Define an animation in code, then preview and tune its timing, values, and curves in the dock. Press Play or scrub the playhead — every clip drives the card. Each named clip is one row: an entrance (spring), a looping float (a second row that keeps cycling), and a glow (easing). Open a clip to edit its from/to values, transition, and timing; resize a bar to retime a curve." single>
           <Card title="useDialTimeline + DialTimeline" desc="useDialTimeline registers clips in the same store as panels (so presets, reset, and Copy work on timing too) and returns per-clip current values plus a transport (time, playing, play/pause/replay/seek). Bind clip.current directly while authoring — DialKit deterministically samples the configured spring/easing so every intermediate frame is scrubbable. The <DialTimeline /> dock is the visual editor; hiding it never changes how the animation renders. from/to accept any leaf values and become editable controls; the bar owns time-based durations while physics springs derive theirs from settle time." code="useDialTimeline('Timeline', { card, float, glow }, { loop }) · <DialTimeline />">
             <TimelineShowcase />
           </Card>
@@ -504,29 +542,22 @@ function Card({ title, desc, code, children }: { title: string; desc: string; co
   );
 }
 
+/* The showcase speaks the same language as the kit it shows: flat surfaces,
+   no borders and no gradients, one accent, and System85 throughout — mono and
+   uppercase for anything that names a thing, the reading face for prose. */
 const CSS = `
 .lib-page {
   --lib-bg: #161616;
-  --lib-accent: #ff5a3c;
+  --lib-accent: var(--dial-accent);
   height: 100vh;
   overflow-y: auto;
   background: var(--lib-bg);
   color: var(--dial-text-root);
+  font-family: var(--dial-font-value);
   box-sizing: border-box;
 }
 .lib-page[data-theme="light"] { --lib-bg: #efefef; }
 .lib-page *, .lib-page *::before, .lib-page *::after { box-sizing: border-box; }
-
-.lib-page::before {
-  content: '';
-  position: fixed;
-  top: -180px; left: 50%;
-  width: 900px; height: 420px;
-  transform: translateX(-50%);
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--lib-accent) 18%, transparent), transparent);
-  pointer-events: none;
-  z-index: 0;
-}
 
 .lib-header, .lib-main, .lib-footer {
   position: relative;
@@ -539,34 +570,34 @@ const CSS = `
 .lib-header { padding-top: 28px; padding-bottom: 24px; }
 .lib-header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px; }
 
-.lib-back { font-size: 13px; font-weight: 500; color: var(--dial-text-label); text-decoration: none; transition: color 0.15s; }
+.lib-back { font-family: var(--dial-font-label); font-size: 12px; text-transform: uppercase; color: var(--dial-text-label); text-decoration: none; transition: color 0.15s; }
 .lib-back:hover { color: var(--dial-text-root); }
 
-.lib-theme-switch { display: inline-flex; padding: 3px; gap: 2px; background: var(--dial-surface); border: 1px solid var(--dial-border); border-radius: 999px; }
-.lib-theme-btn { font-family: inherit; font-size: 12px; font-weight: 600; padding: 5px 14px; border: none; border-radius: 999px; background: transparent; color: var(--dial-text-label); cursor: pointer; transition: background 0.18s, color 0.18s; }
-.lib-theme-btn[data-active="true"] { background: var(--dial-surface-active); color: var(--dial-text-root); }
+.lib-theme-switch { display: inline-flex; gap: 4px; }
+.lib-theme-btn { font-family: var(--dial-font-label); font-size: 12px; text-transform: uppercase; padding: 5px 10px; border: none; border-radius: var(--dial-radius); background: var(--dial-surface); color: var(--dial-text-label); cursor: pointer; transition: background 0.18s, color 0.18s; }
+.lib-theme-btn[data-active="true"] { background: var(--dial-text-root); color: var(--lib-bg); }
 
-.lib-eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--dial-text-tertiary); }
-.lib-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--lib-accent); box-shadow: 0 0 12px var(--lib-accent); }
+.lib-eyebrow { display: inline-flex; align-items: center; gap: 8px; font-family: var(--dial-font-label); font-size: 12px; text-transform: uppercase; color: var(--dial-text-tertiary); }
+.lib-dot { width: 8px; height: 8px; border-radius: var(--dial-radius); background: var(--lib-accent); }
 
-.lib-title { margin: 14px 0 0; font-size: clamp(34px, 6vw, 56px); font-weight: 600; letter-spacing: -0.03em; line-height: 1.02; }
-.lib-lead { margin: 16px 0 0; max-width: 600px; font-size: 16px; line-height: 1.55; color: var(--dial-text-section); }
-.lib-lead code { font-family: 'Geist Mono', monospace; font-size: 0.9em; padding: 1px 5px; border-radius: 5px; background: var(--dial-surface); color: var(--dial-text-root); }
+.lib-title { margin: 14px 0 0; font-family: var(--dial-font-value); font-size: clamp(32px, 5vw, 48px); font-weight: 400; letter-spacing: 0; line-height: 1.1; }
+.lib-lead { margin: 16px 0 0; max-width: 600px; font-size: 15px; line-height: 1.6; color: var(--dial-text-section); }
+.lib-lead code { font-family: var(--dial-font-label); font-size: 0.92em; padding: 1px 5px; border-radius: var(--dial-radius); background: var(--dial-surface); color: var(--dial-text-root); }
 
 .lib-main { padding-bottom: 8px; }
 .lib-section { padding-top: 36px; }
-.lib-section-head { padding-bottom: 18px; margin-bottom: 22px; border-bottom: 1px solid var(--dial-surface-subtle); }
-.lib-section-headline { display: flex; align-items: baseline; gap: 12px; }
-.lib-section-index { font-family: 'Geist Mono', monospace; font-size: 13px; font-weight: 500; color: var(--lib-accent); }
-.lib-section-title { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
-.lib-section-count { font-family: 'Geist Mono', monospace; font-size: 12px; font-weight: 500; color: var(--dial-text-tertiary); padding: 2px 8px; border-radius: 999px; background: var(--dial-surface); }
-.lib-section-hint { margin: 10px 0 0; font-size: 13.5px; color: var(--dial-text-tertiary); }
+.lib-section-head { padding-bottom: 16px; margin-bottom: 20px; }
+.lib-section-headline { display: flex; align-items: center; gap: 10px; }
+.lib-section-index { font-family: var(--dial-font-label); font-size: 12px; color: var(--lib-accent); }
+.lib-section-title { margin: 0; font-family: var(--dial-font-label); font-size: 18px; font-weight: 400; text-transform: uppercase; letter-spacing: 0; }
+.lib-section-count { font-family: var(--dial-font-label); font-size: 12px; color: var(--dial-text-tertiary); padding: 2px 6px; border-radius: var(--dial-radius); background: var(--dial-surface); }
+.lib-section-hint { margin: 10px 0 0; font-size: 13px; line-height: 1.55; color: var(--dial-text-tertiary); }
 
-/* Tab bar for the slider type switcher — mirrors the theme switch pill group */
-.lib-tabs { display: inline-flex; align-self: center; margin-left: auto; padding: 3px; gap: 2px; background: var(--dial-surface); border: 1px solid var(--dial-border); border-radius: 999px; }
-.lib-tab { font-family: inherit; font-size: 12px; font-weight: 600; padding: 5px 12px; border: none; border-radius: 999px; background: transparent; color: var(--dial-text-label); cursor: pointer; transition: background 0.18s, color 0.18s; }
+/* Tab bar for the slider type switcher — the panel's tab idiom, in miniature */
+.lib-tabs { display: inline-flex; align-self: center; margin-left: auto; gap: 4px; }
+.lib-tab { font-family: var(--dial-font-label); font-size: 12px; text-transform: uppercase; padding: 5px 10px; border: none; border-radius: var(--dial-radius); background: var(--dial-surface); color: var(--dial-text-label); cursor: pointer; transition: background 0.18s, color 0.18s; }
 .lib-tab:hover { color: var(--dial-text-root); }
-.lib-tab[data-active="true"] { background: var(--dial-surface-active); color: var(--dial-text-root); }
+.lib-tab[data-active="true"] { background: var(--dial-text-root); color: var(--lib-bg); }
 
 /* Surface the ShortcutsMenu trigger (normally inside a panel) on the section head */
 .lib-section-headline .dialkit-shortcuts-trigger { margin-left: auto; align-self: center; }
@@ -575,23 +606,23 @@ const CSS = `
 /* Single-control sections show one card at a comfortable, contained width */
 .lib-single { max-width: 460px; }
 
-.lib-card { display: flex; flex-direction: column; background: var(--dial-glass-bg); border: 1px solid var(--dial-border); border-radius: 16px; padding: 14px; transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease; }
-.lib-card:hover { transform: translateY(-2px); border-color: var(--dial-border-hover); box-shadow: var(--dial-shadow); }
+.lib-card { display: flex; flex-direction: column; background: var(--dial-glass-bg); border: none; border-radius: var(--dial-radius); padding: 14px; transition: background 0.18s ease; }
+.lib-card:hover { background: var(--dial-dropdown-bg); }
 
 .lib-stage { display: flex; flex-direction: column; gap: 6px; padding: 4px 0 16px; }
 .lib-viz { padding: 4px 0; }
 
 .lib-gradient-demo { display: flex; flex-direction: column; gap: 10px; }
-.lib-gradient-swatch { position: relative; overflow: hidden; width: 100%; height: 72px; border-radius: 10px; border: 1px solid var(--dial-border); }
+.lib-gradient-swatch { position: relative; overflow: hidden; width: 100%; height: 72px; border-radius: var(--dial-radius); }
 .lib-gradient-clip { position: absolute; inset: 0; overflow: hidden; z-index: 0; }
 
-.lib-action-log { font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--dial-text-tertiary); padding-left: 2px; }
+.lib-action-log { font-family: var(--dial-font-label); font-size: 11px; text-transform: uppercase; color: var(--dial-text-tertiary); padding-left: 2px; }
 .lib-action-log span { color: var(--dial-text-label); }
 
-.lib-meta { border-top: 1px solid var(--dial-surface-subtle); padding-top: 14px; }
-.lib-card-title { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; color: var(--dial-text-root); }
-.lib-card-desc { margin: 6px 0 12px; font-size: 12.5px; line-height: 1.5; color: var(--dial-text-section); min-height: 38px; }
-.lib-code { display: block; font-family: 'Geist Mono', monospace; font-size: 11.5px; line-height: 1.5; color: var(--dial-text-label); background: var(--dial-surface); border: 1px solid var(--dial-border); border-radius: 8px; padding: 8px 10px; white-space: pre; overflow-x: auto; }
+.lib-meta { padding-top: 14px; }
+.lib-card-title { font-family: var(--dial-font-label); font-size: 12px; text-transform: uppercase; color: var(--dial-text-root); }
+.lib-card-desc { margin: 6px 0 12px; font-size: 12.5px; line-height: 1.55; color: var(--dial-text-section); min-height: 38px; }
+.lib-code { display: block; font-family: var(--dial-font-label); font-size: 11.5px; line-height: 1.5; color: var(--dial-text-label); background: var(--dial-surface); border: none; border-radius: var(--dial-radius); padding: 8px 10px; white-space: pre; overflow-x: auto; }
 .lib-code::-webkit-scrollbar { height: 0; }
 
 /* Live panel section */
@@ -601,14 +632,12 @@ const CSS = `
   display: flex; align-items: center; justify-content: center;
   min-height: 540px;
   background: var(--dial-glass-bg);
-  border: 1px solid var(--dial-border);
-  border-radius: 16px;
+  border-radius: var(--dial-radius);
 }
 .lib-window {
   height: 540px;
   background: var(--dial-glass-bg);
-  border: 1px solid var(--dial-border);
-  border-radius: 16px;
+  border-radius: var(--dial-radius);
   overflow: hidden;
   padding: 4px;
 }

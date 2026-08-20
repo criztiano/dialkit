@@ -37,6 +37,7 @@ export type {
 // Individual components (for advanced usage)
 export { ControlRenderer } from './components/ControlRenderer';
 export { Slider } from './components/Slider';
+export { NumberControl } from './components/NumberControl';
 export { RangeSlider } from './components/RangeSlider';
 export { Checkbox } from './components/Checkbox';
 export { Toggle } from './components/Toggle';
@@ -218,6 +219,7 @@ export type {
   MultiSelectConfig,
   MultiSelectOption,
   SliderConfig,
+  NumberConfig,
   RangeConfig,
   RangeValue,
   ListConfig,

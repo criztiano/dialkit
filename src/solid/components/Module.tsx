@@ -1,5 +1,5 @@
 import { JSX } from 'solid-js';
-import { SegmentedControl } from './SegmentedControl';
+import { Checkbox } from './Checkbox';
 
 interface ModuleProps {
   title: string;
@@ -7,11 +7,6 @@ interface ModuleProps {
   onEnabledChange: (enabled: boolean) => void;
   children?: JSX.Element;
 }
-
-const ENABLE_OPTIONS = [
-  { value: 'off' as const, label: 'Off' },
-  { value: 'on' as const, label: 'On' },
-];
 
 /**
  * A titled module whose header carries an enable switch — for parameter
@@ -22,14 +17,8 @@ export function Module(props: ModuleProps) {
   return (
     <div class="dialkit-module">
       <div class="dialkit-module-header">
+        <Checkbox checked={props.enabled} onChange={props.onEnabledChange} label={props.title} />
         <span class="dialkit-module-title">{props.title}</span>
-        <div class="dialkit-module-switch">
-          <SegmentedControl
-            options={ENABLE_OPTIONS}
-            value={props.enabled ? 'on' : 'off'}
-            onChange={(v) => props.onEnabledChange(v === 'on')}
-          />
-        </div>
       </div>
 
       <div class="dialkit-module-collapse" data-open={props.enabled}>

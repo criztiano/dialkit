@@ -190,7 +190,6 @@ export function Panel(props: PanelProps) {
             </svg>
           </span>
         </span>
-        Copy
       </button>
 
       {props.toolbarExtra}

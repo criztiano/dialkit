@@ -14,6 +14,7 @@ import { Folder } from './Folder';
 import { ModuleFolder } from './ModuleFolder';
 import { ControlShell } from './ControlShell';
 import { Slider } from './Slider';
+import { NumberControl } from './NumberControl';
 import { RangeSlider } from './RangeSlider';
 import { Toggle } from './Toggle';
 import { SpringControl } from './SpringControl';
@@ -56,8 +57,28 @@ export function ControlRenderer(props: ControlRendererProps) {
             min={control.min}
             max={control.max}
             step={control.step}
+            unit={control.unit}
+            formatValue={control.formatValue}
+            origin={control.origin}
+            bipolar={control.bipolar}
+            orientation={control.orientation}
             shortcut={control.shortcut}
             shortcutActive={active()}
+          />
+        );
+
+      case 'number':
+        return (
+          <NumberControl
+            label={control.label}
+            value={value() as number}
+            onChange={(next) => DialStore.updateValue(props.panelId, control.path, next)}
+            min={control.min}
+            max={control.max}
+            step={control.step}
+            unit={control.unit}
+            formatValue={control.formatValue}
+            orientation={control.orientation}
           />
         );
 
