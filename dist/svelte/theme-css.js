@@ -676,10 +676,11 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 }
 
 /* Non-root folder header — the title sits close to the section above it and
-   holds its rows at arm's length below. */
+   holds its rows at arm's length below. The 4px indent settles it under the
+   row labels rather than hanging off the panel's edge. */
 .dialkit-folder:not(.dialkit-folder-root) > .dialkit-folder-header {
   height: auto;
-  padding: 2px 0 8px;
+  padding: 2px 0 8px 4px;
 }
 
 .dialkit-folder:not(.dialkit-folder-root) > .dialkit-folder-header > .dialkit-folder-header-top {
@@ -777,7 +778,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 .dialkit-module-folder > .dialkit-module-header {
   box-sizing: border-box;
   min-height: var(--dial-row-height);
-  padding: 2px 10px 8px 0;
+  padding: 2px 10px 8px 4px;
 }
 
 .dialkit-module-folder[data-open='true'] {
@@ -1091,12 +1092,19 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   height: var(--dial-row-height);
 }
 
+/* Same flow as the slider: the rail, fill and both ticks are absolutely
+   positioned, so only the label and the bounds join the row. */
 .dialkit-range-slider {
   position: absolute;
   top: 0;
   left: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
   width: 100%;
   height: 100%;
+  padding: 2px 4px 0;
+  box-sizing: border-box;
   cursor: pointer;
   user-select: none;
   overflow: hidden;
@@ -1152,9 +1160,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 }
 
 .dialkit-range-slider-label {
-  position: absolute;
-  left: 4px;
-  top: 2px;
+  position: static;
   font-size: var(--dial-font-size);
   font-weight: 400;
   font-family: var(--dial-font-label);
@@ -1168,9 +1174,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 }
 
 .dialkit-range-slider-value {
-  position: absolute;
-  right: 4px;
-  top: 2px;
+  position: static;
   font-size: var(--dial-font-size);
   font-weight: 400;
   font-family: var(--dial-font-value);
@@ -1202,9 +1206,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 }
 
 .dialkit-range-slider-input {
-  position: absolute;
-  right: 4px;
-  top: 2px;
+  position: static;
   width: 4ch;
   min-width: 3ch;
   max-width: 6ch;
@@ -1231,8 +1233,9 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 .dialkit-number-control {
   position: relative;
   display: flex;
+  gap: 12px;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   height: var(--dial-row-height);
   padding: 0 8px;
   background: var(--dial-surface);
@@ -1438,7 +1441,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 .dialkit-labeled-control {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   height: var(--dial-row-height);
   padding: 2px 8px;
@@ -2010,8 +2013,9 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 
 .dialkit-file-trigger {
   display: flex;
+  gap: 12px;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   flex: 1;
   min-width: 0;
   height: var(--dial-row-height);
@@ -2041,6 +2045,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 
 .dialkit-file-right {
   display: flex;
+  flex: 1;
   align-items: center;
   gap: 6px;
   min-width: 0;
@@ -2576,8 +2581,9 @@ input.dialkit-list-item-title:focus {
 /* Gallery Control */
 .dialkit-gallery-trigger {
   display: flex;
+  gap: 12px;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   width: 100%;
   height: var(--dial-row-height);
   padding: 0 8px;
@@ -2610,6 +2616,7 @@ input.dialkit-list-item-title:focus {
 
 .dialkit-gallery-right {
   display: flex;
+  flex: 1;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -2641,6 +2648,7 @@ input.dialkit-list-item-title:focus {
   flex-shrink: 0;
   opacity: 0.6;
   transition: transform 0.2s ease;
+  margin-left: auto;
 }
 
 .dialkit-gallery[data-open="true"] .dialkit-gallery-chevron {
@@ -2853,7 +2861,7 @@ input.dialkit-list-item-title:focus {
 .dialkit-color-control {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   height: var(--dial-row-height);
   padding: 0 8px;
@@ -2871,6 +2879,7 @@ input.dialkit-list-item-title:focus {
 
 .dialkit-color-inputs {
   display: flex;
+  flex: 1;
   align-items: center;
   gap: 6px;
 }
@@ -3133,7 +3142,7 @@ input.dialkit-list-item-title:focus {
 .dialkit-gradient-control {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   height: var(--dial-row-height);
   padding: 0 8px;
