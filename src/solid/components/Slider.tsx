@@ -1,4 +1,5 @@
 import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
+import type { JSX } from 'solid-js';
 import { animate, motionValue } from 'motion';
 import type { ShortcutConfig } from '../../store/DialStore';
 import {
@@ -17,6 +18,17 @@ interface SliderProps {
   step?: number;
   unit?: string;
   /**
+   * Override the displayed value text. When provided, the formatter owns the
+   * full label and `unit` is not auto-appended. Inline editing still operates
+   * on the raw numeric value.
+   */
+  formatValue?: (value: number) => string;
+  /**
+   * Render a custom node (e.g. an icon or gauge) in the value slot instead of
+   * the editable numeric text. Sliders with a `valueIcon` are not editable.
+   */
+  valueIcon?: JSX.Element;
+  /**
    * Anchor the fill at this value instead of `min`. Bipolar parameters fill
    * out from the origin in either direction and gain an escapable detent at
    * the origin while dragging. Defaults to `min` (classic left-anchored
@@ -25,6 +37,12 @@ interface SliderProps {
   origin?: number;
   /** Convenience for `origin={0}` on a symmetric range. */
   bipolar?: boolean;
+  /**
+   * `vertical` renders the 77px column card: fill grows bottom-up, label sits
+   * at the base, and the value readout appears over the fill on hover/drag.
+   * Vertical sliders flex to their container width — place them in a flex row.
+   */
+  orientation?: 'horizontal' | 'vertical';
   shortcut?: ShortcutConfig;
   shortcutActive?: boolean;
 }
@@ -40,17 +58,16 @@ export function Slider(props: SliderProps) {
   const min = () => props.min ?? 0;
   const max = () => props.max ?? 1;
   const step = () => props.step ?? 0.01;
+  const isVertical = () => props.orientation === 'vertical';
   const resolvedOrigin = () =>
     Math.min(max(), Math.max(min(), props.origin ?? (props.bipolar ? 0 : min())));
   const hasOrigin = () => resolvedOrigin() > min();
   const originPercent = () => ((resolvedOrigin() - min()) / (max() - min())) * 100;
 
   let wrapperRef!: HTMLDivElement;
-  let trackRef!: HTMLDivElement;
+  let cardRef!: HTMLDivElement;
   let fillRef!: HTMLDivElement;
   let handleRef!: HTMLDivElement;
-  let labelRef!: HTMLSpanElement;
-  let valueSpanRef!: HTMLSpanElement;
   let inputRef!: HTMLInputElement;
 
   const [isInteracting, setIsInteracting] = createSignal(false);
@@ -64,40 +81,47 @@ export function Slider(props: SliderProps) {
   const fillPercent = motionValue(((props.value - min()) / (max() - min())) * 100);
   const rubberStretchPx = motionValue(0);
   const handleOpacityMv = motionValue(0);
-  const handleScaleXMv = motionValue(0.25);
-  const handleScaleYMv = motionValue(1);
+
+  // Origin-anchored fill spans between the origin and the handle; without an
+  // origin it reduces to the classic min-anchored fill. Horizontal grows the
+  // fill from the left edge; vertical grows it bottom-up.
+  const fillStart = (pct: number) =>
+    hasOrigin() ? `${Math.min(pct, originPercent())}%` : '0%';
+  const fillExtent = (pct: number) =>
+    hasOrigin() ? `${Math.abs(pct - originPercent())}%` : `${pct}%`;
+  const handleLeft = (pct: number) =>
+    `min(calc(100% - 1px), max(0px, calc(${pct}% - 0.5px)))`;
 
   const applyFillStyles = (pct: number) => {
     if (fillRef) {
-      // Origin-anchored fill spans between the origin and the handle; without
-      // an origin it reduces to the classic left-anchored fill.
-      fillRef.style.left = hasOrigin() ? `${Math.min(pct, originPercent())}%` : '0%';
-      fillRef.style.width = hasOrigin()
-        ? `${Math.abs(pct - originPercent())}%`
-        : `${pct}%`;
+      if (isVertical()) {
+        fillRef.style.bottom = fillStart(pct);
+        fillRef.style.height = fillExtent(pct);
+      } else {
+        fillRef.style.left = fillStart(pct);
+        fillRef.style.width = fillExtent(pct);
+      }
     }
-    if (handleRef) handleRef.style.left = `max(5px, calc(${pct}% - 9px))`;
+    if (!isVertical() && handleRef) handleRef.style.left = handleLeft(pct);
   };
 
-  // Escapable magnetic snap to the origin while dragging.
-  const applyDetent = (v: number) => {
-    if (!hasOrigin() || !wrapperRef) return v;
-    const trackWidth = wrapperRef.offsetWidth;
-    if (trackWidth <= 0) return v;
-    const detentValue = (DETENT_PX / trackWidth) * (max() - min());
-    return Math.abs(v - resolvedOrigin()) <= detentValue ? resolvedOrigin() : v;
-  };
-
+  // Rubber band: horizontal maps stretch to width/x; vertical to height/y
+  // (negative stretch = overshoot past the max end: left or top).
   const applyRubberStyles = (stretch: number) => {
-    if (!trackRef) return;
-    trackRef.style.width = `calc(100% + ${Math.abs(stretch)}px)`;
-    trackRef.style.transform = `translateX(${stretch < 0 ? stretch : 0}px)`;
+    if (!cardRef) return;
+    const size = `calc(100% + ${Math.abs(stretch)}px)`;
+    const shift = stretch < 0 ? stretch : 0;
+    if (isVertical()) {
+      cardRef.style.height = size;
+      cardRef.style.transform = `translateY(${shift}px)`;
+    } else {
+      cardRef.style.width = size;
+      cardRef.style.transform = `translateX(${shift}px)`;
+    }
   };
 
-  const applyHandleVisualStyles = () => {
-    if (!handleRef) return;
-    handleRef.style.opacity = String(handleOpacityMv.get());
-    handleRef.style.transform = `translateY(-50%) scaleX(${handleScaleXMv.get()}) scaleY(${handleScaleYMv.get()})`;
+  const applyHandleOpacity = (opacity: number) => {
+    if (handleRef) handleRef.style.opacity = String(opacity);
   };
 
   // Sync fill from props when not interacting
@@ -107,7 +131,6 @@ export function Slider(props: SliderProps) {
     }
   });
 
-  const percentage = () => ((props.value - min()) / (max() - min())) * 100;
   const isActive = () => isInteracting() || isHovered();
 
   let pointerDownPos: { x: number; y: number } | null = null;
@@ -121,26 +144,40 @@ export function Slider(props: SliderProps) {
   let rubberAnim: any = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let handleOpacityAnim: any = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let handleScaleXAnim: any = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let handleScaleYAnim: any = null;
 
-  const positionToValue = (clientX: number) => {
+  const trackExtent = () => {
+    if (!wrapperRef) return 0;
+    return isVertical() ? wrapperRef.offsetHeight : wrapperRef.offsetWidth;
+  };
+
+  const positionToValue = (clientX: number, clientY: number) => {
     if (!wrapperRect) return props.value;
-    const screenX = clientX - wrapperRect.left;
-    const sceneX = screenX / scaleVal;
-    const nativeWidth = wrapperRef ? wrapperRef.offsetWidth : wrapperRect.width;
-    const percent = Math.max(0, Math.min(1, sceneX / nativeWidth));
+    const screenPos = isVertical() ? clientY - wrapperRect.top : clientX - wrapperRect.left;
+    const scenePos = screenPos / scaleVal;
+    const nativeExtent = trackExtent() || (isVertical() ? wrapperRect.height : wrapperRect.width);
+    let percent = Math.max(0, Math.min(1, scenePos / nativeExtent));
+    // Vertical: top of the card is max, bottom is min.
+    if (isVertical()) percent = 1 - percent;
     const rawValue = min() + percent * (max() - min());
     return Math.max(min(), Math.min(max(), rawValue));
   };
 
   const percentFromValue = (v: number) => ((v - min()) / (max() - min())) * 100;
 
-  const computeRubberStretch = (clientX: number, sign: number) => {
+  // Escapable magnetic snap to the origin while dragging.
+  const applyDetent = (v: number) => {
+    if (!hasOrigin()) return v;
+    const extent = trackExtent();
+    if (extent <= 0) return v;
+    const detentValue = (DETENT_PX / extent) * (max() - min());
+    return Math.abs(v - resolvedOrigin()) <= detentValue ? resolvedOrigin() : v;
+  };
+
+  const computeRubberStretch = (clientPos: number, sign: number) => {
     if (!wrapperRect) return 0;
-    const distancePast = sign < 0 ? wrapperRect.left - clientX : clientX - wrapperRect.right;
+    const nearEdge = isVertical() ? wrapperRect.top : wrapperRect.left;
+    const farEdge = isVertical() ? wrapperRect.bottom : wrapperRect.right;
+    const distancePast = sign < 0 ? nearEdge - clientPos : clientPos - farEdge;
     const overflow = Math.max(0, distancePast - DEAD_ZONE);
     return sign * MAX_STRETCH * Math.sqrt(Math.min(overflow / MAX_CURSOR_RANGE, 1.0));
   };
@@ -161,9 +198,12 @@ export function Slider(props: SliderProps) {
     isClickFlag = true;
     setIsInteracting(true);
 
+    // Capture wrapper rect at pointer down for stable reference
     if (wrapperRef) {
       wrapperRect = wrapperRef.getBoundingClientRect();
-      scaleVal = wrapperRect.width / wrapperRef.offsetWidth;
+      const nativeExtent = trackExtent();
+      const rectExtent = isVertical() ? wrapperRect.height : wrapperRect.width;
+      scaleVal = nativeExtent > 0 ? rectExtent / nativeExtent : 1;
     }
   };
 
@@ -180,17 +220,21 @@ export function Slider(props: SliderProps) {
     }
 
     if (!isClickFlag) {
+      // Drag mode — instant update
       if (wrapperRect) {
-        if (e.clientX < wrapperRect.left) {
-          rubberStretchPx.jump(computeRubberStretch(e.clientX, -1));
-        } else if (e.clientX > wrapperRect.right) {
-          rubberStretchPx.jump(computeRubberStretch(e.clientX, 1));
+        const clientPos = isVertical() ? e.clientY : e.clientX;
+        const nearEdge = isVertical() ? wrapperRect.top : wrapperRect.left;
+        const farEdge = isVertical() ? wrapperRect.bottom : wrapperRect.right;
+        if (clientPos < nearEdge) {
+          rubberStretchPx.jump(computeRubberStretch(clientPos, -1));
+        } else if (clientPos > farEdge) {
+          rubberStretchPx.jump(computeRubberStretch(clientPos, 1));
         } else {
           rubberStretchPx.jump(0);
         }
       }
 
-      const newValue = applyDetent(positionToValue(e.clientX));
+      const newValue = applyDetent(positionToValue(e.clientX, e.clientY));
       const newPct = percentFromValue(newValue);
       if (snapAnim) { snapAnim.stop(); snapAnim = null; }
       fillPercent.jump(newPct);
@@ -202,7 +246,9 @@ export function Slider(props: SliderProps) {
     if (!isInteracting()) return;
 
     if (isClickFlag) {
-      const rawValue = positionToValue(e.clientX);
+      // When steps are coarse (≤10 positions), click snaps to the nearest step.
+      // Otherwise, the original decile-magnetic behavior is preserved
+      const rawValue = positionToValue(e.clientX, e.clientY);
       const discreteSteps = (max() - min()) / step();
       const snappedValue = discreteSteps <= 10
         ? Math.max(min(), Math.min(max(), min() + Math.round((rawValue - min()) / step()) * step()))
@@ -224,6 +270,7 @@ export function Slider(props: SliderProps) {
       props.onChange(roundValue(snappedValue, step()));
     }
 
+    // Spring rubber band back
     if (rubberStretchPx.get() !== 0) {
       if (rubberAnim) rubberAnim.stop();
       rubberAnim = animate(rubberStretchPx, 0, {
@@ -264,27 +311,28 @@ export function Slider(props: SliderProps) {
     snapAnim?.stop();
     rubberAnim?.stop();
     handleOpacityAnim?.stop();
-    handleScaleXAnim?.stop();
-    handleScaleYAnim?.stop();
   });
 
   onMount(() => {
     const unsubFill = fillPercent.on('change', applyFillStyles);
     const unsubRubber = rubberStretchPx.on('change', applyRubberStyles);
-    const unsubHandleOpacity = handleOpacityMv.on('change', applyHandleVisualStyles);
-    const unsubHandleScaleX = handleScaleXMv.on('change', applyHandleVisualStyles);
-    const unsubHandleScaleY = handleScaleYMv.on('change', applyHandleVisualStyles);
+    const unsubHandleOpacity = handleOpacityMv.on('change', applyHandleOpacity);
     applyFillStyles(fillPercent.get());
     applyRubberStyles(rubberStretchPx.get());
-    applyHandleVisualStyles();
+    applyHandleOpacity(handleOpacityMv.get());
 
     onCleanup(() => {
       unsubFill();
       unsubRubber();
       unsubHandleOpacity();
-      unsubHandleScaleX();
-      unsubHandleScaleY();
     });
+  });
+
+  // Handle only shows while dragging
+  createEffect(() => {
+    const targetOpacity = isDragging() ? 0.9 : 0;
+    handleOpacityAnim?.stop();
+    handleOpacityAnim = animate(handleOpacityMv, targetOpacity, { duration: 0.15 });
   });
 
   // Focus input when it appears
@@ -323,60 +371,13 @@ export function Slider(props: SliderProps) {
     }
   };
 
-  const displayValue = () => props.value.toFixed(decimalsForStep(step()));
+  const displayValue = () =>
+    props.formatValue
+      ? props.formatValue(props.value)
+      : props.value.toFixed(decimalsForStep(step()));
 
-  // Value dodge: fade handle when it overlaps label or value text
-  const HANDLE_BUFFER = 8;
-  const LABEL_CSS_LEFT = 10;
-  const VALUE_CSS_RIGHT = 10;
-
-  const leftThreshold = () => {
-    const trackWidth = wrapperRef?.offsetWidth;
-    if (trackWidth && labelRef) {
-      return ((LABEL_CSS_LEFT + labelRef.offsetWidth + HANDLE_BUFFER) / trackWidth) * 100;
-    }
-    return 30;
-  };
-
-  const rightThreshold = () => {
-    const trackWidth = wrapperRef?.offsetWidth;
-    if (trackWidth && valueSpanRef) {
-      return ((trackWidth - VALUE_CSS_RIGHT - valueSpanRef.offsetWidth - HANDLE_BUFFER) / trackWidth) * 100;
-    }
-    return 78;
-  };
-
-  const valueDodge = () => percentage() < leftThreshold() || percentage() > rightThreshold();
-
-  const handleOpacity = () => {
-    if (!isActive()) return 0;
-    if (valueDodge()) return 0.1;
-    if (isDragging()) return 0.9;
-    return 0.5;
-  };
-
-  createEffect(() => {
-    const targetOpacity = handleOpacity();
-    const targetScaleX = isActive() ? 1 : 0.25;
-    const targetScaleY = isActive() && valueDodge() ? 0.75 : 1;
-
-    handleOpacityAnim?.stop();
-    handleScaleXAnim?.stop();
-    handleScaleYAnim?.stop();
-
-    handleOpacityAnim = animate(handleOpacityMv, targetOpacity, { duration: 0.15 });
-    handleScaleXAnim = animate(handleScaleXMv, targetScaleX, {
-      type: 'spring',
-      visualDuration: 0.25,
-      bounce: 0.15,
-    });
-    handleScaleYAnim = animate(handleScaleYMv, targetScaleY, {
-      type: 'spring',
-      visualDuration: 0.2,
-      bounce: 0.1,
-    });
-  });
-
+  // The ≤ 10 threshold separates discrete sliders
+  // (like step=2 on a 0–10 range → 5 steps) from continuous ones.
   const discreteSteps = () => (max() - min()) / step();
 
   const hashMarks = () => {
@@ -393,11 +394,33 @@ export function Slider(props: SliderProps) {
     });
   };
 
+  const cardClass = () =>
+    [
+      'dialkit-slider',
+      isVertical() ? 'dialkit-slider-vertical' : '',
+      isActive() ? 'dialkit-slider-active' : '',
+      isInteracting() ? 'dialkit-slider-engaged' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+  const shortcutPill = () => (
+    <Show when={props.shortcut}>
+      <span class={`dialkit-shortcut-pill${props.shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`}>
+        {formatSliderShortcut(props.shortcut!)}
+      </span>
+    </Show>
+  );
+
   return (
-    <div ref={wrapperRef} class="dialkit-slider-wrapper">
+    <div
+      ref={wrapperRef}
+      class={`dialkit-slider-wrapper${isVertical() ? ' dialkit-slider-wrapper-vertical' : ''}`}
+    >
       <div
-        ref={trackRef}
-        class={`dialkit-slider ${isActive() ? 'dialkit-slider-active' : ''}`}
+        ref={cardRef}
+        class={cardClass()}
+        data-origin={hasOrigin() ? 'true' : undefined}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -405,65 +428,111 @@ export function Slider(props: SliderProps) {
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        <div class="dialkit-slider-hashmarks">{hashMarks()}</div>
+        <Show
+          when={isVertical()}
+          fallback={
+            <>
+              <div class="dialkit-slider-track">
+                <div
+                  ref={fillRef}
+                  class="dialkit-slider-fill"
+                  style={{
+                    left: fillStart(fillPercent.get()),
+                    width: fillExtent(fillPercent.get()),
+                  }}
+                />
+                <div
+                  ref={handleRef}
+                  class="dialkit-slider-handle"
+                  style={{ left: handleLeft(fillPercent.get()), opacity: 0 }}
+                />
+              </div>
 
-        <div
-          ref={fillRef}
-          class="dialkit-slider-fill"
-          style={{
-            left: hasOrigin()
-              ? `${Math.min(fillPercent.get(), originPercent())}%`
-              : '0%',
-            width: hasOrigin()
-              ? `${Math.abs(fillPercent.get() - originPercent())}%`
-              : `${fillPercent.get()}%`,
-          }}
-        />
+              <div class="dialkit-slider-hashmarks">{hashMarks()}</div>
 
-        <div
-          ref={handleRef}
-          class="dialkit-slider-handle"
-          style={{
-            left: `max(5px, calc(${fillPercent.get()}% - 9px))`,
-            transform: 'translateY(-50%) scaleX(0.25) scaleY(1)',
-            opacity: 0,
-          }}
-        />
+              <span class="dialkit-slider-label">
+                {props.label}
+                {shortcutPill()}
+              </span>
 
-        <span ref={labelRef} class="dialkit-slider-label">
-          {props.label}
-          <Show when={props.shortcut}>
-            <span class={`dialkit-shortcut-pill${props.shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`}>
-              {formatSliderShortcut(props.shortcut!)}
+              {props.valueIcon != null ? (
+                <span class="dialkit-slider-value dialkit-slider-value-icon">
+                  {props.valueIcon}
+                </span>
+              ) : showInput() ? (
+                <input
+                  ref={inputRef}
+                  type="text"
+                  class="dialkit-slider-input"
+                  value={inputValue()}
+                  onInput={(e) => setInputValue(e.currentTarget.value)}
+                  onKeyDown={handleInputKeyDown}
+                  onBlur={handleInputSubmit}
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <span
+                  class={`dialkit-slider-value ${isValueEditable() ? 'dialkit-slider-value-editable' : ''}`}
+                  onMouseEnter={() => setIsValueHovered(true)}
+                  onMouseLeave={() => setIsValueHovered(false)}
+                  onClick={handleValueClick}
+                  onPointerDown={(e) => isValueEditable() && e.stopPropagation()}
+                  style={{ cursor: isValueEditable() ? 'text' : 'default' }}
+                >
+                  {displayValue()}
+                  <Show when={props.unit}>
+                    <span class="dialkit-slider-unit">{props.unit}</span>
+                  </Show>
+                </span>
+              )}
+            </>
+          }
+        >
+          <div class="dialkit-slider-fill-area">
+            <div
+              ref={fillRef}
+              class="dialkit-slider-fill-vertical"
+              style={{
+                bottom: fillStart(fillPercent.get()),
+                height: fillExtent(fillPercent.get()),
+              }}
+            />
+          </div>
+
+          {showInput() ? (
+            <input
+              ref={inputRef}
+              type="text"
+              class="dialkit-slider-input dialkit-slider-input-vertical"
+              value={inputValue()}
+              onInput={(e) => setInputValue(e.currentTarget.value)}
+              onKeyDown={handleInputKeyDown}
+              onBlur={handleInputSubmit}
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span
+              class={`dialkit-slider-value-vertical ${isValueEditable() ? 'dialkit-slider-value-editable' : ''}`}
+              onMouseEnter={() => setIsValueHovered(true)}
+              onMouseLeave={() => setIsValueHovered(false)}
+              onClick={handleValueClick}
+              onPointerDown={(e) => isValueEditable() && e.stopPropagation()}
+              style={{ cursor: isValueEditable() ? 'text' : 'default' }}
+            >
+              {displayValue()}
+              <Show when={props.unit}>
+                <span class="dialkit-slider-unit">{props.unit}</span>
+              </Show>
             </span>
-          </Show>
-        </span>
+          )}
 
-        {showInput() ? (
-          <input
-            ref={inputRef}
-            type="text"
-            class="dialkit-slider-input"
-            value={inputValue()}
-            onInput={(e) => setInputValue(e.currentTarget.value)}
-            onKeyDown={handleInputKeyDown}
-            onBlur={handleInputSubmit}
-            onClick={(e) => e.stopPropagation()}
-            onMouseDown={(e) => e.stopPropagation()}
-          />
-        ) : (
-          <span
-            ref={valueSpanRef}
-            class={`dialkit-slider-value ${isValueEditable() ? 'dialkit-slider-value-editable' : ''}`}
-            onMouseEnter={() => setIsValueHovered(true)}
-            onMouseLeave={() => setIsValueHovered(false)}
-            onClick={handleValueClick}
-            onMouseDown={(e) => isValueEditable() && e.stopPropagation()}
-            style={{ cursor: isValueEditable() ? 'text' : 'default' }}
-          >
-            {displayValue()}
+          <span class="dialkit-slider-label-vertical">
+            {props.label}
+            {shortcutPill()}
           </span>
-        )}
+        </Show>
       </div>
     </div>
   );

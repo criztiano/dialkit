@@ -4,6 +4,7 @@
   import type { ControlMeta, DialValue, SpringConfig, TransitionConfig, ListItemValue, XYValue, RangeValue } from 'dialkit/store';
   import type { GradientValue } from '../../gradient-core';
   import Slider from './Slider.svelte';
+  import NumberControl from './NumberControl.svelte';
   import RangeSlider from './RangeSlider.svelte';
   import Toggle from './Toggle.svelte';
   import Folder from './Folder.svelte';
@@ -86,8 +87,25 @@
         min={control.min}
         max={control.max}
         step={control.step}
+        unit={control.unit}
+        formatValue={control.formatValue}
+        origin={control.origin}
+        bipolar={control.bipolar}
+        orientation={control.orientation}
         shortcut={control.shortcut}
         shortcutActive={isShortcutActive}
+      />
+    {:else if control.type === 'number'}
+      <NumberControl
+        label={control.label}
+        value={controlValue as number}
+        onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+        min={control.min}
+        max={control.max}
+        step={control.step}
+        unit={control.unit}
+        formatValue={control.formatValue}
+        orientation={control.orientation}
       />
     {:else if control.type === 'range'}
       <RangeSlider

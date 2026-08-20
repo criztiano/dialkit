@@ -1,15 +1,15 @@
 // Auto-generated from src/styles/theme.css — do not edit
-export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono when the host app ships
-   it, and fall back to the system monospace stack offline. A render-blocking
-   Google Fonts request has no place in a library stylesheet. */
+export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: System85 Mono Pro,
+   values: System85 Pro) are host-provided — licensing does not allow bundling
+   them in the package. Hosts that don't load them get the fallback stacks. */
 
-/* Dialkit Theme - Dark glassmorphic design */
+/* Dialkit Theme - instrument-panel design (Cri's Figma language) */
 .dialkit-root {
   /* Surfaces */
-  --dial-surface: rgba(255, 255, 255, 0.05);
-  --dial-surface-hover: rgba(255, 255, 255, 0.1);
-  --dial-surface-active: rgba(255, 255, 255, 0.11);
-  --dial-surface-subtle: rgba(255, 255, 255, 0.06);
+  --dial-surface: rgba(44, 44, 44, 0.7);
+  --dial-surface-hover: rgba(58, 58, 58, 0.75);
+  --dial-surface-active: rgba(64, 64, 64, 0.78);
+  --dial-surface-subtle: rgba(44, 44, 44, 0.55);
 
   /* Text hierarchy - 3 levels */
   --dial-text-root: #FFFFFF;   /* Root title */
@@ -39,12 +39,29 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
   --dial-affordance-armed: #818cf8;
   --dial-affordance-active: #a5b4fc;
 
-  /* Glassmorphic panel */
-  --dial-glass-bg: #212121;
+  /* Accent (active tab indicators, armed states) */
+  --dial-accent: #7a6fff;
+
+  /* Slider tracks — thin bottom-pinned rail + fill */
+  --dial-track: rgba(228, 228, 228, 0.05);
+  --dial-track-fill: rgba(228, 228, 228, 0.3);
+  --dial-track-fill-strong: #e4e4e4;
+
+  /* Type — labels are uppercase mono, values are the reading face */
+  --dial-font-label: 'System85 Mono Pro', 'Geist Mono', ui-monospace, monospace;
+  --dial-font-value: 'System85 Pro', system-ui, -apple-system, sans-serif;
+  --dial-font-size: 12px;
+  --dial-value-opacity: 0.7;
+
+  /* Panel */
+  --dial-glass-bg: #232424;
   --dial-dropdown-bg: #2a2a2a;
   --dial-backdrop-blur: 20px;
-  --dial-radius: 8px;
-  --dial-row-height: 36px;
+  --dial-radius: 2px;
+  --dial-radius-inner: 1px;
+  --dial-panel-padding: 6px;
+  --dial-panel-gap: 6px;
+  --dial-row-height: 28px;
   --dial-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   --dial-shadow-collapsed: 0 4px 16px rgba(0, 0, 0, 0.25);
   --dial-shadow-dropdown: 0 8px 24px rgba(0, 0, 0, 0.4);
@@ -65,7 +82,7 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
     0 2px 4px rgba(0, 0, 0, 0.16);
 
   /* Fonts */
-  font-family: system-ui, -apple-system, 'SF Pro Display', sans-serif;
+  font-family: var(--dial-font-value);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -165,10 +182,10 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
 .dialkit-panel-inner {
   background: var(--dial-glass-bg);
   border: 1px solid var(--dial-border);
-  border-radius: 14px;
+  border-radius: 6px;
   backdrop-filter: blur(var(--dial-backdrop-blur));
   -webkit-backdrop-filter: blur(var(--dial-backdrop-blur));
-  padding: 10px 12px 0 12px;
+  padding: var(--dial-panel-padding) var(--dial-panel-padding) 0;
   transform: translateZ(0);
   transform-origin: top right;
 }
@@ -547,8 +564,8 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
 .dialkit-folder-inner {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-bottom: 10px;
+  gap: var(--dial-panel-gap);
+  padding-bottom: var(--dial-panel-padding);
 }
 
 /* Non-root folders - top & bottom HR dividers */
@@ -693,7 +710,9 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
 }
 
 
-/* Slider */
+/* Slider — 28px card. Label top-left, value top-right, and a thin 4px track
+   pinned to the bottom edge. The WHOLE card is the pointer target: the visible
+   track is only 4px tall but the hit area is the full row (Cri's hotspot rule). */
 .dialkit-slider-wrapper {
   position: relative;
   height: var(--dial-row-height);
@@ -713,19 +732,32 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
   touch-action: none;
 }
 
+.dialkit-slider-track {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  height: 4px;
+  background: var(--dial-track);
+  border-radius: var(--dial-radius-inner);
+  pointer-events: none;
+}
+
 .dialkit-slider-hashmarks {
   position: absolute;
-  inset: 0;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  height: 4px;
   pointer-events: none;
 }
 
 .dialkit-slider-hashmark {
   position: absolute;
-  top: 50%;
+  top: 0;
+  bottom: 0;
   width: 1px;
-  height: 8px;
-  border-radius: 999px;
-  transform: translateX(-50%) translateY(-50%);
+  transform: translateX(-50%);
   background: rgba(255, 255, 255, 0);
   transition: background 200ms;
 }
@@ -743,20 +775,28 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
   top: 0;
   bottom: 0;
   left: 0;
-  background: var(--dial-surface-active);
+  background: var(--dial-track-fill);
+  border-radius: var(--dial-radius-inner);
   transition: background 0.15s;
   pointer-events: none;
 }
 
-.dialkit-slider-active .dialkit-slider-fill {
-  background: var(--dial-border-hover);
+/* Held: fill brightens to full strength while the pointer is down. */
+.dialkit-slider-engaged .dialkit-slider-fill {
+  background: var(--dial-track-fill-strong);
 }
 
+/* Bipolar/origin fill reads stronger even at rest (center-anchored bar). */
+.dialkit-slider[data-origin="true"] .dialkit-slider-fill {
+  background: var(--dial-track-fill-strong);
+}
+
+/* Drag-only precision tick, centered on the 4px rail (lives inside the track). */
 .dialkit-slider-handle {
   position: absolute;
-  top: 50%;
-  width: 3px;
-  height: 20px;
+  bottom: -2px;
+  width: 1px;
+  height: 8px;
   border-radius: 999px;
   background: var(--dial-text-primary);
   pointer-events: none;
@@ -764,12 +804,13 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
 
 .dialkit-slider-label {
   position: absolute;
-  left: 10px;
-  top: 50%;
-  transform: translateY(calc(-50% - 0.5px));
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--dial-text-label);
+  left: 4px;
+  top: 4px;
+  font-size: var(--dial-font-size);
+  font-weight: 400;
+  font-family: var(--dial-font-label);
+  text-transform: uppercase;
+  color: var(--dial-text-root);
   pointer-events: none;
   transition: color 0.15s;
   display: inline-flex;
@@ -778,13 +819,13 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
 
 .dialkit-slider-value {
   position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(calc(-50% + 0.5px));
-  font-size: 13px;
-  font-weight: 500;
-  font-family: 'Geist Mono', monospace;
-  color: var(--dial-text-label);
+  right: 4px;
+  top: 4px;
+  font-size: var(--dial-font-size);
+  font-weight: 400;
+  font-family: var(--dial-font-value);
+  color: var(--dial-text-root);
+  opacity: var(--dial-value-opacity);
   pointer-events: auto;
   transition: color 0.15s, border-color 0.15s;
   border-bottom: 1px solid transparent;
@@ -797,7 +838,6 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
 
 .dialkit-slider-unit {
   margin-left: 2px;
-  color: var(--dial-text-tertiary);
 }
 
 .dialkit-slider-value-icon {
@@ -815,15 +855,14 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
 
 .dialkit-slider-input {
   position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
+  right: 4px;
+  top: 4px;
   width: 4ch;
   min-width: 3ch;
   max-width: 6ch;
-  font-size: 13px;
-  font-weight: 500;
-  font-family: 'Geist Mono', monospace;
+  font-size: var(--dial-font-size);
+  font-weight: 400;
+  font-family: var(--dial-font-value);
   color: var(--dial-text-label);
   background: transparent;
   border: none;
@@ -835,6 +874,101 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
 
 .dialkit-slider-input:focus {
   color: var(--dial-text-focus);
+}
+
+/* Vertical slider — 77px column card. Fill grows bottom-up over the label,
+   uppercase mono label centered at the base. Value readout fades in over the
+   fill on hover/drag only. Whole card is the pointer target. */
+.dialkit-slider-wrapper-vertical {
+  height: 77px;
+  flex: 1;
+  min-width: 0;
+}
+
+.dialkit-slider-vertical {
+  overflow: hidden;
+}
+
+/* Fill region: above the label strip (label ~13px + 4px pad + 3px gap). */
+.dialkit-slider-fill-area {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  top: 8px;
+  bottom: 21px;
+  pointer-events: none;
+}
+
+.dialkit-slider-fill-vertical {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  min-height: 1px;
+  background: var(--dial-track-fill);
+  border-radius: var(--dial-radius);
+  transition: background 0.15s;
+  pointer-events: none;
+}
+
+.dialkit-slider-engaged .dialkit-slider-fill-vertical,
+.dialkit-slider-vertical[data-origin="true"] .dialkit-slider-fill-vertical {
+  background: var(--dial-track-fill-strong);
+}
+
+.dialkit-slider-label-vertical {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  bottom: 4px;
+  text-align: center;
+  font-size: var(--dial-font-size);
+  font-weight: 400;
+  font-family: var(--dial-font-label);
+  text-transform: uppercase;
+  color: var(--dial-text-root);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+/* Hover/drag-only readout floating over the fill area. */
+.dialkit-slider-value-vertical {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  top: 8px;
+  text-align: center;
+  font-size: var(--dial-font-size);
+  font-weight: 400;
+  font-family: var(--dial-font-value);
+  color: var(--dial-text-root);
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+  pointer-events: none;
+}
+
+.dialkit-slider-active .dialkit-slider-value-vertical {
+  opacity: var(--dial-value-opacity);
+  pointer-events: auto;
+}
+
+.dialkit-slider-value-vertical.dialkit-slider-value-editable {
+  border-bottom: none;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.dialkit-slider-input-vertical {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  top: 8px;
+  width: auto;
+  max-width: none;
+  text-align: center;
+  transform: none;
 }
 
 /* Range Slider — dual-handle sibling of the slider. Track is identical; the fill
@@ -858,29 +992,47 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
   touch-action: none;
 }
 
+/* Bottom rail behind the between-handles fill (fill spans card percentages,
+   so the rail runs the full card width to stay aligned with it). */
+.dialkit-range-slider::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 4px;
+  height: 4px;
+  background: var(--dial-track);
+  border-radius: var(--dial-radius-inner);
+  pointer-events: none;
+}
+
 .dialkit-range-slider-fill {
   position: absolute;
-  top: 0;
-  bottom: 0;
+  bottom: 4px;
+  height: 4px;
   left: 0;
-  background: var(--dial-surface-active);
+  background: var(--dial-track-fill);
+  border-radius: var(--dial-radius-inner);
   transition: background 0.15s;
   pointer-events: none;
 }
 
 .dialkit-range-slider-active .dialkit-range-slider-fill {
-  background: var(--dial-border-hover);
+  background: var(--dial-track-fill-strong);
 }
 
 .dialkit-range-slider-active .dialkit-range-slider-value {
   color: var(--dial-text-focus);
 }
 
+/* Bottom-anchored tick; the component applies translateY(-50%), so the
+   -2px bottom lands the 8px tick centered on the 4px rail. */
 .dialkit-range-slider-handle {
   position: absolute;
-  top: 50%;
-  width: 3px;
-  height: 20px;
+  top: auto;
+  bottom: -2px;
+  width: 1px;
+  height: 8px;
   border-radius: 999px;
   background: var(--dial-text-primary);
   pointer-events: none;
@@ -888,12 +1040,13 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
 
 .dialkit-range-slider-label {
   position: absolute;
-  left: 10px;
-  top: 50%;
-  transform: translateY(calc(-50% - 0.5px));
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--dial-text-label);
+  left: 4px;
+  top: 4px;
+  font-size: var(--dial-font-size);
+  font-weight: 400;
+  font-family: var(--dial-font-label);
+  text-transform: uppercase;
+  color: var(--dial-text-root);
   pointer-events: none;
   transition: color 0.15s;
   display: inline-flex;
@@ -902,13 +1055,13 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
 
 .dialkit-range-slider-value {
   position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(calc(-50% + 0.5px));
-  font-size: 13px;
-  font-weight: 500;
-  font-family: 'Geist Mono', monospace;
-  color: var(--dial-text-label);
+  right: 4px;
+  top: 4px;
+  font-size: var(--dial-font-size);
+  font-weight: 400;
+  font-family: var(--dial-font-value);
+  color: var(--dial-text-root);
+  opacity: var(--dial-value-opacity);
   pointer-events: auto;
   transition: color 0.15s;
   display: inline-flex;
@@ -935,15 +1088,14 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
 
 .dialkit-range-slider-input {
   position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
+  right: 4px;
+  top: 4px;
   width: 4ch;
   min-width: 3ch;
   max-width: 6ch;
-  font-size: 13px;
-  font-weight: 500;
-  font-family: 'Geist Mono', monospace;
+  font-size: var(--dial-font-size);
+  font-weight: 400;
+  font-family: var(--dial-font-value);
   color: var(--dial-text-label);
   background: transparent;
   border: none;
@@ -954,6 +1106,91 @@ export const themeCSS = `/* No webfont import: numeric readouts use Geist Mono w
 }
 
 .dialkit-range-slider-input:focus {
+  color: var(--dial-text-focus);
+}
+
+/* Number Control — numeric readout card. Drag anywhere on the card to scrub
+   the value; click to type. Horizontal = label left / value right;
+   vertical = column card with the value under the label. */
+.dialkit-number-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--dial-row-height);
+  padding: 0 8px;
+  background: var(--dial-surface);
+  border-radius: var(--dial-radius);
+  cursor: ew-resize;
+  user-select: none;
+  touch-action: none;
+  box-sizing: border-box;
+}
+
+.dialkit-number-control-vertical {
+  height: auto;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px;
+  cursor: ns-resize;
+  flex: 1;
+  min-width: 0;
+}
+
+.dialkit-number-label {
+  font-size: var(--dial-font-size);
+  font-weight: 400;
+  font-family: var(--dial-font-label);
+  text-transform: uppercase;
+  color: var(--dial-text-root);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.dialkit-number-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: var(--dial-font-size);
+  font-weight: 400;
+  font-family: var(--dial-font-value);
+  color: var(--dial-text-root);
+  opacity: var(--dial-value-opacity);
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+
+.dialkit-number-control-engaged .dialkit-number-value {
+  opacity: 1;
+}
+
+.dialkit-number-value-editable {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: text;
+}
+
+.dialkit-number-input {
+  width: 6ch;
+  min-width: 4ch;
+  font-size: var(--dial-font-size);
+  font-weight: 400;
+  font-family: var(--dial-font-value);
+  color: var(--dial-text-label);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--dial-text-label);
+  padding: 0 0 1px 0;
+  outline: none;
+  text-align: right;
+}
+
+.dialkit-number-control-vertical .dialkit-number-input {
+  text-align: center;
+}
+
+.dialkit-number-input:focus {
   color: var(--dial-text-focus);
 }
 
@@ -3346,6 +3583,11 @@ input.dialkit-list-item-title:focus {
   --dial-affordance-armed: #4f46e5;
   --dial-affordance-active: #4338ca;
 
+  --dial-accent: #7a6fff;
+  --dial-track: rgba(20, 20, 20, 0.06);
+  --dial-track-fill: rgba(20, 20, 20, 0.3);
+  --dial-track-fill-strong: #1a1a1a;
+
   --dial-glass-bg: #fafafa;
   --dial-dropdown-bg: #ffffff;
   --dial-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
@@ -3399,6 +3641,11 @@ input.dialkit-list-item-title:focus {
     --dial-affordance-idle: rgba(0, 0, 0, 0.2);
     --dial-affordance-armed: #4f46e5;
     --dial-affordance-active: #4338ca;
+
+    --dial-accent: #7a6fff;
+    --dial-track: rgba(20, 20, 20, 0.06);
+    --dial-track-fill: rgba(20, 20, 20, 0.3);
+    --dial-track-fill-strong: #1a1a1a;
 
     --dial-glass-bg: #fafafa;
     --dial-dropdown-bg: #ffffff;

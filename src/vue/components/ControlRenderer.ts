@@ -12,6 +12,7 @@ import type { GradientValue } from '../../gradient-core';
 import { ColorControl } from './ColorControl';
 import { Folder } from './Folder';
 import { ModuleFolder } from './ModuleFolder';
+import { NumberControl } from './NumberControl';
 import { ControlShell } from './ControlShell';
 import { GradientControl } from './GradientControl';
 import { RangeSlider } from './RangeSlider';
@@ -51,8 +52,22 @@ export const ControlRenderer = defineComponent({
             min: control.min,
             max: control.max,
             step: control.step,
+            orientation: control.orientation,
             shortcut: control.shortcut,
             shortcutActive: isShortcutActive(control.path),
+            onChange: (next: number) => DialStore.updateValue(props.panelId, control.path, next),
+          });
+        case 'number':
+          return h(NumberControl, {
+            key: control.path,
+            label: control.label,
+            value: value as number,
+            min: control.min,
+            max: control.max,
+            step: control.step,
+            unit: control.unit,
+            formatValue: control.formatValue,
+            orientation: control.orientation,
             onChange: (next: number) => DialStore.updateValue(props.panelId, control.path, next),
           });
         case 'range':
