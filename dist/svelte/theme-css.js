@@ -798,12 +798,22 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   height: var(--dial-row-height);
 }
 
+/* Label and value read as one phrase at the left, 12px apart, rather than
+   facing each other across the card. The track, fill, hashmarks and handle are
+   all absolutely positioned, so they sit out of this flex flow untouched —
+   and out of the padding too, since an absolute child is placed against the
+   padding edge, not inside it. */
 .dialkit-slider {
   position: absolute;
   top: 0;
   left: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
   width: 100%;
   height: 100%;
+  padding: 2px 4px 0;
+  box-sizing: border-box;
   cursor: pointer;
   user-select: none;
   overflow: hidden;
@@ -883,9 +893,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 }
 
 .dialkit-slider-label {
-  position: absolute;
-  left: 4px;
-  top: 2px;
+  position: static;
   font-size: var(--dial-font-size);
   font-weight: 400;
   font-family: var(--dial-font-label);
@@ -899,9 +907,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 }
 
 .dialkit-slider-value {
-  position: absolute;
-  right: 4px;
-  top: 2px;
+  position: static;
   font-size: var(--dial-font-size);
   font-weight: 400;
   font-family: var(--dial-font-value);
@@ -962,9 +968,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 }
 
 .dialkit-slider-input {
-  position: absolute;
-  right: 4px;
-  top: 2px;
+  position: static;
   width: 4ch;
   min-width: 3ch;
   max-width: 6ch;
@@ -1845,7 +1849,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 .dialkit-text-control {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   height: var(--dial-row-height);
   padding: 0 8px;
@@ -1863,16 +1867,21 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 .dialkit-text-input {
   flex: 1;
   min-width: 0;
-  font-family: inherit;
-  font-size: 13px;
+  font-family: var(--dial-font-value);
+  font-size: var(--dial-font-size);
   font-weight: 400;
-  color: var(--dial-text-label);
+  color: var(--dial-text-root);
+  opacity: var(--dial-value-opacity);
   background: transparent;
   border: none;
   padding: 0;
   outline: none;
-  text-align: right;
+  text-align: left;
   cursor: text;
+}
+
+.dialkit-text-input:focus {
+  opacity: 1;
 }
 
 .dialkit-text-input:focus {
@@ -1889,8 +1898,9 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 
 .dialkit-select-trigger {
   display: flex;
+  gap: 12px;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   width: 100%;
   height: var(--dial-row-height);
   padding: 0 8px;
@@ -1921,10 +1931,15 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   transform: translateY(-0.5px);
 }
 
+/* The value follows the label; the caret keeps the far edge, where "this
+   opens" belongs. Pushed there by its own margin rather than by
+   space-between, so a row with a swatch keeps swatch and value together. */
 .dialkit-select-right {
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: flex-start;
+  gap: 6px;
+  flex: 1;
   min-width: 0;
 }
 
@@ -1946,6 +1961,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   padding: 2px;
   box-sizing: border-box;
   flex-shrink: 0;
+  margin-left: auto;
   opacity: 0.35;
 }
 
