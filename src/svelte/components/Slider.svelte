@@ -156,7 +156,7 @@
       if (raw === 0) return;
 
       const stepMultiplier = e.shiftKey ? 10 : e.altKey ? 0.1 : 1;
-      const delta = (raw > 0 ? -1 : 1) * step * stepMultiplier;
+      const delta = (raw > 0 ? 1 : -1) * step * stepMultiplier;
       // A trackpad fires several wheel events per frame, all before the new
       // value comes back — so each notch reads the running value, not the stale prop.
       const next = roundValue(Math.max(min, Math.min(max, wheelValue + delta)), step);

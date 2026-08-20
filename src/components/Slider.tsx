@@ -338,7 +338,7 @@ export function Slider({
       if (raw === 0) return;
 
       const stepMultiplier = e.shiftKey ? 10 : e.altKey ? 0.1 : 1;
-      const delta = (raw > 0 ? -1 : 1) * step * stepMultiplier;
+      const delta = (raw > 0 ? 1 : -1) * step * stepMultiplier;
       // A trackpad fires several wheel events per frame, all before React can
       // re-render — so each notch reads the running value, not the stale prop.
       const next = roundValue(

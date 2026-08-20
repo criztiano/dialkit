@@ -281,7 +281,7 @@ export const Slider = defineComponent({
       if (raw === 0) return;
 
       const stepMultiplier = event.shiftKey ? 10 : event.altKey ? 0.1 : 1;
-      const delta = (raw > 0 ? -1 : 1) * step.value * stepMultiplier;
+      const delta = (raw > 0 ? 1 : -1) * step.value * stepMultiplier;
       // A trackpad fires several wheel events per frame, all before the value
       // prop comes back — so each notch reads the running value, not the stale prop.
       const next = roundValue(

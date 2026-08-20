@@ -542,29 +542,22 @@ function Card({ title, desc, code, children }: { title: string; desc: string; co
   );
 }
 
+/* The showcase speaks the same language as the kit it shows: flat surfaces,
+   no borders and no gradients, one accent, and System85 throughout — mono and
+   uppercase for anything that names a thing, the reading face for prose. */
 const CSS = `
 .lib-page {
   --lib-bg: #161616;
-  --lib-accent: #ff5a3c;
+  --lib-accent: var(--dial-accent);
   height: 100vh;
   overflow-y: auto;
   background: var(--lib-bg);
   color: var(--dial-text-root);
+  font-family: var(--dial-font-value);
   box-sizing: border-box;
 }
 .lib-page[data-theme="light"] { --lib-bg: #efefef; }
 .lib-page *, .lib-page *::before, .lib-page *::after { box-sizing: border-box; }
-
-.lib-page::before {
-  content: '';
-  position: fixed;
-  top: -180px; left: 50%;
-  width: 900px; height: 420px;
-  transform: translateX(-50%);
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--lib-accent) 18%, transparent), transparent);
-  pointer-events: none;
-  z-index: 0;
-}
 
 .lib-header, .lib-main, .lib-footer {
   position: relative;
@@ -577,34 +570,34 @@ const CSS = `
 .lib-header { padding-top: 28px; padding-bottom: 24px; }
 .lib-header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px; }
 
-.lib-back { font-size: 13px; font-weight: 500; color: var(--dial-text-label); text-decoration: none; transition: color 0.15s; }
+.lib-back { font-family: var(--dial-font-label); font-size: 12px; text-transform: uppercase; color: var(--dial-text-label); text-decoration: none; transition: color 0.15s; }
 .lib-back:hover { color: var(--dial-text-root); }
 
-.lib-theme-switch { display: inline-flex; padding: 3px; gap: 2px; background: var(--dial-surface); border: 1px solid var(--dial-border); border-radius: 999px; }
-.lib-theme-btn { font-family: inherit; font-size: 12px; font-weight: 600; padding: 5px 14px; border: none; border-radius: 999px; background: transparent; color: var(--dial-text-label); cursor: pointer; transition: background 0.18s, color 0.18s; }
-.lib-theme-btn[data-active="true"] { background: var(--dial-surface-active); color: var(--dial-text-root); }
+.lib-theme-switch { display: inline-flex; gap: 4px; }
+.lib-theme-btn { font-family: var(--dial-font-label); font-size: 12px; text-transform: uppercase; padding: 5px 10px; border: none; border-radius: var(--dial-radius); background: var(--dial-surface); color: var(--dial-text-label); cursor: pointer; transition: background 0.18s, color 0.18s; }
+.lib-theme-btn[data-active="true"] { background: var(--dial-text-root); color: var(--lib-bg); }
 
-.lib-eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--dial-text-tertiary); }
-.lib-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--lib-accent); box-shadow: 0 0 12px var(--lib-accent); }
+.lib-eyebrow { display: inline-flex; align-items: center; gap: 8px; font-family: var(--dial-font-label); font-size: 12px; text-transform: uppercase; color: var(--dial-text-tertiary); }
+.lib-dot { width: 8px; height: 8px; border-radius: var(--dial-radius); background: var(--lib-accent); }
 
-.lib-title { margin: 14px 0 0; font-size: clamp(34px, 6vw, 56px); font-weight: 600; letter-spacing: -0.03em; line-height: 1.02; }
-.lib-lead { margin: 16px 0 0; max-width: 600px; font-size: 16px; line-height: 1.55; color: var(--dial-text-section); }
-.lib-lead code { font-family: 'Geist Mono', monospace; font-size: 0.9em; padding: 1px 5px; border-radius: 5px; background: var(--dial-surface); color: var(--dial-text-root); }
+.lib-title { margin: 14px 0 0; font-family: var(--dial-font-value); font-size: clamp(32px, 5vw, 48px); font-weight: 400; letter-spacing: 0; line-height: 1.1; }
+.lib-lead { margin: 16px 0 0; max-width: 600px; font-size: 15px; line-height: 1.6; color: var(--dial-text-section); }
+.lib-lead code { font-family: var(--dial-font-label); font-size: 0.92em; padding: 1px 5px; border-radius: var(--dial-radius); background: var(--dial-surface); color: var(--dial-text-root); }
 
 .lib-main { padding-bottom: 8px; }
 .lib-section { padding-top: 36px; }
-.lib-section-head { padding-bottom: 18px; margin-bottom: 22px; border-bottom: 1px solid var(--dial-surface-subtle); }
-.lib-section-headline { display: flex; align-items: baseline; gap: 12px; }
-.lib-section-index { font-family: 'Geist Mono', monospace; font-size: 13px; font-weight: 500; color: var(--lib-accent); }
-.lib-section-title { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
-.lib-section-count { font-family: 'Geist Mono', monospace; font-size: 12px; font-weight: 500; color: var(--dial-text-tertiary); padding: 2px 8px; border-radius: 999px; background: var(--dial-surface); }
-.lib-section-hint { margin: 10px 0 0; font-size: 13.5px; color: var(--dial-text-tertiary); }
+.lib-section-head { padding-bottom: 16px; margin-bottom: 20px; }
+.lib-section-headline { display: flex; align-items: center; gap: 10px; }
+.lib-section-index { font-family: var(--dial-font-label); font-size: 12px; color: var(--lib-accent); }
+.lib-section-title { margin: 0; font-family: var(--dial-font-label); font-size: 18px; font-weight: 400; text-transform: uppercase; letter-spacing: 0; }
+.lib-section-count { font-family: var(--dial-font-label); font-size: 12px; color: var(--dial-text-tertiary); padding: 2px 6px; border-radius: var(--dial-radius); background: var(--dial-surface); }
+.lib-section-hint { margin: 10px 0 0; font-size: 13px; line-height: 1.55; color: var(--dial-text-tertiary); }
 
-/* Tab bar for the slider type switcher — mirrors the theme switch pill group */
-.lib-tabs { display: inline-flex; align-self: center; margin-left: auto; padding: 3px; gap: 2px; background: var(--dial-surface); border: 1px solid var(--dial-border); border-radius: 999px; }
-.lib-tab { font-family: inherit; font-size: 12px; font-weight: 600; padding: 5px 12px; border: none; border-radius: 999px; background: transparent; color: var(--dial-text-label); cursor: pointer; transition: background 0.18s, color 0.18s; }
+/* Tab bar for the slider type switcher — the panel's tab idiom, in miniature */
+.lib-tabs { display: inline-flex; align-self: center; margin-left: auto; gap: 4px; }
+.lib-tab { font-family: var(--dial-font-label); font-size: 12px; text-transform: uppercase; padding: 5px 10px; border: none; border-radius: var(--dial-radius); background: var(--dial-surface); color: var(--dial-text-label); cursor: pointer; transition: background 0.18s, color 0.18s; }
 .lib-tab:hover { color: var(--dial-text-root); }
-.lib-tab[data-active="true"] { background: var(--dial-surface-active); color: var(--dial-text-root); }
+.lib-tab[data-active="true"] { background: var(--dial-text-root); color: var(--lib-bg); }
 
 /* Surface the ShortcutsMenu trigger (normally inside a panel) on the section head */
 .lib-section-headline .dialkit-shortcuts-trigger { margin-left: auto; align-self: center; }
@@ -613,23 +606,23 @@ const CSS = `
 /* Single-control sections show one card at a comfortable, contained width */
 .lib-single { max-width: 460px; }
 
-.lib-card { display: flex; flex-direction: column; background: var(--dial-glass-bg); border: 1px solid var(--dial-border); border-radius: 16px; padding: 14px; transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease; }
-.lib-card:hover { transform: translateY(-2px); border-color: var(--dial-border-hover); box-shadow: var(--dial-shadow); }
+.lib-card { display: flex; flex-direction: column; background: var(--dial-glass-bg); border: none; border-radius: var(--dial-radius); padding: 14px; transition: background 0.18s ease; }
+.lib-card:hover { background: var(--dial-dropdown-bg); }
 
 .lib-stage { display: flex; flex-direction: column; gap: 6px; padding: 4px 0 16px; }
 .lib-viz { padding: 4px 0; }
 
 .lib-gradient-demo { display: flex; flex-direction: column; gap: 10px; }
-.lib-gradient-swatch { position: relative; overflow: hidden; width: 100%; height: 72px; border-radius: 10px; border: 1px solid var(--dial-border); }
+.lib-gradient-swatch { position: relative; overflow: hidden; width: 100%; height: 72px; border-radius: var(--dial-radius); }
 .lib-gradient-clip { position: absolute; inset: 0; overflow: hidden; z-index: 0; }
 
-.lib-action-log { font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--dial-text-tertiary); padding-left: 2px; }
+.lib-action-log { font-family: var(--dial-font-label); font-size: 11px; text-transform: uppercase; color: var(--dial-text-tertiary); padding-left: 2px; }
 .lib-action-log span { color: var(--dial-text-label); }
 
-.lib-meta { border-top: 1px solid var(--dial-surface-subtle); padding-top: 14px; }
-.lib-card-title { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; color: var(--dial-text-root); }
-.lib-card-desc { margin: 6px 0 12px; font-size: 12.5px; line-height: 1.5; color: var(--dial-text-section); min-height: 38px; }
-.lib-code { display: block; font-family: 'Geist Mono', monospace; font-size: 11.5px; line-height: 1.5; color: var(--dial-text-label); background: var(--dial-surface); border: 1px solid var(--dial-border); border-radius: 8px; padding: 8px 10px; white-space: pre; overflow-x: auto; }
+.lib-meta { padding-top: 14px; }
+.lib-card-title { font-family: var(--dial-font-label); font-size: 12px; text-transform: uppercase; color: var(--dial-text-root); }
+.lib-card-desc { margin: 6px 0 12px; font-size: 12.5px; line-height: 1.55; color: var(--dial-text-section); min-height: 38px; }
+.lib-code { display: block; font-family: var(--dial-font-label); font-size: 11.5px; line-height: 1.5; color: var(--dial-text-label); background: var(--dial-surface); border: none; border-radius: var(--dial-radius); padding: 8px 10px; white-space: pre; overflow-x: auto; }
 .lib-code::-webkit-scrollbar { height: 0; }
 
 /* Live panel section */
@@ -639,14 +632,12 @@ const CSS = `
   display: flex; align-items: center; justify-content: center;
   min-height: 540px;
   background: var(--dial-glass-bg);
-  border: 1px solid var(--dial-border);
-  border-radius: 16px;
+  border-radius: var(--dial-radius);
 }
 .lib-window {
   height: 540px;
   background: var(--dial-glass-bg);
-  border: 1px solid var(--dial-border);
-  border-radius: 16px;
+  border-radius: var(--dial-radius);
   overflow: hidden;
   padding: 4px;
 }

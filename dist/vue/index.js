@@ -4734,7 +4734,7 @@ var ShortcutListener = defineComponent14({
           if (interaction !== "scroll" || control.type !== "slider") continue;
           e.preventDefault();
           const effectiveStep2 = getEffectiveStep(control, control.shortcut);
-          const direction = e.deltaY > 0 ? -1 : 1;
+          const direction = e.deltaY > 0 ? 1 : -1;
           applySliderDelta(panelId, path, control, effectiveStep2, direction);
           return;
         }
@@ -4744,7 +4744,7 @@ var ShortcutListener = defineComponent14({
         if (control.type !== "slider") continue;
         e.preventDefault();
         const effectiveStep2 = getEffectiveStep(control, shortcut);
-        const direction = e.deltaY > 0 ? -1 : 1;
+        const direction = e.deltaY > 0 ? 1 : -1;
         applySliderDelta(panelId, path, control, effectiveStep2, direction);
         return;
       }
@@ -5057,7 +5057,7 @@ var Slider = defineComponent15({
       const raw = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
       if (raw === 0) return;
       const stepMultiplier = event.shiftKey ? 10 : event.altKey ? 0.1 : 1;
-      const delta = (raw > 0 ? -1 : 1) * step.value * stepMultiplier;
+      const delta = (raw > 0 ? 1 : -1) * step.value * stepMultiplier;
       const next = roundValue(
         Math.max(min.value, Math.min(max.value, wheelValue + delta)),
         step.value

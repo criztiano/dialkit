@@ -151,7 +151,7 @@
 
         e.preventDefault();
         const effectiveStep = getEffectiveStep(control, control.shortcut!);
-        const direction = e.deltaY > 0 ? -1 : 1;
+        const direction = e.deltaY > 0 ? 1 : -1;
         applySliderDelta(panelId, path, control, effectiveStep, direction);
         return;
       }
@@ -164,7 +164,7 @@
 
       e.preventDefault();
       const effectiveStep = getEffectiveStep(control, shortcut);
-      const direction = e.deltaY > 0 ? -1 : 1;
+      const direction = e.deltaY > 0 ? 1 : -1;
       applySliderDelta(panelId, path, control, effectiveStep, direction);
       return;
     }

@@ -3503,7 +3503,7 @@ function ShortcutListener(props) {
           if (interaction !== "scroll" || control.type !== "slider") continue;
           e.preventDefault();
           const effectiveStep2 = getEffectiveStep(control, control.shortcut);
-          const direction = e.deltaY > 0 ? -1 : 1;
+          const direction = e.deltaY > 0 ? 1 : -1;
           applySliderDelta(panelId, path, control, effectiveStep2, direction);
           return;
         }
@@ -3518,7 +3518,7 @@ function ShortcutListener(props) {
         if (control.type !== "slider") continue;
         e.preventDefault();
         const effectiveStep2 = getEffectiveStep(control, shortcut);
-        const direction = e.deltaY > 0 ? -1 : 1;
+        const direction = e.deltaY > 0 ? 1 : -1;
         applySliderDelta(panelId, path, control, effectiveStep2, direction);
         return;
       }
@@ -4613,7 +4613,7 @@ function Slider(props) {
       const raw = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
       if (raw === 0) return;
       const stepMultiplier = e.shiftKey ? 10 : e.altKey ? 0.1 : 1;
-      const delta = (raw > 0 ? -1 : 1) * step() * stepMultiplier;
+      const delta = (raw > 0 ? 1 : -1) * step() * stepMultiplier;
       const next = roundValue(Math.max(min(), Math.min(max(), wheelValue + delta)), step());
       wheelValue = next;
       if (snapAnim) {

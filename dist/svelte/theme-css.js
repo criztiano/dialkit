@@ -58,7 +58,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   --dial-glass-bg: #232424;
   --dial-dropdown-bg: #2a2a2a;
   --dial-backdrop-blur: 20px;
-  --dial-radius: 2px;
+  --dial-radius: 3px;
   --dial-radius-inner: 1px;
   --dial-panel-padding: 6px;
   --dial-panel-gap: 6px;
@@ -142,6 +142,25 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   font-family: var(--dial-font-value);
   font-size: var(--dial-font-size);
   font-weight: 400;
+}
+
+/* Slider text runs tighter than the rest: the card is only 28px and the rail
+   sits under it, so a smaller line box is what buys the text room to breathe
+   above the fill. */
+.dialkit-root .dialkit-slider-label,
+.dialkit-root .dialkit-slider-value,
+.dialkit-root .dialkit-slider-input,
+.dialkit-root .dialkit-range-slider-label,
+.dialkit-root .dialkit-range-slider-value,
+.dialkit-root .dialkit-range-slider-input {
+  line-height: 14px;
+}
+
+/* Form controls do not inherit line-height — the UA stylesheet pins them to
+   \`normal\`, which is the short box that shears System85's descenders off. */
+.dialkit-root input,
+.dialkit-root textarea {
+  line-height: 1.35;
 }
 
 /* Field labels inside the colour picker keep their own small size. */
@@ -259,7 +278,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 .dialkit-panel-inner {
   background: var(--dial-glass-bg);
   border: 1px solid var(--dial-border);
-  border-radius: 6px;
+  border-radius: var(--dial-radius);
   backdrop-filter: blur(var(--dial-backdrop-blur));
   -webkit-backdrop-filter: blur(var(--dial-backdrop-blur));
   padding: var(--dial-panel-padding) var(--dial-panel-padding) 0;
@@ -347,8 +366,8 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 
 /* Folder */
 .dialkit-folder {
-  padding-bottom: 8px;
-  margin-bottom: 8px;
+  padding-bottom: 0;
+  margin-bottom: 0;
 }
 
 .dialkit-folder:last-child:not(.dialkit-folder-root) {
@@ -387,7 +406,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 
 .dialkit-folder-title {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--dial-text-section);
   letter-spacing: -0.01em;
   transform: translateY(-0.5px);
@@ -396,7 +415,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 
 .dialkit-folder-title-root {
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--dial-text-root);
   transform: translateZ(0);
 }
@@ -430,7 +449,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   z-index: 20;
   padding: 6px 8px;
   border: 1px solid var(--dial-border);
-  border-radius: 7px;
+  border-radius: var(--dial-radius);
   background: var(--dial-dropdown-bg);
   box-shadow: var(--dial-shadow-dropdown);
   color: var(--dial-text-secondary);
@@ -569,7 +588,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   box-sizing: border-box;
   padding: 8px;
   border: 1px solid var(--dial-border);
-  border-radius: 10px;
+  border-radius: var(--dial-radius);
   background: var(--dial-dropdown-bg);
   box-shadow: var(--dial-shadow-dropdown);
 }
@@ -579,7 +598,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   margin-bottom: 6px;
   color: var(--dial-text-tertiary);
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -643,10 +662,12 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   padding-bottom: var(--dial-panel-padding);
 }
 
-/* Non-root folders — separated by space alone, never by a rule. */
+/* Non-root folders — separated by space alone, never by a rule. The space a
+   section owns sits between the title and its rows, not stacked above and
+   below the whole block. */
 .dialkit-folder:not(.dialkit-folder-root) {
-  margin-top: 4px;
-  margin-bottom: 4px;
+  margin-top: 0;
+  margin-bottom: 0;
   padding-bottom: 0;
 }
 
@@ -654,10 +675,11 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   margin-top: 0;
 }
 
-/* Non-root folder header — a section title breathes above its rows. */
+/* Non-root folder header — the title sits close to the section above it and
+   holds its rows at arm's length below. */
 .dialkit-folder:not(.dialkit-folder-root) > .dialkit-folder-header {
   height: auto;
-  padding: 8px 0 2px;
+  padding: 2px 0 8px;
 }
 
 .dialkit-folder:not(.dialkit-folder-root) > .dialkit-folder-header > .dialkit-folder-header-top {
@@ -693,7 +715,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   flex: 1;
   min-width: 0;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--dial-text-section);
   letter-spacing: -0.01em;
   overflow: hidden;
@@ -755,7 +777,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 .dialkit-module-folder > .dialkit-module-header {
   box-sizing: border-box;
   min-height: var(--dial-row-height);
-  padding: 8px 10px 2px 0;
+  padding: 2px 10px 8px 0;
 }
 
 .dialkit-module-folder[data-open='true'] {
@@ -855,7 +877,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   bottom: -2px;
   width: 1px;
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--dial-radius);
   background: var(--dial-text-primary);
   pointer-events: none;
 }
@@ -873,6 +895,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   transition: color 0.15s;
   display: inline-flex;
   align-items: center;
+  line-height: 14px;
 }
 
 .dialkit-slider-value {
@@ -888,6 +911,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   transition: color 0.15s, border-color 0.15s;
   border-bottom: 1px solid transparent;
   padding-bottom: 1px;
+  line-height: 14px;
 }
 
 .dialkit-slider-value-editable {
@@ -954,6 +978,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   padding: 0 0 1px 0;
   outline: none;
   text-align: right;
+  line-height: 14px;
 }
 
 .dialkit-slider-input:focus {
@@ -1117,7 +1142,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   bottom: -2px;
   width: 2px;
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--dial-radius);
   background: var(--dial-text-primary);
   pointer-events: none;
 }
@@ -1135,6 +1160,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   transition: color 0.15s;
   display: inline-flex;
   align-items: center;
+  line-height: 14px;
 }
 
 .dialkit-range-slider-value {
@@ -1151,6 +1177,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  line-height: 14px;
 }
 
 .dialkit-range-slider-dash {
@@ -1187,6 +1214,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   padding: 0 0 1px 0;
   outline: none;
   text-align: right;
+  line-height: 14px;
 }
 
 .dialkit-range-slider-input:focus {
@@ -1307,7 +1335,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   padding: 6px 8px;
   font-family: inherit;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   background: transparent;
   border: none;
   cursor: pointer;
@@ -1341,7 +1369,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 
 .dialkit-toggle-label {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
   transition: color 0.15s;
 }
@@ -1384,7 +1412,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   padding: 10px 16px;
   font-family: inherit;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-secondary);
   background: var(--dial-surface);
   border: none;
@@ -1418,7 +1446,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   display: flex;
   align-items: center;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
   flex-shrink: 0;
   line-height: 17px;
@@ -1454,7 +1482,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   padding: 10px 16px;
   font-family: inherit;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-secondary);
   background: var(--dial-surface);
   border: none;
@@ -1507,7 +1535,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 
 .dialkit-curve-label {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
 }
 
@@ -1569,7 +1597,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   width: 22px;
   height: 22px;
   padding: 0;
-  border-radius: 6px;
+  border-radius: var(--dial-radius);
   border: 1px solid var(--dial-border);
   background: var(--dial-surface-active);
   color: var(--dial-text-root);
@@ -1628,9 +1656,9 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   padding: 0;
   font-family: inherit;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1;
-  border-radius: 6px;
+  border-radius: var(--dial-radius);
   border: 1px solid var(--dial-border);
   background: var(--dial-surface-active);
   color: var(--dial-text-root);
@@ -1827,7 +1855,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 
 .dialkit-text-label {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
   flex-shrink: 0;
 }
@@ -1837,7 +1865,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   min-width: 0;
   font-family: inherit;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
   background: transparent;
   border: none;
@@ -1868,7 +1896,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   padding: 0 8px;
   font-family: inherit;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
   background: var(--dial-surface);
   border: none;
@@ -1887,7 +1915,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 
 .dialkit-select-label {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
   flex-shrink: 0;
   transform: translateY(-0.5px);
@@ -1974,7 +2002,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   padding: 0 8px;
   font-family: inherit;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
   background: var(--dial-surface);
   border: none;
@@ -1989,7 +2017,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 
 .dialkit-file-label {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
   flex-shrink: 0;
   transform: translateY(-0.5px);
@@ -2011,7 +2039,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 
 .dialkit-file-name {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2067,7 +2095,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   flex-shrink: 0;
   width: 30px;
   height: 16px;
-  border-radius: 4px;
+  border-radius: var(--dial-radius);
   overflow: hidden;
   box-shadow: inset 0 0 0 1px var(--dial-border);
 }
@@ -2102,7 +2130,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 
 .dialkit-chips-label {
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
   padding-left: 2px;
 }
@@ -2113,42 +2141,47 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   gap: 6px;
 }
 
+/* A selected chip inverts — bright ground, dark text, no outline. The state
+   is the fill itself, so nothing has to be drawn around it. */
 .dialkit-chip {
   display: inline-flex;
   align-items: stretch;
   background: var(--dial-surface);
   border-radius: var(--dial-radius);
   overflow: hidden;
-  box-shadow: inset 0 0 0 1px transparent;
-  transition: background 0.15s, box-shadow 0.15s;
+  transition: background 0.15s;
 }
 
 .dialkit-chip[data-active="true"] {
-  background: var(--dial-surface-active);
-  box-shadow: inset 0 0 0 1px var(--dial-text-root);
+  background: var(--dial-text-root);
 }
 
 .dialkit-chip-select {
-  padding: 6px 11px;
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--dial-text-label);
+  padding: 5px 8px;
+  font-family: var(--dial-font-value);
+  font-size: var(--dial-font-size);
+  font-weight: 400;
+  color: var(--dial-text-root);
+  opacity: var(--dial-value-opacity);
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: color 0.15s;
+  transition: color 0.15s, opacity 0.15s;
 }
 
-.dialkit-chip-select:hover,
+.dialkit-chip-select:hover {
+  opacity: 1;
+}
+
 .dialkit-chip[data-active="true"] .dialkit-chip-select {
-  color: var(--dial-text-root);
+  color: var(--dial-glass-bg);
+  opacity: 1;
 }
 
 .dialkit-chip-remove {
   display: grid;
   place-items: center;
-  width: 22px;
+  width: 20px;
   padding: 0;
   color: var(--dial-text-tertiary);
   background: transparent;
@@ -2157,9 +2190,20 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   transition: color 0.15s, background 0.15s;
 }
 
+.dialkit-chip[data-active="true"] .dialkit-chip-remove {
+  color: var(--dial-glass-bg);
+  opacity: 0.55;
+}
+
 .dialkit-chip-remove:hover {
   color: var(--dial-text-root);
   background: var(--dial-surface-hover);
+}
+
+.dialkit-chip[data-active="true"] .dialkit-chip-remove:hover {
+  color: var(--dial-glass-bg);
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.12);
 }
 
 .dialkit-chip-remove svg {
@@ -2176,7 +2220,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 
 .dialkit-multiselect-label {
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
   padding-left: 2px;
 }
@@ -2212,7 +2256,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   width: 14px;
   height: 14px;
   margin-top: 1px;
-  border-radius: 4px;
+  border-radius: var(--dial-radius);
   box-shadow: inset 0 0 0 1.5px var(--dial-border-hover);
   color: var(--dial-glass-bg);
   transition: background 0.15s, box-shadow 0.15s;
@@ -2240,7 +2284,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   align-items: center;
   gap: 6px;
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
   transition: color 0.15s;
 }
@@ -2253,12 +2297,12 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 .dialkit-multiselect-tag {
   padding: 1px 5px;
   font-size: 9.5px;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--dial-text-tertiary);
   background: var(--dial-surface);
-  border-radius: 999px;
+  border-radius: var(--dial-radius);
 }
 
 .dialkit-multiselect-hint {
@@ -2279,7 +2323,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 .dialkit-list-item {
   position: relative;
   background: var(--dial-surface);
-  border-radius: 10px;
+  border-radius: var(--dial-radius);
   padding: 8px 8px 10px;
   /* Pure-CSS entrance — plays once per new row, no rAF dependency (robust where
      JS animation loops can stall, e.g. headless/background tabs). */
@@ -2324,13 +2368,13 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   min-width: 0;
   font-family: inherit;
   font-size: 12.5px;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: -0.01em;
   color: var(--dial-text-root);
   text-align: left;
   padding: 2px 4px;
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: var(--dial-radius);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2372,7 +2416,7 @@ input.dialkit-list-item-title:focus {
   color: var(--dial-text-tertiary);
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--dial-radius);
   cursor: pointer;
   transition: background 0.15s, color 0.15s, opacity 0.15s;
 }
@@ -2402,7 +2446,7 @@ input.dialkit-list-item-title:focus {
   color: var(--dial-text-tertiary);
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--dial-radius);
   cursor: grab;
   touch-action: none;
   transition: background 0.15s, color 0.15s;
@@ -2452,7 +2496,7 @@ input.dialkit-list-item-title:focus {
   height: 32px;
   font-family: inherit;
   font-size: 12.5px;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--dial-text-label);
   background: var(--dial-surface);
   border: none;
@@ -2499,7 +2543,7 @@ input.dialkit-list-item-title:focus {
   padding: 6px 11px;
   font-family: inherit;
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
   background: var(--dial-surface);
   border: none;
@@ -2523,7 +2567,7 @@ input.dialkit-list-item-title:focus {
   padding: 0 8px;
   font-family: inherit;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
   background: var(--dial-surface);
   border: none;
@@ -2543,7 +2587,7 @@ input.dialkit-list-item-title:focus {
 
 .dialkit-gallery-label {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
   transform: translateY(-0.5px);
 }
@@ -2561,7 +2605,7 @@ input.dialkit-list-item-title:focus {
   flex-shrink: 0;
   display: block;
   overflow: hidden;
-  border-radius: 5px;
+  border-radius: var(--dial-radius);
   background: var(--dial-surface-active);
   box-shadow: inset 0 0 0 1px var(--dial-border);
 }
@@ -2652,7 +2696,7 @@ input.dialkit-list-item-title:focus {
   padding: 0;
   border: none;
   background: var(--dial-surface-active);
-  border-radius: 7px;
+  border-radius: var(--dial-radius);
   overflow: hidden;
   cursor: pointer;
   opacity: 0.82;
@@ -2803,7 +2847,7 @@ input.dialkit-list-item-title:focus {
 
 .dialkit-color-label {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
   flex-shrink: 0;
   transform: translateY(-0.5px);
@@ -2917,7 +2961,7 @@ input.dialkit-list-item-title:focus {
   padding: 10px;
   background: var(--dial-dropdown-bg);
   border: 1px solid var(--dial-border);
-  border-radius: 12px;
+  border-radius: var(--dial-radius);
   box-shadow: var(--dial-shadow-dropdown);
   box-sizing: border-box;
 }
@@ -2929,7 +2973,7 @@ input.dialkit-list-item-title:focus {
 .dialkit-color-sv {
   position: relative;
   aspect-ratio: 3 / 2;
-  border-radius: 6px;
+  border-radius: var(--dial-radius);
   cursor: crosshair;
   touch-action: none;
   background:
@@ -2953,7 +2997,7 @@ input.dialkit-list-item-title:focus {
 .dialkit-color-slider {
   position: relative;
   height: 12px;
-  border-radius: 999px;
+  border-radius: var(--dial-radius);
   cursor: pointer;
   touch-action: none;
 }
@@ -2994,14 +3038,14 @@ input.dialkit-list-item-title:focus {
   width: 100%;
   height: 26px;
   padding: 0 4px;
-  font-family: 'Geist Mono', monospace;
+  font-family: var(--dial-font-label);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
   text-align: center;
   color: var(--dial-text-label);
   background: var(--dial-surface);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--dial-radius);
   outline: none;
   box-sizing: border-box;
 }
@@ -3017,7 +3061,7 @@ input.dialkit-list-item-title:focus {
 
 .dialkit-color-field-label {
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: 0.04em;
   text-align: center;
   color: var(--dial-text-tertiary);
@@ -3036,7 +3080,7 @@ input.dialkit-list-item-title:focus {
   aspect-ratio: 1;
   min-width: 0;
   padding: 0;
-  border-radius: 5px;
+  border-radius: var(--dial-radius);
   cursor: pointer;
   border: none;
   transition: transform 0.45s ease;
@@ -3083,7 +3127,7 @@ input.dialkit-list-item-title:focus {
 
 .dialkit-gradient-label {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
   flex-shrink: 0;
   transform: translateY(-0.5px);
@@ -3095,7 +3139,7 @@ input.dialkit-list-item-title:focus {
   width: 96px;
   height: 20px;
   padding: 0;
-  border-radius: 4px;
+  border-radius: var(--dial-radius);
   border: 1px solid var(--dial-border-hover);
   cursor: pointer;
   transition: transform 0.15s;
@@ -3122,7 +3166,7 @@ input.dialkit-list-item-title:focus {
   padding: 10px;
   background: var(--dial-dropdown-bg);
   border: 1px solid var(--dial-border);
-  border-radius: 12px;
+  border-radius: var(--dial-radius);
   box-shadow: var(--dial-shadow-dropdown);
   box-sizing: border-box;
 }
@@ -3184,7 +3228,7 @@ input.dialkit-list-item-title:focus {
   height: 24px;
   padding: 0;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--dial-radius);
   background: transparent;
   color: var(--dial-text-tertiary);
   cursor: pointer;
@@ -3216,7 +3260,7 @@ input.dialkit-list-item-title:focus {
   position: relative;
   width: 100%;
   height: 120px;
-  border-radius: 8px;
+  border-radius: var(--dial-radius);
   border: 1px solid var(--dial-border);
   overflow: hidden;
   touch-action: none;
@@ -3265,7 +3309,7 @@ input.dialkit-list-item-title:focus {
 .dialkit-gradient-strip {
   position: relative;
   height: 28px;
-  border-radius: 6px;
+  border-radius: var(--dial-radius);
   cursor: crosshair;
   touch-action: none;
   background:
@@ -3364,7 +3408,7 @@ input.dialkit-list-item-title:focus {
   width: max-content;
   background: var(--dial-dropdown-bg);
   border: 1px solid var(--dial-border);
-  border-radius: 12px;
+  border-radius: var(--dial-radius);
   padding: 4px;
   z-index: 10000;
   box-shadow: var(--dial-shadow-dropdown);
@@ -3384,7 +3428,7 @@ input.dialkit-list-item-title:focus {
   justify-content: space-between;
   padding: 8px 10px 8px 10px;
   gap: 8px;
-  border-radius: 8px;
+  border-radius: var(--dial-radius);
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -3399,7 +3443,7 @@ input.dialkit-list-item-title:focus {
 
 .dialkit-preset-name {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3480,7 +3524,7 @@ input.dialkit-list-item-title:focus {
   color: var(--dial-text-focus);
   background: var(--dial-surface);
   border: 1px solid var(--dial-border-hover);
-  border-radius: 6px;
+  border-radius: var(--dial-radius);
   padding: 2px 6px;
   outline: none;
 }
@@ -3494,11 +3538,11 @@ input.dialkit-list-item-title:focus {
   padding: 8px 10px;
   font-family: inherit;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--dial-radius);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
@@ -3529,7 +3573,7 @@ input.dialkit-list-item-title:focus {
   color: var(--dial-text-primary);
   background: var(--dial-surface);
   border: 1px solid var(--dial-border);
-  border-radius: 6px;
+  border-radius: var(--dial-radius);
   outline: none;
 }
 
@@ -3550,7 +3594,7 @@ input.dialkit-list-item-title:focus {
   padding: 0;
   background: var(--dial-surface);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--dial-radius);
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -3574,12 +3618,12 @@ input.dialkit-list-item-title:focus {
 .dialkit-shortcut-pill {
   display: inline-block;
   font-size: 10px;
-  font-weight: 600;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-weight: 400;
+  font-family: var(--dial-font-value);
   color: var(--dial-text-tertiary);
   background: var(--dial-surface-subtle);
   padding: 1px 5px;
-  border-radius: 4px;
+  border-radius: var(--dial-radius);
   margin-left: 6px;
   letter-spacing: 0.02em;
   line-height: 16px;
@@ -3623,7 +3667,7 @@ input.dialkit-list-item-title:focus {
 .dialkit-shortcuts-dropdown {
   background: var(--dial-dropdown-bg);
   border: 1px solid var(--dial-border);
-  border-radius: 12px;
+  border-radius: var(--dial-radius);
   padding: 8px;
   z-index: 10000;
   box-shadow: var(--dial-shadow-dropdown);
@@ -3632,7 +3676,7 @@ input.dialkit-list-item-title:focus {
 
 .dialkit-shortcuts-title {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--dial-text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -3650,17 +3694,17 @@ input.dialkit-list-item-title:focus {
   align-items: center;
   gap: 10px;
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--dial-radius);
 }
 
 .dialkit-shortcuts-row-key {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 400;
   font-family: ui-monospace, 'SF Mono', 'Courier New', monospace;
   color: var(--dial-text-secondary);
   background: var(--dial-surface-subtle);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--dial-radius);
   min-width: 28px;
   text-align: center;
 }
@@ -3668,13 +3712,13 @@ input.dialkit-list-item-title:focus {
 .dialkit-shortcuts-row-label {
   flex: 1;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
 }
 
 .dialkit-shortcuts-row-mode {
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-tertiary);
   font-style: italic;
 }
@@ -3901,7 +3945,7 @@ input.dialkit-list-item-title:focus {
 .dialkit-cc-label {
   fill: currentColor;
   fill-opacity: 0.4;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: var(--dial-font-value);
   font-size: 9px;
   text-anchor: middle;
   pointer-events: none;
@@ -3930,7 +3974,7 @@ input.dialkit-list-item-title:focus {
 
 .dialkit-xy-label {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
 }
 
@@ -3988,7 +4032,7 @@ input.dialkit-list-item-title:focus {
    interaction, matching the kit's readout pattern. */
 .dialkit-xy-axis {
   position: absolute;
-  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-family: var(--dial-font-label);
   font-size: 11px;
   letter-spacing: 0.02em;
   color: var(--dial-text-label);
@@ -4122,7 +4166,7 @@ input.dialkit-list-item-title:focus {
   box-sizing: border-box;
   background: var(--dial-glass-bg);
   border: 1px solid var(--dial-border);
-  border-radius: 14px;
+  border-radius: var(--dial-radius);
   backdrop-filter: blur(var(--dial-backdrop-blur));
   -webkit-backdrop-filter: blur(var(--dial-backdrop-blur));
   padding: 0 12px 10px;
@@ -4156,7 +4200,7 @@ input.dialkit-list-item-title:focus {
 }
 
 .dialkit-timeline-dock::-webkit-scrollbar-thumb {
-  border-radius: 999px;
+  border-radius: var(--dial-radius);
   background: var(--dial-text-tertiary);
 }
 
@@ -4223,10 +4267,12 @@ input.dialkit-list-item-title:focus {
 .dialkit-timeline-title {
   display: block;
   min-width: 0;
-  font-size: 15px;
-  font-weight: 600;
+  font-family: var(--dial-font-label);
+  font-size: var(--dial-font-size);
+  font-weight: 400;
+  text-transform: uppercase;
   color: var(--dial-text-root);
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   white-space: nowrap;
 }
 
@@ -4245,9 +4291,9 @@ input.dialkit-list-item-title:focus {
 }
 
 .dialkit-timeline-time {
-  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-family: var(--dial-font-label);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
   color: var(--dial-text-label);
   white-space: nowrap;
@@ -4257,7 +4303,7 @@ input.dialkit-list-item-title:focus {
   position: relative;
   min-width: 60px;
   height: 12px;
-  border-radius: 999px;
+  border-radius: var(--dial-radius);
   background: var(--dial-surface-subtle);
   overflow: hidden;
   cursor: col-resize;
@@ -4387,7 +4433,7 @@ input.dialkit-list-item-title:focus {
 }
 
 .dialkit-timeline-horizontal-scroll::-webkit-scrollbar-thumb {
-  border-radius: 999px;
+  border-radius: var(--dial-radius);
   background: var(--dial-text-tertiary);
 }
 
@@ -4411,7 +4457,7 @@ input.dialkit-list-item-title:focus {
   align-items: center;
   gap: 4px;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--dial-text-label);
   padding-right: 10px;
   overflow: hidden;
@@ -4471,7 +4517,7 @@ input.dialkit-list-item-title:focus {
   align-items: center;
   height: 18px;
   transform: translateY(-50%);
-  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-family: var(--dial-font-label);
   font-size: 9.5px;
   line-height: 18px;
   font-variant-numeric: tabular-nums;
@@ -4491,7 +4537,7 @@ input.dialkit-list-item-title:focus {
 
 .dialkit-timeline-group-row .dialkit-timeline-label {
   gap: 4px;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--dial-text-root);
 }
 
@@ -4530,7 +4576,7 @@ input.dialkit-list-item-title:focus {
   position: relative;
   flex: 1;
   background: var(--dial-surface-subtle);
-  border-radius: 8px;
+  border-radius: var(--dial-radius);
   overflow: hidden;
 }
 
@@ -4538,7 +4584,7 @@ input.dialkit-list-item-title:focus {
   position: absolute;
   top: 3px;
   bottom: 3px;
-  border-radius: 6px;
+  border-radius: var(--dial-radius);
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -4558,7 +4604,7 @@ input.dialkit-list-item-title:focus {
   top: 4px;
   bottom: 4px;
   display: flex;
-  border-radius: 5px;
+  border-radius: var(--dial-radius);
   box-sizing: border-box;
   overflow: hidden;
   opacity: 0.18;
@@ -4583,9 +4629,9 @@ input.dialkit-list-item-title:focus {
   right: 7px;
   z-index: 2;
   color: var(--dial-text-tertiary);
-  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-family: var(--dial-font-label);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1;
   transform: translateY(-50%);
   pointer-events: none;
@@ -4604,7 +4650,7 @@ input.dialkit-list-item-title:focus {
 }
 
 .dialkit-timeline-clip-duration {
-  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-family: var(--dial-font-label);
   font-size: 9.5px;
   font-variant-numeric: tabular-nums;
   color: rgba(0, 0, 0, 0.55);
@@ -4720,12 +4766,12 @@ input.dialkit-list-item-title:focus {
   padding: 0 7px;
   box-sizing: border-box;
   border: 1px solid rgba(255, 255, 255, 0.75);
-  border-radius: 6px;
+  border-radius: var(--dial-radius);
   background: #f3f3f3;
   color: #414141;
-  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-family: var(--dial-font-label);
   font-size: 9.5px;
-  font-weight: 600;
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1;
   line-height: 16px;
@@ -4753,7 +4799,7 @@ input.dialkit-list-item-title:focus {
   z-index: 10000;
   background: var(--dial-glass-bg);
   border: 1px solid var(--dial-border);
-  border-radius: 14px;
+  border-radius: var(--dial-radius);
   backdrop-filter: blur(var(--dial-backdrop-blur));
   -webkit-backdrop-filter: blur(var(--dial-backdrop-blur));
   box-shadow: var(--dial-shadow);
@@ -4779,7 +4825,7 @@ input.dialkit-list-item-title:focus {
 
 .dialkit-timeline-popover-title {
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--dial-text-root);
   letter-spacing: -0.01em;
 }
@@ -4793,7 +4839,7 @@ input.dialkit-list-item-title:focus {
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--dial-radius);
   background: none;
   color: var(--dial-text-tertiary);
   cursor: pointer;
