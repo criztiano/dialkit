@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { ICON_CHEVRON, ICON_CHECK } from '../icons';
-import type { GalleryItem } from '../store/DialStore';
+import type { GalleryItem } from '../store/TweakStore';
 
 interface GalleryControlProps {
   label: string;
@@ -42,14 +42,14 @@ function GalleryImage({ item }: { item: GalleryItem }) {
   }, []);
   return (
     <span
-      className="dialkit-gallery-media"
+      className="tweakers-gallery-media"
       data-fixed={item.aspect ? 'true' : 'false'}
       style={item.aspect ? { aspectRatio: String(item.aspect) } : undefined}
     >
-      <span className="dialkit-gallery-skeleton" data-done={String(loaded)} aria-hidden="true" />
+      <span className="tweakers-gallery-skeleton" data-done={String(loaded)} aria-hidden="true" />
       <img
         ref={imgRef}
-        className="dialkit-gallery-img"
+        className="tweakers-gallery-img"
         data-loaded={String(loaded)}
         src={item.src}
         alt={item.alt ?? ''}
@@ -68,18 +68,18 @@ export function GalleryControl({ label, value, items, onChange, columns = 2 }: G
   const preview = selected ? itemContent(selected, false) : null;
 
   return (
-    <div className="dialkit-gallery" data-open={String(isOpen)}>
+    <div className="tweakers-gallery" data-open={String(isOpen)}>
       <button
         type="button"
-        className="dialkit-gallery-trigger"
+        className="tweakers-gallery-trigger"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((o) => !o)}
       >
-        <span className="dialkit-gallery-label">{label}</span>
-        <span className="dialkit-gallery-right">
-          {preview && <span className="dialkit-gallery-preview" aria-hidden="true">{preview}</span>}
+        <span className="tweakers-gallery-label">{label}</span>
+        <span className="tweakers-gallery-right">
+          {preview && <span className="tweakers-gallery-preview" aria-hidden="true">{preview}</span>}
           <svg
-            className="dialkit-gallery-chevron"
+            className="tweakers-gallery-chevron"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -94,17 +94,17 @@ export function GalleryControl({ label, value, items, onChange, columns = 2 }: G
 
       {/* The reveal animates height via a grid 0fr → 1fr transition: pure CSS,
           no measurement, so it can't get stuck on re-renders or resizes. */}
-      <div className="dialkit-gallery-reveal" aria-hidden={!isOpen}>
-        <div className="dialkit-gallery-reveal-inner">
-          <div className="dialkit-gallery-box">
-            <div className="dialkit-gallery-masonry" style={{ columnCount: columns }}>
+      <div className="tweakers-gallery-reveal" aria-hidden={!isOpen}>
+        <div className="tweakers-gallery-reveal-inner">
+          <div className="tweakers-gallery-box">
+            <div className="tweakers-gallery-masonry" style={{ columnCount: columns }}>
               {items.map((item) => {
                 const isSelected = item.id === value;
                 return (
                   <button
                     key={item.id}
                     type="button"
-                    className="dialkit-gallery-item"
+                    className="tweakers-gallery-item"
                     data-selected={String(isSelected)}
                     aria-pressed={isSelected}
                     tabIndex={isOpen ? 0 : -1}
@@ -112,7 +112,7 @@ export function GalleryControl({ label, value, items, onChange, columns = 2 }: G
                     onClick={() => onChange(item.id)}
                   >
                     {itemContent(item, true)}
-                    <span className="dialkit-gallery-check" aria-hidden="true">
+                    <span className="tweakers-gallery-check" aria-hidden="true">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                         <path d={ICON_CHECK} />
                       </svg>

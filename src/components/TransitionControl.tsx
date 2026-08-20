@@ -1,4 +1,4 @@
-import { SpringConfig, EasingConfig, TransitionConfig, DialStore } from '../store/DialStore';
+import { SpringConfig, EasingConfig, TransitionConfig, TweakStore } from '../store/TweakStore';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
 import { SegmentedControl } from './SegmentedControl';
@@ -36,9 +36,9 @@ export function TransitionControl({
   durationControl,
 }: TransitionControlProps) {
   const mode = useSyncExternalStore(
-    (cb) => DialStore.subscribe(panelId, cb),
-    () => DialStore.getTransitionMode(panelId, path),
-    () => DialStore.getTransitionMode(panelId, path)
+    (cb) => TweakStore.subscribe(panelId, cb),
+    () => TweakStore.getTransitionMode(panelId, path),
+    () => TweakStore.getTransitionMode(panelId, path)
   );
 
   const isEasing = mode === 'easing';
@@ -68,7 +68,7 @@ export function TransitionControl({
   const easing: EasingConfig = value.type === 'easing' ? value : cache.current.easing;
 
   const handleModeChange = (newMode: CurveMode) => {
-    DialStore.updateTransitionMode(panelId, path, newMode);
+    TweakStore.updateTransitionMode(panelId, path, newMode);
 
     if (newMode === 'easing') {
       onChange(cache.current.easing);
@@ -119,8 +119,8 @@ export function TransitionControl({
           <SpringVisualization spring={spring} isSimpleMode={isSimpleSpring} />
         )}
 
-        <div className="dialkit-labeled-control">
-          <span className="dialkit-labeled-control-label">Type</span>
+        <div className="tweakers-labeled-control">
+          <span className="tweakers-labeled-control-label">Type</span>
           <SegmentedControl
             options={[
               { value: 'easing' as const, label: 'Easing' },
@@ -189,11 +189,11 @@ function EaseTextInput({ ease, onChange }: { ease: [number, number, number, numb
   };
 
   return (
-    <div className="dialkit-labeled-control">
-      <span className="dialkit-labeled-control-label">Ease</span>
+    <div className="tweakers-labeled-control">
+      <span className="tweakers-labeled-control-label">Ease</span>
       <input
         type="text"
-        className="dialkit-text-input"
+        className="tweakers-text-input"
         value={editing ? draft : formatEase(ease)}
         onChange={(e) => setDraft(e.target.value)}
         onFocus={handleFocus}

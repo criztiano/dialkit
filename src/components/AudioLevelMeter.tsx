@@ -368,13 +368,13 @@ export function AudioLevelMeter(props: AudioLevelMeterProps): ReactElement {
     .filter(Boolean)
     .join('. ');
 
-  const rootClassName = ['dialkit-root', 'dialkit-audio-meter', props.className]
+  const rootClassName = ['tweakers-root', 'tweakers-audio-meter', props.className]
     .filter(Boolean)
     .join(' ');
   const rootStyle = {
     ...props.style,
-    '--dial-meter-band-count': levels.length,
-    '--dial-meter-cell-count': cellCount,
+    '--tweak-meter-band-count': levels.length,
+    '--tweak-meter-cell-count': cellCount,
   } as CSSProperties;
 
   return (
@@ -386,9 +386,9 @@ export function AudioLevelMeter(props: AudioLevelMeterProps): ReactElement {
       role="img"
       aria-label={accessibleSummary}
     >
-      <div className="dialkit-audio-meter__bands" aria-hidden="true">
+      <div className="tweakers-audio-meter__bands" aria-hidden="true">
         {activeCellCounts.map((activeCellCount, bandIndex) => (
-          <div className="dialkit-audio-meter__band" key={bandIndex}>
+          <div className="tweakers-audio-meter__band" key={bandIndex}>
             {Array.from({ length: cellCount }, (_, visualIndex) => {
               const indexFromBottom = cellCount - visualIndex - 1;
               const isActive = indexFromBottom < activeCellCount;
@@ -397,12 +397,12 @@ export function AudioLevelMeter(props: AudioLevelMeterProps): ReactElement {
                 displayedClippedBands[bandIndex] && indexFromBottom === cellCount - 1;
               const color = getCellColor(colors, indexFromBottom, cellCount);
               const cellStyle = color
-                ? ({ '--dial-meter-cell-color': color } as CSSProperties)
+                ? ({ '--tweak-meter-cell-color': color } as CSSProperties)
                 : undefined;
 
               return (
                 <span
-                  className="dialkit-audio-meter__cell"
+                  className="tweakers-audio-meter__cell"
                   data-active={isActive || undefined}
                   data-peak={isPeak || undefined}
                   data-clipped={isClipped || undefined}

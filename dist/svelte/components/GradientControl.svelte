@@ -68,7 +68,7 @@
 
   $effect(() => {
     if (typeof document === 'undefined' || !triggerRef) return;
-    portalTarget = (triggerRef.closest('.dialkit-root') as HTMLElement | null) ?? document.body;
+    portalTarget = (triggerRef.closest('.tweakers-root') as HTMLElement | null) ?? document.body;
   });
 
   // Reposition re-runs when value.type changes (the estimated height flips).
@@ -104,11 +104,11 @@
   });
 </script>
 
-<div class="dialkit-gradient-control">
-  <span class="dialkit-gradient-label">{label}</span>
+<div class="tweakers-gradient-control">
+  <span class="tweakers-gradient-label">{label}</span>
   <button
     bind:this={triggerRef}
-    class="dialkit-gradient-preview dialkit-checker"
+    class="tweakers-gradient-preview tweakers-checker"
     style:--gradient-preview={gradientToCss(value)}
     onclick={() => (isOpen ? (isOpen = false) : open())}
     data-open={String(isOpen)}
@@ -122,7 +122,7 @@
       {#if isOpen && pos}
         <div
           bind:this={panelRef}
-          class="dialkit-gradient-popover"
+          class="tweakers-gradient-popover"
           style={popoverStyle}
           transition:dropdownTransition={{ above: pos.above }}
         >

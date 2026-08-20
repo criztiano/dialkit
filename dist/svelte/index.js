@@ -1,11 +1,11 @@
 // Core API
-export { createDialKit } from './createDialKit.svelte';
+export { createTweakers } from './createTweakers.svelte';
 // Root component
-export { default as DialRoot } from './components/DialRoot.svelte';
+export { default as TweakRoot } from './components/TweakRoot.svelte';
 // Timeline (prototype)
-export { createDialTimeline } from './createDialTimeline.svelte';
-export { default as DialTimeline } from './components/Timeline/DialTimeline.svelte';
-export { formatClock, TimelineStore } from 'dialkit/timeline';
+export { createTweakTimeline } from './createTweakTimeline.svelte';
+export { default as TweakTimeline } from './components/Timeline/TweakTimeline.svelte';
+export { formatClock, TimelineStore } from 'tweakers/timeline';
 // Shortcut components
 export { default as ShortcutListener } from './components/ShortcutListener.svelte';
 export { SHORTCUT_CTX } from './components/ShortcutListener.svelte';
@@ -30,7 +30,7 @@ export { default as AnalyserVisualization } from './components/AnalyserVisualiza
 export { default as CurveComposer } from './components/CurveComposer.svelte';
 // The editing + sampling helpers, mirroring what is re-exported for gradients
 // below: a host app driving its own composition state needs them, and they are
-// otherwise reachable only from the React entry. `dialkit/curve-composer-core`
+// otherwise reachable only from the React entry. `tweakers/curve-composer-core`
 // serves the same functions to code that must stay framework-free.
 export { defaultComposition, buildSamplers, readComposition, directionPhase, splitSegment, removeSegment, cycleSegmentType, flipSegment, redistributeWeight, setSegmentCurvature, setSegmentSteepness, setSegmentOvershoot, setSegmentAnticipate, addDriver, removeDriver, cycleDriverType, flipDriver, setDriverCurvature, setDriverSteepness, setDriverOvershoot, setDriverAnticipate, } from '../curve-composer-core';
 export { default as TextControl } from './components/TextControl.svelte';
@@ -47,5 +47,5 @@ export { default as SwatchControl } from './components/SwatchControl.svelte';
 export { default as ChipsControl } from './components/ChipsControl.svelte';
 export { default as ListControl } from './components/ListControl.svelte';
 export { default as PresetManager } from './components/PresetManager.svelte';
-// Store exports (via dialkit/store subpath — svelte-package doesn't bundle, so relative paths to src/store would break in dist)
-export { DialStore, parseListItemSchema, groupListFields, defaultListItemParams, normalizeListItems, hintDomId } from 'dialkit/store';
+// Store exports (via tweakers/store subpath — svelte-package doesn't bundle, so relative paths to src/store would break in dist)
+export { TweakStore, parseListItemSchema, groupListFields, defaultListItemParams, normalizeListItems, hintDomId } from 'tweakers/store';

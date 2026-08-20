@@ -2,7 +2,7 @@ import { createSignal, createEffect, onMount, onCleanup, Show, For } from 'solid
 import { Portal } from 'solid-js/web';
 import { animate } from 'motion';
 import { ICON_CHEVRON, ICON_TRASH } from '../../icons';
-import { DialStore } from '../../store/DialStore';
+import { TweakStore } from '../../store/TweakStore';
 
 interface PresetManagerProps {
   panelId: string;
@@ -30,7 +30,7 @@ export function PresetManager(props: PresetManagerProps) {
   const activePreset = () => props.presets.find((p) => p.id === props.activePresetId);
 
   onMount(() => {
-    const root = triggerRef?.closest('.dialkit-root') as HTMLElement | null;
+    const root = triggerRef?.closest('.tweakers-root') as HTMLElement | null;
     setPortalTarget(root ?? document.body);
 
     if (chevronRef) {
@@ -105,31 +105,31 @@ export function PresetManager(props: PresetManagerProps) {
   });
 
   const handleSelect = (presetId: string | null) => {
-    DialStore.selectPreset(props.panelId, presetId);
+    TweakStore.selectPreset(props.panelId, presetId);
     closeDropdown();
   };
 
   const handleDelete = (e: MouseEvent, presetId: string) => {
     e.stopPropagation();
-    DialStore.removePreset(props.panelId, presetId);
+    TweakStore.removePreset(props.panelId, presetId);
   };
 
   return (
-    <div class="dialkit-preset-manager">
+    <div class="tweakers-preset-manager">
       <button
         ref={triggerRef}
-        class="dialkit-preset-trigger"
+        class="tweakers-preset-trigger"
         onClick={toggle}
         data-open={String(isOpen())}
         data-has-preset={String(!!activePreset())}
         data-disabled={String(!hasPresets())}
       >
-        <span class="dialkit-preset-label">
+        <span class="tweakers-preset-label">
           {activePreset() ? activePreset()!.name : props.providerMode ? 'Presets' : 'Version 1'}
         </span>
         <svg
           ref={chevronRef}
-          class="dialkit-select-chevron"
+          class="tweakers-select-chevron"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -153,7 +153,7 @@ export function PresetManager(props: PresetManagerProps) {
                   { type: 'spring', visualDuration: 0.15, bounce: 0 }
                 );
               }}
-              class="dialkit-root dialkit-preset-dropdown"
+              class="tweakers-root tweakers-preset-dropdown"
               style={{
                 position: 'fixed',
                 top: `${pos().top}px`,
@@ -163,25 +163,25 @@ export function PresetManager(props: PresetManagerProps) {
             >
               <Show when={!props.providerMode}>
                 <div
-                  class="dialkit-preset-item"
+                  class="tweakers-preset-item"
                   data-active={String(!props.activePresetId)}
                   onClick={() => handleSelect(null)}
                 >
-                  <span class="dialkit-preset-name">Version 1</span>
+                  <span class="tweakers-preset-name">Version 1</span>
                 </div>
               </Show>
 
               <For each={props.presets}>
                 {(preset) => (
                   <div
-                    class="dialkit-preset-item"
+                    class="tweakers-preset-item"
                     data-active={String(preset.id === props.activePresetId)}
                     onClick={() => handleSelect(preset.id)}
                   >
-                    <span class="dialkit-preset-name">{preset.name}</span>
+                    <span class="tweakers-preset-name">{preset.name}</span>
                     <Show when={preset.deletable ?? true}>
                       <button
-                        class="dialkit-preset-delete"
+                        class="tweakers-preset-delete"
                         onClick={(e) => handleDelete(e, preset.id)}
                         title="Delete preset"
                       >

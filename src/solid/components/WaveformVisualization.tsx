@@ -77,14 +77,14 @@ export function WaveformVisualization(props: WaveformVisualizationProps) {
   const framingLoop = () => p.autoZoomOnLoop && !!p.loop;
 
   return (
-    <div class="dialkit-waveform-viz-wrap" style={{ width: `${p.width}px` }}>
+    <div class="tweakers-waveform-viz-wrap" style={{ width: `${p.width}px` }}>
       <canvas
         ref={canvasEl}
-        class="dialkit-waveform-viz"
+        class="tweakers-waveform-viz"
         style={{ width: `${p.width}px`, height: `${p.height}px` }}
       />
       <Show when={!framingLoop()}>
-        <div class="dialkit-waveform-zoom">
+        <div class="tweakers-waveform-zoom">
           <Show when={zoom() > 1}>
             <button type="button" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(1, z / 2))}>
               <svg viewBox="0 0 16 16" fill="none">

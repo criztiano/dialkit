@@ -10,7 +10,7 @@ const PICKER_ALPHA_HEIGHT = 22;
 const PICKER_PALETTE_HEIGHT = 30;
 
 export const ColorControl = defineComponent({
-  name: 'DialKitColorControl',
+  name: 'TweakersColorControl',
   props: {
     label: { type: String, required: true },
     value: { type: String, required: true },
@@ -117,7 +117,7 @@ export const ColorControl = defineComponent({
     });
 
     onMounted(() => {
-      const root = swatchRef.value?.closest('.dialkit-root') as HTMLElement | null;
+      const root = swatchRef.value?.closest('.tweakers-root') as HTMLElement | null;
       portalTarget.value = root ?? document.body;
     });
 
@@ -136,22 +136,22 @@ export const ColorControl = defineComponent({
     return () => {
       const rgba = parseHex(props.value);
 
-      return h('div', { class: 'dialkit-color-control' }, [
-        h('span', { class: 'dialkit-color-label' }, props.label),
-        h('div', { class: 'dialkit-color-inputs' }, [
+      return h('div', { class: 'tweakers-color-control' }, [
+        h('span', { class: 'tweakers-color-label' }, props.label),
+        h('div', { class: 'tweakers-color-inputs' }, [
           // The whole token (hash included) is the click target for editing.
           h('span', {
-            class: 'dialkit-color-hex-wrap',
+            class: 'tweakers-color-hex-wrap',
             onClick: () => {
               isEditing.value = true;
             },
           }, [
-            h('span', { class: 'dialkit-color-hash', 'aria-hidden': 'true' }, '#'),
+            h('span', { class: 'tweakers-color-hash', 'aria-hidden': 'true' }, '#'),
             isEditing.value
               ? h('input', {
                 ref: hexInputRef,
                 type: 'text',
-                class: 'dialkit-color-hex-input',
+                class: 'tweakers-color-hex-input',
                 'aria-label': `Hex color for ${props.label}`,
                 value: editValue.value,
                 onInput: (event: Event) => {
@@ -170,22 +170,22 @@ export const ColorControl = defineComponent({
                 },
               })
               : h('span', {
-                class: 'dialkit-color-hex',
+                class: 'tweakers-color-hex',
                 'aria-label': `Hex color for ${props.label}`,
               }, bareHex(props.value)),
           ]),
           ...(props.alpha && rgba
             ? [
-              h('span', { class: 'dialkit-color-divider', 'aria-hidden': 'true' }),
-              h('span', { class: 'dialkit-color-opacity' }, [
+              h('span', { class: 'tweakers-color-divider', 'aria-hidden': 'true' }),
+              h('span', { class: 'tweakers-color-opacity' }, [
                 `${opacityPercent(rgba)} `,
-                h('span', { class: 'dialkit-color-opacity-unit' }, '%'),
+                h('span', { class: 'tweakers-color-opacity-unit' }, '%'),
               ]),
             ]
             : []),
           h('button', {
             ref: swatchRef,
-            class: 'dialkit-color-swatch',
+            class: 'tweakers-color-swatch',
             style: { '--swatch-color': props.value },
             'data-open': String(isOpen.value),
             title: 'Pick color',
@@ -199,9 +199,9 @@ export const ColorControl = defineComponent({
             h(AnimatePresence, null, {
               default: () => (isOpen.value && pos.value)
                 ? [h(motion.div, {
-                  key: 'dialkit-color-picker-popover',
+                  key: 'tweakers-color-picker-popover',
                   ref: setPickerRef,
-                  class: 'dialkit-color-picker-popover',
+                  class: 'tweakers-color-picker-popover',
                   initial: { opacity: 0, y: pos.value.above ? 8 : -8, scale: 0.95 },
                   animate: { opacity: 1, y: 0, scale: 1 },
                   exit: { opacity: 0, y: pos.value.above ? 8 : -8, scale: 0.95 },

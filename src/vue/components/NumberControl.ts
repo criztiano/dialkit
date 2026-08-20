@@ -8,7 +8,7 @@ const CLICK_THRESHOLD = 3;
  * (Shift = ×10, Alt = ×0.1); a plain click opens inline text entry.
  */
 export const NumberControl = defineComponent({
-  name: 'DialKitNumberControl',
+  name: 'TweakersNumberControl',
   props: {
     label: { type: String, required: true },
     value: { type: Number, required: true },
@@ -120,9 +120,9 @@ export const NumberControl = defineComponent({
 
     const className = computed(() =>
       [
-        'dialkit-number-control',
-        isVertical.value ? 'dialkit-number-control-vertical' : '',
-        isScrubbing.value ? 'dialkit-number-control-engaged' : '',
+        'tweakers-number-control',
+        isVertical.value ? 'tweakers-number-control-vertical' : '',
+        isScrubbing.value ? 'tweakers-number-control-engaged' : '',
       ]
         .filter(Boolean)
         .join(' ')
@@ -134,12 +134,12 @@ export const NumberControl = defineComponent({
       onPointermove: handlePointerMove,
       onPointerup: handlePointerUp,
     }, [
-      h('span', { class: 'dialkit-number-label' }, props.label),
+      h('span', { class: 'tweakers-number-label' }, props.label),
       showInput.value
         ? h('input', {
             ref: inputRef,
             type: 'text',
-            class: 'dialkit-number-input',
+            class: 'tweakers-number-input',
             value: inputValue.value,
             onInput: (event: Event) => {
               inputValue.value = (event.target as HTMLInputElement).value;
@@ -149,9 +149,9 @@ export const NumberControl = defineComponent({
             onClick: (event: MouseEvent) => event.stopPropagation(),
             onPointerdown: (event: PointerEvent) => event.stopPropagation(),
           })
-        : h('span', { class: 'dialkit-number-value' }, [
+        : h('span', { class: 'tweakers-number-value' }, [
             displayValue.value,
-            props.unit ? h('span', { class: 'dialkit-number-unit' }, props.unit) : null,
+            props.unit ? h('span', { class: 'tweakers-number-unit' }, props.unit) : null,
           ]),
     ]);
   },

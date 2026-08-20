@@ -13,7 +13,7 @@ import type {
 export type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, AnalyserSpring } from '../../analyser-engine';
 
 export const AnalyserVisualization = defineComponent({
-  name: 'DialKitAnalyserVisualization',
+  name: 'TweakersAnalyserVisualization',
   props: {
     analyser: { type: Object as PropType<AnalyserNode | null>, default: null },
     source: { type: String as PropType<AnalyserSource>, default: 'frequency' },
@@ -66,7 +66,7 @@ export const AnalyserVisualization = defineComponent({
       const children = [
         h('canvas', {
           ref: canvasRef,
-          class: 'dialkit-analyser-viz',
+          class: 'tweakers-analyser-viz',
           style: { width: `${props.width}px`, height: `${props.height}px` },
         }),
       ];
@@ -100,9 +100,9 @@ export const AnalyserVisualization = defineComponent({
             )
           );
         }
-        children.push(h('div', { class: 'dialkit-analyser-actions' }, buttons));
+        children.push(h('div', { class: 'tweakers-analyser-actions' }, buttons));
       }
-      return h('div', { class: 'dialkit-analyser-viz-wrap', style: { width: `${props.width}px` } }, children);
+      return h('div', { class: 'tweakers-analyser-viz-wrap', style: { width: `${props.width}px` } }, children);
     };
   },
 });

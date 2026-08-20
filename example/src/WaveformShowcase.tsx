@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { WaveformVisualization, Slider, ColorControl } from 'dialkit';
-import type { WaveformMode, WaveformLoop } from 'dialkit';
+import { WaveformVisualization, Slider, ColorControl } from 'tweakers';
+import type { WaveformMode, WaveformLoop } from 'tweakers';
 
 const DURATION = 3; // seconds
 const PIXEL_SIZES = [1, 2, 4, 6]; // pixelated block-size multipliers
@@ -126,7 +126,7 @@ export function WaveformShowcase() {
         playheadColor={playheadColor}
         autoZoomOnLoop={autoZoom}
       />
-      <div style={{ fontSize: 12, color: 'var(--dial-text-secondary)' }}>
+      <div style={{ fontSize: 12, color: 'var(--tweak-text-secondary)' }}>
         {loop
           ? `loop ${Math.round(loop.start * 100)}–${Math.round(loop.end * 100)}% · drag edges to resize · click clears`
           : 'click to set playhead · drag to loop'}

@@ -1,13 +1,13 @@
-export { useDialKit } from './useDialKit';
-export type { UseDialOptions } from './useDialKit';
-export { vDialKit } from './directives/dialkit';
-export type { DialKitDirectiveOptions, DialKitDirectiveValue } from './directives/dialkit';
+export { useTweakers } from './useTweakers';
+export type { UseTweakersOptions } from './useTweakers';
+export { vTweakers } from './directives/tweakers';
+export type { TweakersDirectiveOptions, TweakersDirectiveValue } from './directives/tweakers';
 
 // Timeline (prototype)
-export { useDialTimeline } from './useDialTimeline';
-export type { UseDialTimelineOptions } from './useDialTimeline';
+export { useTweakTimeline } from './useTweakTimeline';
+export type { UseTweakTimelineOptions } from './useTweakTimeline';
 export type {
-  DialTimelineValues,
+  TweakTimelineValues,
   TimelineClipConfig,
   TimelineClipCss,
   TimelineClipLoop,
@@ -20,7 +20,7 @@ export type {
   TimelineStepConfig,
   TimelineStepValues,
 } from '../timeline';
-export { DialTimeline } from './components/Timeline/DialTimeline';
+export { TweakTimeline } from './components/Timeline/TweakTimeline';
 export { TimelineToggleButton } from './components/Timeline/TimelineToggleButton';
 export { ControlRenderer } from './components/ControlRenderer';
 export { TimelineStore } from '../store/TimelineStore';
@@ -31,8 +31,8 @@ export type {
   TimelineTransport,
 } from '../store/TimelineStore';
 
-export { DialRoot } from './components/DialRoot';
-export type { DialPosition, DialMode, DialTheme } from './components/DialRoot';
+export { TweakRoot } from './components/TweakRoot';
+export type { TweakPosition, TweakMode, TweakTheme } from './components/TweakRoot';
 
 export { ShortcutListener, useShortcutContext, ShortcutKey } from './components/ShortcutListener';
 export type { ShortcutState } from './components/ShortcutListener';
@@ -82,7 +82,7 @@ export { XYPad } from './components/XYPad';
 export { XYControl } from './components/XYControl';
 export { PresetManager } from './components/PresetManager';
 
-export { DialStore } from '../store/DialStore';
+export { TweakStore } from '../store/TweakStore';
 export type {
   SpringConfig,
   EasingConfig,
@@ -99,8 +99,8 @@ export type {
   PresetProvider,
   PresetProviderPreset,
   PresetItem,
-  DialValue,
-  DialConfig,
+  TweakValue,
+  TweakConfig,
   ResolvedValues,
   ControlMeta,
   PanelConfig,
@@ -108,4 +108,4 @@ export type {
   AffordanceContext,
   AffordanceStatus,
   ShortcutConfig,
-} from '../store/DialStore';
+} from '../store/TweakStore';

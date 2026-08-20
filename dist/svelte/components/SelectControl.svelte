@@ -68,7 +68,7 @@
   $effect(() => {
     if (typeof document === 'undefined' || !triggerRef) return;
 
-    portalTarget = (triggerRef.closest('.dialkit-root') as HTMLElement | null) ?? document.body;
+    portalTarget = (triggerRef.closest('.tweakers-root') as HTMLElement | null) ?? document.body;
   });
 
   $effect(() => {
@@ -99,18 +99,18 @@
   });
 </script>
 
-<div class="dialkit-select-row">
+<div class="tweakers-select-row">
   <button
     bind:this={triggerRef}
-    class="dialkit-select-trigger"
+    class="tweakers-select-trigger"
     onclick={() => (isOpen ? closeDropdown() : openDropdown())}
     data-open={String(isOpen)}
   >
-    <span class="dialkit-select-label">{label}</span>
-    <div class="dialkit-select-right">
-      <span class="dialkit-select-value">{selectedOption?.label ?? value}</span>
+    <span class="tweakers-select-label">{label}</span>
+    <div class="tweakers-select-right">
+      <span class="tweakers-select-value">{selectedOption?.label ?? value}</span>
       <svg
-        class="dialkit-select-chevron"
+        class="tweakers-select-chevron"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -129,13 +129,13 @@
       {#if isOpen && pos}
         <div
           bind:this={dropdownRef}
-          class="dialkit-select-dropdown"
+          class="tweakers-select-dropdown"
           style={dropdownStyle}
           transition:dropdownTransition={{ above: pos.above }}
         >
           {#each normalized as option (option.value)}
             <button
-              class="dialkit-select-option"
+              class="tweakers-select-option"
               data-selected={String(option.value === value)}
               onclick={() => {
                 onChange(option.value);

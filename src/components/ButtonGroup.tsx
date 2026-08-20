@@ -7,11 +7,11 @@ interface ButtonGroupProps {
 
 export function ButtonGroup({ buttons }: ButtonGroupProps) {
   return (
-    <div className="dialkit-button-group">
+    <div className="tweakers-button-group">
       {buttons.map((button, index) => (
         <button
           key={index}
-          className="dialkit-button"
+          className="tweakers-button"
           onClick={button.onClick}
         >
           {button.label}

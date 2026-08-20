@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useDialKit, DialStore, Slider, Toggle } from 'dialkit';
-import type { AffordanceContext, ChipOption, ListItemType } from 'dialkit';
+import { useTweakers, TweakStore, Slider, Toggle } from 'tweakers';
+import type { AffordanceContext, ChipOption, ListItemType } from 'tweakers';
 
 const PANEL_NAME = 'Photo Stack';
 
@@ -50,7 +50,7 @@ const EFFECT_TYPES: Record<string, ListItemType> = {
 };
 
 /**
- * What the host app puts inside an affordance popover — dialkit renders only the
+ * What the host app puts inside an affordance popover — tweakers renders only the
  * dot and the shell. This one stands in for Pixture's ♪ music binding: a toggle
  * plus a depth amount, pushing status back so the dot lights up.
  */
@@ -85,7 +85,7 @@ export function PhotoStack() {
     setStep((s) => s + 1);
   };
 
-  const params = useDialKit(PANEL_NAME, {
+  const params = useTweakers(PANEL_NAME, {
     title: 'Japan',
     subtitle: { type: 'text' as const, default: 'December 2025', placeholder: 'Enter subtitle...' },
     shadowTint: '#000000',
@@ -147,7 +147,7 @@ export function PhotoStack() {
     },
     // Help text is keyed by control path — most controls are bare shorthand
     // (`scale: [0.7, 0.5, 0.95]`) with nowhere to hang a property.
-    // dialkit draws the dot and the popover shell; the app fills the inside.
+    // tweakers draws the dot and the popover shell; the app fills the inside.
     affordances: {
       'backPhoto.offsetX': { label: 'Bind to music', content: MusicBind },
       'shadow.opacity': { label: 'Bind to music', content: MusicBind },
@@ -183,15 +183,15 @@ export function PhotoStack() {
   // Resolve this panel's id so the gallery selection can be written back in sync.
   const [panelId, setPanelId] = useState<string | null>(null);
   useEffect(() => {
-    const sync = () => setPanelId(DialStore.getPanels().find((p) => p.name === PANEL_NAME)?.id ?? null);
+    const sync = () => setPanelId(TweakStore.getPanels().find((p) => p.name === PANEL_NAME)?.id ?? null);
     sync();
-    return DialStore.subscribeGlobal(sync);
+    return TweakStore.subscribeGlobal(sync);
   }, []);
 
   // Availability is app state, so it's pushed at runtime rather than declared.
   useEffect(() => {
     if (!panelId) return;
-    DialStore.setDisabled(panelId, 'reset', true);
+    TweakStore.setDisabled(panelId, 'reset', true);
   }, [panelId]);
 
   // Keep the "cover" gallery and the photo on top of the stack as one selection, so
@@ -201,7 +201,7 @@ export function PhotoStack() {
   useEffect(() => {
     if (!panelId) return;
     const frontKey = PHOTOS[currentIndex].key;
-    if (params.cover !== frontKey) DialStore.updateValue(panelId, 'cover', frontKey);
+    if (params.cover !== frontKey) TweakStore.updateValue(panelId, 'cover', frontKey);
     // Only react to the stack moving (not the pick itself), so this can't clobber a
     // fresh selection before `step` has advanced to it.
     // eslint-disable-next-line react-hooks/exhaustive-deps

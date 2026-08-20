@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { TimelineUiStore } from 'dialkit/timeline';
+  import { TimelineUiStore } from 'tweakers/timeline';
   import { ICON_TIMELINE } from '../../../icons';
 
   let visible = $state(TimelineUiStore.getVisible());
@@ -10,7 +10,7 @@
 </script>
 
 <button
-  class="dialkit-toolbar-add dialkit-timeline-toolbar-toggle"
+  class="tweakers-toolbar-add tweakers-timeline-toolbar-toggle"
   data-active={visible || undefined}
   aria-pressed={visible}
   aria-label={label}

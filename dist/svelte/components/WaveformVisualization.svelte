@@ -74,14 +74,14 @@
   const framingLoop = $derived(autoZoomOnLoop && !!loop);
 </script>
 
-<div class="dialkit-waveform-viz-wrap" style={`width:${width}px`}>
+<div class="tweakers-waveform-viz-wrap" style={`width:${width}px`}>
   <canvas
     bind:this={canvasEl}
-    class="dialkit-waveform-viz"
+    class="tweakers-waveform-viz"
     style={`width:${width}px;height:${height}px`}
   ></canvas>
   {#if !framingLoop}
-    <div class="dialkit-waveform-zoom">
+    <div class="tweakers-waveform-zoom">
       {#if zoom > 1}
         <button type="button" aria-label="Zoom out" onclick={() => (zoom = Math.max(1, zoom / 2))}>
           <svg viewBox="0 0 16 16" fill="none">

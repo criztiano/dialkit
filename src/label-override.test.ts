@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { DialStore, type ControlMeta } from './store/DialStore';
+import { TweakStore, type ControlMeta } from './store/TweakStore';
 
 // `labels` overrides the name derived from a control's config key. It is keyed by
 // path for the same reason as `hints`: the controls that most need a label their
@@ -19,12 +19,12 @@ function find(nodes: ControlMeta[], path: string): ControlMeta | undefined {
 }
 
 const control = (id: string, path: string): ControlMeta | undefined =>
-  find(DialStore.getPanel(id)?.controls ?? [], path);
+  find(TweakStore.getPanel(id)?.controls ?? [], path);
 
 describe('label overrides', () => {
   it('replaces the key-derived label on a shorthand slider', () => {
     const id = nextId();
-    DialStore.registerPanel(id, id, { paramA: [0.5, 0, 1] }, undefined, {
+    TweakStore.registerPanel(id, id, { paramA: [0.5, 0, 1] }, undefined, {
       labels: { paramA: 'Turbulence' }
     });
     assert.equal(control(id, 'paramA')?.label, 'Turbulence');
@@ -32,13 +32,13 @@ describe('label overrides', () => {
 
   it('derives the label from the key when no override is given', () => {
     const id = nextId();
-    DialStore.registerPanel(id, id, { paramA: [0.5, 0, 1] });
+    TweakStore.registerPanel(id, id, { paramA: [0.5, 0, 1] });
     assert.equal(control(id, 'paramA')?.label, 'Param A');
   });
 
   it('applies to nested controls and to the folder itself', () => {
     const id = nextId();
-    DialStore.registerPanel(id, id, { physics: { elastic: [0.5, 0, 1] } }, undefined, {
+    TweakStore.registerPanel(id, id, { physics: { elastic: [0.5, 0, 1] } }, undefined, {
       labels: { physics: 'Feel', 'physics.elastic': 'Bounce' }
     });
     assert.equal(control(id, 'physics')?.label, 'Feel');
@@ -48,29 +48,29 @@ describe('label overrides', () => {
   it('relabels without changing identity, so the value survives', () => {
     // The whole point: renaming the key to change the text would reset the value.
     const id = nextId();
-    DialStore.registerPanel(id, id, { paramA: [0.5, 0, 1] }, undefined, {
+    TweakStore.registerPanel(id, id, { paramA: [0.5, 0, 1] }, undefined, {
       labels: { paramA: 'Wander' }
     });
-    DialStore.updateValue(id, 'paramA', 0.9);
-    DialStore.updatePanel(id, id, { paramA: [0.5, 0, 1] }, undefined, {
+    TweakStore.updateValue(id, 'paramA', 0.9);
+    TweakStore.updatePanel(id, id, { paramA: [0.5, 0, 1] }, undefined, {
       labels: { paramA: 'Drift' }
     });
     assert.equal(control(id, 'paramA')?.label, 'Drift');
-    assert.equal(DialStore.getValue(id, 'paramA'), 0.9);
+    assert.equal(TweakStore.getValue(id, 'paramA'), 0.9);
   });
 
   it('retains labels across an updatePanel that omits them', () => {
     const id = nextId();
-    DialStore.registerPanel(id, id, { paramA: [0.5, 0, 1] }, undefined, {
+    TweakStore.registerPanel(id, id, { paramA: [0.5, 0, 1] }, undefined, {
       labels: { paramA: 'Kept' }
     });
-    DialStore.updatePanel(id, id, { paramA: [0.5, 0, 1] });
+    TweakStore.updatePanel(id, id, { paramA: [0.5, 0, 1] });
     assert.equal(control(id, 'paramA')?.label, 'Kept');
   });
 
   it('ignores an empty override rather than blanking the label', () => {
     const id = nextId();
-    DialStore.registerPanel(id, id, { paramA: [0.5, 0, 1] }, undefined, {
+    TweakStore.registerPanel(id, id, { paramA: [0.5, 0, 1] }, undefined, {
       labels: { paramA: '' }
     });
     assert.equal(control(id, 'paramA')?.label, 'Param A');
@@ -78,11 +78,11 @@ describe('label overrides', () => {
 
   it('still honours ActionConfig.label, and lets a keyed label win', () => {
     const id = nextId();
-    DialStore.registerPanel(id, id, { go: { type: 'action', label: 'Inline' } });
+    TweakStore.registerPanel(id, id, { go: { type: 'action', label: 'Inline' } });
     assert.equal(control(id, 'go')?.label, 'Inline');
 
     const id2 = nextId();
-    DialStore.registerPanel(id2, id2, { go: { type: 'action', label: 'Inline' } }, undefined, {
+    TweakStore.registerPanel(id2, id2, { go: { type: 'action', label: 'Inline' } }, undefined, {
       labels: { go: 'Keyed' }
     });
     assert.equal(control(id2, 'go')?.label, 'Keyed');

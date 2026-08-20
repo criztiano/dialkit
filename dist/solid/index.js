@@ -1,4 +1,4 @@
-// src/solid/createDialKit.ts
+// src/solid/createTweakers.ts
 import { createSignal, createMemo, createEffect, onMount, onCleanup, createUniqueId } from "solid-js";
 
 // src/color-core.ts
@@ -203,7 +203,7 @@ function channelsToRgba(values, format, alphaEnabled) {
   return oklchToRgb({ l: v[0], c: v[1], h: v[2], a });
 }
 var PALETTE_SIZE = 8;
-var PALETTE_STORAGE_KEY = "dialkit:color-palette";
+var PALETTE_STORAGE_KEY = "tweakers:color-palette";
 function emptyPalette() {
   return Array(PALETTE_SIZE).fill(null);
 }
@@ -555,7 +555,7 @@ function resolvePersistTarget(kind, id, persist) {
   const base = config.key ?? id;
   if (!base) return null;
   return {
-    key: `dialkit:${STORAGE_VERSION}:${kind}:${base}`,
+    key: `tweakers:${STORAGE_VERSION}:${kind}:${base}`,
     storage: config.storage ?? "localStorage"
   };
 }
@@ -598,14 +598,14 @@ function clearPersisted(target) {
   }
 }
 
-// src/store/DialStore.ts
+// src/store/TweakStore.ts
 var TAB_PATH = "_tab";
 var EMPTY_VALUES = Object.freeze({});
 function formatLabel(key) {
   return key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()).trim();
 }
 function hintDomId(scope, path) {
-  return `dialkit-hint-${scope}-${path}`.replace(/\s+/g, "-");
+  return `tweakers-hint-${scope}-${path}`.replace(/\s+/g, "-");
 }
 function inferStep(min, max) {
   const range = max - min;
@@ -631,7 +631,7 @@ function isSpringConfigValue(value) {
 function isEasingConfigValue(value) {
   return resolveValueHasType(value, "easing");
 }
-function resolveDialValues(config, flatValues) {
+function resolveTweakValues(config, flatValues) {
   return resolveConfigValues(config, flatValues, "");
 }
 function resolveConfigValues(config, flatValues, prefix) {
@@ -662,7 +662,7 @@ function resolveConfigValues(config, flatValues, prefix) {
   }
   return result;
 }
-var DialStoreClass = class {
+var TweakStoreClass = class {
   constructor() {
     this.panels = /* @__PURE__ */ new Map();
     this.listeners = /* @__PURE__ */ new Map();
@@ -693,7 +693,7 @@ var DialStoreClass = class {
     const existingPanel = this.panels.get(id);
     if (existingPanel && existingPanel.kind !== options.kind) {
       console.warn(
-        `[dialkit] Panel id "${id}" cannot be shared by a timeline and a standard panel; the most recent registration controls where it renders.`
+        `[tweakers] Panel id "${id}" cannot be shared by a timeline and a standard panel; the most recent registration controls where it renders.`
       );
     }
     const target = resolvePersistTarget("panel", id, options.persist);
@@ -1773,36 +1773,36 @@ function normalizeListItems(config) {
     return row;
   });
 }
-var DialStore = new DialStoreClass();
+var TweakStore = new TweakStoreClass();
 
-// src/solid/createDialKit.ts
-function createDialKit(name, config, options) {
+// src/solid/createTweakers.ts
+function createTweakers(name, config, options) {
   const id = createUniqueId();
   const panelId = `${name}-${id}`;
   const [values, setValues] = createSignal(
-    DialStore.getValues(panelId)
+    TweakStore.getValues(panelId)
   );
   onMount(() => {
-    DialStore.registerPanel(panelId, name, config, options?.shortcuts, {
+    TweakStore.registerPanel(panelId, name, config, options?.shortcuts, {
       hints: options?.hints,
       affordances: options?.affordances,
       labels: options?.labels
     });
-    setValues(DialStore.getValues(panelId));
-    const unsubValues = DialStore.subscribe(panelId, () => {
-      setValues(DialStore.getValues(panelId));
+    setValues(TweakStore.getValues(panelId));
+    const unsubValues = TweakStore.subscribe(panelId, () => {
+      setValues(TweakStore.getValues(panelId));
     });
-    const unsubActions = options?.onAction ? DialStore.subscribeActions(panelId, options.onAction) : void 0;
+    const unsubActions = options?.onAction ? TweakStore.subscribeActions(panelId, options.onAction) : void 0;
     onCleanup(() => {
       unsubValues();
       unsubActions?.();
-      DialStore.unregisterPanel(panelId);
+      TweakStore.unregisterPanel(panelId);
     });
   });
   createEffect(() => {
     const provider = options?.presets ?? null;
     if (provider) JSON.stringify(provider);
-    DialStore.setPresetProvider(panelId, provider);
+    TweakStore.setPresetProvider(panelId, provider);
   });
   return createMemo(() => buildResolvedValues(config, values(), ""));
 }
@@ -1860,7 +1860,7 @@ function getFirstOptionValue(options) {
   return typeof first === "string" ? first : first.value;
 }
 
-// src/solid/createDialTimeline.ts
+// src/solid/createTweakTimeline.ts
 import { createEffect as createEffect2, createMemo as createMemo2, createSignal as createSignal2, createUniqueId as createUniqueId2, onCleanup as onCleanup2, onMount as onMount2 } from "solid-js";
 import { isServer } from "solid-js/web";
 
@@ -1937,7 +1937,7 @@ var TimelineStoreClass = class {
     const existing = this.timelines.get(meta.id);
     if (existing && existing.name !== meta.name) {
       console.warn(
-        `[dialkit] Timeline id "${meta.id}" is already registered by "${existing.name}"; "${meta.name}" will share and overwrite that transport.`
+        `[tweakers] Timeline id "${meta.id}" is already registered by "${existing.name}"; "${meta.name}" will share and overwrite that transport.`
       );
     }
     const firstRegistration = !this.registrationCounts.has(meta.id);
@@ -2311,7 +2311,7 @@ function collectClipEntries(config) {
   for (const [key, value] of Object.entries(config)) {
     if (key === "duration") continue;
     if (RESERVED_KEYS.has(key)) {
-      console.warn(`[dialkit] Timeline key "${key}" collides with a reserved key and was skipped.`);
+      console.warn(`[tweakers] Timeline key "${key}" collides with a reserved key and was skipped.`);
       continue;
     }
     if (isClipConfig(value)) {
@@ -2322,13 +2322,13 @@ function collectClipEntries(config) {
           entries.push({ path: `${key}.${childKey}`, childKey, group: key, clip: childClip });
         } else {
           console.warn(
-            `[dialkit] Timeline clip "${key}.${childKey}" is missing a numeric "at" and was skipped.`
+            `[tweakers] Timeline clip "${key}.${childKey}" is missing a numeric "at" and was skipped.`
           );
         }
       }
     } else {
       console.warn(
-        `[dialkit] Timeline entry "${key}" is neither a clip (needs a numeric "at") nor a group of clips and was skipped.`
+        `[tweakers] Timeline entry "${key}" is neither a clip (needs a numeric "at") nor a group of clips and was skipped.`
       );
     }
   }
@@ -2342,9 +2342,9 @@ function definedValues(values) {
   }
   return result;
 }
-function setDialPath(dialConfig, path, value) {
+function setTweakPath(tweakConfig, path, value) {
   const segments = path.split(".");
-  let node = dialConfig;
+  let node = tweakConfig;
   for (const segment of segments.slice(0, -1)) {
     node = node[segment] ?? (node[segment] = {});
   }
@@ -2357,17 +2357,17 @@ function parseTimelineConfig(config) {
     maxEnd = Math.max(maxEnd, nonNegativeFinite(clip.at) + defaultClipDuration(clip));
   }
   const duration = typeof config.duration === "number" && Number.isFinite(config.duration) && config.duration > 0 ? config.duration : maxEnd > 0 ? Math.ceil(maxEnd * 100 - 1e-4) / 100 : 1;
-  const dialConfig = {};
+  const tweakConfig = {};
   const clips = [];
   entries.forEach(({ path, childKey, group, clip }, index) => {
     const raw = clip;
     if (raw.props && (raw.steps?.length || raw.from || raw.to)) {
       console.warn(
-        `[dialkit] Timeline clip "${path}": "props" is mutually exclusive with from/to/steps \u2014 using "props".`
+        `[tweakers] Timeline clip "${path}": "props" is mutually exclusive with from/to/steps \u2014 using "props".`
       );
     } else if (raw.steps?.length && raw.to) {
       console.warn(
-        `[dialkit] Timeline clip "${path}": "to" is ignored when "steps" is present \u2014 each leg's "to" defines its targets.`
+        `[tweakers] Timeline clip "${path}": "to" is ignored when "steps" is present \u2014 each leg's "to" defines its targets.`
       );
     }
     const hasSteps = Boolean(clip.steps?.length) && !clip.props;
@@ -2376,44 +2376,44 @@ function parseTimelineConfig(config) {
     const total = defaultClipDuration(clip);
     const defaultCurve = single ?? DEFAULT_CLIP_TRANSITION;
     const clipAt = nonNegativeFinite(clip.at);
-    const clipDial = {
+    const clipTweak = {
       at: [clipAt, 0, duration, CLIP_VALUE_STEP]
     };
     if (!hasSteps && !hasProps) {
-      clipDial.duration = [total, 0, duration, CLIP_VALUE_STEP];
+      clipTweak.duration = [total, 0, duration, CLIP_VALUE_STEP];
     }
     if (!hasSteps && !hasProps && (clip.transition || clip.from || clip.to)) {
-      clipDial.transition = normalizeStoredTransition(defaultCurve, total);
+      clipTweak.transition = normalizeStoredTransition(defaultCurve, total);
     }
     let tracks;
     if (clip.props) {
       tracks = [];
       for (const [prop, track] of Object.entries(clip.props)) {
         if (TRACK_RESERVED.has(prop) || /^step\d+$/.test(prop)) {
-          console.warn(`[dialkit] Timeline property "${prop}" collides with a clip field and was skipped.`);
+          console.warn(`[tweakers] Timeline property "${prop}" collides with a clip field and was skipped.`);
           continue;
         }
         const trackDuration = defaultTrackDuration(track, defaultCurve);
         const trackCurve = track.transition ?? defaultCurve;
         const hasTrackSteps = Boolean(track.steps?.length);
-        const trackDial = {
+        const trackTweak = {
           delay: [nonNegativeFinite(track.delay), 0, duration, CLIP_VALUE_STEP]
         };
         if (!hasTrackSteps) {
-          trackDial.duration = [trackDuration, 0, duration, CLIP_VALUE_STEP];
-          trackDial.transition = normalizeStoredTransition(trackCurve, trackDuration);
+          trackTweak.duration = [trackDuration, 0, duration, CLIP_VALUE_STEP];
+          trackTweak.transition = normalizeStoredTransition(trackCurve, trackDuration);
         }
         const fromValue = track.from ?? (hasTrackSteps ? void 0 : track.to);
         if (hasTrackSteps && fromValue === void 0) {
           console.warn(
-            `[dialkit] Timeline clip "${path}": track "${prop}" has steps but no "from" \u2014 declare its starting value.`
+            `[tweakers] Timeline clip "${path}": track "${prop}" has steps but no "from" \u2014 declare its starting value.`
           );
         }
         if (fromValue !== void 0) {
-          trackDial.from = scalarDial(prop, fromValue, hasTrackSteps ? track.steps[0]?.to : track.to);
+          trackTweak.from = scalarTweak(prop, fromValue, hasTrackSteps ? track.steps[0]?.to : track.to);
         }
         if (!hasTrackSteps && track.to !== void 0) {
-          trackDial.to = scalarDial(prop, track.to, fromValue);
+          trackTweak.to = scalarTweak(prop, track.to, fromValue);
         }
         let trackStepKeys;
         if (hasTrackSteps) {
@@ -2423,29 +2423,29 @@ function parseTimelineConfig(config) {
             const stepKey = `step${stepIndex + 1}`;
             trackStepKeys.push(stepKey);
             const stepDuration = defaultStepDuration(step, trackCurve);
-            const stepDial = {
+            const stepTweak = {
               duration: [stepDuration, 0, duration, CLIP_VALUE_STEP],
               transition: normalizeStoredTransition(step.transition ?? trackCurve, stepDuration)
             };
             if (step.to !== void 0) {
-              stepDial.to = scalarDial(prop, step.to, previous);
+              stepTweak.to = scalarTweak(prop, step.to, previous);
               previous = step.to;
             }
-            trackDial[stepKey] = stepDial;
+            trackTweak[stepKey] = stepTweak;
           });
         }
-        clipDial[prop] = trackDial;
+        clipTweak[prop] = trackTweak;
         tracks.push({ prop, stepKeys: trackStepKeys });
       }
     }
     if (clip.from && !hasProps) {
-      clipDial.from = withFromToRanges(
+      clipTweak.from = withFromToRanges(
         clip.from,
         hasSteps ? definedValues(clip.steps[0]?.to) : clip.to
       );
     }
     if (!hasSteps && !hasProps && clip.to) {
-      clipDial.to = withFromToRanges(clip.to, clip.from);
+      clipTweak.to = withFromToRanges(clip.to, clip.from);
     }
     let stepKeys;
     if (hasSteps) {
@@ -2455,7 +2455,7 @@ function parseTimelineConfig(config) {
         const stepKey = `step${stepIndex + 1}`;
         stepKeys.push(stepKey);
         const stepDuration = defaultStepDuration(step, defaultCurve);
-        const stepDial = {
+        const stepTweak = {
           duration: [stepDuration, 0, duration, CLIP_VALUE_STEP],
           transition: normalizeStoredTransition(step.transition ?? defaultCurve, stepDuration)
         };
@@ -2464,17 +2464,17 @@ function parseTimelineConfig(config) {
           for (const prop of Object.keys(stepTo)) {
             if (!running || !(prop in running)) {
               console.warn(
-                `[dialkit] Timeline clip "${path}": property "${prop}" first animates in step ${stepIndex + 1} with no starting value \u2014 declare it in "from".`
+                `[tweakers] Timeline clip "${path}": property "${prop}" first animates in step ${stepIndex + 1} with no starting value \u2014 declare it in "from".`
               );
             }
           }
-          stepDial.to = withFromToRanges(stepTo, running);
+          stepTweak.to = withFromToRanges(stepTo, running);
         }
-        clipDial[stepKey] = stepDial;
+        clipTweak[stepKey] = stepTweak;
         running = { ...running ?? {}, ...stepTo ?? {} };
       });
     }
-    setDialPath(dialConfig, path, clipDial);
+    setTweakPath(tweakConfig, path, clipTweak);
     clips.push({
       key: path,
       label: formatLabel(childKey),
@@ -2485,10 +2485,10 @@ function parseTimelineConfig(config) {
       tracks
     });
   });
-  return { duration, dialConfig, clips };
+  return { duration, tweakConfig, clips };
 }
 var TRACK_RESERVED = /* @__PURE__ */ new Set(["at", "duration", "loop", "from", "to", "transition", "delay"]);
-function scalarDial(prop, value, counterpart) {
+function scalarTweak(prop, value, counterpart) {
   const record = withFromToRanges(
     { [prop]: value },
     counterpart === void 0 ? void 0 : { [prop]: counterpart }
@@ -2559,7 +2559,7 @@ function resolvedAtPath(resolved, path) {
   return isPlainObject(node) ? node : {};
 }
 function computeStaticClips(parsed, flatValues) {
-  const resolved = resolveDialValues(parsed.dialConfig, flatValues);
+  const resolved = resolveTweakValues(parsed.tweakConfig, flatValues);
   return parsed.clips.map(
     (clip) => buildClipStatic(resolvedAtPath(resolved, clip.key), clip, parsed.duration)
   );
@@ -3104,21 +3104,21 @@ var TimelineUiStore = /* @__PURE__ */ new TimelineUiStoreClass();
 function buildCopyInstruction(hookName, panelName, values) {
   const { [TAB_PATH]: _activeTab, ...parameters } = values;
   const jsonStr = JSON.stringify(parameters, null, 2);
-  if (hookName === "useDialTimeline" || hookName === "createDialTimeline") {
+  if (hookName === "useTweakTimeline" || hookName === "createTweakTimeline") {
     return `Update the ${hookName} configuration for "${panelName}" with these values:
 
 \`\`\`json
 ${jsonStr}
 \`\`\`
 
-Apply these values as the new defaults in the ${hookName} call. Keep the existing \`clip.current\` bindings while this timeline is being authored; do not convert the animation or remove DialKit yet.
+Apply these values as the new defaults in the ${hookName} call. Keep the existing \`clip.current\` bindings while this timeline is being authored; do not convert the animation or remove Tweakers yet.
 
 Add this comment immediately above the ${hookName} call as a production handoff note:
 
 \`\`\`tsx
-// TODO(production): DialKit's clip.current values are the scrubbable authoring preview.
+// TODO(production): Tweakers's clip.current values are the scrubbable authoring preview.
 // Replace them with equivalent real Motion animations using the tuned timeline
-// timings and transitions, then remove ${hookName} and <DialTimeline />.
+// timings and transitions, then remove ${hookName} and <TweakTimeline />.
 \`\`\``;
   }
   return `Update the ${hookName} configuration for "${panelName}" with these values:
@@ -3133,13 +3133,13 @@ Apply these values as the new defaults in the ${hookName} call.`;
 // src/env.ts
 var isDevDefault = typeof process !== "undefined" && process?.env?.NODE_ENV ? process.env.NODE_ENV !== "production" : typeof import.meta !== "undefined" && import.meta.env?.MODE ? import.meta.env.MODE !== "production" : true;
 
-// src/solid/createDialTimeline.ts
-function createDialTimeline(name, config, options) {
+// src/solid/createTweakTimeline.ts
+function createTweakTimeline(name, config, options) {
   const instanceId = createUniqueId2();
   const hasStableId = options?.id !== void 0;
   const panelId = options?.id ?? `${name}-${instanceId}`;
   const parsed = createMemo2(() => parseTimelineConfig(config));
-  const [flatValues, setFlatValues] = createSignal2(DialStore.getValues(panelId));
+  const [flatValues, setFlatValues] = createSignal2(TweakStore.getValues(panelId));
   const [transport, setTransport] = createSignal2(TimelineStore.getTransport(panelId));
   const [loopRegion, setLoopRegion] = createSignal2(
     TimelineStore.getLoopRegion(panelId)
@@ -3151,8 +3151,8 @@ function createDialTimeline(name, config, options) {
   const replay = () => TimelineStore.replay(panelId);
   const seek = (time) => TimelineStore.seek(panelId, time);
   if (!isServer) {
-    const unsubscribeValues = DialStore.subscribe(panelId, () => {
-      setFlatValues(DialStore.getValues(panelId));
+    const unsubscribeValues = TweakStore.subscribe(panelId, () => {
+      setFlatValues(TweakStore.getValues(panelId));
     });
     const unsubscribeTransport = TimelineStore.subscribe(panelId, () => {
       setTransport(TimelineStore.getTransport(panelId));
@@ -3164,12 +3164,12 @@ function createDialTimeline(name, config, options) {
     });
   }
   onMount2(() => {
-    DialStore.registerPanel(panelId, name, parsed().dialConfig, void 0, {
+    TweakStore.registerPanel(panelId, name, parsed().tweakConfig, void 0, {
       retainOnUnmount: hasStableId,
       persist: options?.persist,
       kind: "timeline"
     });
-    setFlatValues(DialStore.getValues(panelId));
+    setFlatValues(TweakStore.getValues(panelId));
     const currentStatic = staticTimeline();
     TimelineStore.register(
       buildTimelineMeta(panelId, name, currentStatic.duration, parsed(), options?.loop),
@@ -3181,7 +3181,7 @@ function createDialTimeline(name, config, options) {
     onCleanup2(() => {
       mounted = false;
       TimelineStore.unregister(panelId);
-      DialStore.unregisterPanel(panelId);
+      TweakStore.unregisterPanel(panelId);
     });
   });
   createEffect2(() => {
@@ -3208,7 +3208,7 @@ function createDialTimeline(name, config, options) {
   });
 }
 
-// src/solid/components/DialRoot.tsx
+// src/solid/components/TweakRoot.tsx
 import { template as _$template26 } from "solid-js/web";
 import { memo as _$memo15 } from "solid-js/web";
 import { setAttribute as _$setAttribute20 } from "solid-js/web";
@@ -3240,11 +3240,11 @@ function getEffectiveStep(control, shortcut) {
   return mode === "fine" ? range * 0.01 : mode === "coarse" ? range * 0.1 : control.step ?? 1;
 }
 function applySliderDelta(panelId, path, control, effectiveStep2, direction) {
-  const currentValue = DialStore.getValue(panelId, path);
+  const currentValue = TweakStore.getValue(panelId, path);
   const min = control.min ?? 0;
   const max = control.max ?? 1;
   const newValue = Math.max(min, Math.min(max, currentValue + direction * effectiveStep2));
-  DialStore.updateValue(panelId, path, roundValue(newValue, effectiveStep2));
+  TweakStore.updateValue(panelId, path, roundValue(newValue, effectiveStep2));
 }
 function snapToDecile(rawValue, min, max) {
   const normalized = (rawValue - min) / (max - min);
@@ -3324,13 +3324,13 @@ function ShortcutListener(props) {
   let dragAccumulator = 0;
   const resolveActiveTarget = (interaction) => {
     for (const key of activeKeys) {
-      const panels = DialStore.getPanels();
+      const panels = TweakStore.getPanels();
       for (const panel of panels) {
         for (const [path, shortcut] of Object.entries(panel.shortcuts)) {
           if (!shortcut.key) continue;
           if (shortcut.key.toLowerCase() !== key) continue;
           if ((shortcut.interaction ?? "scroll") !== interaction) continue;
-          const control = DialStore.getPanel(panel.id)?.controls ? findControl(panel.controls, path) : null;
+          const control = TweakStore.getPanel(panel.id)?.controls ? findControl(panel.controls, path) : null;
           if (control && control.type === "slider") {
             return {
               panelId: panel.id,
@@ -3363,15 +3363,15 @@ function ShortcutListener(props) {
       const wasAlreadyHeld = activeKeys.has(key);
       activeKeys.add(key);
       const modifier = getActiveModifier(e);
-      const target = DialStore.resolveShortcutTarget(key, modifier);
+      const target = TweakStore.resolveShortcutTarget(key, modifier);
       if (target) {
         setActiveShortcut({
           activePanelId: target.panelId,
           activePath: target.path
         });
         if (!wasAlreadyHeld && target.control.type === "toggle") {
-          const currentValue = DialStore.getValue(target.panelId, target.path);
-          DialStore.updateValue(target.panelId, target.path, !currentValue);
+          const currentValue = TweakStore.getValue(target.panelId, target.path);
+          TweakStore.updateValue(target.panelId, target.path, !currentValue);
         }
       }
       if (!wasAlreadyHeld) {
@@ -3394,7 +3394,7 @@ function ShortcutListener(props) {
         let found = false;
         for (const remainingKey of activeKeys) {
           const modifier = getActiveModifier(e);
-          const target = DialStore.resolveShortcutTarget(remainingKey, modifier);
+          const target = TweakStore.resolveShortcutTarget(remainingKey, modifier);
           if (target) {
             setActiveShortcut({
               activePanelId: target.panelId,
@@ -3417,7 +3417,7 @@ function ShortcutListener(props) {
       const modifier = getActiveModifier(e);
       if (activeKeys.size > 0) {
         for (const key of activeKeys) {
-          const target = DialStore.resolveShortcutTarget(key, modifier);
+          const target = TweakStore.resolveShortcutTarget(key, modifier);
           if (!target) continue;
           const {
             panelId,
@@ -3433,7 +3433,7 @@ function ShortcutListener(props) {
           return;
         }
       }
-      const scrollOnlyTargets = DialStore.resolveScrollOnlyTargets();
+      const scrollOnlyTargets = TweakStore.resolveScrollOnlyTargets();
       for (const {
         panelId,
         path,
@@ -3621,16 +3621,16 @@ import { addEventListener as _$addEventListener } from "solid-js/web";
 import { use as _$use } from "solid-js/web";
 import { createSignal as createSignal4, createEffect as createEffect3, onCleanup as onCleanup4, Show } from "solid-js";
 import { animate } from "motion";
-var _tmpl$ = /* @__PURE__ */ _$template(`<div class=dialkit-panel-toolbar>`);
-var _tmpl$2 = /* @__PURE__ */ _$template(`<span class=dialkit-hint role=tooltip>`);
-var _tmpl$3 = /* @__PURE__ */ _$template(`<div class=dialkit-folder-content><div class=dialkit-folder-inner>`);
-var _tmpl$4 = /* @__PURE__ */ _$template(`<div><div><div class=dialkit-folder-header-top>`);
-var _tmpl$5 = /* @__PURE__ */ _$template(`<div class=dialkit-folder-title-row><span class="dialkit-folder-title dialkit-folder-title-root">`);
-var _tmpl$6 = /* @__PURE__ */ _$template(`<div class=dialkit-folder-title-row><span class=dialkit-folder-title>`);
-var _tmpl$7 = /* @__PURE__ */ _$template(`<svg class=dialkit-panel-icon viewBox="0 0 16 16"fill=none><path opacity=0.5 fill=currentColor></path><circle fill=currentColor stroke=currentColor stroke-width=1.25></circle><circle fill=currentColor stroke=currentColor stroke-width=1.25></circle><circle fill=currentColor stroke=currentColor stroke-width=1.25>`);
-var _tmpl$8 = /* @__PURE__ */ _$template(`<svg class=dialkit-folder-icon viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
-var _tmpl$9 = /* @__PURE__ */ _$template(`<div class="dialkit-panel-inner dialkit-panel-inline">`);
-var _tmpl$0 = /* @__PURE__ */ _$template(`<div class=dialkit-panel-inner>`);
+var _tmpl$ = /* @__PURE__ */ _$template(`<div class=tweakers-panel-toolbar>`);
+var _tmpl$2 = /* @__PURE__ */ _$template(`<span class=tweakers-hint role=tooltip>`);
+var _tmpl$3 = /* @__PURE__ */ _$template(`<div class=tweakers-folder-content><div class=tweakers-folder-inner>`);
+var _tmpl$4 = /* @__PURE__ */ _$template(`<div><div><div class=tweakers-folder-header-top>`);
+var _tmpl$5 = /* @__PURE__ */ _$template(`<div class=tweakers-folder-title-row><span class="tweakers-folder-title tweakers-folder-title-root">`);
+var _tmpl$6 = /* @__PURE__ */ _$template(`<div class=tweakers-folder-title-row><span class=tweakers-folder-title>`);
+var _tmpl$7 = /* @__PURE__ */ _$template(`<svg class=tweakers-panel-icon viewBox="0 0 16 16"fill=none><path opacity=0.5 fill=currentColor></path><circle fill=currentColor stroke=currentColor stroke-width=1.25></circle><circle fill=currentColor stroke=currentColor stroke-width=1.25></circle><circle fill=currentColor stroke=currentColor stroke-width=1.25>`);
+var _tmpl$8 = /* @__PURE__ */ _$template(`<svg class=tweakers-folder-icon viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
+var _tmpl$9 = /* @__PURE__ */ _$template(`<div class="tweakers-panel-inner tweakers-panel-inline">`);
+var _tmpl$0 = /* @__PURE__ */ _$template(`<div class=tweakers-panel-inner>`);
 function Folder(props) {
   const [isOpen, setIsOpen] = createSignal4(props.defaultOpen ?? true);
   const [isCollapsed, setIsCollapsed] = createSignal4(!(props.defaultOpen ?? true));
@@ -3855,7 +3855,7 @@ function Folder(props) {
       }
     }), null);
     _$effect((_p$) => {
-      var _v$ = `dialkit-folder ${props.isRoot ? "dialkit-folder-root" : ""}`, _v$2 = `dialkit-folder-header ${props.isRoot ? "dialkit-panel-header" : ""} ${props.collapsible === false ? "dialkit-folder-header-static" : ""}`, _v$3 = props.hint ? "true" : void 0, _v$4 = props.hint ? props.hintId : void 0;
+      var _v$ = `tweakers-folder ${props.isRoot ? "tweakers-folder-root" : ""}`, _v$2 = `tweakers-folder-header ${props.isRoot ? "tweakers-panel-header" : ""} ${props.collapsible === false ? "tweakers-folder-header-static" : ""}`, _v$3 = props.hint ? "true" : void 0, _v$4 = props.hint ? props.hintId : void 0;
       _v$ !== _p$.e && _$className(_el$, _p$.e = _v$);
       _v$2 !== _p$.t && _$className(_el$2, _p$.t = _v$2);
       _v$3 !== _p$.a && _$setAttribute(_el$2, "data-hint", _p$.a = _v$3);
@@ -3898,7 +3898,7 @@ function Folder(props) {
         width: open ? 280 : 42,
         height: open ? measuredOpenHeight : 42,
         borderRadius: open ? 14 : 21,
-        boxShadow: open ? "var(--dial-shadow)" : "var(--dial-shadow-collapsed)"
+        boxShadow: open ? "var(--tweak-shadow)" : "var(--tweak-shadow-collapsed)"
       };
       panelRef.style.cursor = open ? "" : "pointer";
       panelRef.style.overflow = open ? "hidden auto" : "hidden";
@@ -4013,7 +4013,7 @@ import { template as _$template2 } from "solid-js/web";
 import { delegateEvents as _$delegateEvents2 } from "solid-js/web";
 import { setAttribute as _$setAttribute2 } from "solid-js/web";
 import { effect as _$effect2 } from "solid-js/web";
-var _tmpl$10 = /* @__PURE__ */ _$template2(`<button type=button role=checkbox class=dialkit-checkbox><svg viewBox="0 0 22 22"width=22 height=22 aria-hidden=true><path class=dialkit-checkbox-slash d="M6 16 16 6"fill=none></path><rect class=dialkit-checkbox-chip x=5 y=5 width=12 height=12 rx=2></rect><path class=dialkit-checkbox-dash d="M6 11h10"fill=none>`);
+var _tmpl$10 = /* @__PURE__ */ _$template2(`<button type=button role=checkbox class=tweakers-checkbox><svg viewBox="0 0 22 22"width=22 height=22 aria-hidden=true><path class=tweakers-checkbox-slash d="M6 16 16 6"fill=none></path><rect class=tweakers-checkbox-chip x=5 y=5 width=12 height=12 rx=2></rect><path class=tweakers-checkbox-dash d="M6 11h10"fill=none>`);
 function Checkbox(props) {
   const disabled = () => props.disabled ?? false;
   return (() => {
@@ -4045,8 +4045,8 @@ function Checkbox(props) {
 _$delegateEvents2(["click"]);
 
 // src/solid/components/ModuleFolder.tsx
-var _tmpl$11 = /* @__PURE__ */ _$template3(`<span class=dialkit-hint role=tooltip>`);
-var _tmpl$22 = /* @__PURE__ */ _$template3(`<div class="dialkit-module dialkit-module-folder"><div class="dialkit-module-header dialkit-module-header-toggle"><span class=dialkit-module-title></span></div><div class=dialkit-module-collapse><div class=dialkit-module-collapse-clip><div class=dialkit-module-inner>`);
+var _tmpl$11 = /* @__PURE__ */ _$template3(`<span class=tweakers-hint role=tooltip>`);
+var _tmpl$22 = /* @__PURE__ */ _$template3(`<div class="tweakers-module tweakers-module-folder"><div class="tweakers-module-header tweakers-module-header-toggle"><span class=tweakers-module-title></span></div><div class=tweakers-module-collapse><div class=tweakers-module-collapse-clip><div class=tweakers-module-inner>`);
 function ModuleFolder(props) {
   const [isOpen, setIsOpen] = createSignal5(props.defaultOpen ?? true);
   const handleEnabledChange = (next) => {
@@ -4129,10 +4129,10 @@ function placePopover(anchor, popoverHeight, viewportHeight, width = AFFORDANCE_
 }
 
 // src/solid/components/ControlShell.tsx
-var _tmpl$12 = /* @__PURE__ */ _$template4(`<span class=dialkit-hint role=tooltip>`);
-var _tmpl$23 = /* @__PURE__ */ _$template4(`<button type=button class=dialkit-affordance-dot>`);
-var _tmpl$32 = /* @__PURE__ */ _$template4(`<div class=dialkit-control-tip>`);
-var _tmpl$42 = /* @__PURE__ */ _$template4(`<div class=dialkit-affordance-popover role=dialog tabindex=-1><span class=dialkit-affordance-popover-title>`);
+var _tmpl$12 = /* @__PURE__ */ _$template4(`<span class=tweakers-hint role=tooltip>`);
+var _tmpl$23 = /* @__PURE__ */ _$template4(`<button type=button class=tweakers-affordance-dot>`);
+var _tmpl$32 = /* @__PURE__ */ _$template4(`<div class=tweakers-control-tip>`);
+var _tmpl$42 = /* @__PURE__ */ _$template4(`<div class=tweakers-affordance-popover role=dialog tabindex=-1><span class=tweakers-affordance-popover-title>`);
 function ControlShell(props) {
   const hasAffordance = () => Boolean(props.affordance && props.panelId && props.path);
   const label = () => props.affordance?.label ?? "Options";
@@ -4148,15 +4148,15 @@ function ControlShell(props) {
     const path = props.path;
     if (!panelId || !path) return;
     const read = () => {
-      setStatus(DialStore.getAffordanceStatus(panelId, path));
-      setDisabled(DialStore.isDisabled(panelId, path));
+      setStatus(TweakStore.getAffordanceStatus(panelId, path));
+      setDisabled(TweakStore.isDisabled(panelId, path));
     };
     read();
-    onCleanup5(DialStore.subscribeControlState(panelId, read));
+    onCleanup5(TweakStore.subscribeControlState(panelId, read));
   });
   createEffect4(() => {
     if (!dotEl) return;
-    setPortalTarget(dotEl.closest(".dialkit-root") ?? document.body);
+    setPortalTarget(dotEl.closest(".tweakers-root") ?? document.body);
   });
   const place = () => {
     const rect = dotEl?.getBoundingClientRect();
@@ -4203,7 +4203,7 @@ function ControlShell(props) {
     panelId: props.panelId,
     path: props.path,
     status: status(),
-    setStatus: (next) => DialStore.setAffordanceStatus(props.panelId, props.path, next)
+    setStatus: (next) => TweakStore.setAffordanceStatus(props.panelId, props.path, next)
   });
   return [(() => {
     var _el$ = _tmpl$32();
@@ -4320,18 +4320,18 @@ import { insert as _$insert4 } from "solid-js/web";
 import { setStyleProperty as _$setStyleProperty2 } from "solid-js/web";
 import { createSignal as createSignal7, createEffect as createEffect5, onMount as onMount4, onCleanup as onCleanup6, Show as Show4 } from "solid-js";
 import { animate as animate2, motionValue } from "motion";
-var _tmpl$13 = /* @__PURE__ */ _$template5(`<div class=dialkit-slider-hashmark>`);
+var _tmpl$13 = /* @__PURE__ */ _$template5(`<div class=tweakers-slider-hashmark>`);
 var _tmpl$24 = /* @__PURE__ */ _$template5(`<span>`);
-var _tmpl$33 = /* @__PURE__ */ _$template5(`<div class=dialkit-slider-fill-area><div class=dialkit-slider-fill-vertical>`);
-var _tmpl$43 = /* @__PURE__ */ _$template5(`<span class=dialkit-slider-label-vertical>`);
+var _tmpl$33 = /* @__PURE__ */ _$template5(`<div class=tweakers-slider-fill-area><div class=tweakers-slider-fill-vertical>`);
+var _tmpl$43 = /* @__PURE__ */ _$template5(`<span class=tweakers-slider-label-vertical>`);
 var _tmpl$52 = /* @__PURE__ */ _$template5(`<div><div>`);
-var _tmpl$62 = /* @__PURE__ */ _$template5(`<div class=dialkit-slider-track><div class=dialkit-slider-fill></div><div class=dialkit-slider-handle style=opacity:0>`);
-var _tmpl$72 = /* @__PURE__ */ _$template5(`<div class=dialkit-slider-hashmarks>`);
-var _tmpl$82 = /* @__PURE__ */ _$template5(`<span class=dialkit-slider-label>`);
-var _tmpl$92 = /* @__PURE__ */ _$template5(`<span class="dialkit-slider-value dialkit-slider-value-icon">`);
-var _tmpl$02 = /* @__PURE__ */ _$template5(`<input type=text class=dialkit-slider-input>`);
-var _tmpl$1 = /* @__PURE__ */ _$template5(`<span class=dialkit-slider-unit>`);
-var _tmpl$102 = /* @__PURE__ */ _$template5(`<input type=text class="dialkit-slider-input dialkit-slider-input-vertical">`);
+var _tmpl$62 = /* @__PURE__ */ _$template5(`<div class=tweakers-slider-track><div class=tweakers-slider-fill></div><div class=tweakers-slider-handle style=opacity:0>`);
+var _tmpl$72 = /* @__PURE__ */ _$template5(`<div class=tweakers-slider-hashmarks>`);
+var _tmpl$82 = /* @__PURE__ */ _$template5(`<span class=tweakers-slider-label>`);
+var _tmpl$92 = /* @__PURE__ */ _$template5(`<span class="tweakers-slider-value tweakers-slider-value-icon">`);
+var _tmpl$02 = /* @__PURE__ */ _$template5(`<input type=text class=tweakers-slider-input>`);
+var _tmpl$1 = /* @__PURE__ */ _$template5(`<span class=tweakers-slider-unit>`);
+var _tmpl$102 = /* @__PURE__ */ _$template5(`<input type=text class="tweakers-slider-input tweakers-slider-input-vertical">`);
 var CLICK_THRESHOLD = 3;
 var DEAD_ZONE = 32;
 var MAX_CURSOR_RANGE = 200;
@@ -4669,7 +4669,7 @@ function Slider(props) {
       })();
     });
   };
-  const cardClass = () => ["dialkit-slider", isVertical() ? "dialkit-slider-vertical" : "", isActive() ? "dialkit-slider-active" : "", isInteracting() ? "dialkit-slider-engaged" : "", isMetaHeld() ? "dialkit-slider-text-mode" : ""].filter(Boolean).join(" ");
+  const cardClass = () => ["tweakers-slider", isVertical() ? "tweakers-slider-vertical" : "", isActive() ? "tweakers-slider-active" : "", isInteracting() ? "tweakers-slider-engaged" : "", isMetaHeld() ? "tweakers-slider-text-mode" : ""].filter(Boolean).join(" ");
   const shortcutPill = () => _$createComponent5(Show4, {
     get when() {
       return props.shortcut;
@@ -4677,7 +4677,7 @@ function Slider(props) {
     get children() {
       var _el$3 = _tmpl$24();
       _$insert4(_el$3, () => formatSliderShortcut(props.shortcut));
-      _$effect5(() => _$className2(_el$3, `dialkit-shortcut-pill${props.shortcutActive ? " dialkit-shortcut-pill-active" : ""}`));
+      _$effect5(() => _$className2(_el$3, `tweakers-shortcut-pill${props.shortcutActive ? " tweakers-shortcut-pill-active" : ""}`));
       return _el$3;
     }
   });
@@ -4761,7 +4761,7 @@ function Slider(props) {
             }
           }), null);
           _$effect5((_p$) => {
-            var _v$9 = `dialkit-slider-value ${isValueEditable() ? "dialkit-slider-value-editable" : ""}`, _v$0 = isValueEditable() || isMetaHeld() ? "text" : "default";
+            var _v$9 = `tweakers-slider-value ${isValueEditable() ? "tweakers-slider-value-editable" : ""}`, _v$0 = isValueEditable() || isMetaHeld() ? "text" : "default";
             _v$9 !== _p$.e && _$className2(_el$14, _p$.e = _v$9);
             _v$0 !== _p$.t && _$setStyleProperty2(_el$14, "cursor", _p$.t = _v$0);
             return _p$;
@@ -4816,7 +4816,7 @@ function Slider(props) {
             }
           }), null);
           _$effect5((_p$) => {
-            var _v$1 = `dialkit-slider-value-vertical ${isValueEditable() ? "dialkit-slider-value-editable" : ""}`, _v$10 = isValueEditable() || isMetaHeld() ? "text" : "default";
+            var _v$1 = `tweakers-slider-value-vertical ${isValueEditable() ? "tweakers-slider-value-editable" : ""}`, _v$10 = isValueEditable() || isMetaHeld() ? "text" : "default";
             _v$1 !== _p$.e && _$className2(_el$17, _p$.e = _v$1);
             _v$10 !== _p$.t && _$setStyleProperty2(_el$17, "cursor", _p$.t = _v$10);
             return _p$;
@@ -4834,7 +4834,7 @@ function Slider(props) {
       }
     }));
     _$effect5((_p$) => {
-      var _v$3 = `dialkit-slider-wrapper${isVertical() ? " dialkit-slider-wrapper-vertical" : ""}`, _v$4 = cardClass(), _v$5 = hasOrigin() ? "true" : void 0;
+      var _v$3 = `tweakers-slider-wrapper${isVertical() ? " tweakers-slider-wrapper-vertical" : ""}`, _v$4 = cardClass(), _v$5 = hasOrigin() ? "true" : void 0;
       _v$3 !== _p$.e && _$className2(_el$4, _p$.e = _v$3);
       _v$4 !== _p$.t && _$className2(_el$5, _p$.t = _v$4);
       _v$5 !== _p$.a && _$setAttribute5(_el$5, "data-origin", _p$.a = _v$5);
@@ -4858,10 +4858,10 @@ import { effect as _$effect6 } from "solid-js/web";
 import { memo as _$memo4 } from "solid-js/web";
 import { insert as _$insert5 } from "solid-js/web";
 import { createSignal as createSignal8, createEffect as createEffect6 } from "solid-js";
-var _tmpl$14 = /* @__PURE__ */ _$template6(`<div><span class=dialkit-number-label>`);
-var _tmpl$25 = /* @__PURE__ */ _$template6(`<input type=text class=dialkit-number-input>`);
-var _tmpl$34 = /* @__PURE__ */ _$template6(`<span class=dialkit-number-value>`);
-var _tmpl$44 = /* @__PURE__ */ _$template6(`<span class=dialkit-number-unit>`);
+var _tmpl$14 = /* @__PURE__ */ _$template6(`<div><span class=tweakers-number-label>`);
+var _tmpl$25 = /* @__PURE__ */ _$template6(`<input type=text class=tweakers-number-input>`);
+var _tmpl$34 = /* @__PURE__ */ _$template6(`<span class=tweakers-number-value>`);
+var _tmpl$44 = /* @__PURE__ */ _$template6(`<span class=tweakers-number-unit>`);
 var CLICK_THRESHOLD2 = 3;
 function NumberControl(props) {
   const step = () => props.step ?? 0.01;
@@ -4940,7 +4940,7 @@ function NumberControl(props) {
     }
   };
   const displayValue = () => props.formatValue ? props.formatValue(props.value) : props.value.toFixed(decimalsForStep2(step()));
-  const className = () => ["dialkit-number-control", isVertical() ? "dialkit-number-control-vertical" : "", isScrubbing() ? "dialkit-number-control-engaged" : ""].filter(Boolean).join(" ");
+  const className = () => ["tweakers-number-control", isVertical() ? "tweakers-number-control-vertical" : "", isScrubbing() ? "tweakers-number-control-engaged" : ""].filter(Boolean).join(" ");
   return (() => {
     var _el$ = _tmpl$14(), _el$2 = _el$.firstChild;
     _el$.$$pointerup = handlePointerUp;
@@ -4991,9 +4991,9 @@ import { insert as _$insert6 } from "solid-js/web";
 import { use as _$use5 } from "solid-js/web";
 import { createSignal as createSignal9, createEffect as createEffect7, onMount as onMount5, onCleanup as onCleanup7, Show as Show5 } from "solid-js";
 import { animate as animate3, motionValue as motionValue2 } from "motion";
-var _tmpl$15 = /* @__PURE__ */ _$template7(`<input type=text class=dialkit-range-slider-input>`);
-var _tmpl$26 = /* @__PURE__ */ _$template7(`<div class=dialkit-range-slider-wrapper><div><div class=dialkit-range-slider-fill></div><div class=dialkit-range-slider-handle style=transform:translateY(-50%);opacity:0.35></div><div class=dialkit-range-slider-handle style=transform:translateY(-50%);opacity:0.35></div><span class=dialkit-range-slider-label>`);
-var _tmpl$35 = /* @__PURE__ */ _$template7(`<span class=dialkit-range-slider-value><span class=dialkit-range-slider-bound></span><span class=dialkit-range-slider-dash>\u2013</span><span class=dialkit-range-slider-bound>`);
+var _tmpl$15 = /* @__PURE__ */ _$template7(`<input type=text class=tweakers-range-slider-input>`);
+var _tmpl$26 = /* @__PURE__ */ _$template7(`<div class=tweakers-range-slider-wrapper><div><div class=tweakers-range-slider-fill></div><div class=tweakers-range-slider-handle style=transform:translateY(-50%);opacity:0.35></div><div class=tweakers-range-slider-handle style=transform:translateY(-50%);opacity:0.35></div><span class=tweakers-range-slider-label>`);
+var _tmpl$35 = /* @__PURE__ */ _$template7(`<span class=tweakers-range-slider-value><span class=tweakers-range-slider-bound></span><span class=tweakers-range-slider-dash>\u2013</span><span class=tweakers-range-slider-bound>`);
 var CLICK_THRESHOLD3 = 3;
 var HANDLE_HIT_PX = 12;
 function RangeSlider(props) {
@@ -5309,7 +5309,7 @@ function RangeSlider(props) {
       }
     }), null);
     _$effect7((_p$) => {
-      var _v$ = `dialkit-range-slider ${isActive() ? "dialkit-range-slider-active" : ""}`, _v$2 = `${lowPercent()}%`, _v$3 = `${Math.max(0, highPercent() - lowPercent())}%`, _v$4 = handleLeftStyles(lowPercent(), highPercent()).low, _v$5 = handleLeftStyles(lowPercent(), highPercent()).high;
+      var _v$ = `tweakers-range-slider ${isActive() ? "tweakers-range-slider-active" : ""}`, _v$2 = `${lowPercent()}%`, _v$3 = `${Math.max(0, highPercent() - lowPercent())}%`, _v$4 = handleLeftStyles(lowPercent(), highPercent()).low, _v$5 = handleLeftStyles(lowPercent(), highPercent()).high;
       _v$ !== _p$.e && _$className4(_el$2, _p$.e = _v$);
       _v$2 !== _p$.t && _$setStyleProperty3(_el$3, "left", _p$.t = _v$2);
       _v$3 !== _p$.a && _$setStyleProperty3(_el$3, "width", _p$.a = _v$3);
@@ -5336,7 +5336,7 @@ import { insert as _$insert7 } from "solid-js/web";
 import { createComponent as _$createComponent7 } from "solid-js/web";
 import { Show as Show6 } from "solid-js";
 var _tmpl$16 = /* @__PURE__ */ _$template8(`<span>`);
-var _tmpl$27 = /* @__PURE__ */ _$template8(`<div class="dialkit-labeled-control dialkit-labeled-control-check"><span class=dialkit-labeled-control-label>`);
+var _tmpl$27 = /* @__PURE__ */ _$template8(`<div class="tweakers-labeled-control tweakers-labeled-control-check"><span class=tweakers-labeled-control-label>`);
 function Toggle(props) {
   return (() => {
     var _el$ = _tmpl$27(), _el$2 = _el$.firstChild;
@@ -5359,7 +5359,7 @@ function Toggle(props) {
       get children() {
         var _el$3 = _tmpl$16();
         _$insert7(_el$3, () => formatToggleShortcut(props.shortcut));
-        _$effect8(() => _$className5(_el$3, `dialkit-shortcut-pill${props.shortcutActive ? " dialkit-shortcut-pill-active" : ""}`));
+        _$effect8(() => _$className5(_el$3, `tweakers-shortcut-pill${props.shortcutActive ? " tweakers-shortcut-pill-active" : ""}`));
         return _el$3;
       }
     }), null);
@@ -5384,9 +5384,9 @@ import { insert as _$insert8 } from "solid-js/web";
 import { createComponent as _$createComponent8 } from "solid-js/web";
 import { use as _$use6 } from "solid-js/web";
 import { createSignal as createSignal10, createEffect as createEffect8, For, Show as Show7 } from "solid-js";
-var _tmpl$17 = /* @__PURE__ */ _$template9(`<div class=dialkit-segmented>`);
-var _tmpl$28 = /* @__PURE__ */ _$template9(`<div class=dialkit-segmented-pill>`);
-var _tmpl$36 = /* @__PURE__ */ _$template9(`<button class=dialkit-segmented-button>`);
+var _tmpl$17 = /* @__PURE__ */ _$template9(`<div class=tweakers-segmented>`);
+var _tmpl$28 = /* @__PURE__ */ _$template9(`<div class=tweakers-segmented-pill>`);
+var _tmpl$36 = /* @__PURE__ */ _$template9(`<button class=tweakers-segmented-button>`);
 function SegmentedControl(props) {
   let containerRef;
   let hasAnimated = false;
@@ -5461,7 +5461,7 @@ import { insert as _$insert9 } from "solid-js/web";
 import { setAttribute as _$setAttribute7 } from "solid-js/web";
 var _tmpl$18 = /* @__PURE__ */ _$template10(`<svg><line y1=0 y2=140 stroke="rgba(255, 255, 255, 0.08)"stroke-width=1></svg>`, false, true, false);
 var _tmpl$29 = /* @__PURE__ */ _$template10(`<svg><line x1=0 x2=256 stroke="rgba(255, 255, 255, 0.08)"stroke-width=1></svg>`, false, true, false);
-var _tmpl$37 = /* @__PURE__ */ _$template10(`<svg viewBox="0 0 256 140"class=dialkit-spring-viz><line x1=0 y1=70 x2=256 y2=70 stroke="rgba(255, 255, 255, 0.15)"stroke-width=1 stroke-dasharray=4,4></line><path fill=none stroke="rgba(255, 255, 255, 0.6)"stroke-width=2 stroke-linecap=round stroke-linejoin=round>`);
+var _tmpl$37 = /* @__PURE__ */ _$template10(`<svg viewBox="0 0 256 140"class=tweakers-spring-viz><line x1=0 y1=70 x2=256 y2=70 stroke="rgba(255, 255, 255, 0.15)"stroke-width=1 stroke-dasharray=4,4></line><path fill=none stroke="rgba(255, 255, 255, 0.6)"stroke-width=2 stroke-linecap=round stroke-linejoin=round>`);
 function generateSpringCurve(stiffness, damping, mass, duration) {
   const points = [];
   const steps = 100;
@@ -5541,12 +5541,12 @@ function SpringVisualization(props) {
 }
 
 // src/solid/components/SpringControl.tsx
-var _tmpl$19 = /* @__PURE__ */ _$template11(`<div style=display:flex;flex-direction:column;gap:6px><div class=dialkit-labeled-control><span class=dialkit-labeled-control-label>Type`);
+var _tmpl$19 = /* @__PURE__ */ _$template11(`<div style=display:flex;flex-direction:column;gap:6px><div class=tweakers-labeled-control><span class=tweakers-labeled-control-label>Type`);
 function SpringControl(props) {
-  const [mode, setMode] = createSignal11(DialStore.getSpringMode(props.panelId, props.path));
+  const [mode, setMode] = createSignal11(TweakStore.getSpringMode(props.panelId, props.path));
   onMount6(() => {
-    const unsub = DialStore.subscribe(props.panelId, () => {
-      setMode(DialStore.getSpringMode(props.panelId, props.path));
+    const unsub = TweakStore.subscribe(props.panelId, () => {
+      setMode(TweakStore.getSpringMode(props.panelId, props.path));
     });
     onCleanup8(unsub);
   });
@@ -5570,7 +5570,7 @@ function SpringControl(props) {
     } else {
       cache2.advanced = props.spring;
     }
-    DialStore.updateSpringMode(props.panelId, props.path, newMode);
+    TweakStore.updateSpringMode(props.panelId, props.path, newMode);
     if (newMode === "simple") {
       props.onChange(cache2.simple);
     } else {
@@ -5710,7 +5710,7 @@ function fromStore(read, subscribe) {
 import { template as _$template12 } from "solid-js/web";
 import { setAttribute as _$setAttribute8 } from "solid-js/web";
 import { effect as _$effect11 } from "solid-js/web";
-var _tmpl$20 = /* @__PURE__ */ _$template12(`<svg viewBox="0 0 200 200"preserveAspectRatio="xMidYMid slice"class="dialkit-spring-viz dialkit-easing-viz"><line stroke="rgba(255, 255, 255, 0.15)"stroke-width=1 stroke-dasharray=4,4></line><path fill=none stroke="rgba(255, 255, 255, 0.6)"stroke-width=2 stroke-linecap=round>`);
+var _tmpl$20 = /* @__PURE__ */ _$template12(`<svg viewBox="0 0 200 200"preserveAspectRatio="xMidYMid slice"class="tweakers-spring-viz tweakers-easing-viz"><line stroke="rgba(255, 255, 255, 0.15)"stroke-width=1 stroke-dasharray=4,4></line><path fill=none stroke="rgba(255, 255, 255, 0.6)"stroke-width=2 stroke-linecap=round>`);
 function EasingVisualization(props) {
   const size = 200;
   const pad = 10;
@@ -5749,10 +5749,10 @@ function EasingVisualization(props) {
 }
 
 // src/solid/components/TransitionControl.tsx
-var _tmpl$21 = /* @__PURE__ */ _$template13(`<div class=dialkit-labeled-control><span class=dialkit-labeled-control-label>Ease</span><input type=text class=dialkit-text-input>`);
-var _tmpl$210 = /* @__PURE__ */ _$template13(`<div style=display:flex;flex-direction:column;gap:6px><div class=dialkit-labeled-control><span class=dialkit-labeled-control-label>Type`);
+var _tmpl$21 = /* @__PURE__ */ _$template13(`<div class=tweakers-labeled-control><span class=tweakers-labeled-control-label>Ease</span><input type=text class=tweakers-text-input>`);
+var _tmpl$210 = /* @__PURE__ */ _$template13(`<div style=display:flex;flex-direction:column;gap:6px><div class=tweakers-labeled-control><span class=tweakers-labeled-control-label>Type`);
 function TransitionControl(props) {
-  const mode = fromStore(() => DialStore.getTransitionMode(props.panelId, props.path), (notify2) => DialStore.subscribe(props.panelId, notify2));
+  const mode = fromStore(() => TweakStore.getTransitionMode(props.panelId, props.path), (notify2) => TweakStore.subscribe(props.panelId, notify2));
   const [editingEase, setEditingEase] = createSignal13(false);
   const [easeDraft, setEaseDraft] = createSignal13("");
   const cache2 = {
@@ -5791,7 +5791,7 @@ function TransitionControl(props) {
     return cache2.easing;
   };
   const handleModeChange = (next) => {
-    DialStore.updateTransitionMode(props.panelId, props.path, next);
+    TweakStore.updateTransitionMode(props.panelId, props.path, next);
     props.onChange(next === "easing" ? cache2.easing : next === "simple" ? cache2.simple : cache2.advanced);
   };
   const handleSpringUpdate = (key, value) => {
@@ -6037,7 +6037,7 @@ import { effect as _$effect13 } from "solid-js/web";
 import { insert as _$insert12 } from "solid-js/web";
 import { setAttribute as _$setAttribute10 } from "solid-js/web";
 import { createUniqueId as createUniqueId3 } from "solid-js";
-var _tmpl$30 = /* @__PURE__ */ _$template14(`<div class=dialkit-text-control><label class=dialkit-text-label></label><input type=text class=dialkit-text-input>`);
+var _tmpl$30 = /* @__PURE__ */ _$template14(`<div class=tweakers-text-control><label class=tweakers-text-label></label><input type=text class=tweakers-text-input>`);
 function TextControl(props) {
   const inputId = createUniqueId3();
   return (() => {
@@ -6066,9 +6066,9 @@ import { use as _$use7 } from "solid-js/web";
 import { createSignal as createSignal14, createEffect as createEffect10, onMount as onMount7, onCleanup as onCleanup10, Show as Show9, For as For2 } from "solid-js";
 import { Portal as Portal2 } from "solid-js/web";
 import { animate as animate4 } from "motion";
-var _tmpl$31 = /* @__PURE__ */ _$template15(`<div class=dialkit-select-dropdown>`);
-var _tmpl$211 = /* @__PURE__ */ _$template15(`<div class=dialkit-select-row><button class=dialkit-select-trigger><span class=dialkit-select-label></span><div class=dialkit-select-right><span class=dialkit-select-value></span><svg class=dialkit-select-chevron viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
-var _tmpl$38 = /* @__PURE__ */ _$template15(`<button class=dialkit-select-option>`);
+var _tmpl$31 = /* @__PURE__ */ _$template15(`<div class=tweakers-select-dropdown>`);
+var _tmpl$211 = /* @__PURE__ */ _$template15(`<div class=tweakers-select-row><button class=tweakers-select-trigger><span class=tweakers-select-label></span><div class=tweakers-select-right><span class=tweakers-select-value></span><svg class=tweakers-select-chevron viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
+var _tmpl$38 = /* @__PURE__ */ _$template15(`<button class=tweakers-select-option>`);
 function toTitleCase(s) {
   return s.replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -6091,7 +6091,7 @@ function SelectControl(props) {
   const normalized = () => normalizeOptions(props.options);
   const selectedOption = () => normalized().find((o) => o.value === props.value);
   onMount7(() => {
-    const root = triggerRef?.closest(".dialkit-root");
+    const root = triggerRef?.closest(".tweakers-root");
     setPortalTarget(root ?? document.body);
     if (chevronRef) {
       chevronRef.style.transform = `rotate(${isOpen() ? 180 : 0}deg)`;
@@ -6338,12 +6338,12 @@ function subscribePalette(cb) {
 }
 
 // src/solid/components/ColorPickerPanel.tsx
-var _tmpl$39 = /* @__PURE__ */ _$template16(`<label class=dialkit-color-field><input type=text inputmode=decimal><span class=dialkit-color-field-label>`);
-var _tmpl$212 = /* @__PURE__ */ _$template16(`<label class="dialkit-color-field dialkit-color-field-hex"><input type=text><span class=dialkit-color-field-label>HEX`);
-var _tmpl$310 = /* @__PURE__ */ _$template16(`<button class=dialkit-color-palette-slot>`);
-var _tmpl$45 = /* @__PURE__ */ _$template16(`<div class="dialkit-color-slider dialkit-color-alpha dialkit-checker"><div class=dialkit-color-alpha-gradient></div><div class=dialkit-color-slider-thumb>`);
-var _tmpl$53 = /* @__PURE__ */ _$template16(`<div class=dialkit-color-palette>`);
-var _tmpl$63 = /* @__PURE__ */ _$template16(`<div class=dialkit-color-picker><div class=dialkit-color-sv><div class=dialkit-color-sv-thumb></div></div><div class="dialkit-color-slider dialkit-color-hue"><div class=dialkit-color-slider-thumb></div></div><div class=dialkit-color-fields>`);
+var _tmpl$39 = /* @__PURE__ */ _$template16(`<label class=tweakers-color-field><input type=text inputmode=decimal><span class=tweakers-color-field-label>`);
+var _tmpl$212 = /* @__PURE__ */ _$template16(`<label class="tweakers-color-field tweakers-color-field-hex"><input type=text><span class=tweakers-color-field-label>HEX`);
+var _tmpl$310 = /* @__PURE__ */ _$template16(`<button class=tweakers-color-palette-slot>`);
+var _tmpl$45 = /* @__PURE__ */ _$template16(`<div class="tweakers-color-slider tweakers-color-alpha tweakers-checker"><div class=tweakers-color-alpha-gradient></div><div class=tweakers-color-slider-thumb>`);
+var _tmpl$53 = /* @__PURE__ */ _$template16(`<div class=tweakers-color-palette>`);
+var _tmpl$63 = /* @__PURE__ */ _$template16(`<div class=tweakers-color-picker><div class=tweakers-color-sv><div class=tweakers-color-sv-thumb></div></div><div class="tweakers-color-slider tweakers-color-hue"><div class=tweakers-color-slider-thumb></div></div><div class=tweakers-color-fields>`);
 var FORMAT_OPTIONS = [{
   value: "hex",
   label: "HEX"
@@ -6744,12 +6744,12 @@ function ColorPickerPanel(props) {
 _$delegateEvents12(["input", "keydown", "contextmenu", "pointerdown", "pointermove", "pointerup", "click"]);
 
 // src/solid/components/ColorControl.tsx
-var _tmpl$40 = /* @__PURE__ */ _$template17(`<input type=text class=dialkit-color-hex-input>`);
-var _tmpl$213 = /* @__PURE__ */ _$template17(`<div class=dialkit-color-picker-popover>`);
-var _tmpl$311 = /* @__PURE__ */ _$template17(`<div class=dialkit-color-control><span class=dialkit-color-label></span><div class=dialkit-color-inputs><span class=dialkit-color-hex-wrap><span class=dialkit-color-hash aria-hidden=true>#</span></span><button class=dialkit-color-swatch title="Pick color">`);
-var _tmpl$46 = /* @__PURE__ */ _$template17(`<span class=dialkit-color-hex>`);
-var _tmpl$54 = /* @__PURE__ */ _$template17(`<span class=dialkit-color-divider aria-hidden=true>`);
-var _tmpl$64 = /* @__PURE__ */ _$template17(`<span class=dialkit-color-opacity> <span class=dialkit-color-opacity-unit>%`);
+var _tmpl$40 = /* @__PURE__ */ _$template17(`<input type=text class=tweakers-color-hex-input>`);
+var _tmpl$213 = /* @__PURE__ */ _$template17(`<div class=tweakers-color-picker-popover>`);
+var _tmpl$311 = /* @__PURE__ */ _$template17(`<div class=tweakers-color-control><span class=tweakers-color-label></span><div class=tweakers-color-inputs><span class=tweakers-color-hex-wrap><span class=tweakers-color-hash aria-hidden=true>#</span></span><button class=tweakers-color-swatch title="Pick color">`);
+var _tmpl$46 = /* @__PURE__ */ _$template17(`<span class=tweakers-color-hex>`);
+var _tmpl$54 = /* @__PURE__ */ _$template17(`<span class=tweakers-color-divider aria-hidden=true>`);
+var _tmpl$64 = /* @__PURE__ */ _$template17(`<span class=tweakers-color-opacity> <span class=tweakers-color-opacity-unit>%`);
 var PICKER_WIDTH = 240;
 var PICKER_BASE_HEIGHT = 270;
 var PICKER_ALPHA_HEIGHT = 22;
@@ -6774,7 +6774,7 @@ function ColorControl(props) {
     }
   });
   onMount8(() => {
-    const root = swatchRef?.closest(".dialkit-root");
+    const root = swatchRef?.closest(".tweakers-root");
     setPortalTarget(root ?? document.body);
     onCleanup12(() => {
       closeAnim?.stop();
@@ -7040,12 +7040,12 @@ import { setStyleProperty as _$setStyleProperty7 } from "solid-js/web";
 import { effect as _$effect17 } from "solid-js/web";
 import { use as _$use10 } from "solid-js/web";
 import { createSignal as createSignal17, onCleanup as onCleanup13, onMount as onMount9, Show as Show12 } from "solid-js";
-var _tmpl$41 = /* @__PURE__ */ _$template18(`<div class=dialkit-gradient-pad-line>`);
-var _tmpl$214 = /* @__PURE__ */ _$template18(`<button type=button class=dialkit-gradient-pad-handle data-kind=major aria-label="Gradient size and rotation">`);
-var _tmpl$312 = /* @__PURE__ */ _$template18(`<button type=button class=dialkit-gradient-pad-handle data-kind=minor aria-label="Gradient squash">`);
-var _tmpl$47 = /* @__PURE__ */ _$template18(`<button type=button class=dialkit-gradient-pad-handle data-kind=angle aria-label="Gradient angle">`);
-var _tmpl$55 = /* @__PURE__ */ _$template18(`<button type=button class=dialkit-gradient-pad-handle data-kind=center aria-label="Gradient center">`);
-var _tmpl$65 = /* @__PURE__ */ _$template18(`<div class="dialkit-gradient-pad dialkit-checker"><div class=dialkit-gradient-pad-fill>`);
+var _tmpl$41 = /* @__PURE__ */ _$template18(`<div class=tweakers-gradient-pad-line>`);
+var _tmpl$214 = /* @__PURE__ */ _$template18(`<button type=button class=tweakers-gradient-pad-handle data-kind=major aria-label="Gradient size and rotation">`);
+var _tmpl$312 = /* @__PURE__ */ _$template18(`<button type=button class=tweakers-gradient-pad-handle data-kind=minor aria-label="Gradient squash">`);
+var _tmpl$47 = /* @__PURE__ */ _$template18(`<button type=button class=tweakers-gradient-pad-handle data-kind=angle aria-label="Gradient angle">`);
+var _tmpl$55 = /* @__PURE__ */ _$template18(`<button type=button class=tweakers-gradient-pad-handle data-kind=center aria-label="Gradient center">`);
+var _tmpl$65 = /* @__PURE__ */ _$template18(`<div class="tweakers-gradient-pad tweakers-checker"><div class=tweakers-gradient-pad-fill>`);
 var clamp5 = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 var wrap360 = (deg) => (deg % 360 + 360) % 360;
 var RAD = Math.PI / 180;
@@ -7292,9 +7292,9 @@ function GradientTransformPad(props) {
 _$delegateEvents14(["pointerdown", "pointermove", "pointerup"]);
 
 // src/solid/components/GradientPanel.tsx
-var _tmpl$48 = /* @__PURE__ */ _$template19(`<div class=dialkit-gradient-panel><div class=dialkit-gradient-toolbar><button type=button class=dialkit-gradient-grip aria-label="Drag to move"title="Drag to move"><svg viewBox="0 0 24 24"fill=currentColor aria-hidden=true></svg></button></div><div class=dialkit-gradient-strip></div><span class=dialkit-gradient-divider aria-hidden=true>`);
+var _tmpl$48 = /* @__PURE__ */ _$template19(`<div class=tweakers-gradient-panel><div class=tweakers-gradient-toolbar><button type=button class=tweakers-gradient-grip aria-label="Drag to move"title="Drag to move"><svg viewBox="0 0 24 24"fill=currentColor aria-hidden=true></svg></button></div><div class=tweakers-gradient-strip></div><span class=tweakers-gradient-divider aria-hidden=true>`);
 var _tmpl$215 = /* @__PURE__ */ _$template19(`<svg><circle r=1.5></svg>`, false, true, false);
-var _tmpl$313 = /* @__PURE__ */ _$template19(`<button type=button class=dialkit-gradient-stop>`);
+var _tmpl$313 = /* @__PURE__ */ _$template19(`<button type=button class=tweakers-gradient-stop>`);
 var TYPE_OPTIONS = [{
   value: "linear",
   label: "Linear"
@@ -7384,7 +7384,7 @@ function GradientPanel(props) {
     drag.originX = e.clientX;
     drag.originY = e.clientY;
     drag.working = props.value;
-    const handle = e.target.closest(".dialkit-gradient-stop");
+    const handle = e.target.closest(".tweakers-gradient-stop");
     if (handle) {
       const index2 = Number(handle.dataset.index);
       setSelectedIndex(index2);
@@ -7571,8 +7571,8 @@ function GradientPanel(props) {
 _$delegateEvents15(["pointerdown", "pointermove", "pointerup"]);
 
 // src/solid/components/GradientControl.tsx
-var _tmpl$49 = /* @__PURE__ */ _$template20(`<div class=dialkit-gradient-popover>`);
-var _tmpl$216 = /* @__PURE__ */ _$template20(`<div class=dialkit-gradient-control><span class=dialkit-gradient-label></span><button class="dialkit-gradient-preview dialkit-checker"title="Edit gradient">`);
+var _tmpl$49 = /* @__PURE__ */ _$template20(`<div class=tweakers-gradient-popover>`);
+var _tmpl$216 = /* @__PURE__ */ _$template20(`<div class=tweakers-gradient-control><span class=tweakers-gradient-label></span><button class="tweakers-gradient-preview tweakers-checker"title="Edit gradient">`);
 var PANEL_WIDTH = 240;
 var PANEL_HEIGHT_ANGLED = 470;
 var PANEL_HEIGHT_RADIAL = 430;
@@ -7586,7 +7586,7 @@ function GradientControl(props) {
   let panelRef;
   let closeAnim = null;
   onMount10(() => {
-    const root = triggerRef?.closest(".dialkit-root");
+    const root = triggerRef?.closest(".tweakers-root");
     setPortalTarget(root ?? document.body);
     onCleanup15(() => {
       closeAnim?.stop();
@@ -7799,8 +7799,8 @@ import { effect as _$effect20 } from "solid-js/web";
 import { insert as _$insert19 } from "solid-js/web";
 import { createSignal as createSignal20, Show as Show15 } from "solid-js";
 var _tmpl$50 = /* @__PURE__ */ _$template21(`<span>`);
-var _tmpl$217 = /* @__PURE__ */ _$template21(`<div class=dialkit-xy-grid aria-hidden=true>`);
-var _tmpl$314 = /* @__PURE__ */ _$template21(`<div class=dialkit-xy><div class=dialkit-xy-header><span class=dialkit-xy-label></span></div><div class=dialkit-xy-area role=application aria-roledescription="2D pad"><div class="dialkit-xy-axis dialkit-xy-axis-x"aria-hidden=true></div><div class="dialkit-xy-axis dialkit-xy-axis-y"aria-hidden=true></div><div class="dialkit-xy-guide dialkit-xy-guide-v"aria-hidden=true></div><div class="dialkit-xy-guide dialkit-xy-guide-h"aria-hidden=true></div><div class=dialkit-xy-thumb aria-hidden=true>`);
+var _tmpl$217 = /* @__PURE__ */ _$template21(`<div class=tweakers-xy-grid aria-hidden=true>`);
+var _tmpl$314 = /* @__PURE__ */ _$template21(`<div class=tweakers-xy><div class=tweakers-xy-header><span class=tweakers-xy-label></span></div><div class=tweakers-xy-area role=application aria-roledescription="2D pad"><div class="tweakers-xy-axis tweakers-xy-axis-x"aria-hidden=true></div><div class="tweakers-xy-axis tweakers-xy-axis-y"aria-hidden=true></div><div class="tweakers-xy-guide tweakers-xy-guide-v"aria-hidden=true></div><div class="tweakers-xy-guide tweakers-xy-guide-h"aria-hidden=true></div><div class=tweakers-xy-thumb aria-hidden=true>`);
 var DEFAULT_GRID_X = 5;
 var DEFAULT_GRID_Y = 5;
 var FINE_DRAG = 0.15;
@@ -7975,7 +7975,7 @@ function XYPad(props) {
       get children() {
         var _el$4 = _tmpl$50();
         _$insert19(_el$4, () => formatSliderShortcut(props.shortcut));
-        _$effect20(() => _$className6(_el$4, `dialkit-shortcut-pill${props.shortcutActive ? " dialkit-shortcut-pill-active" : ""}`));
+        _$effect20(() => _$className6(_el$4, `tweakers-shortcut-pill${props.shortcutActive ? " tweakers-shortcut-pill-active" : ""}`));
         return _el$4;
       }
     }), null);
@@ -8003,8 +8003,8 @@ function XYPad(props) {
       get children() {
         var _el$6 = _tmpl$217();
         _$effect20((_$p) => _$style6(_el$6, {
-          "--dial-xy-grid-step-x": `${100 / gridX()}%`,
-          "--dial-xy-grid-step-y": `${100 / gridY()}%`
+          "--tweak-xy-grid-step-x": `${100 / gridX()}%`,
+          "--tweak-xy-grid-step-y": `${100 / gridY()}%`
         }, _$p));
         return _el$6;
       }
@@ -8098,7 +8098,7 @@ function XYControl(props) {
 }
 
 // src/solid/components/ControlRenderer.tsx
-var _tmpl$51 = /* @__PURE__ */ _$template22(`<button class=dialkit-button>`);
+var _tmpl$51 = /* @__PURE__ */ _$template22(`<button class=tweakers-button>`);
 function ControlRenderer(props) {
   const shortcut = useShortcutContext();
   const hintId = (control) => hintDomId(props.panelId, control.path);
@@ -8114,7 +8114,7 @@ function ControlRenderer(props) {
           get value() {
             return value();
           },
-          onChange: (next) => DialStore.updateValue(props.panelId, control.path, next),
+          onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next),
           get min() {
             return control.min;
           },
@@ -8154,7 +8154,7 @@ function ControlRenderer(props) {
           get value() {
             return value();
           },
-          onChange: (next) => DialStore.updateValue(props.panelId, control.path, next),
+          onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next),
           get min() {
             return control.min;
           },
@@ -8194,7 +8194,7 @@ function ControlRenderer(props) {
           get defaultValue() {
             return control.rangeDefault;
           },
-          onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
+          onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next)
         });
       case "toggle":
         return _$createComponent19(Toggle, {
@@ -8204,7 +8204,7 @@ function ControlRenderer(props) {
           get checked() {
             return value();
           },
-          onChange: (next) => DialStore.updateValue(props.panelId, control.path, next),
+          onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next),
           get shortcut() {
             return control.shortcut;
           },
@@ -8226,7 +8226,7 @@ function ControlRenderer(props) {
           get spring() {
             return value();
           },
-          onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
+          onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next)
         });
       case "transition":
         return _$createComponent19(TransitionControl, {
@@ -8242,7 +8242,7 @@ function ControlRenderer(props) {
           get value() {
             return value();
           },
-          onChange: (next) => DialStore.updateValue(props.panelId, control.path, next),
+          onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next),
           get durationControl() {
             return props.transitionDuration;
           }
@@ -8257,7 +8257,7 @@ function ControlRenderer(props) {
             get enabled() {
               return props.values[enabledPath];
             },
-            onEnabledChange: (next) => DialStore.updateValue(props.panelId, enabledPath, next),
+            onEnabledChange: (next) => TweakStore.updateValue(props.panelId, enabledPath, next),
             get defaultOpen() {
               return control.defaultOpen ?? true;
             },
@@ -8310,7 +8310,7 @@ function ControlRenderer(props) {
           get value() {
             return value();
           },
-          onChange: (next) => DialStore.updateValue(props.panelId, control.path, next),
+          onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next),
           get placeholder() {
             return control.placeholder;
           }
@@ -8326,7 +8326,7 @@ function ControlRenderer(props) {
           get options() {
             return control.options ?? [];
           },
-          onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
+          onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next)
         });
       case "color":
         return _$createComponent19(ColorControl, {
@@ -8336,7 +8336,7 @@ function ControlRenderer(props) {
           get value() {
             return value();
           },
-          onChange: (next) => DialStore.updateValue(props.panelId, control.path, next),
+          onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next),
           get alpha() {
             return control.alpha;
           },
@@ -8352,7 +8352,7 @@ function ControlRenderer(props) {
           get value() {
             return value();
           },
-          onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
+          onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next)
         });
       case "xy":
         return _$createComponent19(XYControl, {
@@ -8362,7 +8362,7 @@ function ControlRenderer(props) {
           get value() {
             return value();
           },
-          onChange: (next) => DialStore.updateValue(props.panelId, control.path, next),
+          onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next),
           get x() {
             return control.xAxis;
           },
@@ -8394,9 +8394,9 @@ function ControlRenderer(props) {
       case "action":
         return (() => {
           var _el$ = _tmpl$51();
-          _el$.$$click = () => DialStore.triggerAction(props.panelId, control.path);
+          _el$.$$click = () => TweakStore.triggerAction(props.panelId, control.path);
           _$insert20(_el$, () => control.label);
-          _$effect21(() => _el$.disabled = DialStore.isDisabled(props.panelId, control.path));
+          _$effect21(() => _el$.disabled = TweakStore.isDisabled(props.panelId, control.path));
           return _el$;
         })();
       default:
@@ -8450,11 +8450,11 @@ import { use as _$use14 } from "solid-js/web";
 import { createSignal as createSignal21, createEffect as createEffect14, onMount as onMount11, onCleanup as onCleanup16, Show as Show16, For as For6 } from "solid-js";
 import { Portal as Portal5 } from "solid-js/web";
 import { animate as animate7 } from "motion";
-var _tmpl$56 = /* @__PURE__ */ _$template23(`<div class=dialkit-preset-item><span class=dialkit-preset-name>Version 1`);
-var _tmpl$218 = /* @__PURE__ */ _$template23(`<div class="dialkit-root dialkit-preset-dropdown"style=position:fixed>`);
-var _tmpl$315 = /* @__PURE__ */ _$template23(`<div class=dialkit-preset-manager><button class=dialkit-preset-trigger><span class=dialkit-preset-label></span><svg class=dialkit-select-chevron viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
-var _tmpl$410 = /* @__PURE__ */ _$template23(`<button class=dialkit-preset-delete title="Delete preset"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round><path></path><path></path><path></path><path></path><path>`);
-var _tmpl$57 = /* @__PURE__ */ _$template23(`<div class=dialkit-preset-item><span class=dialkit-preset-name>`);
+var _tmpl$56 = /* @__PURE__ */ _$template23(`<div class=tweakers-preset-item><span class=tweakers-preset-name>Version 1`);
+var _tmpl$218 = /* @__PURE__ */ _$template23(`<div class="tweakers-root tweakers-preset-dropdown"style=position:fixed>`);
+var _tmpl$315 = /* @__PURE__ */ _$template23(`<div class=tweakers-preset-manager><button class=tweakers-preset-trigger><span class=tweakers-preset-label></span><svg class=tweakers-select-chevron viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
+var _tmpl$410 = /* @__PURE__ */ _$template23(`<button class=tweakers-preset-delete title="Delete preset"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round><path></path><path></path><path></path><path></path><path>`);
+var _tmpl$57 = /* @__PURE__ */ _$template23(`<div class=tweakers-preset-item><span class=tweakers-preset-name>`);
 function PresetManager(props) {
   const [isOpen, setIsOpen] = createSignal21(false);
   const [mounted, setMounted] = createSignal21(false);
@@ -8472,7 +8472,7 @@ function PresetManager(props) {
   const hasPresets = () => props.presets.length > 0;
   const activePreset = () => props.presets.find((p) => p.id === props.activePresetId);
   onMount11(() => {
-    const root = triggerRef?.closest(".dialkit-root");
+    const root = triggerRef?.closest(".tweakers-root");
     setPortalTarget(root ?? document.body);
     if (chevronRef) {
       chevronRef.style.transform = `rotate(${isOpen() ? 180 : 0}deg)`;
@@ -8558,12 +8558,12 @@ function PresetManager(props) {
     });
   });
   const handleSelect = (presetId) => {
-    DialStore.selectPreset(props.panelId, presetId);
+    TweakStore.selectPreset(props.panelId, presetId);
     closeDropdown();
   };
   const handleDelete = (e, presetId) => {
     e.stopPropagation();
-    DialStore.removePreset(props.panelId, presetId);
+    TweakStore.removePreset(props.panelId, presetId);
   };
   return (() => {
     var _el$ = _tmpl$315(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild;
@@ -8688,16 +8688,16 @@ function PresetManager(props) {
 _$delegateEvents19(["click"]);
 
 // src/solid/components/Panel.tsx
-var _tmpl$58 = /* @__PURE__ */ _$template24(`<button class=dialkit-toolbar-add title="Add preset"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path></path><path></path><path></path><path></path><path>`);
-var _tmpl$219 = /* @__PURE__ */ _$template24(`<button class=dialkit-toolbar-copy title="Copy parameters"><span class=dialkit-toolbar-copy-icon-wrap><span class=dialkit-toolbar-copy-icon style=opacity:1;transform:scale(1);filter:blur(0px)><svg viewBox="0 0 24 24"fill=none width=16 height=16><path stroke=currentColor stroke-width=2 stroke-linejoin=round></path><path fill=currentColor></path><path stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round></path></svg></span><span class=dialkit-toolbar-copy-icon style=opacity:0;transform:scale(0.5);filter:blur(4px)><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round width=16 height=16><path>`);
-var _tmpl$316 = /* @__PURE__ */ _$template24(`<div class=dialkit-panel-wrapper>`);
+var _tmpl$58 = /* @__PURE__ */ _$template24(`<button class=tweakers-toolbar-add title="Add preset"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path></path><path></path><path></path><path></path><path>`);
+var _tmpl$219 = /* @__PURE__ */ _$template24(`<button class=tweakers-toolbar-copy title="Copy parameters"><span class=tweakers-toolbar-copy-icon-wrap><span class=tweakers-toolbar-copy-icon style=opacity:1;transform:scale(1);filter:blur(0px)><svg viewBox="0 0 24 24"fill=none width=16 height=16><path stroke=currentColor stroke-width=2 stroke-linejoin=round></path><path fill=currentColor></path><path stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round></path></svg></span><span class=tweakers-toolbar-copy-icon style=opacity:0;transform:scale(0.5);filter:blur(4px)><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round width=16 height=16><path>`);
+var _tmpl$316 = /* @__PURE__ */ _$template24(`<div class=tweakers-panel-wrapper>`);
 function Panel(props) {
   const [copied, setCopied] = createSignal22(false);
   const [isPanelOpen, setIsPanelOpen] = createSignal22(props.defaultOpen ?? true);
-  const [values, setValues] = createSignal22(DialStore.getValues(props.panel.id));
-  const [presets, setPresets] = createSignal22(DialStore.getPresetItems(props.panel.id));
-  const [activePresetId, setActivePresetId] = createSignal22(DialStore.getActivePresetId(props.panel.id));
-  const [providerMode, setProviderMode] = createSignal22(DialStore.hasPresetProvider(props.panel.id));
+  const [values, setValues] = createSignal22(TweakStore.getValues(props.panel.id));
+  const [presets, setPresets] = createSignal22(TweakStore.getPresetItems(props.panel.id));
+  const [activePresetId, setActivePresetId] = createSignal22(TweakStore.getActivePresetId(props.panel.id));
+  const [providerMode, setProviderMode] = createSignal22(TweakStore.hasPresetProvider(props.panel.id));
   let addButtonRef;
   let copyButtonRef;
   let copyClipboardIconRef;
@@ -8713,11 +8713,11 @@ function Panel(props) {
     bounce: 0.3
   };
   onMount12(() => {
-    const unsub = DialStore.subscribe(props.panel.id, () => {
-      setValues(DialStore.getValues(props.panel.id));
-      setPresets(DialStore.getPresetItems(props.panel.id));
-      setActivePresetId(DialStore.getActivePresetId(props.panel.id));
-      setProviderMode(DialStore.hasPresetProvider(props.panel.id));
+    const unsub = TweakStore.subscribe(props.panel.id, () => {
+      setValues(TweakStore.getValues(props.panel.id));
+      setPresets(TweakStore.getPresetItems(props.panel.id));
+      setActivePresetId(TweakStore.getActivePresetId(props.panel.id));
+      setProviderMode(TweakStore.hasPresetProvider(props.panel.id));
     });
     if (copyClipboardIconRef && copyCheckIconRef) {
       copyClipboardIconRef.style.transformOrigin = "50% 50%";
@@ -8732,16 +8732,16 @@ function Panel(props) {
     }
     onCleanup17(unsub);
   });
-  const handleAddPreset = () => DialStore.createPreset(props.panel.id);
+  const handleAddPreset = () => TweakStore.createPreset(props.panel.id);
   const handleCopy = () => {
     const jsonStr = JSON.stringify(values(), null, 2);
-    const instruction = `Update the createDialKit configuration for "${props.panel.name}" with these values:
+    const instruction = `Update the createTweakers configuration for "${props.panel.name}" with these values:
 
 \`\`\`json
 ${jsonStr}
 \`\`\`
 
-Apply these values as the new defaults in the createDialKit call.`;
+Apply these values as the new defaults in the createTweakers call.`;
     navigator.clipboard.writeText(instruction);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
@@ -8911,7 +8911,7 @@ import { effect as _$effect24 } from "solid-js/web";
 import { insert as _$insert23 } from "solid-js/web";
 import { createComponent as _$createComponent22 } from "solid-js/web";
 import { For as For7 } from "solid-js";
-var _tmpl$59 = /* @__PURE__ */ _$template25(`<button class="dialkit-toolbar-add dialkit-timeline-toolbar-toggle"><svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
+var _tmpl$59 = /* @__PURE__ */ _$template25(`<button class="tweakers-toolbar-add tweakers-timeline-toolbar-toggle"><svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
 var _tmpl$220 = /* @__PURE__ */ _$template25(`<svg><path fill=currentColor></svg>`, false, true, false);
 function TimelineToggleButton() {
   const visible = fromStore(() => TimelineUiStore.getVisible(), (notify2) => TimelineUiStore.subscribe(notify2));
@@ -8945,12 +8945,12 @@ function TimelineToggleButton() {
 }
 _$delegateEvents21(["click"]);
 
-// src/solid/components/DialRoot.tsx
-var _tmpl$60 = /* @__PURE__ */ _$template26(`<div class=dialkit-root><div class=dialkit-panel>`);
-var _tmpl$221 = /* @__PURE__ */ _$template26(`<div class=dialkit-timeline-toolkit-only>Timeline`);
-var _tmpl$317 = /* @__PURE__ */ _$template26(`<div class=dialkit-panel-wrapper>`);
+// src/solid/components/TweakRoot.tsx
+var _tmpl$60 = /* @__PURE__ */ _$template26(`<div class=tweakers-root><div class=tweakers-panel>`);
+var _tmpl$221 = /* @__PURE__ */ _$template26(`<div class=tweakers-timeline-toolkit-only>Timeline`);
+var _tmpl$317 = /* @__PURE__ */ _$template26(`<div class=tweakers-panel-wrapper>`);
 var isDevDefault2 = typeof process !== "undefined" && process?.env?.NODE_ENV ? process.env.NODE_ENV !== "production" : typeof import.meta !== "undefined" && import.meta.env?.MODE ? import.meta.env.MODE !== "production" : true;
-function DialRoot(props) {
+function TweakRoot(props) {
   if ((props.productionEnabled ?? isDevDefault2) === false) return null;
   const [panels, setPanels] = createSignal23([]);
   const [timelineCount, setTimelineCount] = createSignal23(0);
@@ -8958,10 +8958,10 @@ function DialRoot(props) {
   const inline = () => (props.mode ?? "popover") === "inline";
   onMount13(() => {
     setMounted(true);
-    setPanels(DialStore.getPanels("panel"));
+    setPanels(TweakStore.getPanels("panel"));
     setTimelineCount(TimelineStore.getTimelines().length);
-    const unsubPanels = DialStore.subscribeGlobal(() => {
-      setPanels(DialStore.getPanels("panel"));
+    const unsubPanels = TweakStore.subscribeGlobal(() => {
+      setPanels(TweakStore.getPanels("panel"));
     });
     const unsubTimelines = TimelineStore.subscribeGlobal(() => {
       setTimelineCount(TimelineStore.getTimelines().length);
@@ -8983,7 +8983,7 @@ function DialRoot(props) {
           return (() => {
             var _el$3 = _tmpl$317();
             _$insert24(_el$3, _$createComponent23(Folder, {
-              title: "DialKit",
+              title: "Tweakers",
               get defaultOpen() {
                 return inline() || (props.defaultOpen ?? true);
               },
@@ -9064,7 +9064,7 @@ function DialRoot(props) {
   });
 }
 
-// src/solid/components/Timeline/DialTimeline.tsx
+// src/solid/components/Timeline/TweakTimeline.tsx
 import { template as _$template27 } from "solid-js/web";
 import { delegateEvents as _$delegateEvents22 } from "solid-js/web";
 import { addEventListener as _$addEventListener4 } from "solid-js/web";
@@ -9078,41 +9078,41 @@ import { memo as _$memo16 } from "solid-js/web";
 import { createComponent as _$createComponent24 } from "solid-js/web";
 import { For as For9, Show as Show18, createEffect as createEffect16, createMemo as createMemo3, createSignal as createSignal24, onCleanup as onCleanup19, onMount as onMount14 } from "solid-js";
 import { Portal as Portal7 } from "solid-js/web";
-var _tmpl$61 = /* @__PURE__ */ _$template27(`<div class="dialkit-root dialkit-timeline"><div class=dialkit-timeline-resize-handle role=separator aria-label="Resize timeline height"aria-orientation=horizontal title="Drag to resize timeline"></div><div class=dialkit-timeline-dock>`);
+var _tmpl$61 = /* @__PURE__ */ _$template27(`<div class="tweakers-root tweakers-timeline"><div class=tweakers-timeline-resize-handle role=separator aria-label="Resize timeline height"aria-orientation=horizontal title="Drag to resize timeline"></div><div class=tweakers-timeline-dock>`);
 var _tmpl$222 = /* @__PURE__ */ _$template27(`<svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
-var _tmpl$318 = /* @__PURE__ */ _$template27(`<button class=dialkit-toolbar-add><span style=position:relative;width:16px;height:16px>`);
+var _tmpl$318 = /* @__PURE__ */ _$template27(`<button class=tweakers-toolbar-add><span style=position:relative;width:16px;height:16px>`);
 var _tmpl$411 = /* @__PURE__ */ _$template27(`<svg viewBox="0 0 24 24"fill=none aria-hidden=true><path fill=currentColor>`);
 var _tmpl$510 = /* @__PURE__ */ _$template27(`<svg><path fill=currentColor></svg>`, false, true, false);
-var _tmpl$66 = /* @__PURE__ */ _$template27(`<button class=dialkit-toolbar-add title=Replay aria-label=Replay><svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
-var _tmpl$73 = /* @__PURE__ */ _$template27(`<div class=dialkit-timeline-overview title="Drag to scrub the full timeline"><div class=dialkit-timeline-overview-viewport></div><div class=dialkit-timeline-overview-progress></div><div class=dialkit-timeline-overview-playhead>`);
-var _tmpl$83 = /* @__PURE__ */ _$template27(`<div class=dialkit-timeline-playhead-control role=slider aria-label="Timeline current time"aria-valuemin=0 title="Drag to scrub the timeline"><div class=dialkit-timeline-playhead-stem></div><div class=dialkit-timeline-playhead-anchor><div class=dialkit-timeline-playhead-flag>`);
-var _tmpl$93 = /* @__PURE__ */ _$template27(`<div class="dialkit-timeline-row dialkit-timeline-group-row"><div class=dialkit-timeline-label><button class=dialkit-timeline-group-toggle></button><span></span></div><div class=dialkit-timeline-lane>`);
-var _tmpl$03 = /* @__PURE__ */ _$template27(`<button class=dialkit-timeline-group-toggle>`);
-var _tmpl$110 = /* @__PURE__ */ _$template27(`<div class=dialkit-timeline-row><div class=dialkit-timeline-label></div><div class=dialkit-timeline-lane>`);
-var _tmpl$103 = /* @__PURE__ */ _$template27(`<div class="dialkit-timeline-row dialkit-timeline-track-row"><div class=dialkit-timeline-label></div><div class=dialkit-timeline-lane>`);
+var _tmpl$66 = /* @__PURE__ */ _$template27(`<button class=tweakers-toolbar-add title=Replay aria-label=Replay><svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
+var _tmpl$73 = /* @__PURE__ */ _$template27(`<div class=tweakers-timeline-overview title="Drag to scrub the full timeline"><div class=tweakers-timeline-overview-viewport></div><div class=tweakers-timeline-overview-progress></div><div class=tweakers-timeline-overview-playhead>`);
+var _tmpl$83 = /* @__PURE__ */ _$template27(`<div class=tweakers-timeline-playhead-control role=slider aria-label="Timeline current time"aria-valuemin=0 title="Drag to scrub the timeline"><div class=tweakers-timeline-playhead-stem></div><div class=tweakers-timeline-playhead-anchor><div class=tweakers-timeline-playhead-flag>`);
+var _tmpl$93 = /* @__PURE__ */ _$template27(`<div class="tweakers-timeline-row tweakers-timeline-group-row"><div class=tweakers-timeline-label><button class=tweakers-timeline-group-toggle></button><span></span></div><div class=tweakers-timeline-lane>`);
+var _tmpl$03 = /* @__PURE__ */ _$template27(`<button class=tweakers-timeline-group-toggle>`);
+var _tmpl$110 = /* @__PURE__ */ _$template27(`<div class=tweakers-timeline-row><div class=tweakers-timeline-label></div><div class=tweakers-timeline-lane>`);
+var _tmpl$103 = /* @__PURE__ */ _$template27(`<div class="tweakers-timeline-row tweakers-timeline-track-row"><div class=tweakers-timeline-label></div><div class=tweakers-timeline-lane>`);
 var _tmpl$112 = /* @__PURE__ */ _$template27(`<svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path>`);
-var _tmpl$122 = /* @__PURE__ */ _$template27(`<div class=dialkit-timeline-scroll-row><div class=dialkit-timeline-label></div><div class=dialkit-timeline-horizontal-scroll aria-label="Timeline horizontal scroll"><div>`);
-var _tmpl$132 = /* @__PURE__ */ _$template27(`<div class=dialkit-timeline-body><div class=dialkit-timeline-grid><div class="dialkit-timeline-row dialkit-timeline-ruler-row"><div class=dialkit-timeline-label></div><div class=dialkit-timeline-ruler title="Click to seek \xB7 drag to set a loop region \xB7 Option-drag to zoom \xB7 Shift-drag to reset zoom">`);
-var _tmpl$142 = /* @__PURE__ */ _$template27(`<div class=dialkit-timeline-section><div class=dialkit-timeline-header><div class=dialkit-timeline-identity><span class=dialkit-timeline-title></span></div><div class=dialkit-timeline-actions><button class=dialkit-timeline-loop-toggle><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round aria-hidden=true></svg></button><button class=dialkit-toolbar-add title="Add timeline version"aria-label="Add timeline version"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round aria-hidden=true></svg></button><button class=dialkit-toolbar-add title="Copy parameters"><span style=position:relative;width:16px;height:16px></span></button><button class=dialkit-timeline-chevron>`);
+var _tmpl$122 = /* @__PURE__ */ _$template27(`<div class=tweakers-timeline-scroll-row><div class=tweakers-timeline-label></div><div class=tweakers-timeline-horizontal-scroll aria-label="Timeline horizontal scroll"><div>`);
+var _tmpl$132 = /* @__PURE__ */ _$template27(`<div class=tweakers-timeline-body><div class=tweakers-timeline-grid><div class="tweakers-timeline-row tweakers-timeline-ruler-row"><div class=tweakers-timeline-label></div><div class=tweakers-timeline-ruler title="Click to seek \xB7 drag to set a loop region \xB7 Option-drag to zoom \xB7 Shift-drag to reset zoom">`);
+var _tmpl$142 = /* @__PURE__ */ _$template27(`<div class=tweakers-timeline-section><div class=tweakers-timeline-header><div class=tweakers-timeline-identity><span class=tweakers-timeline-title></span></div><div class=tweakers-timeline-actions><button class=tweakers-timeline-loop-toggle><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round aria-hidden=true></svg></button><button class=tweakers-toolbar-add title="Add timeline version"aria-label="Add timeline version"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round aria-hidden=true></svg></button><button class=tweakers-toolbar-add title="Copy parameters"><span style=position:relative;width:16px;height:16px></span></button><button class=tweakers-timeline-chevron>`);
 var _tmpl$152 = /* @__PURE__ */ _$template27(`<svg><path></svg>`, false, true, false);
 var _tmpl$162 = /* @__PURE__ */ _$template27(`<svg viewBox="0 0 24 24"fill=none aria-hidden=true><path stroke=currentColor stroke-width=2 stroke-linejoin=round></path><path fill=currentColor></path><path stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round>`);
-var _tmpl$172 = /* @__PURE__ */ _$template27(`<div class=dialkit-timeline-loop-dim style=left:0px>`);
-var _tmpl$182 = /* @__PURE__ */ _$template27(`<div class=dialkit-timeline-loop-dim style=right:0px>`);
-var _tmpl$192 = /* @__PURE__ */ _$template27(`<div class=dialkit-timeline-loop-band>`);
-var _tmpl$202 = /* @__PURE__ */ _$template27(`<div class="dialkit-timeline-tick dialkit-timeline-tick-fine">`);
-var _tmpl$2110 = /* @__PURE__ */ _$template27(`<div class="dialkit-timeline-tick dialkit-timeline-tick-medium">`);
-var _tmpl$223 = /* @__PURE__ */ _$template27(`<div class=dialkit-timeline-tick><span class=dialkit-timeline-tick-label>`);
+var _tmpl$172 = /* @__PURE__ */ _$template27(`<div class=tweakers-timeline-loop-dim style=left:0px>`);
+var _tmpl$182 = /* @__PURE__ */ _$template27(`<div class=tweakers-timeline-loop-dim style=right:0px>`);
+var _tmpl$192 = /* @__PURE__ */ _$template27(`<div class=tweakers-timeline-loop-band>`);
+var _tmpl$202 = /* @__PURE__ */ _$template27(`<div class="tweakers-timeline-tick tweakers-timeline-tick-fine">`);
+var _tmpl$2110 = /* @__PURE__ */ _$template27(`<div class="tweakers-timeline-tick tweakers-timeline-tick-medium">`);
+var _tmpl$223 = /* @__PURE__ */ _$template27(`<div class=tweakers-timeline-tick><span class=tweakers-timeline-tick-label>`);
 var _tmpl$232 = /* @__PURE__ */ _$template27(`<svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
-var _tmpl$242 = /* @__PURE__ */ _$template27(`<div class=dialkit-root><div class=dialkit-timeline-popover role=dialog><div class=dialkit-timeline-popover-header><span class=dialkit-timeline-popover-title></span><button class=dialkit-timeline-popover-close title="Close editor"aria-label="Close editor"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round><path d="M6 6L18 18M18 6L6 18"></path></svg></button></div><div class=dialkit-timeline-popover-body>`);
-var _tmpl$252 = /* @__PURE__ */ _$template27(`<div class=dialkit-timeline-clip-handle data-edge=start>`);
-var _tmpl$262 = /* @__PURE__ */ _$template27(`<div class=dialkit-timeline-clip>`);
-var _tmpl$272 = /* @__PURE__ */ _$template27(`<span class=dialkit-timeline-loop-infinity aria-hidden=true title="Repeats indefinitely">\u221E`);
-var _tmpl$282 = /* @__PURE__ */ _$template27(`<div class=dialkit-timeline-clip-ghost aria-hidden=true>`);
-var _tmpl$292 = /* @__PURE__ */ _$template27(`<span class=dialkit-timeline-clip-ghost-segment>`);
-var _tmpl$302 = /* @__PURE__ */ _$template27(`<span class=dialkit-timeline-clip-duration>`);
-var _tmpl$319 = /* @__PURE__ */ _$template27(`<div class=dialkit-timeline-clip-handle data-edge=end>`);
-var _tmpl$322 = /* @__PURE__ */ _$template27(`<div class=dialkit-timeline-clip-segment>`);
-var _tmpl$332 = /* @__PURE__ */ _$template27(`<div class=dialkit-timeline-clip-handle>`);
+var _tmpl$242 = /* @__PURE__ */ _$template27(`<div class=tweakers-root><div class=tweakers-timeline-popover role=dialog><div class=tweakers-timeline-popover-header><span class=tweakers-timeline-popover-title></span><button class=tweakers-timeline-popover-close title="Close editor"aria-label="Close editor"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round><path d="M6 6L18 18M18 6L6 18"></path></svg></button></div><div class=tweakers-timeline-popover-body>`);
+var _tmpl$252 = /* @__PURE__ */ _$template27(`<div class=tweakers-timeline-clip-handle data-edge=start>`);
+var _tmpl$262 = /* @__PURE__ */ _$template27(`<div class=tweakers-timeline-clip>`);
+var _tmpl$272 = /* @__PURE__ */ _$template27(`<span class=tweakers-timeline-loop-infinity aria-hidden=true title="Repeats indefinitely">\u221E`);
+var _tmpl$282 = /* @__PURE__ */ _$template27(`<div class=tweakers-timeline-clip-ghost aria-hidden=true>`);
+var _tmpl$292 = /* @__PURE__ */ _$template27(`<span class=tweakers-timeline-clip-ghost-segment>`);
+var _tmpl$302 = /* @__PURE__ */ _$template27(`<span class=tweakers-timeline-clip-duration>`);
+var _tmpl$319 = /* @__PURE__ */ _$template27(`<div class=tweakers-timeline-clip-handle data-edge=end>`);
+var _tmpl$322 = /* @__PURE__ */ _$template27(`<div class=tweakers-timeline-clip-segment>`);
+var _tmpl$332 = /* @__PURE__ */ _$template27(`<div class=tweakers-timeline-clip-handle>`);
 var DRAG_THRESHOLD_PX = 3;
 var LOOP_DRAG_THRESHOLD_PX = 4;
 var MAJOR_TICK_TARGET_PX = 140;
@@ -9125,23 +9125,23 @@ var POPOVER_WIDTH = 280;
 var ZOOM_DRAG_DISTANCE = 180;
 var DEFAULT_DOCK_MAX_HEIGHT = 400;
 var MIN_DOCK_MAX_HEIGHT = 120;
-function DialTimeline(props) {
+function TweakTimeline(props) {
   const enabled = () => (props.productionEnabled ?? isDevDefault) !== false;
   return _$createComponent24(Show18, {
     get when() {
       return enabled();
     },
     get children() {
-      return _$createComponent24(DialTimelineDock, props);
+      return _$createComponent24(TweakTimelineDock, props);
     }
   });
 }
-function DialTimelineDock(props) {
+function TweakTimelineDock(props) {
   const timelines = fromStore(() => TimelineStore.getTimelines(), (notify2) => TimelineStore.subscribeGlobal(notify2));
   const visible = fromStore(() => TimelineUiStore.getVisible(), (notify2) => TimelineUiStore.subscribe(notify2));
   const [mounted, setMounted] = createSignal24(false);
   const [dockMaxHeight, setDockMaxHeight] = createSignal24(DEFAULT_DOCK_MAX_HEIGHT);
-  const controllerId = /* @__PURE__ */ Symbol("dialkit-timeline-visibility");
+  const controllerId = /* @__PURE__ */ Symbol("tweakers-timeline-visibility");
   let dockRef;
   let resizeCleanup = null;
   onMount14(() => {
@@ -9298,7 +9298,7 @@ var iconStyle = {
   inset: "0",
   width: "16px",
   height: "16px",
-  color: "var(--dial-text-label)"
+  color: "var(--tweak-text-label)"
 };
 function TimelineOverview(props) {
   const time = fromStore(() => TimelineStore.getTransport(props.id).time, (notify2) => TimelineStore.subscribe(props.id, notify2));
@@ -9403,10 +9403,10 @@ function TimelinePlayheadFlag(props) {
       };
       _$insert25(_el$18, () => time().toFixed(2));
       _$effect26((_p$) => {
-        var _v$1 = edge(), _v$10 = `calc(var(--dial-timeline-label-w) + ${x()}px)`, _v$11 = `${flagOffset()}px`, _v$12 = props.duration, _v$13 = time();
+        var _v$1 = edge(), _v$10 = `calc(var(--tweak-timeline-label-w) + ${x()}px)`, _v$11 = `${flagOffset()}px`, _v$12 = props.duration, _v$13 = time();
         _v$1 !== _p$.e && _$setAttribute21(_el$15, "data-edge", _p$.e = _v$1);
         _v$10 !== _p$.t && _$setStyleProperty12(_el$15, "left", _p$.t = _v$10);
-        _v$11 !== _p$.a && _$setStyleProperty12(_el$15, "--dial-timeline-playhead-flag-offset", _p$.a = _v$11);
+        _v$11 !== _p$.a && _$setStyleProperty12(_el$15, "--tweak-timeline-playhead-flag-offset", _p$.a = _v$11);
         _v$12 !== _p$.o && _$setAttribute21(_el$15, "aria-valuemax", _p$.o = _v$12);
         _v$13 !== _p$.i && _$setAttribute21(_el$15, "aria-valuenow", _p$.i = _v$13);
         return _p$;
@@ -9437,14 +9437,14 @@ function TimelineSection(props) {
   const [expandedTracks, setExpandedTracks] = createSignal24(/* @__PURE__ */ new Set());
   const [zoom, setZoom] = createSignal24(1);
   const [viewStart, setViewStart] = createSignal24(0);
-  const values = fromStore(() => DialStore.getValues(props.meta.id), (notify2) => DialStore.subscribe(props.meta.id, notify2));
+  const values = fromStore(() => TweakStore.getValues(props.meta.id), (notify2) => TweakStore.subscribe(props.meta.id, notify2));
   const presets = () => {
     values();
-    return DialStore.getPresets(props.meta.id);
+    return TweakStore.getPresets(props.meta.id);
   };
   const activePresetId = () => {
     values();
-    return DialStore.getActivePresetId(props.meta.id);
+    return TweakStore.getActivePresetId(props.meta.id);
   };
   const loopRegion = fromStore(() => TimelineStore.getLoopRegion(props.meta.id), (notify2) => TimelineStore.subscribe(props.meta.id, notify2));
   const [loopDrag, setLoopDrag] = createSignal24(null);
@@ -9583,8 +9583,8 @@ function TimelineSection(props) {
   };
   const handleTrackPointerDown = (event) => {
     const target = event.target;
-    if (target.closest(".dialkit-timeline-label, button")) return;
-    if (!event.shiftKey && target.closest(".dialkit-timeline-clip")) return;
+    if (target.closest(".tweakers-timeline-label, button")) return;
+    if (!event.shiftKey && target.closest(".tweakers-timeline-clip")) return;
     const rect = laneAreaRef?.getBoundingClientRect();
     if (!rect) return;
     event.preventDefault();
@@ -9606,13 +9606,13 @@ function TimelineSection(props) {
     trackScrub = null;
   };
   const handleCopy = () => {
-    const normalized = normalizeTimelineValuesForCopy(DialStore.getValues(props.meta.id), props.meta.clips);
-    void navigator.clipboard.writeText(buildCopyInstruction("createDialTimeline", props.meta.name, normalized));
+    const normalized = normalizeTimelineValuesForCopy(TweakStore.getValues(props.meta.id), props.meta.clips);
+    void navigator.clipboard.writeText(buildCopyInstruction("createTweakTimeline", props.meta.name, normalized));
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1500);
   };
   const handleAddPreset = () => {
-    DialStore.savePreset(props.meta.id, `Version ${presets().length + 2}`);
+    TweakStore.savePreset(props.meta.id, `Version ${presets().length + 2}`);
   };
   const closePopover = () => setPopover(null);
   const openClipPopover = (clip, rect, stepKey) => {
@@ -10106,11 +10106,11 @@ function ClipPopover(props) {
     const measure = () => ref && setNaturalHeight(ref.scrollHeight + 2);
     measure();
     const observer = new ResizeObserver(measure);
-    if (ref) observer.observe(ref.querySelector(".dialkit-timeline-popover-body") ?? ref);
+    if (ref) observer.observe(ref.querySelector(".tweakers-timeline-popover-body") ?? ref);
     const updateViewport = () => setViewport(readViewport());
     const outside = (event) => {
       const target = event.target;
-      if (ref?.contains(target) || target.closest?.(".dialkit-timeline-clip") || target.closest?.(".dialkit-timeline-label")) return;
+      if (ref?.contains(target) || target.closest?.(".tweakers-timeline-clip") || target.closest?.(".tweakers-timeline-label")) return;
       props.onClose();
     };
     const keydown = (event) => {
@@ -10157,7 +10157,7 @@ function ClipPopover(props) {
     const durationValue = durationMeta ? props.values[durationMeta.path] : void 0;
     const transitionDuration = durationMeta?.type === "slider" && typeof durationValue === "number" ? {
       value: durationValue,
-      onChange: (next) => DialStore.updateValue(props.panelId, durationMeta.path, next),
+      onChange: (next) => TweakStore.updateValue(props.panelId, durationMeta.path, next),
       min: Math.max(TIMELINE_MIN_CLIP_DURATION, durationMeta.min ?? 0),
       max: durationMeta.max,
       step: durationMeta.step
@@ -10257,7 +10257,7 @@ function clipPopoverExclusions(clip) {
   return /* @__PURE__ */ new Set([...clip.stepKeys ?? [], ...clip.tracks?.map((track) => track.prop) ?? []]);
 }
 function getClipControls(panelId, path, exclusions) {
-  const panel = DialStore.getPanel(panelId);
+  const panel = TweakStore.getPanel(panelId);
   const folder = panel ? findControl(panel.controls, path) : null;
   if (!folder?.children) return [];
   return folder.children.filter((control) => {
@@ -10266,7 +10266,7 @@ function getClipControls(panelId, path, exclusions) {
   });
 }
 function getControlAt(panelId, path) {
-  const panel = DialStore.getPanel(panelId);
+  const panel = TweakStore.getPanel(panelId);
   return panel ? findControl(panel.controls, path) : null;
 }
 function TimelineClip(props) {
@@ -10312,24 +10312,24 @@ function TimelineClip(props) {
     if (drag.mode === "boundary" && props.steps && drag.stepDurations) {
       const index = drag.boundaryIndex ?? 0;
       const others = drag.stepDurations.reduce((sum, duration, stepIndex) => stepIndex === index ? sum : sum + duration, 0);
-      DialStore.updateValue(props.timelineId, `${props.clip.key}.${props.steps[index].key ?? ""}.duration`, clampStepResize(drag.stepDurations[index] + dt, drag.at, others, props.timelineDuration));
+      TweakStore.updateValue(props.timelineId, `${props.clip.key}.${props.steps[index].key ?? ""}.duration`, clampStepResize(drag.stepDurations[index] + dt, drag.at, others, props.timelineDuration));
     } else if (drag.mode === "move") {
       if (props.delayMode) {
-        DialStore.updateValue(props.timelineId, `${props.clip.key}.delay`, clampTrackDelay(drag.at + dt - baseAt, baseAt, drag.duration, props.timelineDuration));
+        TweakStore.updateValue(props.timelineId, `${props.clip.key}.delay`, clampTrackDelay(drag.at + dt - baseAt, baseAt, drag.duration, props.timelineDuration));
       } else {
-        DialStore.updateValue(props.timelineId, `${props.clip.key}.at`, clampClipMove(drag.at + dt, drag.duration, props.timelineDuration));
+        TweakStore.updateValue(props.timelineId, `${props.clip.key}.at`, clampClipMove(drag.at + dt, drag.duration, props.timelineDuration));
       }
     } else if (drag.mode === "end") {
-      DialStore.updateValue(props.timelineId, `${props.clip.key}.duration`, clampClipResizeEnd(drag.duration + dt, drag.at, props.timelineDuration));
+      TweakStore.updateValue(props.timelineId, `${props.clip.key}.duration`, clampClipResizeEnd(drag.duration + dt, drag.at, props.timelineDuration));
     } else if (props.steps && drag.stepDurations) {
       const next = clampClipResizeStart(Math.max(drag.at + dt, Math.max(baseAt, 0)), drag.at, drag.stepDurations[0]);
-      DialStore.updateValues(props.timelineId, {
+      TweakStore.updateValues(props.timelineId, {
         [props.delayMode ? `${props.clip.key}.delay` : `${props.clip.key}.at`]: props.delayMode ? Math.max(0, next.at - baseAt) : next.at,
         [`${props.clip.key}.${props.steps[0].key ?? ""}.duration`]: next.duration
       });
     } else {
       const next = clampClipResizeStart(Math.max(drag.at + dt, Math.max(baseAt, 0)), drag.at, drag.duration);
-      DialStore.updateValues(props.timelineId, {
+      TweakStore.updateValues(props.timelineId, {
         [props.delayMode ? `${props.clip.key}.delay` : `${props.clip.key}.at`]: props.delayMode ? Math.max(0, next.at - baseAt) : next.at,
         [`${props.clip.key}.duration`]: next.duration
       });
@@ -10560,7 +10560,7 @@ import { setAttribute as _$setAttribute22 } from "solid-js/web";
 import { effect as _$effect27 } from "solid-js/web";
 import { insert as _$insert26 } from "solid-js/web";
 import { createComponent as _$createComponent25 } from "solid-js/web";
-var _tmpl$67 = /* @__PURE__ */ _$template28(`<div class=dialkit-module><div class=dialkit-module-header><span class=dialkit-module-title></span></div><div class=dialkit-module-collapse><div class=dialkit-module-collapse-clip><div class=dialkit-module-inner>`);
+var _tmpl$67 = /* @__PURE__ */ _$template28(`<div class=tweakers-module><div class=tweakers-module-header><span class=tweakers-module-title></span></div><div class=tweakers-module-collapse><div class=tweakers-module-collapse-clip><div class=tweakers-module-inner>`);
 function Module(props) {
   return (() => {
     var _el$ = _tmpl$67(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$2.nextSibling, _el$5 = _el$4.firstChild, _el$6 = _el$5.firstChild;
@@ -10589,8 +10589,8 @@ import { addEventListener as _$addEventListener5 } from "solid-js/web";
 import { insert as _$insert27 } from "solid-js/web";
 import { createComponent as _$createComponent26 } from "solid-js/web";
 import { For as For10 } from "solid-js";
-var _tmpl$68 = /* @__PURE__ */ _$template29(`<div class=dialkit-button-group>`);
-var _tmpl$224 = /* @__PURE__ */ _$template29(`<button class=dialkit-button>`);
+var _tmpl$68 = /* @__PURE__ */ _$template29(`<div class=tweakers-button-group>`);
+var _tmpl$224 = /* @__PURE__ */ _$template29(`<button class=tweakers-button>`);
 function ButtonGroup(props) {
   return (() => {
     var _el$ = _tmpl$68();
@@ -11012,8 +11012,8 @@ function createWaveformEngine(canvas, get) {
 
 // src/solid/components/WaveformVisualization.tsx
 var _tmpl$69 = /* @__PURE__ */ _$template30(`<button type=button aria-label="Zoom out"><svg viewBox="0 0 16 16"fill=none><path d="M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
-var _tmpl$225 = /* @__PURE__ */ _$template30(`<div class=dialkit-waveform-zoom><button type=button aria-label="Zoom in"><svg viewBox="0 0 16 16"fill=none><path d="M8 3.5v9M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
-var _tmpl$320 = /* @__PURE__ */ _$template30(`<div class=dialkit-waveform-viz-wrap><canvas class=dialkit-waveform-viz>`);
+var _tmpl$225 = /* @__PURE__ */ _$template30(`<div class=tweakers-waveform-zoom><button type=button aria-label="Zoom in"><svg viewBox="0 0 16 16"fill=none><path d="M8 3.5v9M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
+var _tmpl$320 = /* @__PURE__ */ _$template30(`<div class=tweakers-waveform-viz-wrap><canvas class=tweakers-waveform-viz>`);
 function WaveformVisualization(props) {
   const p = mergeProps({
     buffer: null,
@@ -11562,8 +11562,8 @@ function createAnalyserEngine(canvas, get) {
 // src/solid/components/AnalyserVisualization.tsx
 var _tmpl$70 = /* @__PURE__ */ _$template31(`<button type=button aria-label=Mute>M`);
 var _tmpl$226 = /* @__PURE__ */ _$template31(`<button type=button aria-label=Solo>S`);
-var _tmpl$321 = /* @__PURE__ */ _$template31(`<div class=dialkit-analyser-actions>`);
-var _tmpl$412 = /* @__PURE__ */ _$template31(`<div class=dialkit-analyser-viz-wrap><canvas class=dialkit-analyser-viz>`);
+var _tmpl$321 = /* @__PURE__ */ _$template31(`<div class=tweakers-analyser-actions>`);
+var _tmpl$412 = /* @__PURE__ */ _$template31(`<div class=tweakers-analyser-viz-wrap><canvas class=tweakers-analyser-viz>`);
 function AnalyserVisualization(props) {
   const p = mergeProps2({
     analyser: null,
@@ -12067,19 +12067,19 @@ function triggersCrossed(prevValue, curValue, steps) {
 }
 
 // src/solid/components/CurveComposer.tsx
-var _tmpl$71 = /* @__PURE__ */ _$template32(`<div class=dialkit-cc-wrap><svg class=dialkit-cc><rect class=dialkit-cc-lane rx=8></rect><line class=dialkit-cc-playhead x1=0 x2=0></line><circle class=dialkit-cc-dot cx=0 r=3>`);
-var _tmpl$227 = /* @__PURE__ */ _$template32(`<svg><line class=dialkit-cc-grid></svg>`, false, true, false);
-var _tmpl$323 = /* @__PURE__ */ _$template32(`<svg><rect class=dialkit-cc-seg-selected rx=8></svg>`, false, true, false);
-var _tmpl$413 = /* @__PURE__ */ _$template32(`<svg><rect class=dialkit-cc-seg-hover rx=8></svg>`, false, true, false);
-var _tmpl$511 = /* @__PURE__ */ _$template32(`<svg><g><line class=dialkit-cc-diagonal></line><path class=dialkit-cc-curve></path><text class=dialkit-cc-label></svg>`, false, true, false);
-var _tmpl$610 = /* @__PURE__ */ _$template32(`<svg><path class=dialkit-cc-connector></svg>`, false, true, false);
-var _tmpl$74 = /* @__PURE__ */ _$template32(`<svg><line class=dialkit-cc-boundary></svg>`, false, true, false);
-var _tmpl$84 = /* @__PURE__ */ _$template32(`<svg><rect class=dialkit-cc-lane rx=8></svg>`, false, true, false);
-var _tmpl$94 = /* @__PURE__ */ _$template32(`<svg><rect class=dialkit-cc-seg-hover x=0 rx=8></svg>`, false, true, false);
-var _tmpl$04 = /* @__PURE__ */ _$template32(`<svg><path class="dialkit-cc-curve dialkit-cc-curve-driver"></svg>`, false, true, false);
-var _tmpl$111 = /* @__PURE__ */ _$template32(`<svg><text class=dialkit-cc-label>driver \xB7 </svg>`, false, true, false);
-var _tmpl$104 = /* @__PURE__ */ _$template32(`<svg><line class=dialkit-cc-playhead x1=0 x2=0></svg>`, false, true, false);
-var _tmpl$113 = /* @__PURE__ */ _$template32(`<svg><line class=dialkit-cc-diagonal></svg>`, false, true, false);
+var _tmpl$71 = /* @__PURE__ */ _$template32(`<div class=tweakers-cc-wrap><svg class=tweakers-cc><rect class=tweakers-cc-lane rx=8></rect><line class=tweakers-cc-playhead x1=0 x2=0></line><circle class=tweakers-cc-dot cx=0 r=3>`);
+var _tmpl$227 = /* @__PURE__ */ _$template32(`<svg><line class=tweakers-cc-grid></svg>`, false, true, false);
+var _tmpl$323 = /* @__PURE__ */ _$template32(`<svg><rect class=tweakers-cc-seg-selected rx=8></svg>`, false, true, false);
+var _tmpl$413 = /* @__PURE__ */ _$template32(`<svg><rect class=tweakers-cc-seg-hover rx=8></svg>`, false, true, false);
+var _tmpl$511 = /* @__PURE__ */ _$template32(`<svg><g><line class=tweakers-cc-diagonal></line><path class=tweakers-cc-curve></path><text class=tweakers-cc-label></svg>`, false, true, false);
+var _tmpl$610 = /* @__PURE__ */ _$template32(`<svg><path class=tweakers-cc-connector></svg>`, false, true, false);
+var _tmpl$74 = /* @__PURE__ */ _$template32(`<svg><line class=tweakers-cc-boundary></svg>`, false, true, false);
+var _tmpl$84 = /* @__PURE__ */ _$template32(`<svg><rect class=tweakers-cc-lane rx=8></svg>`, false, true, false);
+var _tmpl$94 = /* @__PURE__ */ _$template32(`<svg><rect class=tweakers-cc-seg-hover x=0 rx=8></svg>`, false, true, false);
+var _tmpl$04 = /* @__PURE__ */ _$template32(`<svg><path class="tweakers-cc-curve tweakers-cc-curve-driver"></svg>`, false, true, false);
+var _tmpl$111 = /* @__PURE__ */ _$template32(`<svg><text class=tweakers-cc-label>driver \xB7 </svg>`, false, true, false);
+var _tmpl$104 = /* @__PURE__ */ _$template32(`<svg><line class=tweakers-cc-playhead x1=0 x2=0></svg>`, false, true, false);
+var _tmpl$113 = /* @__PURE__ */ _$template32(`<svg><line class=tweakers-cc-diagonal></svg>`, false, true, false);
 function CurveComposer(props) {
   const p = mergeProps3({
     driver: null,
@@ -12663,9 +12663,6 @@ export {
   ControlShell,
   CurveComposer,
   DEFAULT_GRADIENT,
-  DialRoot,
-  DialStore,
-  DialTimeline,
   EasingVisualization,
   Folder,
   GradientControl,
@@ -12683,6 +12680,9 @@ export {
   TimelineToggleButton,
   Toggle,
   TransitionControl,
+  TweakRoot,
+  TweakStore,
+  TweakTimeline,
   WaveformVisualization,
   XYControl,
   XYPad,
@@ -12691,8 +12691,8 @@ export {
   applyDetentAxis,
   centerValue,
   clamp2 as clamp,
-  createDialKit,
-  createDialTimeline,
+  createTweakTimeline,
+  createTweakers,
   gradientToCss,
   invertY,
   normToValue,

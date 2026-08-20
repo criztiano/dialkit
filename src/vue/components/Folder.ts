@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion-v';
 import { ICON_CHEVRON, ICON_PANEL } from '../../icons';
 
 export const Folder = defineComponent({
-  name: 'DialKitFolder',
+  name: 'TweakersFolder',
   props: {
     title: { type: String, required: true },
     defaultOpen: { type: Boolean, default: true },
@@ -75,23 +75,23 @@ export const Folder = defineComponent({
     });
 
     const renderHeader = () => h('div', {
-      class: `dialkit-folder-header ${props.isRoot ? 'dialkit-panel-header' : ''} ${props.collapsible ? '' : 'dialkit-folder-header-static'}`,
+      class: `tweakers-folder-header ${props.isRoot ? 'tweakers-panel-header' : ''} ${props.collapsible ? '' : 'tweakers-folder-header-static'}`,
       onClick: props.collapsible ? handleToggle : undefined,
       'data-hint': props.hint ? 'true' : undefined,
       'aria-describedby': props.hint ? props.hintId : undefined,
     }, [
-      h('div', { class: 'dialkit-folder-header-top' }, [
+      h('div', { class: 'tweakers-folder-header-top' }, [
         props.isRoot
           ? (isOpen.value
-              ? h('div', { class: 'dialkit-folder-title-row' }, [
-                h('span', { class: 'dialkit-folder-title dialkit-folder-title-root' }, props.title),
+              ? h('div', { class: 'tweakers-folder-title-row' }, [
+                h('span', { class: 'tweakers-folder-title tweakers-folder-title-root' }, props.title),
               ])
               : null)
-          : h('div', { class: 'dialkit-folder-title-row' }, [
-            h('span', { class: 'dialkit-folder-title' }, props.title),
+          : h('div', { class: 'tweakers-folder-title-row' }, [
+            h('span', { class: 'tweakers-folder-title' }, props.title),
           ]),
         props.isRoot && !props.inline
-          ? h('svg', { class: 'dialkit-panel-icon', viewBox: '0 0 16 16', fill: 'none' }, [
+          ? h('svg', { class: 'tweakers-panel-icon', viewBox: '0 0 16 16', fill: 'none' }, [
             h('path', {
               opacity: '0.5',
               d: ICON_PANEL.path,
@@ -102,7 +102,7 @@ export const Folder = defineComponent({
           : null,
         !props.isRoot && props.collapsible
           ? h(motion.svg, {
-            class: 'dialkit-folder-icon',
+            class: 'tweakers-folder-icon',
             viewBox: '0 0 24 24',
             fill: 'none',
             stroke: 'currentColor',
@@ -116,27 +116,27 @@ export const Folder = defineComponent({
           : null,
       ]),
       props.isRoot && props.toolbar && isOpen.value
-        ? h('div', { class: 'dialkit-panel-toolbar', onClick: (event: Event) => event.stopPropagation() }, [props.toolbar()])
+        ? h('div', { class: 'tweakers-panel-toolbar', onClick: (event: Event) => event.stopPropagation() }, [props.toolbar()])
         : null,
       props.hint
-        ? h('span', { class: 'dialkit-hint', id: props.hintId, role: 'tooltip' }, props.hint)
+        ? h('span', { class: 'tweakers-hint', id: props.hintId, role: 'tooltip' }, props.hint)
         : null,
     ]);
 
-    const renderChildren = () => h('div', { class: 'dialkit-folder-inner' }, slots.default ? slots.default() : []);
+    const renderChildren = () => h('div', { class: 'tweakers-folder-inner' }, slots.default ? slots.default() : []);
 
     const renderContent = () => {
       if (props.isRoot) {
         return isOpen.value
-          ? h('div', { class: 'dialkit-folder-content' }, [renderChildren()])
+          ? h('div', { class: 'tweakers-folder-content' }, [renderChildren()])
           : null;
       }
 
       return h(AnimatePresence, { initial: false }, {
         default: () => isOpen.value
           ? [h(motion.div, {
-            key: 'dialkit-folder-content',
-            class: 'dialkit-folder-content',
+            key: 'tweakers-folder-content',
+            class: 'tweakers-folder-content',
             initial: { height: 0, opacity: 0 },
             animate: { height: 'auto', opacity: 1 },
             exit: { height: 0, opacity: 0 },
@@ -149,7 +149,7 @@ export const Folder = defineComponent({
 
     const folderContent = () => h('div', {
       ref: props.isRoot ? contentRef : undefined,
-      class: `dialkit-folder ${props.isRoot ? 'dialkit-folder-root' : ''}`,
+      class: `tweakers-folder ${props.isRoot ? 'tweakers-folder-root' : ''}`,
     }, [
       renderHeader(),
       renderContent(),
@@ -158,7 +158,7 @@ export const Folder = defineComponent({
     return () => {
       if (props.isRoot) {
         if (props.inline) {
-          return h('div', { class: 'dialkit-panel-inner dialkit-panel-inline' }, [folderContent()]);
+          return h('div', { class: 'tweakers-panel-inner tweakers-panel-inline' }, [folderContent()]);
         }
 
         const panelStyle = isOpen.value
@@ -166,7 +166,7 @@ export const Folder = defineComponent({
             width: 280,
             height: contentHeight.value !== undefined ? Math.min(contentHeight.value + 10, windowHeight.value - 32) : 'auto',
             borderRadius: 14,
-            boxShadow: 'var(--dial-shadow)',
+            boxShadow: 'var(--tweak-shadow)',
             cursor: undefined as string | undefined,
             overflowY: 'auto' as const,
           }
@@ -174,13 +174,13 @@ export const Folder = defineComponent({
             width: 42,
             height: 42,
             borderRadius: 21,
-            boxShadow: 'var(--dial-shadow-collapsed)',
+            boxShadow: 'var(--tweak-shadow-collapsed)',
             overflow: 'hidden',
             cursor: 'pointer',
           };
 
         return h(motion.div, {
-          class: 'dialkit-panel-inner',
+          class: 'tweakers-panel-inner',
           style: panelStyle,
           onClick: !isOpen.value ? handleToggle : undefined,
           'data-collapsed': String(isCollapsed.value),

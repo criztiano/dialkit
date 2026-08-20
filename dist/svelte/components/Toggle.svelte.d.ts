@@ -1,4 +1,4 @@
-import type { ShortcutConfig } from 'dialkit/store';
+import type { ShortcutConfig } from 'tweakers/store';
 type $$ComponentProps = {
     label: string;
     checked: boolean;

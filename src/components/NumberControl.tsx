@@ -133,9 +133,9 @@ export function NumberControl({
     : value.toFixed(decimalsForStep(step));
 
   const className = [
-    'dialkit-number-control',
-    isVertical ? 'dialkit-number-control-vertical' : '',
-    isScrubbing ? 'dialkit-number-control-engaged' : '',
+    'tweakers-number-control',
+    isVertical ? 'tweakers-number-control-vertical' : '',
+    isScrubbing ? 'tweakers-number-control-engaged' : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -147,12 +147,12 @@ export function NumberControl({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
     >
-      <span className="dialkit-number-label">{label}</span>
+      <span className="tweakers-number-label">{label}</span>
       {showInput ? (
         <input
           ref={inputRef}
           type="text"
-          className="dialkit-number-input"
+          className="tweakers-number-input"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleInputKeyDown}
@@ -161,9 +161,9 @@ export function NumberControl({
           onPointerDown={(e) => e.stopPropagation()}
         />
       ) : (
-        <span className="dialkit-number-value">
+        <span className="tweakers-number-value">
           {displayValue}
-          {unit && <span className="dialkit-number-unit">{unit}</span>}
+          {unit && <span className="tweakers-number-unit">{unit}</span>}
         </span>
       )}
     </div>

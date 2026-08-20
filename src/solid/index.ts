@@ -1,12 +1,12 @@
 // Core API
-export { createDialKit } from './createDialKit';
-export type { CreateDialOptions } from './createDialKit';
+export { createTweakers } from './createTweakers';
+export type { CreateTweakersOptions } from './createTweakers';
 
 // Timeline
-export { createDialTimeline } from './createDialTimeline';
-export type { CreateDialTimelineOptions } from './createDialTimeline';
+export { createTweakTimeline } from './createTweakTimeline';
+export type { CreateTweakTimelineOptions } from './createTweakTimeline';
 export type {
-  DialTimelineValues,
+  TweakTimelineValues,
   TimelineClipConfig,
   TimelineClipCss,
   TimelineClipLoop,
@@ -21,10 +21,10 @@ export type {
 } from '../timeline';
 
 // Root component
-export { DialRoot } from './components/DialRoot';
-export type { DialPosition, DialMode, DialTheme } from './components/DialRoot';
-export { DialTimeline } from './components/Timeline/DialTimeline';
-export type { DialTimelineProps } from './components/Timeline/DialTimeline';
+export { TweakRoot } from './components/TweakRoot';
+export type { TweakPosition, TweakMode, TweakTheme } from './components/TweakRoot';
+export { TweakTimeline } from './components/Timeline/TweakTimeline';
+export type { TweakTimelineProps } from './components/Timeline/TweakTimeline';
 export { TimelineToggleButton } from './components/Timeline/TimelineToggleButton';
 
 // Component exports
@@ -80,7 +80,7 @@ export { TransitionControl } from './components/TransitionControl';
 export { EasingVisualization } from './components/EasingVisualization';
 
 // Store exports
-export { DialStore } from '../store/DialStore';
+export { TweakStore } from '../store/TweakStore';
 export type {
   SpringConfig,
   EasingConfig,
@@ -99,9 +99,9 @@ export type {
   PresetProvider,
   PresetProviderPreset,
   PresetItem,
-  DialValue,
-  DialConfig,
+  TweakValue,
+  TweakConfig,
   ResolvedValues,
   ControlMeta,
   PanelConfig,
-} from '../store/DialStore';
+} from '../store/TweakStore';

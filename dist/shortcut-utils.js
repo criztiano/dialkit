@@ -1,5 +1,5 @@
 // src/shortcut-utils.ts
-import { DialStore } from "dialkit/store";
+import { TweakStore } from "tweakers/store";
 function decimalsForStep(step) {
   const s = step.toString();
   const dot = s.indexOf(".");
@@ -17,11 +17,11 @@ function getEffectiveStep(control, shortcut) {
   return mode === "fine" ? range * 0.01 : mode === "coarse" ? range * 0.1 : control.step ?? 1;
 }
 function applySliderDelta(panelId, path, control, effectiveStep, direction) {
-  const currentValue = DialStore.getValue(panelId, path);
+  const currentValue = TweakStore.getValue(panelId, path);
   const min = control.min ?? 0;
   const max = control.max ?? 1;
   const newValue = Math.max(min, Math.min(max, currentValue + direction * effectiveStep));
-  DialStore.updateValue(panelId, path, roundValue(newValue, effectiveStep));
+  TweakStore.updateValue(panelId, path, roundValue(newValue, effectiveStep));
 }
 function snapToDecile(rawValue, min, max) {
   const normalized = (rawValue - min) / (max - min);

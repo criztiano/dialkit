@@ -30,7 +30,7 @@
   aria-checked={disabled ? 'mixed' : checked}
   aria-label={label}
   aria-disabled={disabled || undefined}
-  class="dialkit-checkbox"
+  class="tweakers-checkbox"
   data-checked={checked && !disabled ? 'true' : undefined}
   data-disabled={disabled ? 'true' : undefined}
   onclick={(e) => {
@@ -39,8 +39,8 @@
   }}
 >
   <svg viewBox="0 0 22 22" width="22" height="22" aria-hidden="true">
-    <path class="dialkit-checkbox-slash" d="M6 16 16 6" fill="none"></path>
-    <rect class="dialkit-checkbox-chip" x="5" y="5" width="12" height="12" rx="2"></rect>
-    <path class="dialkit-checkbox-dash" d="M6 11h10" fill="none"></path>
+    <path class="tweakers-checkbox-slash" d="M6 16 16 6" fill="none"></path>
+    <rect class="tweakers-checkbox-chip" x="5" y="5" width="12" height="12" rx="2"></rect>
+    <path class="tweakers-checkbox-dash" d="M6 11h10" fill="none"></path>
   </svg>
 </button>

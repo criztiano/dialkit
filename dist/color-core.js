@@ -201,7 +201,7 @@ function channelsToRgba(values, format, alphaEnabled) {
   return oklchToRgb({ l: v[0], c: v[1], h: v[2], a });
 }
 var PALETTE_SIZE = 8;
-var PALETTE_STORAGE_KEY = "dialkit:color-palette";
+var PALETTE_STORAGE_KEY = "tweakers:color-palette";
 function emptyPalette() {
   return Array(PALETTE_SIZE).fill(null);
 }

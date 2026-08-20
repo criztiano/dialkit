@@ -210,7 +210,7 @@
 </script>
 
 {#snippet channelField(id: string, spec: ChannelSpec, val: number, onCommit: (n: number) => void)}
-  <label class="dialkit-color-field">
+  <label class="tweakers-color-field">
     <input
       type="text"
       inputmode="decimal"
@@ -234,13 +234,13 @@
         }
       }}
     />
-    <span class="dialkit-color-field-label">{spec.label}</span>
+    <span class="tweakers-color-field-label">{spec.label}</span>
   </label>
 {/snippet}
 
-<div class="dialkit-color-picker" style:--picker-hue={hsva.h}>
+<div class="tweakers-color-picker" style:--picker-hue={hsva.h}>
   <div
-    class="dialkit-color-sv"
+    class="tweakers-color-sv"
     role="application"
     aria-label="Saturation and brightness"
     onpointerdown={svDrag.onpointerdown}
@@ -249,7 +249,7 @@
     onpointercancel={svDrag.onpointercancel}
   >
     <div
-      class="dialkit-color-sv-thumb"
+      class="tweakers-color-sv-thumb"
       style:left="{hsva.s * 100}%"
       style:top="{(1 - hsva.v) * 100}%"
       style:background={opaqueHex}
@@ -257,7 +257,7 @@
   </div>
 
   <div
-    class="dialkit-color-slider dialkit-color-hue"
+    class="tweakers-color-slider tweakers-color-hue"
     role="application"
     aria-label="Hue"
     onpointerdown={hueDrag.onpointerdown}
@@ -266,7 +266,7 @@
     onpointercancel={hueDrag.onpointercancel}
   >
     <div
-      class="dialkit-color-slider-thumb"
+      class="tweakers-color-slider-thumb"
       style:left="{(hsva.h / 360) * 100}%"
       style:background="hsl({hsva.h} 100% 50%)"
     ></div>
@@ -274,7 +274,7 @@
 
   {#if alpha}
     <div
-      class="dialkit-color-slider dialkit-color-alpha dialkit-checker"
+      class="tweakers-color-slider tweakers-color-alpha tweakers-checker"
       role="application"
       aria-label="Opacity"
       onpointerdown={alphaDrag.onpointerdown}
@@ -283,11 +283,11 @@
       onpointercancel={alphaDrag.onpointercancel}
     >
       <div
-        class="dialkit-color-alpha-gradient"
+        class="tweakers-color-alpha-gradient"
         style:background="linear-gradient(to right, transparent, {opaqueHex})"
       ></div>
       <div
-        class="dialkit-color-slider-thumb"
+        class="tweakers-color-slider-thumb"
         style:left="{hsva.a * 100}%"
         style:background={opaqueHex}
         style:opacity={Math.max(hsva.a, 0.15)}
@@ -304,9 +304,9 @@
     }}
   />
 
-  <div class="dialkit-color-fields" data-format={format}>
+  <div class="tweakers-color-fields" data-format={format}>
     {#if format === 'hex'}
-      <label class="dialkit-color-field dialkit-color-field-hex">
+      <label class="tweakers-color-field tweakers-color-field-hex">
         <input
           type="text"
           spellcheck="false"
@@ -330,7 +330,7 @@
             }
           }}
         />
-        <span class="dialkit-color-field-label">HEX</span>
+        <span class="tweakers-color-field-label">HEX</span>
       </label>
       {#if alpha}
         {@render channelField(
@@ -348,11 +348,11 @@
   </div>
 
   {#if palette}
-    <div class="dialkit-color-palette">
+    <div class="tweakers-color-palette">
       {#each slots as slotColor, i (i)}
         {@const color = slotColor ?? null}
         <button
-          class="dialkit-color-palette-slot"
+          class="tweakers-color-palette-slot"
           data-filled={String(color !== null)}
           data-holding={String(holdingSlot === i)}
           style:--swatch-color={color}

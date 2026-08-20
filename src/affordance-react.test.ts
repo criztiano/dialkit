@@ -4,8 +4,8 @@ import type { ReactTestRenderer, ReactTestInstance } from 'react-test-renderer';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { ControlRenderer } from './components/ControlRenderer';
-import { DialStore } from './store/DialStore';
-import type { AffordanceContext } from './store/DialStore';
+import { TweakStore } from './store/TweakStore';
+import type { AffordanceContext } from './store/TweakStore';
 
 // Folder measures window height and Slider binds pointer handlers; node:test has
 // no DOM. document is stubbed only enough for the popover's listeners and portal.
@@ -33,7 +33,7 @@ function Bind({ setStatus }: AffordanceContext) {
 
 function renderPanel(withAffordance = true) {
   const id = `affordance-render-${++panelSeq}`;
-  DialStore.registerPanel(id, id, { gravity: [9.8, 0, 20] }, undefined, {
+  TweakStore.registerPanel(id, id, { gravity: [9.8, 0, 20] }, undefined, {
     affordances: withAffordance ? { gravity: { label: 'Bind to music', content: Bind } } : undefined,
   });
 
@@ -42,23 +42,23 @@ function renderPanel(withAffordance = true) {
     renderer = create(
       createElement(ControlRenderer, {
         panelId: id,
-        controls: DialStore.getPanel(id)?.controls ?? [],
-        values: DialStore.getValues(id),
+        controls: TweakStore.getPanel(id)?.controls ?? [],
+        values: TweakStore.getValues(id),
       })
     );
   });
 
   const dot = (): ReactTestInstance =>
-    renderer.root.findByProps({ className: 'dialkit-affordance-dot' });
+    renderer.root.findByProps({ className: 'tweakers-affordance-dot' });
 
   return {
     id,
     root: renderer.root,
     dot,
-    dots: () => renderer.root.findAllByProps({ className: 'dialkit-affordance-dot' }),
-    popovers: () => renderer.root.findAllByProps({ className: 'dialkit-affordance-popover' }),
+    dots: () => renderer.root.findAllByProps({ className: 'tweakers-affordance-dot' }),
+    popovers: () => renderer.root.findAllByProps({ className: 'tweakers-affordance-popover' }),
     toggle: () => act(() => dot().props.onClick()),
-    dispose: () => DialStore.unregisterPanel(id),
+    dispose: () => TweakStore.unregisterPanel(id),
   };
 }
 
@@ -124,7 +124,7 @@ describe('affordance dot and popover (React)', () => {
   it('reflects a status pushed from outside the popover', () => {
     const panel = renderPanel();
 
-    act(() => DialStore.setAffordanceStatus(panel.id, 'gravity', 'armed'));
+    act(() => TweakStore.setAffordanceStatus(panel.id, 'gravity', 'armed'));
     assert.equal(panel.dot().props['data-status'], 'armed');
 
     panel.dispose();

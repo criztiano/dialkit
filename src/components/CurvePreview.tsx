@@ -1,5 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react';
-import { DialStore, ControlMeta } from '../store/DialStore';
+import { TweakStore, ControlMeta } from '../store/TweakStore';
 import { plotCurve, curvePathData, curveY, clampCurveHeight, normalizeCurveMarkers } from '../curve-preview-core';
 
 interface CurvePreviewProps {
@@ -15,14 +15,14 @@ const PAD_Y = 4;
 
 /**
  * The read-only `{ type: 'curve' }` row: draws the host-supplied sampler on a
- * dial surface. The sampler and markers live on the ControlMeta and are
- * swapped in place by DialStore.syncCurveConfigs (functions are invisible to
+ * control surface. The sampler and markers live on the ControlMeta and are
+ * swapped in place by TweakStore.syncCurveConfigs (functions are invisible to
  * the config diff; markers ride the same sync), with the swap announced on the
  * control-state channel — so this subscribes there and re-reads each snapshot.
  */
 export function CurvePreview({ panelId, control }: CurvePreviewProps) {
   const subscribe = useCallback(
-    (callback: () => void) => DialStore.subscribeControlState(panelId, callback),
+    (callback: () => void) => TweakStore.subscribeControlState(panelId, callback),
     [panelId]
   );
   const sample = useSyncExternalStore(subscribe, () => control.sample, () => control.sample);
@@ -37,10 +37,10 @@ export function CurvePreview({ panelId, control }: CurvePreviewProps) {
   const markerXs = normalizeCurveMarkers(markers);
 
   return (
-    <div className="dialkit-curve">
-      {!control.hideLabel && <span className="dialkit-curve-label">{control.label}</span>}
+    <div className="tweakers-curve">
+      {!control.hideLabel && <span className="tweakers-curve-label">{control.label}</span>}
       <svg
-        className="dialkit-curve-surface"
+        className="tweakers-curve-surface"
         viewBox={`0 0 ${VIEW_WIDTH} ${height}`}
         preserveAspectRatio="none"
         style={{ height }}
@@ -49,7 +49,7 @@ export function CurvePreview({ panelId, control }: CurvePreviewProps) {
       >
         {baselineY !== null && (
           <line
-            className="dialkit-curve-baseline"
+            className="tweakers-curve-baseline"
             x1={0}
             y1={baselineY}
             x2={VIEW_WIDTH}
@@ -60,7 +60,7 @@ export function CurvePreview({ panelId, control }: CurvePreviewProps) {
         {markerXs.map((m, i) => (
           <line
             key={i}
-            className="dialkit-curve-marker"
+            className="tweakers-curve-marker"
             x1={m * VIEW_WIDTH}
             y1={0}
             x2={m * VIEW_WIDTH}
@@ -69,7 +69,7 @@ export function CurvePreview({ panelId, control }: CurvePreviewProps) {
           />
         ))}
         {pathData && (
-          <path className="dialkit-curve-stroke" d={pathData} fill="none" vectorEffect="non-scaling-stroke" />
+          <path className="tweakers-curve-stroke" d={pathData} fill="none" vectorEffect="non-scaling-stroke" />
         )}
       </svg>
     </div>

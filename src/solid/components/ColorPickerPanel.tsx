@@ -96,7 +96,7 @@ function ChannelField(props: { spec: ChannelSpec; value: number; onCommit: (n: n
   };
 
   return (
-    <label class="dialkit-color-field">
+    <label class="tweakers-color-field">
       <input
         type="text"
         inputmode="decimal"
@@ -118,7 +118,7 @@ function ChannelField(props: { spec: ChannelSpec; value: number; onCommit: (n: n
           }
         }}
       />
-      <span class="dialkit-color-field-label">{props.spec.label}</span>
+      <span class="tweakers-color-field-label">{props.spec.label}</span>
     </label>
   );
 }
@@ -136,7 +136,7 @@ function HexField(props: { value: string; alpha: boolean; onCommit: (hex: string
   };
 
   return (
-    <label class="dialkit-color-field dialkit-color-field-hex">
+    <label class="tweakers-color-field tweakers-color-field-hex">
       <input
         type="text"
         spellcheck={false}
@@ -158,7 +158,7 @@ function HexField(props: { value: string; alpha: boolean; onCommit: (hex: string
           }
         }}
       />
-      <span class="dialkit-color-field-label">HEX</span>
+      <span class="tweakers-color-field-label">HEX</span>
     </label>
   );
 }
@@ -185,7 +185,7 @@ function PaletteSlot(props: {
 
   return (
     <button
-      class="dialkit-color-palette-slot"
+      class="tweakers-color-palette-slot"
       data-filled={String(props.color !== null)}
       data-holding={String(holding())}
       style={props.color ? { '--swatch-color': props.color } : undefined}
@@ -291,9 +291,9 @@ export function ColorPickerPanel(props: ColorPickerPanelProps) {
   };
 
   return (
-    <div class="dialkit-color-picker" style={{ '--picker-hue': String(hsva().h) }}>
+    <div class="tweakers-color-picker" style={{ '--picker-hue': String(hsva().h) }}>
       <div
-        class="dialkit-color-sv"
+        class="tweakers-color-sv"
         ref={svDrag.ref}
         onPointerDown={svDrag.onPointerDown}
         onPointerMove={svDrag.onPointerMove}
@@ -301,13 +301,13 @@ export function ColorPickerPanel(props: ColorPickerPanelProps) {
         onPointerCancel={svDrag.onPointerCancel}
       >
         <div
-          class="dialkit-color-sv-thumb"
+          class="tweakers-color-sv-thumb"
           style={{ left: `${hsva().s * 100}%`, top: `${(1 - hsva().v) * 100}%`, background: opaqueHex() }}
         />
       </div>
 
       <div
-        class="dialkit-color-slider dialkit-color-hue"
+        class="tweakers-color-slider tweakers-color-hue"
         ref={hueDrag.ref}
         onPointerDown={hueDrag.onPointerDown}
         onPointerMove={hueDrag.onPointerMove}
@@ -315,14 +315,14 @@ export function ColorPickerPanel(props: ColorPickerPanelProps) {
         onPointerCancel={hueDrag.onPointerCancel}
       >
         <div
-          class="dialkit-color-slider-thumb"
+          class="tweakers-color-slider-thumb"
           style={{ left: `${(hsva().h / 360) * 100}%`, background: `hsl(${hsva().h} 100% 50%)` }}
         />
       </div>
 
       <Show when={alpha()}>
         <div
-          class="dialkit-color-slider dialkit-color-alpha dialkit-checker"
+          class="tweakers-color-slider tweakers-color-alpha tweakers-checker"
           ref={alphaDrag.ref}
           onPointerDown={alphaDrag.onPointerDown}
           onPointerMove={alphaDrag.onPointerMove}
@@ -330,11 +330,11 @@ export function ColorPickerPanel(props: ColorPickerPanelProps) {
           onPointerCancel={alphaDrag.onPointerCancel}
         >
           <div
-            class="dialkit-color-alpha-gradient"
+            class="tweakers-color-alpha-gradient"
             style={{ background: `linear-gradient(to right, transparent, ${opaqueHex()})` }}
           />
           <div
-            class="dialkit-color-slider-thumb"
+            class="tweakers-color-slider-thumb"
             style={{ left: `${hsva().a * 100}%`, background: opaqueHex(), opacity: Math.max(hsva().a, 0.15) }}
           />
         </div>
@@ -349,7 +349,7 @@ export function ColorPickerPanel(props: ColorPickerPanelProps) {
         }}
       />
 
-      <div class="dialkit-color-fields" data-format={format()}>
+      <div class="tweakers-color-fields" data-format={format()}>
         <Show
           when={format() === 'hex'}
           fallback={
@@ -372,7 +372,7 @@ export function ColorPickerPanel(props: ColorPickerPanelProps) {
       </div>
 
       <Show when={palette()}>
-        <div class="dialkit-color-palette">
+        <div class="tweakers-color-palette">
           <For each={Array.from({ length: PALETTE_SIZE }, (_, i) => i)}>
             {(i) => (
               <PaletteSlot

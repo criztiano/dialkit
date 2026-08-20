@@ -1,4 +1,4 @@
-import type { RangeValue } from '../../store/DialStore';
+import type { RangeValue } from '../../store/TweakStore';
 type $$ComponentProps = {
     label: string;
     value: RangeValue;

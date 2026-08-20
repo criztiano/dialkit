@@ -1,5 +1,5 @@
 import type { Snippet } from 'svelte';
-import type { AffordanceConfig } from 'dialkit/store';
+import type { AffordanceConfig } from 'tweakers/store';
 type $$ComponentProps = {
     /** Help text for this control. Without one the tooltip is not rendered. */
     hint?: string;

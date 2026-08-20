@@ -3,7 +3,7 @@ import { ICON_TIMELINE } from '../../../icons';
 import { TimelineUiStore } from '../../../store/TimelineUiStore';
 
 export const TimelineToggleButton = defineComponent({
-  name: 'DialKitTimelineToggleButton',
+  name: 'TweakersTimelineToggleButton',
   setup() {
     const visible = ref(TimelineUiStore.getVisible());
     let unsubscribe: (() => void) | undefined;
@@ -16,7 +16,7 @@ export const TimelineToggleButton = defineComponent({
     return () => {
       const label = visible.value ? 'Hide timeline' : 'Show timeline';
       return h('button', {
-        class: 'dialkit-toolbar-add dialkit-timeline-toolbar-toggle',
+        class: 'tweakers-toolbar-add tweakers-timeline-toolbar-toggle',
         'data-active': visible.value || undefined,
         'aria-pressed': visible.value,
         'aria-label': label,

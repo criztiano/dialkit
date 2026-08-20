@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { AnalyserVisualization, Slider, ColorControl } from 'dialkit';
-import type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale } from 'dialkit';
+import { AnalyserVisualization, Slider, ColorControl } from 'tweakers';
+import type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale } from 'tweakers';
 
 const PIXEL_SIZES = [1, 2, 4, 6]; // pixelated block-size multipliers
 const CHANNEL_NAMES = ['drone', 'blips'] as const;
@@ -168,7 +168,7 @@ export function AnalyserShowcase() {
               soloed={soloed[i]}
               onSoloChange={setFlag(setSoloed, i)}
             />
-            <div style={{ fontSize: 12, color: 'var(--dial-text-secondary)' }}>{name}</div>
+            <div style={{ fontSize: 12, color: 'var(--tweak-text-secondary)' }}>{name}</div>
           </div>
         ))}
       </div>

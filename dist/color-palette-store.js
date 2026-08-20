@@ -1,7 +1,7 @@
 // src/color-core.ts
 var HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
 var PALETTE_SIZE = 8;
-var PALETTE_STORAGE_KEY = "dialkit:color-palette";
+var PALETTE_STORAGE_KEY = "tweakers:color-palette";
 function emptyPalette() {
   return Array(PALETTE_SIZE).fill(null);
 }

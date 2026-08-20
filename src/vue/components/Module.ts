@@ -7,7 +7,7 @@ import { Checkbox } from './Checkbox';
  * control: disabling collapses the body away with a smooth height transition.
  */
 export const Module = defineComponent({
-  name: 'DialKitModule',
+  name: 'TweakersModule',
   props: {
     title: { type: String, required: true },
     enabled: { type: Boolean, required: true },
@@ -21,18 +21,18 @@ export const Module = defineComponent({
     };
 
     return () =>
-      h('div', { class: 'dialkit-module' }, [
-        h('div', { class: 'dialkit-module-header' }, [
+      h('div', { class: 'tweakers-module' }, [
+        h('div', { class: 'tweakers-module-header' }, [
           h(Checkbox, {
             checked: props.enabled,
             label: props.title,
             onChange: (next: boolean) => setEnabled(next),
           }),
-          h('span', { class: 'dialkit-module-title' }, props.title),
+          h('span', { class: 'tweakers-module-title' }, props.title),
         ]),
-        h('div', { class: 'dialkit-module-collapse', 'data-open': props.enabled }, [
-          h('div', { class: 'dialkit-module-collapse-clip' }, [
-            h('div', { class: 'dialkit-module-inner' }, slots.default ? slots.default() : []),
+        h('div', { class: 'tweakers-module-collapse', 'data-open': props.enabled }, [
+          h('div', { class: 'tweakers-module-collapse-clip' }, [
+            h('div', { class: 'tweakers-module-inner' }, slots.default ? slots.default() : []),
           ]),
         ]),
       ]);

@@ -111,29 +111,29 @@
 
   const panelStyle = $derived(
     `width:${panelWidth.current}px;height:${panelHeight.current}px;border-radius:${panelRadius.current}px;` +
-      `box-shadow:${isOpen ? 'var(--dial-shadow)' : 'var(--dial-shadow-collapsed)'};` +
+      `box-shadow:${isOpen ? 'var(--tweak-shadow)' : 'var(--tweak-shadow-collapsed)'};` +
       `cursor:${isOpen ? '' : 'pointer'};overflow:${isOpen ? 'hidden auto' : 'hidden'};` +
       `transform:scale(${panelScale.current});`
   );
 </script>
 
 {#if isRoot && inline}
-  <div class="dialkit-panel-inner dialkit-panel-inline">
-    <div bind:this={contentRef} class="dialkit-folder dialkit-folder-root">
-      <div class="dialkit-folder-header dialkit-panel-header" onclick={(e) => { e.stopPropagation(); handleToggle(); }}>
-        <div class="dialkit-folder-header-top">
-          <div class="dialkit-folder-title-row">
-            <span class="dialkit-folder-title dialkit-folder-title-root">{title}</span>
+  <div class="tweakers-panel-inner tweakers-panel-inline">
+    <div bind:this={contentRef} class="tweakers-folder tweakers-folder-root">
+      <div class="tweakers-folder-header tweakers-panel-header" onclick={(e) => { e.stopPropagation(); handleToggle(); }}>
+        <div class="tweakers-folder-header-top">
+          <div class="tweakers-folder-title-row">
+            <span class="tweakers-folder-title tweakers-folder-title-root">{title}</span>
           </div>
         </div>
 
-        <div class="dialkit-panel-toolbar" onclick={(e) => e.stopPropagation()}>
+        <div class="tweakers-panel-toolbar" onclick={(e) => e.stopPropagation()}>
           {#if toolbar}{@render toolbar()}{/if}
         </div>
       </div>
 
-      <div class="dialkit-folder-content">
-        <div class="dialkit-folder-inner">
+      <div class="tweakers-folder-content">
+        <div class="tweakers-folder-inner">
           {#if children}{@render children()}{/if}
         </div>
       </div>
@@ -142,7 +142,7 @@
 {:else if isRoot}
   <div
     bind:this={panelRef}
-    class="dialkit-panel-inner"
+    class="tweakers-panel-inner"
     data-collapsed={String(isCollapsed)}
     style={panelStyle}
     onpointerdown={handleCollapsedTapStart}
@@ -151,16 +151,16 @@
     onpointerleave={handleCollapsedTapEnd}
     onclick={() => { if (!isOpen) handleToggle(); }}
   >
-    <div bind:this={contentRef} class="dialkit-folder dialkit-folder-root">
-      <div class="dialkit-folder-header dialkit-panel-header" onclick={(e) => { e.stopPropagation(); handleToggle(); }}>
-        <div class="dialkit-folder-header-top">
+    <div bind:this={contentRef} class="tweakers-folder tweakers-folder-root">
+      <div class="tweakers-folder-header tweakers-panel-header" onclick={(e) => { e.stopPropagation(); handleToggle(); }}>
+        <div class="tweakers-folder-header-top">
           {#if isOpen}
-            <div class="dialkit-folder-title-row">
-              <span class="dialkit-folder-title dialkit-folder-title-root">{title}</span>
+            <div class="tweakers-folder-title-row">
+              <span class="tweakers-folder-title tweakers-folder-title-root">{title}</span>
             </div>
           {/if}
 
-          <svg class="dialkit-panel-icon" viewBox="0 0 16 16" fill="none">
+          <svg class="tweakers-panel-icon" viewBox="0 0 16 16" fill="none">
             <path
               opacity="0.5"
               d={ICON_PANEL.path}
@@ -173,15 +173,15 @@
         </div>
 
         {#if isOpen}
-          <div class="dialkit-panel-toolbar" onclick={(e) => e.stopPropagation()}>
+          <div class="tweakers-panel-toolbar" onclick={(e) => e.stopPropagation()}>
             {#if toolbar}{@render toolbar()}{/if}
           </div>
         {/if}
       </div>
 
       {#if isOpen}
-        <div class="dialkit-folder-content">
-          <div class="dialkit-folder-inner">
+        <div class="tweakers-folder-content">
+          <div class="tweakers-folder-inner">
             {#if children}{@render children()}{/if}
           </div>
         </div>
@@ -189,21 +189,21 @@
     </div>
   </div>
 {:else}
-  <div class="dialkit-folder">
+  <div class="tweakers-folder">
     <div
-      class="dialkit-folder-header {collapsible ? '' : 'dialkit-folder-header-static'}"
+      class="tweakers-folder-header {collapsible ? '' : 'tweakers-folder-header-static'}"
       onclick={collapsible ? handleToggle : undefined}
       data-hint={hint ? 'true' : undefined}
       aria-describedby={hint ? hintId : undefined}
     >
-      <div class="dialkit-folder-header-top">
-        <div class="dialkit-folder-title-row">
-          <span class="dialkit-folder-title">{title}</span>
+      <div class="tweakers-folder-header-top">
+        <div class="tweakers-folder-title-row">
+          <span class="tweakers-folder-title">{title}</span>
         </div>
 
         {#if collapsible}
         <svg
-          class="dialkit-folder-icon"
+          class="tweakers-folder-icon"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -218,13 +218,13 @@
       </div>
 
       {#if hint}
-        <span class="dialkit-hint" id={hintId} role="tooltip">{hint}</span>
+        <span class="tweakers-hint" id={hintId} role="tooltip">{hint}</span>
       {/if}
     </div>
 
     {#if isOpen}
-      <div class="dialkit-folder-content" style="clip-path: inset(0 -20px);" transition:slide={{ duration: 220 }}>
-        <div class="dialkit-folder-inner">
+      <div class="tweakers-folder-content" style="clip-path: inset(0 -20px);" transition:slide={{ duration: 220 }}>
+        <div class="tweakers-folder-inner">
           {#if children}{@render children()}{/if}
         </div>
       </div>

@@ -3,7 +3,7 @@
   import Portal from '../Portal.svelte';
   import { dropdownTransition } from './transitions';
   import { ICON_CHEVRON } from '../../icons';
-  import type { SwatchOption } from 'dialkit/store';
+  import type { SwatchOption } from 'tweakers/store';
 
   let { label, value, options, onChange } = $props<{
     label: string;
@@ -87,7 +87,7 @@
 
   $effect(() => {
     if (typeof document === 'undefined' || !triggerRef) return;
-    portalTarget = (triggerRef.closest('.dialkit-root') as HTMLElement | null) ?? document.body;
+    portalTarget = (triggerRef.closest('.tweakers-root') as HTMLElement | null) ?? document.body;
   });
 
   $effect(() => {
@@ -118,29 +118,29 @@
 </script>
 
 {#snippet preview(colors: string[])}
-  <span class="dialkit-swatch-preview" aria-hidden="true">
+  <span class="tweakers-swatch-preview" aria-hidden="true">
     {#each colors as c (c)}
-      <span class="dialkit-swatch-chip" style:background={c}></span>
+      <span class="tweakers-swatch-chip" style:background={c}></span>
     {/each}
   </span>
 {/snippet}
 
-<div class="dialkit-select-row">
+<div class="tweakers-select-row">
   <button
     bind:this={triggerRef}
-    class="dialkit-select-trigger"
+    class="tweakers-select-trigger"
     onclick={() => (isOpen ? closeDropdown() : openDropdown())}
     onkeydown={onKeydown}
     data-open={String(isOpen)}
   >
-    <span class="dialkit-select-label">{label}</span>
-    <div class="dialkit-select-right">
+    <span class="tweakers-select-label">{label}</span>
+    <div class="tweakers-select-right">
       {#if selectedOption}
         {@render preview(selectedOption.colors)}
       {/if}
-      <span class="dialkit-select-value">{selectedOption?.label ?? value}</span>
+      <span class="tweakers-select-value">{selectedOption?.label ?? value}</span>
       <svg
-        class="dialkit-select-chevron"
+        class="tweakers-select-chevron"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -159,20 +159,20 @@
       {#if isOpen && pos}
         <div
           bind:this={dropdownRef}
-          class="dialkit-select-dropdown"
+          class="tweakers-select-dropdown"
           style={dropdownStyle}
           transition:dropdownTransition={{ above: pos.above }}
         >
           {#each options as option, i (option.value)}
             <button
-              class="dialkit-select-option dialkit-swatch-option"
+              class="tweakers-select-option tweakers-swatch-option"
               data-selected={String(option.value === value)}
               data-highlight={String(i === highlight)}
               onclick={() => select(option.value)}
               onmouseenter={() => (highlight = i)}
             >
               {@render preview(option.colors)}
-              <span class="dialkit-swatch-option-label">{option.label}</span>
+              <span class="tweakers-swatch-option-label">{option.label}</span>
             </button>
           {/each}
         </div>

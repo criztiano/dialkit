@@ -131,7 +131,7 @@ export function GradientPanel({ value, onChange, onDrag }: GradientPanelProps) {
     d.originY = e.clientY;
     d.working = value;
 
-    const handle = (e.target as HTMLElement).closest('.dialkit-gradient-stop') as HTMLElement | null;
+    const handle = (e.target as HTMLElement).closest('.tweakers-gradient-stop') as HTMLElement | null;
     if (handle) {
       const index = Number(handle.dataset.index);
       setSelectedIndex(index);
@@ -216,12 +216,12 @@ export function GradientPanel({ value, onChange, onDrag }: GradientPanelProps) {
   const previewStops = detach ? value.stops.filter((_, i) => i !== detach.index) : value.stops;
 
   return (
-    <div className="dialkit-gradient-panel">
-      <div className="dialkit-gradient-toolbar">
+    <div className="tweakers-gradient-panel">
+      <div className="tweakers-gradient-toolbar">
         <button
           ref={gripRef}
           type="button"
-          className="dialkit-gradient-grip"
+          className="tweakers-gradient-grip"
           aria-label="Drag to move"
           title="Drag to move"
           onPointerDown={onGripDown}
@@ -248,7 +248,7 @@ export function GradientPanel({ value, onChange, onDrag }: GradientPanelProps) {
 
       <div
         ref={stripRef}
-        className="dialkit-gradient-strip"
+        className="tweakers-gradient-strip"
         style={{ '--gradient-ramp': rampCss(previewStops) } as React.CSSProperties}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -261,7 +261,7 @@ export function GradientPanel({ value, onChange, onDrag }: GradientPanelProps) {
             <button
               key={i}
               type="button"
-              className="dialkit-gradient-stop"
+              className="tweakers-gradient-stop"
               data-index={i}
               data-selected={String(i === safeIndex)}
               data-holding={String(i === holdingIndex)}
@@ -278,7 +278,7 @@ export function GradientPanel({ value, onChange, onDrag }: GradientPanelProps) {
         })}
       </div>
 
-      <span className="dialkit-gradient-divider" aria-hidden="true" />
+      <span className="tweakers-gradient-divider" aria-hidden="true" />
 
       <ColorPickerPanel
         key={safeIndex}

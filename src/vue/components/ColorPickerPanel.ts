@@ -81,7 +81,7 @@ function useAreaDrag(onPoint: (x: number, y: number) => void) {
  * typing ("25" on the way to "255") never round-trips through the color.
  */
 const ChannelField = defineComponent({
-  name: 'DialKitColorChannelField',
+  name: 'TweakersColorChannelField',
   props: {
     spec: { type: Object as PropType<ChannelSpec>, required: true },
     value: { type: Number, required: true },
@@ -95,7 +95,7 @@ const ChannelField = defineComponent({
       draft.value = null;
     };
 
-    return () => h('label', { class: 'dialkit-color-field' }, [
+    return () => h('label', { class: 'tweakers-color-field' }, [
       h('input', {
         type: 'text',
         inputmode: 'decimal',
@@ -119,13 +119,13 @@ const ChannelField = defineComponent({
           }
         },
       }),
-      h('span', { class: 'dialkit-color-field-label' }, props.spec.label),
+      h('span', { class: 'tweakers-color-field-label' }, props.spec.label),
     ]);
   },
 });
 
 const HexField = defineComponent({
-  name: 'DialKitColorHexField',
+  name: 'TweakersColorHexField',
   props: {
     value: { type: String, required: true },
     alpha: { type: Boolean, required: true },
@@ -142,7 +142,7 @@ const HexField = defineComponent({
       draft.value = null;
     };
 
-    return () => h('label', { class: 'dialkit-color-field dialkit-color-field-hex' }, [
+    return () => h('label', { class: 'tweakers-color-field tweakers-color-field-hex' }, [
       h('input', {
         type: 'text',
         spellcheck: false,
@@ -166,13 +166,13 @@ const HexField = defineComponent({
           }
         },
       }),
-      h('span', { class: 'dialkit-color-field-label' }, 'HEX'),
+      h('span', { class: 'tweakers-color-field-label' }, 'HEX'),
     ]);
   },
 });
 
 const PaletteSlot = defineComponent({
-  name: 'DialKitColorPaletteSlot',
+  name: 'TweakersColorPaletteSlot',
   props: {
     color: { type: String as PropType<string | null>, default: null },
   },
@@ -193,7 +193,7 @@ const PaletteSlot = defineComponent({
     onBeforeUnmount(cancelHold);
 
     return () => h('button', {
-      class: 'dialkit-color-palette-slot',
+      class: 'tweakers-color-palette-slot',
       'data-filled': String(props.color !== null),
       'data-holding': String(holding.value),
       style: props.color ? { '--swatch-color': props.color } : undefined,
@@ -234,7 +234,7 @@ const PaletteSlot = defineComponent({
 });
 
 export const ColorPickerPanel = defineComponent({
-  name: 'DialKitColorPickerPanel',
+  name: 'TweakersColorPickerPanel',
   props: {
     value: { type: String, required: true },
     alpha: { type: Boolean, default: false },
@@ -306,16 +306,16 @@ export const ColorPickerPanel = defineComponent({
     };
 
     return () => h('div', {
-      class: 'dialkit-color-picker',
+      class: 'tweakers-color-picker',
       style: { '--picker-hue': String(hsva.value.h) },
     }, [
       h('div', {
-        class: 'dialkit-color-sv',
+        class: 'tweakers-color-sv',
         ref: svDrag.elRef,
         ...svDrag.handlers,
       }, [
         h('div', {
-          class: 'dialkit-color-sv-thumb',
+          class: 'tweakers-color-sv-thumb',
           style: {
             left: `${hsva.value.s * 100}%`,
             top: `${(1 - hsva.value.v) * 100}%`,
@@ -325,12 +325,12 @@ export const ColorPickerPanel = defineComponent({
       ]),
 
       h('div', {
-        class: 'dialkit-color-slider dialkit-color-hue',
+        class: 'tweakers-color-slider tweakers-color-hue',
         ref: hueDrag.elRef,
         ...hueDrag.handlers,
       }, [
         h('div', {
-          class: 'dialkit-color-slider-thumb',
+          class: 'tweakers-color-slider-thumb',
           style: {
             left: `${(hsva.value.h / 360) * 100}%`,
             background: `hsl(${hsva.value.h} 100% 50%)`,
@@ -340,16 +340,16 @@ export const ColorPickerPanel = defineComponent({
 
       props.alpha
         ? h('div', {
-          class: 'dialkit-color-slider dialkit-color-alpha dialkit-checker',
+          class: 'tweakers-color-slider tweakers-color-alpha tweakers-checker',
           ref: alphaDrag.elRef,
           ...alphaDrag.handlers,
         }, [
           h('div', {
-            class: 'dialkit-color-alpha-gradient',
+            class: 'tweakers-color-alpha-gradient',
             style: { background: `linear-gradient(to right, transparent, ${opaqueHex.value})` },
           }),
           h('div', {
-            class: 'dialkit-color-slider-thumb',
+            class: 'tweakers-color-slider-thumb',
             style: {
               left: `${hsva.value.a * 100}%`,
               background: opaqueHex.value,
@@ -368,7 +368,7 @@ export const ColorPickerPanel = defineComponent({
         },
       }),
 
-      h('div', { class: 'dialkit-color-fields', 'data-format': format.value }, format.value === 'hex'
+      h('div', { class: 'tweakers-color-fields', 'data-format': format.value }, format.value === 'hex'
         ? [
           h(HexField, {
             value: currentHex.value,
@@ -391,7 +391,7 @@ export const ColorPickerPanel = defineComponent({
         }))),
 
       props.palette
-        ? h('div', { class: 'dialkit-color-palette' }, Array.from({ length: PALETTE_SIZE }, (_, i) => h(PaletteSlot, {
+        ? h('div', { class: 'tweakers-color-palette' }, Array.from({ length: PALETTE_SIZE }, (_, i) => h(PaletteSlot, {
           key: i,
           color: slots.value[i] ?? null,
           // Read the store at commit time — a 500ms hold is long enough for

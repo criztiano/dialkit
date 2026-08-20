@@ -340,26 +340,26 @@ export function CurveComposer({
     for (let i = 1; i < n; i++) {
       const gx = (i / n) * W;
       lines.push(
-        <line key={`g-${rect.y}-${i}`} x1={gx} y1={rect.y} x2={gx} y2={rect.y + rect.h} className="dialkit-cc-grid" />
+        <line key={`g-${rect.y}-${i}`} x1={gx} y1={rect.y} x2={gx} y2={rect.y + rect.h} className="tweakers-cc-grid" />
       );
     }
     return lines;
   };
 
   const renderLaneBg = (rect: Rect, key: string) => (
-    <rect key={key} className="dialkit-cc-lane" x={rect.x} y={rect.y} width={rect.w} height={rect.h} rx={8} />
+    <rect key={key} className="tweakers-cc-lane" x={rect.x} y={rect.y} width={rect.w} height={rect.h} rx={8} />
   );
 
   const diagonal = (rect: Rect, span: [number, number], key: string) => {
     const d = diagonalLine(rect, span, W);
-    return <line key={key} className="dialkit-cc-diagonal" x1={d.x1} y1={d.y1} x2={d.x2} y2={d.y2} />;
+    return <line key={key} className="tweakers-cc-diagonal" x1={d.x1} y1={d.y1} x2={d.x2} y2={d.y2} />;
   };
 
   return (
-    <div className="dialkit-cc-wrap" style={{ width: W }}>
+    <div className="tweakers-cc-wrap" style={{ width: W }}>
       <svg
         ref={svgRef}
-        className="dialkit-cc"
+        className="tweakers-cc"
         viewBox={`0 0 ${W} ${totalH}`}
         width={W}
         height={totalH}
@@ -383,7 +383,7 @@ export function CurveComposer({
             const span = segmentSpan(segments, selectedIndex, gap);
             return (
               <rect
-                className="dialkit-cc-seg-selected"
+                className="tweakers-cc-seg-selected"
                 x={span[0] * W}
                 y={mainRect.y}
                 width={(span[1] - span[0]) * W}
@@ -400,7 +400,7 @@ export function CurveComposer({
             const span = segmentSpan(segments, hover.index, gap);
             return (
               <rect
-                className="dialkit-cc-seg-hover"
+                className="tweakers-cc-seg-hover"
                 x={span[0] * W}
                 y={mainRect.y}
                 width={(span[1] - span[0]) * W}
@@ -415,8 +415,8 @@ export function CurveComposer({
           return (
             <g key={`seg-${i}`}>
               {diagonal(mainRect, span, `diag-${i}`)}
-              <path className="dialkit-cc-curve" d={curvePath(seg, mainRect, span, W)} />
-              <text className="dialkit-cc-label" x={(span[0] + span[1]) * 0.5 * W} y={mainRect.y + 13}>
+              <path className="tweakers-cc-curve" d={curvePath(seg, mainRect, span, W)} />
+              <text className="tweakers-cc-label" x={(span[0] + span[1]) * 0.5 * W} y={mainRect.y + 13}>
                 {seg.type}
               </text>
             </g>
@@ -430,7 +430,7 @@ export function CurveComposer({
             .map((slot) => (
               <path
                 key={`conn-${slot.index}`}
-                className="dialkit-cc-connector"
+                className="tweakers-cc-connector"
                 d={connectorPath(slot, samplers, segments.length, mainRect, W)}
               />
             ))}
@@ -439,7 +439,7 @@ export function CurveComposer({
         {interior.map((bx, i) => (
           <line
             key={`b-${i}`}
-            className="dialkit-cc-boundary"
+            className="tweakers-cc-boundary"
             data-active={String(
               hover?.kind === 'boundary' && hover.index === i || (drag?.kind === 'boundary' && drag.index === i)
             )}
@@ -451,8 +451,8 @@ export function CurveComposer({
         ))}
 
         {/* series playhead + value dot (rides the curve; this is the signal triggers read) */}
-        <line ref={seriesPlayheadRef} className="dialkit-cc-playhead" x1={0} y1={mainRect.y} x2={0} y2={mainRect.y + mainRect.h} style={{ stroke: playheadColor }} />
-        <circle ref={seriesDotRef} className="dialkit-cc-dot" cx={0} cy={mapY(mainRect, 0)} r={3} style={{ fill: playheadColor }} />
+        <line ref={seriesPlayheadRef} className="tweakers-cc-playhead" x1={0} y1={mainRect.y} x2={0} y2={mainRect.y + mainRect.h} style={{ stroke: playheadColor }} />
+        <circle ref={seriesDotRef} className="tweakers-cc-dot" cx={0} cy={mapY(mainRect, 0)} r={3} style={{ fill: playheadColor }} />
 
         {/* driver lane */}
         {driverRect && (
@@ -460,14 +460,14 @@ export function CurveComposer({
             {renderLaneBg(driverRect, 'driver-bg')}
             {renderLaneGrid(driverRect)}
             {hover?.kind === 'driver' && !drag && (
-              <rect className="dialkit-cc-seg-hover" x={0} y={driverRect.y} width={W} height={driverRect.h} rx={8} />
+              <rect className="tweakers-cc-seg-hover" x={0} y={driverRect.y} width={W} height={driverRect.h} rx={8} />
             )}
             {diagonal(driverRect, [0, 1], 'driver-diag')}
-            <path className="dialkit-cc-curve dialkit-cc-curve-driver" d={curvePath(driver!, driverRect, [0, 1], W)} />
-            <text className="dialkit-cc-label" x={W * 0.5} y={driverRect.y + 13}>
+            <path className="tweakers-cc-curve tweakers-cc-curve-driver" d={curvePath(driver!, driverRect, [0, 1], W)} />
+            <text className="tweakers-cc-label" x={W * 0.5} y={driverRect.y + 13}>
               driver · {driver!.type}
             </text>
-            <line ref={driverPlayheadRef} className="dialkit-cc-playhead" x1={0} y1={driverRect.y} x2={0} y2={driverRect.y + driverRect.h} style={{ stroke: playheadColor }} />
+            <line ref={driverPlayheadRef} className="tweakers-cc-playhead" x1={0} y1={driverRect.y} x2={0} y2={driverRect.y + driverRect.h} style={{ stroke: playheadColor }} />
           </>
         )}
       </svg>

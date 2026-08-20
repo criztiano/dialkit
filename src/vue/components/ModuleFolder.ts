@@ -9,7 +9,7 @@ import { Checkbox } from './Checkbox';
  * enabled, so `_collapsed` still controls how the section starts.
  */
 export const ModuleFolder = defineComponent({
-  name: 'DialKitModuleFolder',
+  name: 'TweakersModuleFolder',
   props: {
     title: { type: String, required: true },
     enabled: { type: Boolean, required: true },
@@ -29,11 +29,11 @@ export const ModuleFolder = defineComponent({
     };
 
     return () =>
-      h('div', { class: 'dialkit-module dialkit-module-folder', 'data-open': props.enabled && isOpen.value ? 'true' : 'false' }, [
+      h('div', { class: 'tweakers-module tweakers-module-folder', 'data-open': props.enabled && isOpen.value ? 'true' : 'false' }, [
         h(
           'div',
           {
-            class: 'dialkit-module-header dialkit-module-header-toggle',
+            class: 'tweakers-module-header tweakers-module-header-toggle',
             onClick: () => { if (props.enabled) isOpen.value = !isOpen.value; },
             'data-hint': props.hint ? 'true' : undefined,
             'aria-describedby': props.hint ? props.hintId : undefined,
@@ -44,15 +44,15 @@ export const ModuleFolder = defineComponent({
               label: props.title,
               onChange: (next: boolean) => setEnabled(next),
             }),
-            h('span', { class: 'dialkit-module-title' }, props.title),
+            h('span', { class: 'tweakers-module-title' }, props.title),
             ...(props.hint
-              ? [h('span', { class: 'dialkit-hint', id: props.hintId, role: 'tooltip' }, props.hint)]
+              ? [h('span', { class: 'tweakers-hint', id: props.hintId, role: 'tooltip' }, props.hint)]
               : []),
           ]
         ),
-        h('div', { class: 'dialkit-module-collapse', 'data-open': props.enabled && isOpen.value }, [
-          h('div', { class: 'dialkit-module-collapse-clip' }, [
-            h('div', { class: 'dialkit-module-inner' }, slots.default ? slots.default() : []),
+        h('div', { class: 'tweakers-module-collapse', 'data-open': props.enabled && isOpen.value }, [
+          h('div', { class: 'tweakers-module-collapse-clip' }, [
+            h('div', { class: 'tweakers-module-inner' }, slots.default ? slots.default() : []),
           ]),
         ]),
       ]);

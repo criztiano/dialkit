@@ -1,14 +1,14 @@
 import { Teleport, defineComponent, h, ref, watch, type PropType } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
 import { ICON_CHEVRON, ICON_TRASH } from '../../icons';
-import { DialStore } from '../../store/DialStore';
+import { TweakStore } from '../../store/TweakStore';
 
 // Structural on purpose: stock Preset[] and provider-derived PresetItem[]
 // both fit. `deletable` defaults to true so stock callers stay unchanged.
 type PresetRow = { id: string; name: string; deletable?: boolean };
 
 export const PresetManager = defineComponent({
-  name: 'DialKitPresetManager',
+  name: 'TweakersPresetManager',
   props: {
     panelId: { type: String, required: true },
     presets: {
@@ -82,27 +82,27 @@ export const PresetManager = defineComponent({
     });
 
     const handleSelect = (presetId: string | null) => {
-      DialStore.selectPreset(props.panelId, presetId);
+      TweakStore.selectPreset(props.panelId, presetId);
       close();
     };
 
     const handleDelete = (event: MouseEvent, presetId: string) => {
       event.stopPropagation();
-      DialStore.removePreset(props.panelId, presetId);
+      TweakStore.removePreset(props.panelId, presetId);
     };
 
-    return () => h('div', { class: 'dialkit-preset-manager' }, [
+    return () => h('div', { class: 'tweakers-preset-manager' }, [
       h('button', {
         ref: triggerRef,
-        class: 'dialkit-preset-trigger',
+        class: 'tweakers-preset-trigger',
         onClick: toggle,
         'data-open': String(isOpen.value),
         'data-has-preset': String(!!activePreset()),
         'data-disabled': String(!hasPresets()),
       }, [
-        h('span', { class: 'dialkit-preset-label' }, activePreset()?.name ?? (props.providerMode ? 'Presets' : 'Version 1')),
+        h('span', { class: 'tweakers-preset-label' }, activePreset()?.name ?? (props.providerMode ? 'Presets' : 'Version 1')),
         h(motion.svg, {
-          class: 'dialkit-select-chevron',
+          class: 'tweakers-select-chevron',
           viewBox: '0 0 24 24',
           fill: 'none',
           stroke: 'currentColor',
@@ -118,9 +118,9 @@ export const PresetManager = defineComponent({
         h(AnimatePresence, null, {
           default: () => isOpen.value
             ? [h(motion.div, {
-              key: 'dialkit-preset-dropdown',
+              key: 'tweakers-preset-dropdown',
               ref: setDropdownRef,
-              class: 'dialkit-root dialkit-preset-dropdown',
+              class: 'tweakers-root tweakers-preset-dropdown',
               style: {
                 position: 'fixed',
                 top: `${pos.value.top}px`,
@@ -133,20 +133,20 @@ export const PresetManager = defineComponent({
               transition: { type: 'spring', visualDuration: 0.15, bounce: 0 },
             }, [
               ...(props.providerMode ? [] : [h('div', {
-                class: 'dialkit-preset-item',
+                class: 'tweakers-preset-item',
                 'data-active': String(!props.activePresetId),
                 onClick: () => handleSelect(null),
-              }, [h('span', { class: 'dialkit-preset-name' }, 'Version 1')])]),
+              }, [h('span', { class: 'tweakers-preset-name' }, 'Version 1')])]),
 
               ...props.presets.map((preset) => h('div', {
                 key: preset.id,
-                class: 'dialkit-preset-item',
+                class: 'tweakers-preset-item',
                 'data-active': String(preset.id === props.activePresetId),
                 onClick: () => handleSelect(preset.id),
               }, [
-                h('span', { class: 'dialkit-preset-name' }, preset.name),
+                h('span', { class: 'tweakers-preset-name' }, preset.name),
                 ...((preset.deletable ?? true) ? [h('button', {
-                  class: 'dialkit-preset-delete',
+                  class: 'tweakers-preset-delete',
                   onClick: (event: MouseEvent) => handleDelete(event, preset.id),
                   title: 'Delete preset',
                 }, [

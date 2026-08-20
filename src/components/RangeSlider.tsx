@@ -375,10 +375,10 @@ export function RangeSlider({
       : 0.7;
 
   return (
-    <div ref={wrapperRef} className="dialkit-range-slider-wrapper">
+    <div ref={wrapperRef} className="tweakers-range-slider-wrapper">
       <motion.div
         ref={trackRef}
-        className={`dialkit-range-slider ${isActive ? 'dialkit-range-slider-active' : ''}`}
+        className={`tweakers-range-slider ${isActive ? 'tweakers-range-slider-active' : ''}`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -388,30 +388,30 @@ export function RangeSlider({
         onMouseLeave={() => setIsHovered(false)}
       >
         <motion.div
-          className="dialkit-range-slider-fill"
+          className="tweakers-range-slider-fill"
           style={{ left: fillLeft, width: fillWidth }}
         />
 
         <motion.div
-          className="dialkit-range-slider-handle"
+          className="tweakers-range-slider-handle"
           style={{ left: lowHandleLeft, y: '-50%' }}
           animate={{ opacity: lowOpacity }}
           transition={{ opacity: { duration: 0.15 } }}
         />
         <motion.div
-          className="dialkit-range-slider-handle"
+          className="tweakers-range-slider-handle"
           style={{ left: highHandleLeft, y: '-50%' }}
           animate={{ opacity: highOpacity }}
           transition={{ opacity: { duration: 0.15 } }}
         />
 
-        <span className="dialkit-range-slider-label">{label}</span>
+        <span className="tweakers-range-slider-label">{label}</span>
 
         {editing !== null ? (
           <input
             ref={inputRef}
             type="text"
-            className="dialkit-range-slider-input"
+            className="tweakers-range-slider-input"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleInputKeyDown}
@@ -420,17 +420,17 @@ export function RangeSlider({
             onPointerDown={(e) => e.stopPropagation()}
           />
         ) : (
-          <span className="dialkit-range-slider-value">
+          <span className="tweakers-range-slider-value">
             <span
-              className="dialkit-range-slider-bound"
+              className="tweakers-range-slider-bound"
               onClick={(e) => { e.stopPropagation(); openEditor('min'); }}
               onPointerDown={(e) => e.stopPropagation()}
             >
               {lowText}
             </span>
-            <span className="dialkit-range-slider-dash">–</span>
+            <span className="tweakers-range-slider-dash">–</span>
             <span
-              className="dialkit-range-slider-bound"
+              className="tweakers-range-slider-bound"
               onClick={(e) => { e.stopPropagation(); openEditor('max'); }}
               onPointerDown={(e) => e.stopPropagation()}
             >

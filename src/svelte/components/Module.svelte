@@ -18,15 +18,15 @@
   // away (animated via the grid-rows trick — see theme.css).
 </script>
 
-<div class="dialkit-module">
-  <div class="dialkit-module-header">
+<div class="tweakers-module">
+  <div class="tweakers-module-header">
     <Checkbox checked={enabled} onChange={onEnabledChange} label={title} />
-    <span class="dialkit-module-title">{title}</span>
+    <span class="tweakers-module-title">{title}</span>
   </div>
 
-  <div class="dialkit-module-collapse" data-open={enabled}>
-    <div class="dialkit-module-collapse-clip">
-      <div class="dialkit-module-inner">{@render children?.()}</div>
+  <div class="tweakers-module-collapse" data-open={enabled}>
+    <div class="tweakers-module-collapse-clip">
+      <div class="tweakers-module-inner">{@render children?.()}</div>
     </div>
   </div>
 </div>

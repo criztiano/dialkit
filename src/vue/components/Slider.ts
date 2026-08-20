@@ -1,6 +1,6 @@
 import { defineComponent, h, computed, nextTick, onMounted, onUnmounted, ref, watch, type PropType } from 'vue';
 import { animate, motionValue } from 'motion-v';
-import type { ShortcutConfig } from '../../store/DialStore';
+import type { ShortcutConfig } from '../../store/TweakStore';
 import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut } from '../../shortcut-utils';
 
 const CLICK_THRESHOLD = 3;
@@ -11,7 +11,7 @@ const MAX_STRETCH = 8;
 const DETENT_PX = 6;
 
 export const Slider = defineComponent({
-  name: 'DialKitSlider',
+  name: 'TweakersSlider',
   props: {
     label: { type: String, required: true },
     value: { type: Number, required: true },
@@ -396,14 +396,14 @@ export const Slider = defineComponent({
         const count = Math.max(0, Math.floor(discreteSteps.value) - 1);
         for (let i = 0; i < count; i += 1) {
           const pct = ((i + 1) * step.value) / (max.value - min.value) * 100;
-          marks.push(h('div', { class: 'dialkit-slider-hashmark', style: { left: `${pct}%` } }));
+          marks.push(h('div', { class: 'tweakers-slider-hashmark', style: { left: `${pct}%` } }));
         }
         return marks;
       }
 
       for (let i = 0; i < 9; i += 1) {
         const pct = (i + 1) * 10;
-        marks.push(h('div', { class: 'dialkit-slider-hashmark', style: { left: `${pct}%` } }));
+        marks.push(h('div', { class: 'tweakers-slider-hashmark', style: { left: `${pct}%` } }));
       }
       return marks;
     });
@@ -440,11 +440,11 @@ export const Slider = defineComponent({
 
     const cardClassName = computed(() =>
       [
-        'dialkit-slider',
-        isVertical.value ? 'dialkit-slider-vertical' : '',
-        isActive.value ? 'dialkit-slider-active' : '',
-        isInteracting.value ? 'dialkit-slider-engaged' : '',
-        isMetaHeld.value ? 'dialkit-slider-text-mode' : '',
+        'tweakers-slider',
+        isVertical.value ? 'tweakers-slider-vertical' : '',
+        isActive.value ? 'tweakers-slider-active' : '',
+        isInteracting.value ? 'tweakers-slider-engaged' : '',
+        isMetaHeld.value ? 'tweakers-slider-text-mode' : '',
       ]
         .filter(Boolean)
         .join(' ')
@@ -486,7 +486,7 @@ export const Slider = defineComponent({
 
     const renderValueSpan = (className: string) =>
       h('span', {
-        class: `${className} ${isValueEditable.value ? 'dialkit-slider-value-editable' : ''}`,
+        class: `${className} ${isValueEditable.value ? 'tweakers-slider-value-editable' : ''}`,
         onMouseenter: () => {
           isValueHovered.value = true;
         },
@@ -500,7 +500,7 @@ export const Slider = defineComponent({
         style: { cursor: isValueEditable.value || isMetaHeld.value ? 'text' : 'default' },
       }, [
         displayValue.value,
-        props.unit ? h('span', { class: 'dialkit-slider-unit' }, props.unit) : null,
+        props.unit ? h('span', { class: 'tweakers-slider-unit' }, props.unit) : null,
       ]);
 
     const renderLabel = (className: string) =>
@@ -508,19 +508,19 @@ export const Slider = defineComponent({
         props.label,
         props.shortcut
           ? h('span', {
-              class: `dialkit-shortcut-pill${props.shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`,
+              class: `tweakers-shortcut-pill${props.shortcutActive ? ' tweakers-shortcut-pill-active' : ''}`,
             }, formatSliderShortcut(props.shortcut))
           : null,
       ]);
 
     return () => {
       if (isVertical.value) {
-        return h('div', { ref: wrapperRef, class: 'dialkit-slider-wrapper dialkit-slider-wrapper-vertical' }, [
+        return h('div', { ref: wrapperRef, class: 'tweakers-slider-wrapper tweakers-slider-wrapper-vertical' }, [
           h('div', cardProps(), [
-            h('div', { class: 'dialkit-slider-fill-area' }, [
+            h('div', { class: 'tweakers-slider-fill-area' }, [
               h('div', {
                 ref: fillRef,
-                class: 'dialkit-slider-fill-vertical',
+                class: 'tweakers-slider-fill-vertical',
                 style: {
                   bottom: fillStart(fillPercent.get()),
                   height: fillExtent(fillPercent.get()),
@@ -528,19 +528,19 @@ export const Slider = defineComponent({
               }),
             ]),
             showInput.value
-              ? renderInput('dialkit-slider-input dialkit-slider-input-vertical')
-              : renderValueSpan('dialkit-slider-value-vertical'),
-            renderLabel('dialkit-slider-label-vertical'),
+              ? renderInput('tweakers-slider-input tweakers-slider-input-vertical')
+              : renderValueSpan('tweakers-slider-value-vertical'),
+            renderLabel('tweakers-slider-label-vertical'),
           ]),
         ]);
       }
 
-      return h('div', { ref: wrapperRef, class: 'dialkit-slider-wrapper' }, [
+      return h('div', { ref: wrapperRef, class: 'tweakers-slider-wrapper' }, [
         h('div', cardProps(), [
-          h('div', { class: 'dialkit-slider-track' }, [
+          h('div', { class: 'tweakers-slider-track' }, [
             h('div', {
               ref: fillRef,
-              class: 'dialkit-slider-fill',
+              class: 'tweakers-slider-fill',
               style: {
                 left: fillStart(fillPercent.get()),
                 width: fillExtent(fillPercent.get()),
@@ -548,18 +548,18 @@ export const Slider = defineComponent({
             }),
             h('div', {
               ref: handleRef,
-              class: 'dialkit-slider-handle',
+              class: 'tweakers-slider-handle',
               style: {
                 left: handleLeft(fillPercent.get()),
                 opacity: handleOpacityMv.get(),
               },
             }),
           ]),
-          h('div', { class: 'dialkit-slider-hashmarks' }, hashMarks.value),
-          renderLabel('dialkit-slider-label'),
+          h('div', { class: 'tweakers-slider-hashmarks' }, hashMarks.value),
+          renderLabel('tweakers-slider-label'),
           showInput.value
-            ? renderInput('dialkit-slider-input')
-            : renderValueSpan('dialkit-slider-value'),
+            ? renderInput('tweakers-slider-input')
+            : renderValueSpan('tweakers-slider-value'),
         ]),
       ]);
     };

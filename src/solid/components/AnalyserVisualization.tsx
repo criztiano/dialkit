@@ -78,14 +78,14 @@ export function AnalyserVisualization(props: AnalyserVisualizationProps) {
   });
 
   return (
-    <div class="dialkit-analyser-viz-wrap" style={{ width: `${p.width}px` }}>
+    <div class="tweakers-analyser-viz-wrap" style={{ width: `${p.width}px` }}>
       <canvas
         ref={canvasEl}
-        class="dialkit-analyser-viz"
+        class="tweakers-analyser-viz"
         style={{ width: `${p.width}px`, height: `${p.height}px` }}
       />
       <Show when={p.onMuteChange || p.onSoloChange}>
-        <div class="dialkit-analyser-actions">
+        <div class="tweakers-analyser-actions">
           <Show when={p.onMuteChange}>
             <button type="button" aria-label="Mute" aria-pressed={p.muted} onClick={() => p.onMuteChange?.(!p.muted)}>
               M

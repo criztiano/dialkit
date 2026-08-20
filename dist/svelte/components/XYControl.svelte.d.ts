@@ -1,4 +1,4 @@
-import type { ShortcutConfig, XYAxis, XYValue } from 'dialkit/store';
+import type { ShortcutConfig, XYAxis, XYValue } from 'tweakers/store';
 type $$ComponentProps = {
     label: string;
     value: XYValue;

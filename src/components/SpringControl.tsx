@@ -1,4 +1,4 @@
-import { SpringConfig, DialStore } from '../store/DialStore';
+import { SpringConfig, TweakStore } from '../store/TweakStore';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
 import { SegmentedControl } from './SegmentedControl';
@@ -15,9 +15,9 @@ interface SpringControlProps {
 
 export function SpringControl({ panelId, path, label, spring, onChange }: SpringControlProps) {
   const mode = useSyncExternalStore(
-    (cb) => DialStore.subscribe(panelId, cb),
-    () => DialStore.getSpringMode(panelId, path),
-    () => DialStore.getSpringMode(panelId, path)
+    (cb) => TweakStore.subscribe(panelId, cb),
+    () => TweakStore.getSpringMode(panelId, path),
+    () => TweakStore.getSpringMode(panelId, path)
   );
 
   const isSimpleMode = mode === 'simple';
@@ -38,7 +38,7 @@ export function SpringControl({ panelId, path, label, spring, onChange }: Spring
   }
 
   const handleModeChange = (newMode: 'simple' | 'advanced') => {
-    DialStore.updateSpringMode(panelId, path, newMode);
+    TweakStore.updateSpringMode(panelId, path, newMode);
 
     if (newMode === 'simple') {
       onChange(cache.current.simple);
@@ -64,8 +64,8 @@ export function SpringControl({ panelId, path, label, spring, onChange }: Spring
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <SpringVisualization spring={spring} isSimpleMode={isSimpleMode} />
 
-        <div className="dialkit-labeled-control">
-          <span className="dialkit-labeled-control-label">Type</span>
+        <div className="tweakers-labeled-control">
+          <span className="tweakers-labeled-control-label">Type</span>
           <SegmentedControl
             options={[
               { value: 'simple' as const, label: 'Time' },

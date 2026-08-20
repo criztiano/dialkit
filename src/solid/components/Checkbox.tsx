@@ -32,7 +32,7 @@ export function Checkbox(props: CheckboxProps) {
       aria-checked={disabled() ? 'mixed' : props.checked}
       aria-label={props.label}
       aria-disabled={disabled() || undefined}
-      class="dialkit-checkbox"
+      class="tweakers-checkbox"
       data-checked={props.checked && !disabled() ? 'true' : undefined}
       data-disabled={disabled() ? 'true' : undefined}
       onClick={(e) => {
@@ -41,9 +41,9 @@ export function Checkbox(props: CheckboxProps) {
       }}
     >
       <svg viewBox="0 0 22 22" width="22" height="22" aria-hidden="true">
-        <path class="dialkit-checkbox-slash" d="M6 16 16 6" fill="none" />
-        <rect class="dialkit-checkbox-chip" x="5" y="5" width="12" height="12" rx="2" />
-        <path class="dialkit-checkbox-dash" d="M6 11h10" fill="none" />
+        <path class="tweakers-checkbox-slash" d="M6 16 16 6" fill="none" />
+        <rect class="tweakers-checkbox-chip" x="5" y="5" width="12" height="12" rx="2" />
+        <path class="tweakers-checkbox-dash" d="M6 11h10" fill="none" />
       </svg>
     </button>
   );

@@ -1,4 +1,4 @@
-import type { ChipOption } from 'dialkit/store';
+import type { ChipOption } from 'tweakers/store';
 type $$ComponentProps = {
     label: string;
     value: string;

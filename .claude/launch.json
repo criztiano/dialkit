@@ -2,13 +2,13 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "dialkit-example",
+      "name": "tweakers-example",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "example", "run", "dev"],
       "port": 3000
     },
     {
-      "name": "dialkit-lib-watch",
+      "name": "tweakers-lib-watch",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"]
     }

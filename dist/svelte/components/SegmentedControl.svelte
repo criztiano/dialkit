@@ -38,10 +38,10 @@
   });
 </script>
 
-<div class="dialkit-segmented" bind:this={containerRef}>
+<div class="tweakers-segmented" bind:this={containerRef}>
   {#if pillLeft !== null && pillWidth !== null}
     <div
-      class="dialkit-segmented-pill"
+      class="tweakers-segmented-pill"
       style:left="{pillLeft}px"
       style:width="{pillWidth}px"
       style:transition={shouldAnimate
@@ -53,7 +53,7 @@
   {#each options as option (option.value)}
     <button
       onclick={() => onChange(option.value)}
-      class="dialkit-segmented-button"
+      class="tweakers-segmented-button"
       data-active={String(value === option.value)}
     >
       {option.label}

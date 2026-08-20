@@ -15,15 +15,15 @@ interface ModuleProps {
  */
 export function Module(props: ModuleProps) {
   return (
-    <div class="dialkit-module">
-      <div class="dialkit-module-header">
+    <div class="tweakers-module">
+      <div class="tweakers-module-header">
         <Checkbox checked={props.enabled} onChange={props.onEnabledChange} label={props.title} />
-        <span class="dialkit-module-title">{props.title}</span>
+        <span class="tweakers-module-title">{props.title}</span>
       </div>
 
-      <div class="dialkit-module-collapse" data-open={props.enabled}>
-        <div class="dialkit-module-collapse-clip">
-          <div class="dialkit-module-inner">{props.children}</div>
+      <div class="tweakers-module-collapse" data-open={props.enabled}>
+        <div class="tweakers-module-collapse-clip">
+          <div class="tweakers-module-inner">{props.children}</div>
         </div>
       </div>
     </div>

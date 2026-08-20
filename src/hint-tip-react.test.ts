@@ -4,7 +4,7 @@ import type { ReactTestRenderer, ReactTestInstance } from 'react-test-renderer';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { ControlRenderer } from './components/ControlRenderer';
-import { DialStore } from './store/DialStore';
+import { TweakStore } from './store/TweakStore';
 
 // Folder measures window height and Slider binds pointer handlers; node:test has
 // no DOM.
@@ -15,15 +15,15 @@ let panelSeq = 0;
 
 function renderPanel(hints?: Record<string, string>) {
   const id = `hint-render-${++panelSeq}`;
-  DialStore.registerPanel(id, id, { gravity: [9.8, 0, 20], physics: { elastic: [0.5, 0, 1] } }, undefined, { hints });
+  TweakStore.registerPanel(id, id, { gravity: [9.8, 0, 20], physics: { elastic: [0.5, 0, 1] } }, undefined, { hints });
 
   let renderer!: ReactTestRenderer;
   act(() => {
     renderer = create(
       createElement(ControlRenderer, {
         panelId: id,
-        controls: DialStore.getPanel(id)?.controls ?? [],
-        values: DialStore.getValues(id),
+        controls: TweakStore.getPanel(id)?.controls ?? [],
+        values: TweakStore.getValues(id),
       })
     );
   });
@@ -31,10 +31,10 @@ function renderPanel(hints?: Record<string, string>) {
   return {
     id,
     root: renderer.root,
-    dispose: () => DialStore.unregisterPanel(id),
+    dispose: () => TweakStore.unregisterPanel(id),
     // Index 0 is `gravity`; the nested `physics.elastic` gets a wrapper too.
-    wrapper: (): ReactTestInstance => renderer.root.findAllByProps({ className: 'dialkit-control-tip' })[0],
-    tooltips: () => renderer.root.findAllByProps({ className: 'dialkit-hint' }),
+    wrapper: (): ReactTestInstance => renderer.root.findAllByProps({ className: 'tweakers-control-tip' })[0],
+    tooltips: () => renderer.root.findAllByProps({ className: 'tweakers-hint' }),
   };
 }
 
@@ -79,7 +79,7 @@ describe('control hint rendering (React)', () => {
     const panel = renderPanel({ physics: 'How bodies respond to force.' });
     const header = panel.root.findByProps({ 'data-hint': 'true' });
 
-    assert.ok(String(header.props.className).includes('dialkit-folder-header'));
+    assert.ok(String(header.props.className).includes('tweakers-folder-header'));
     assert.equal(header.props['aria-describedby'], panel.tooltips()[0].props.id);
 
     panel.dispose();

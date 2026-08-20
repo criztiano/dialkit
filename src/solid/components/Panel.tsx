@@ -1,8 +1,8 @@
 import { createSignal, createEffect, onMount, onCleanup, JSX } from 'solid-js';
 import { animate } from 'motion';
 import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../../icons';
-import { DialStore } from '../../store/DialStore';
-import type { PanelConfig, DialValue } from '../../store/DialStore';
+import { TweakStore } from '../../store/TweakStore';
+import type { PanelConfig, TweakValue } from '../../store/TweakStore';
 import { Folder } from './Folder';
 import { ControlRenderer } from './ControlRenderer';
 import { PresetManager } from './PresetManager';
@@ -17,12 +17,12 @@ interface PanelProps {
 export function Panel(props: PanelProps) {
   const [copied, setCopied] = createSignal(false);
   const [isPanelOpen, setIsPanelOpen] = createSignal(props.defaultOpen ?? true);
-  const [values, setValues] = createSignal<Record<string, DialValue>>(
-    DialStore.getValues(props.panel.id)
+  const [values, setValues] = createSignal<Record<string, TweakValue>>(
+    TweakStore.getValues(props.panel.id)
   );
-  const [presets, setPresets] = createSignal(DialStore.getPresetItems(props.panel.id));
-  const [activePresetId, setActivePresetId] = createSignal(DialStore.getActivePresetId(props.panel.id));
-  const [providerMode, setProviderMode] = createSignal(DialStore.hasPresetProvider(props.panel.id));
+  const [presets, setPresets] = createSignal(TweakStore.getPresetItems(props.panel.id));
+  const [activePresetId, setActivePresetId] = createSignal(TweakStore.getActivePresetId(props.panel.id));
+  const [providerMode, setProviderMode] = createSignal(TweakStore.hasPresetProvider(props.panel.id));
   let addButtonRef!: HTMLButtonElement;
   let copyButtonRef!: HTMLButtonElement;
   let copyClipboardIconRef!: HTMLSpanElement;
@@ -40,11 +40,11 @@ export function Panel(props: PanelProps) {
   const tapTransition = { type: 'spring' as const, visualDuration: 0.15, bounce: 0.3 };
 
   onMount(() => {
-    const unsub = DialStore.subscribe(props.panel.id, () => {
-      setValues(DialStore.getValues(props.panel.id));
-      setPresets(DialStore.getPresetItems(props.panel.id));
-      setActivePresetId(DialStore.getActivePresetId(props.panel.id));
-      setProviderMode(DialStore.hasPresetProvider(props.panel.id));
+    const unsub = TweakStore.subscribe(props.panel.id, () => {
+      setValues(TweakStore.getValues(props.panel.id));
+      setPresets(TweakStore.getPresetItems(props.panel.id));
+      setActivePresetId(TweakStore.getActivePresetId(props.panel.id));
+      setProviderMode(TweakStore.hasPresetProvider(props.panel.id));
     });
 
     if (copyClipboardIconRef && copyCheckIconRef) {
@@ -62,11 +62,11 @@ export function Panel(props: PanelProps) {
     onCleanup(unsub);
   });
 
-  const handleAddPreset = () => DialStore.createPreset(props.panel.id);
+  const handleAddPreset = () => TweakStore.createPreset(props.panel.id);
 
   const handleCopy = () => {
     const jsonStr = JSON.stringify(values(), null, 2);
-    const instruction = `Update the createDialKit configuration for "${props.panel.name}" with these values:\n\n\`\`\`json\n${jsonStr}\n\`\`\`\n\nApply these values as the new defaults in the createDialKit call.`;
+    const instruction = `Update the createTweakers configuration for "${props.panel.name}" with these values:\n\n\`\`\`json\n${jsonStr}\n\`\`\`\n\nApply these values as the new defaults in the createTweakers call.`;
     navigator.clipboard.writeText(instruction);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
@@ -133,7 +133,7 @@ export function Panel(props: PanelProps) {
     <>
       <button
         ref={addButtonRef}
-        class="dialkit-toolbar-add"
+        class="tweakers-toolbar-add"
         onClick={handleAddPreset}
         onPointerDown={handleAddTapStart}
         onPointerUp={handleAddTapEnd}
@@ -160,7 +160,7 @@ export function Panel(props: PanelProps) {
 
       <button
         ref={copyButtonRef}
-        class="dialkit-toolbar-copy"
+        class="tweakers-toolbar-copy"
         onClick={handleCopy}
         onPointerDown={handleCopyTapStart}
         onPointerUp={handleCopyTapEnd}
@@ -168,10 +168,10 @@ export function Panel(props: PanelProps) {
         onPointerLeave={handleCopyTapEnd}
         title="Copy parameters"
       >
-        <span class="dialkit-toolbar-copy-icon-wrap">
+        <span class="tweakers-toolbar-copy-icon-wrap">
           <span
             ref={copyClipboardIconRef}
-            class="dialkit-toolbar-copy-icon"
+            class="tweakers-toolbar-copy-icon"
             style={{ opacity: 1, transform: 'scale(1)', filter: 'blur(0px)' }}
           >
             <svg viewBox="0 0 24 24" fill="none" width="16" height="16">
@@ -182,7 +182,7 @@ export function Panel(props: PanelProps) {
           </span>
           <span
             ref={copyCheckIconRef}
-            class="dialkit-toolbar-copy-icon"
+            class="tweakers-toolbar-copy-icon"
             style={{ opacity: 0, transform: 'scale(0.5)', filter: 'blur(4px)' }}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
@@ -197,7 +197,7 @@ export function Panel(props: PanelProps) {
   );
 
   return (
-    <div class="dialkit-panel-wrapper">
+    <div class="tweakers-panel-wrapper">
       <Folder title={props.panel.name} defaultOpen={props.defaultOpen ?? true} isRoot={true} inline={props.inline ?? false} onOpenChange={setIsPanelOpen} toolbar={toolbar}>
         {renderControls()}
       </Folder>

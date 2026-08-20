@@ -1,6 +1,6 @@
 import { computed, defineComponent, h, onBeforeUnmount, onMounted, ref, Teleport, watch, type PropType } from 'vue';
-import { DialStore } from '../../store/DialStore';
-import type { AffordanceConfig, AffordanceContext, AffordanceStatus } from '../../store/DialStore';
+import { TweakStore } from '../../store/TweakStore';
+import type { AffordanceConfig, AffordanceContext, AffordanceStatus } from '../../store/TweakStore';
 import { AFFORDANCE_POPOVER_WIDTH, placePopover } from '../../affordance-core';
 
 /**
@@ -11,7 +11,7 @@ import { AFFORDANCE_POPOVER_WIDTH, placePopover } from '../../affordance-core';
  * element inside the slot.
  */
 export const ControlShell = defineComponent({
-  name: 'DialKitControlShell',
+  name: 'TweakersControlShell',
   props: {
     /** Help text for this control. Without one the tooltip is not rendered. */
     hint: { type: String, default: undefined },
@@ -47,11 +47,11 @@ export const ControlShell = defineComponent({
       const path = props.path;
       if (!panelId || !path) return;
       const read = () => {
-        status.value = DialStore.getAffordanceStatus(panelId, path);
-        disabled.value = DialStore.isDisabled(panelId, path);
+        status.value = TweakStore.getAffordanceStatus(panelId, path);
+        disabled.value = TweakStore.isDisabled(panelId, path);
       };
       read();
-      unsubscribe = DialStore.subscribeControlState(panelId, read);
+      unsubscribe = TweakStore.subscribeControlState(panelId, read);
     };
 
     // Called once before the popover mounts (height 0, so it places below) and
@@ -78,7 +78,7 @@ export const ControlShell = defineComponent({
       resubscribe();
       // Resolve the panel root so the popover escapes the panel body's scroll
       // clipping — the same escape hatch SelectControl's dropdown uses.
-      portalTarget.value = (dotEl.value?.closest('.dialkit-root') as HTMLElement | null) ?? document.body;
+      portalTarget.value = (dotEl.value?.closest('.tweakers-root') as HTMLElement | null) ?? document.body;
     });
 
     watch(() => [props.panelId, props.path, hasAffordance.value], resubscribe);
@@ -123,7 +123,7 @@ export const ControlShell = defineComponent({
       const children = slots.default ? slots.default() : [];
 
       const wrapper = h('div', {
-        class: 'dialkit-control-tip',
+        class: 'tweakers-control-tip',
         'data-hint': props.hint ? 'true' : undefined,
         'data-affordance': hasAffordance.value ? 'true' : undefined,
         'data-affordance-open': open.value ? 'true' : undefined,
@@ -135,13 +135,13 @@ export const ControlShell = defineComponent({
       }, [
         ...children,
         props.hint
-          ? h('span', { class: 'dialkit-hint', id: props.id, role: 'tooltip' }, props.hint)
+          ? h('span', { class: 'tweakers-hint', id: props.id, role: 'tooltip' }, props.hint)
           : null,
         hasAffordance.value
           ? h('button', {
             ref: dotEl,
             type: 'button',
-            class: 'dialkit-affordance-dot',
+            class: 'tweakers-affordance-dot',
             'data-status': status.value,
             'data-open': String(open.value),
             'aria-label': label.value,
@@ -158,7 +158,7 @@ export const ControlShell = defineComponent({
         h(Teleport, { to: portalTarget.value }, [
           h('div', {
             ref: popoverEl,
-            class: 'dialkit-affordance-popover',
+            class: 'tweakers-affordance-popover',
             role: 'dialog',
             'aria-label': label.value,
             tabindex: -1,
@@ -170,7 +170,7 @@ export const ControlShell = defineComponent({
               visibility: pos.value ? undefined : 'hidden',
             },
           }, [
-            h('span', { class: 'dialkit-affordance-popover-title' }, label.value),
+            h('span', { class: 'tweakers-affordance-popover-title' }, label.value),
             // Rendered as a component, not called: a stateful popover needs its
             // own instance.
             h(props.affordance!.content as never, {
@@ -178,7 +178,7 @@ export const ControlShell = defineComponent({
               path: props.path!,
               status: status.value,
               setStatus: (next: AffordanceStatus) =>
-                DialStore.setAffordanceStatus(props.panelId!, props.path!, next),
+                TweakStore.setAffordanceStatus(props.panelId!, props.path!, next),
             } satisfies AffordanceContext),
           ]),
         ]),

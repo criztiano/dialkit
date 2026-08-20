@@ -1,6 +1,6 @@
 import { Show } from 'solid-js';
 import { Checkbox } from './Checkbox';
-import type { ShortcutConfig } from '../../store/DialStore';
+import type { ShortcutConfig } from '../../store/TweakStore';
 import { formatToggleShortcut } from '../../shortcut-utils';
 
 interface ToggleProps {
@@ -13,12 +13,12 @@ interface ToggleProps {
 
 export function Toggle(props: ToggleProps) {
   return (
-    <div class="dialkit-labeled-control dialkit-labeled-control-check">
+    <div class="tweakers-labeled-control tweakers-labeled-control-check">
       <Checkbox checked={props.checked} onChange={props.onChange} label={props.label} />
-      <span class="dialkit-labeled-control-label">
+      <span class="tweakers-labeled-control-label">
         {props.label}
         <Show when={props.shortcut}>
-          <span class={`dialkit-shortcut-pill${props.shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`}>
+          <span class={`tweakers-shortcut-pill${props.shortcutActive ? ' tweakers-shortcut-pill-active' : ''}`}>
             {formatToggleShortcut(props.shortcut!)}
           </span>
         </Show>

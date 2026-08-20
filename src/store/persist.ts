@@ -1,5 +1,5 @@
 /**
- * Fail-soft browser persistence shared by DialStore (panel values) and
+ * Fail-soft browser persistence shared by TweakStore (panel values) and
  * TimelineStore (loop regions). Kept separate so the stores stay node-safe and
  * side-effect-free: nothing here touches `window` at import time, and every
  * storage access is guarded + try/caught. When storage is unavailable (SSR,
@@ -9,8 +9,8 @@
  * Mirrors the style of color-palette-store.ts.
  */
 
-/** Structural mirror of DialKitPersistOptions — duplicated here to keep this
- * module free of a DialStore import (avoids a store ↔ persist cycle). */
+/** Structural mirror of TweakersPersistOptions — duplicated here to keep this
+ * module free of a TweakStore import (avoids a store ↔ persist cycle). */
 export type PersistConfig = boolean | {
   key?: string;
   storage?: 'localStorage' | 'sessionStorage';
@@ -40,7 +40,7 @@ export function resolvePersistTarget(
   const base = config.key ?? id;
   if (!base) return null;
   return {
-    key: `dialkit:${STORAGE_VERSION}:${kind}:${base}`,
+    key: `tweakers:${STORAGE_VERSION}:${kind}:${base}`,
     storage: config.storage ?? 'localStorage',
   };
 }

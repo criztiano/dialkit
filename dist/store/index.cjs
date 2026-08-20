@@ -17,11 +17,11 @@ var __copyProps = (to, from, except, desc) => {
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// src/store/DialStore.ts
-var DialStore_exports = {};
-__export(DialStore_exports, {
-  DialStore: () => DialStore,
+// src/store/TweakStore.ts
+var TweakStore_exports = {};
+__export(TweakStore_exports, {
   TAB_PATH: () => TAB_PATH,
+  TweakStore: () => TweakStore,
   defaultListItemParams: () => defaultListItemParams,
   formatLabel: () => formatLabel,
   groupListFields: () => groupListFields,
@@ -32,9 +32,9 @@ __export(DialStore_exports, {
   isSpringConfigValue: () => isSpringConfigValue,
   normalizeListItems: () => normalizeListItems,
   parseListItemSchema: () => parseListItemSchema,
-  resolveDialValues: () => resolveDialValues
+  resolveTweakValues: () => resolveTweakValues
 });
-module.exports = __toCommonJS(DialStore_exports);
+module.exports = __toCommonJS(TweakStore_exports);
 
 // src/color-core.ts
 var HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
@@ -173,7 +173,7 @@ function resolvePersistTarget(kind, id, persist) {
   const base = config.key ?? id;
   if (!base) return null;
   return {
-    key: `dialkit:${STORAGE_VERSION}:${kind}:${base}`,
+    key: `tweakers:${STORAGE_VERSION}:${kind}:${base}`,
     storage: config.storage ?? "localStorage"
   };
 }
@@ -207,14 +207,14 @@ function savePersisted(target, value) {
   }
 }
 
-// src/store/DialStore.ts
+// src/store/TweakStore.ts
 var TAB_PATH = "_tab";
 var EMPTY_VALUES = Object.freeze({});
 function formatLabel(key) {
   return key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()).trim();
 }
 function hintDomId(scope, path) {
-  return `dialkit-hint-${scope}-${path}`.replace(/\s+/g, "-");
+  return `tweakers-hint-${scope}-${path}`.replace(/\s+/g, "-");
 }
 function inferStep(min, max) {
   const range = max - min;
@@ -240,7 +240,7 @@ function isSpringConfigValue(value) {
 function isEasingConfigValue(value) {
   return resolveValueHasType(value, "easing");
 }
-function resolveDialValues(config, flatValues) {
+function resolveTweakValues(config, flatValues) {
   return resolveConfigValues(config, flatValues, "");
 }
 function resolveConfigValues(config, flatValues, prefix) {
@@ -271,7 +271,7 @@ function resolveConfigValues(config, flatValues, prefix) {
   }
   return result;
 }
-var DialStoreClass = class {
+var TweakStoreClass = class {
   constructor() {
     this.panels = /* @__PURE__ */ new Map();
     this.listeners = /* @__PURE__ */ new Map();
@@ -302,7 +302,7 @@ var DialStoreClass = class {
     const existingPanel = this.panels.get(id);
     if (existingPanel && existingPanel.kind !== options.kind) {
       console.warn(
-        `[dialkit] Panel id "${id}" cannot be shared by a timeline and a standard panel; the most recent registration controls where it renders.`
+        `[tweakers] Panel id "${id}" cannot be shared by a timeline and a standard panel; the most recent registration controls where it renders.`
       );
     }
     const target = resolvePersistTarget("panel", id, options.persist);
@@ -1401,11 +1401,11 @@ function normalizeListItems(config) {
     return row;
   });
 }
-var DialStore = new DialStoreClass();
+var TweakStore = new TweakStoreClass();
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  DialStore,
   TAB_PATH,
+  TweakStore,
   defaultListItemParams,
   formatLabel,
   groupListFields,
@@ -1416,6 +1416,6 @@ var DialStore = new DialStoreClass();
   isSpringConfigValue,
   normalizeListItems,
   parseListItemSchema,
-  resolveDialValues
+  resolveTweakValues
 });
 //# sourceMappingURL=index.cjs.map

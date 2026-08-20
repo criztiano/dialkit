@@ -1,7 +1,7 @@
 import { createEffect, createSignal, onCleanup, Show, type JSX } from 'solid-js';
 import { Dynamic, Portal } from 'solid-js/web';
-import { DialStore } from '../../store/DialStore';
-import type { AffordanceConfig, AffordanceContext, AffordanceStatus } from '../../store/DialStore';
+import { TweakStore } from '../../store/TweakStore';
+import type { AffordanceConfig, AffordanceContext, AffordanceStatus } from '../../store/TweakStore';
 import { AFFORDANCE_POPOVER_WIDTH, placePopover } from '../../affordance-core';
 
 interface ControlShellProps {
@@ -44,18 +44,18 @@ export function ControlShell(props: ControlShellProps) {
     const path = props.path;
     if (!panelId || !path) return;
     const read = () => {
-      setStatus(DialStore.getAffordanceStatus(panelId, path));
-      setDisabled(DialStore.isDisabled(panelId, path));
+      setStatus(TweakStore.getAffordanceStatus(panelId, path));
+      setDisabled(TweakStore.isDisabled(panelId, path));
     };
     read();
-    onCleanup(DialStore.subscribeControlState(panelId, read));
+    onCleanup(TweakStore.subscribeControlState(panelId, read));
   });
 
   // Resolve the panel root, so the popover escapes the panel body's scroll
   // clipping — the same escape hatch SelectControl's dropdown uses.
   createEffect(() => {
     if (!dotEl) return;
-    setPortalTarget((dotEl.closest('.dialkit-root') as HTMLElement | null) ?? document.body);
+    setPortalTarget((dotEl.closest('.tweakers-root') as HTMLElement | null) ?? document.body);
   });
 
   // The first pass runs with height 0 (the popover isn't mounted yet); the
@@ -119,13 +119,13 @@ export function ControlShell(props: ControlShellProps) {
     panelId: props.panelId!,
     path: props.path!,
     status: status(),
-    setStatus: (next) => DialStore.setAffordanceStatus(props.panelId!, props.path!, next),
+    setStatus: (next) => TweakStore.setAffordanceStatus(props.panelId!, props.path!, next),
   });
 
   return (
     <>
       <div
-        class="dialkit-control-tip"
+        class="tweakers-control-tip"
         data-hint={props.hint ? 'true' : undefined}
         data-affordance={hasAffordance() ? 'true' : undefined}
         data-affordance-open={open() ? 'true' : undefined}
@@ -140,7 +140,7 @@ export function ControlShell(props: ControlShellProps) {
         {/* Kept mounted rather than conditional on hover so the id
             `aria-describedby` points at always resolves. */}
         <Show when={props.hint}>
-          <span class="dialkit-hint" id={props.id} role="tooltip">
+          <span class="tweakers-hint" id={props.id} role="tooltip">
             {props.hint}
           </span>
         </Show>
@@ -149,7 +149,7 @@ export function ControlShell(props: ControlShellProps) {
           <button
             ref={dotEl}
             type="button"
-            class="dialkit-affordance-dot"
+            class="tweakers-affordance-dot"
             data-status={status()}
             data-open={String(open())}
             aria-label={label()}
@@ -163,7 +163,7 @@ export function ControlShell(props: ControlShellProps) {
         <Portal mount={portalTarget()!}>
           <div
             ref={popoverEl}
-            class="dialkit-affordance-popover"
+            class="tweakers-affordance-popover"
             role="dialog"
             aria-label={label()}
             tabindex={-1}
@@ -175,7 +175,7 @@ export function ControlShell(props: ControlShellProps) {
               visibility: pos() ? undefined : 'hidden',
             }}
           >
-            <span class="dialkit-affordance-popover-title">{label()}</span>
+            <span class="tweakers-affordance-popover-title">{label()}</span>
             {/* Dynamic, not a direct call: the content is a component and needs
                 its own reactive owner. */}
             <Dynamic component={props.affordance!.content as (ctx: AffordanceContext) => JSX.Element} {...ctx()} />

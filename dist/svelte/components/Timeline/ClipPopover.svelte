@@ -1,17 +1,17 @@
 <script lang="ts">
-  import { DialStore } from 'dialkit/store';
-  import type { ControlMeta, DialValue } from 'dialkit/store';
+  import { TweakStore } from 'tweakers/store';
+  import type { ControlMeta, TweakValue } from 'tweakers/store';
   import {
     TIMELINE_MIN_CLIP_DURATION,
     clamp,
     formatStepLabel,
     timelinePopoverDisplayValues,
-  } from 'dialkit/timeline';
-  import type { TimelineClipMeta } from 'dialkit/timeline';
+  } from 'tweakers/timeline';
+  import type { TimelineClipMeta } from 'tweakers/timeline';
   import { findControl } from '../../../shortcut-utils';
   import Portal from '../../Portal.svelte';
   import ControlRenderer from '../ControlRenderer.svelte';
-  import type { DialTheme } from '../DialRoot.svelte';
+  import type { TweakTheme } from '../TweakRoot.svelte';
 
   const POPOVER_WIDTH = 280;
 
@@ -24,8 +24,8 @@
   let { panelId, popover, values, theme, onClose } = $props<{
     panelId: string;
     popover: PopoverState;
-    values: Record<string, DialValue>;
-    theme: DialTheme;
+    values: Record<string, TweakValue>;
+    theme: TweakTheme;
     onClose: () => void;
   }>();
 
@@ -59,7 +59,7 @@
     const transitionDuration = durationMeta?.type === 'slider' && typeof durationValue === 'number'
       ? {
           value: durationValue,
-          onChange: (next: number) => DialStore.updateValue(panelId, durationMeta.path, next),
+          onChange: (next: number) => TweakStore.updateValue(panelId, durationMeta.path, next),
           min: Math.max(TIMELINE_MIN_CLIP_DURATION, durationMeta.min ?? 0),
           max: durationMeta.max,
           step: durationMeta.step,
@@ -108,7 +108,7 @@
     };
     measure();
     const observer = new ResizeObserver(measure);
-    observer.observe(element.querySelector('.dialkit-timeline-popover-body') ?? element);
+    observer.observe(element.querySelector('.tweakers-timeline-popover-body') ?? element);
     return () => observer.disconnect();
   });
 
@@ -117,7 +117,7 @@
     const updateViewport = () => { viewport = readViewport(); };
     const outside = (event: PointerEvent) => {
       const target = event.target as HTMLElement;
-      if (element?.contains(target) || target.closest?.('.dialkit-timeline-clip') || target.closest?.('.dialkit-timeline-label')) return;
+      if (element?.contains(target) || target.closest?.('.tweakers-timeline-clip') || target.closest?.('.tweakers-timeline-label')) return;
       onClose();
     };
     const keydown = (event: KeyboardEvent) => {
@@ -152,7 +152,7 @@
   }
 
   function getClipControls(panel: string, path: string, exclusions?: Set<string>): ControlMeta[] {
-    const currentPanel = DialStore.getPanel(panel);
+    const currentPanel = TweakStore.getPanel(panel);
     const folder = currentPanel ? findControl(currentPanel.controls, path) : null;
     if (!folder?.children) return [];
     return folder.children.filter((control) => {
@@ -162,17 +162,17 @@
   }
 
   function getControlAt(panel: string, path: string): ControlMeta | null {
-    const currentPanel = DialStore.getPanel(panel);
+    const currentPanel = TweakStore.getPanel(panel);
     return currentPanel ? findControl(currentPanel.controls, path) : null;
   }
 </script>
 
 {#if presentation.controls.length > 0}
   <Portal target="body">
-    <div class="dialkit-root" data-theme={theme}>
+    <div class="tweakers-root" data-theme={theme}>
       <div
         bind:this={element}
-        class="dialkit-timeline-popover"
+        class="tweakers-timeline-popover"
         data-placement={position.placeAbove ? 'above' : 'below'}
         style:left={`${position.left}px`}
         style:top={`${position.top}px`}
@@ -182,15 +182,15 @@
         role="dialog"
         aria-label={`Edit ${presentation.title}`}
       >
-        <div class="dialkit-timeline-popover-header">
-          <span class="dialkit-timeline-popover-title">{presentation.title}</span>
-          <button class="dialkit-timeline-popover-close" onclick={onClose} title="Close editor" aria-label="Close editor">
+        <div class="tweakers-timeline-popover-header">
+          <span class="tweakers-timeline-popover-title">{presentation.title}</span>
+          <button class="tweakers-timeline-popover-close" onclick={onClose} title="Close editor" aria-label="Close editor">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <path d="M6 6L18 18M18 6L6 18" />
             </svg>
           </button>
         </div>
-        <div class="dialkit-timeline-popover-body">
+        <div class="tweakers-timeline-popover-body">
           {#each presentation.controls as control (control.path)}
             <ControlRenderer
               {panelId}

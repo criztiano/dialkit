@@ -1,4 +1,4 @@
-import { EasingConfig } from '../store/DialStore';
+import { EasingConfig } from '../store/TweakStore';
 
 interface EasingVisualizationProps {
   easing: EasingConfig;
@@ -36,7 +36,7 @@ export function EasingVisualization({ easing }: EasingVisualizationProps) {
     <svg
       viewBox={`0 0 ${s} ${s}`}
       preserveAspectRatio="xMidYMid slice"
-      className="dialkit-spring-viz dialkit-easing-viz"
+      className="tweakers-spring-viz tweakers-easing-viz"
     >
       <line
         x1={start.x} y1={start.y} x2={end.x} y2={end.y}

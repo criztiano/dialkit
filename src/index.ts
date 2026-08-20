@@ -1,13 +1,13 @@
 // Main hook
-export { useDialKit } from './hooks/useDialKit';
-export type { UseDialOptions } from './hooks/useDialKit';
+export { useTweakers } from './hooks/useTweakers';
+export type { UseTweakersOptions } from './hooks/useTweakers';
 
 // Root component (user mounts once)
-export { DialRoot } from './components/DialRoot';
-export type { DialPosition, DialMode, DialTheme } from './components/DialRoot';
+export { TweakRoot } from './components/TweakRoot';
+export type { TweakPosition, TweakMode, TweakTheme } from './components/TweakRoot';
 
 // Timeline (prototype)
-export { useDialTimeline } from './hooks/useDialTimeline';
+export { useTweakTimeline } from './hooks/useTweakTimeline';
 export type {
   TimelineClipConfig,
   TimelineClipCss,
@@ -20,11 +20,11 @@ export type {
   TimelinePropStepConfig,
   TimelineStepConfig,
   TimelineStepValues,
-  DialTimelineValues,
-  UseDialTimelineOptions,
-} from './hooks/useDialTimeline';
-export { DialTimeline } from './components/Timeline/DialTimeline';
-export type { DialTimelineProps } from './components/Timeline/DialTimeline';
+  TweakTimelineValues,
+  UseTweakTimelineOptions,
+} from './hooks/useTweakTimeline';
+export { TweakTimeline } from './components/Timeline/TweakTimeline';
+export type { TweakTimelineProps } from './components/Timeline/TweakTimeline';
 export { formatClock } from './timeline-core';
 export { TimelineStore } from './store/TimelineStore';
 export type {
@@ -197,7 +197,7 @@ export type {
 } from './components/AudioLevelMeter';
 
 // Store (for advanced usage)
-export { DialStore, TAB_PATH, parseListItemSchema, groupListFields, defaultListItemParams, normalizeListItems, hintDomId } from './store/DialStore';
+export { TweakStore, TAB_PATH, parseListItemSchema, groupListFields, defaultListItemParams, normalizeListItems, hintDomId } from './store/TweakStore';
 export type {
   SpringConfig,
   EasingConfig,
@@ -240,10 +240,10 @@ export type {
   PresetProvider,
   PresetProviderPreset,
   PresetItem,
-  DialValue,
-  DialEvent,
-  DialConfig,
+  TweakValue,
+  TweakEvent,
+  TweakConfig,
   ResolvedValues,
   ControlMeta,
   PanelConfig,
-} from './store/DialStore';
+} from './store/TweakStore';

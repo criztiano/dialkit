@@ -1,7 +1,7 @@
 <script lang="ts">
   import { getContext } from 'svelte';
-  import { DialStore, hintDomId } from 'dialkit/store';
-  import type { ControlMeta, DialValue, SpringConfig, TransitionConfig, ListItemValue, XYValue, RangeValue } from 'dialkit/store';
+  import { TweakStore, hintDomId } from 'tweakers/store';
+  import type { ControlMeta, TweakValue, SpringConfig, TransitionConfig, ListItemValue, XYValue, RangeValue } from 'tweakers/store';
   import type { GradientValue } from '../../gradient-core';
   import Slider from './Slider.svelte';
   import NumberControl from './NumberControl.svelte';
@@ -29,7 +29,7 @@
   let { panelId, control, values, transitionDuration } = $props<{
     panelId: string;
     control: ControlMeta;
-    values: Record<string, DialValue>;
+    values: Record<string, TweakValue>;
     transitionDuration?: TransitionDurationControl;
   }>();
 
@@ -49,7 +49,7 @@
   <ModuleFolder
     title={control.label}
     enabled={values[`${control.path}._enabled`] as boolean}
-    onEnabledChange={(next) => DialStore.updateValue(panelId, `${control.path}._enabled`, next)}
+    onEnabledChange={(next) => TweakStore.updateValue(panelId, `${control.path}._enabled`, next)}
     defaultOpen={control.defaultOpen ?? true}
     hint={control.hint}
     hintId={hintId}
@@ -83,7 +83,7 @@
       <Slider
         label={control.label}
         value={controlValue as number}
-        onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+        onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
         min={control.min}
         max={control.max}
         step={control.step}
@@ -99,7 +99,7 @@
       <NumberControl
         label={control.label}
         value={controlValue as number}
-        onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+        onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
         min={control.min}
         max={control.max}
         step={control.step}
@@ -115,13 +115,13 @@
         max={control.max ?? 1}
         step={control.step}
         defaultValue={control.rangeDefault}
-        onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+        onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
       />
     {:else if control.type === 'toggle'}
       <Toggle
         label={control.label}
         checked={controlValue as boolean}
-        onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+        onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
         shortcut={control.shortcut}
         shortcutActive={isShortcutActive}
       />
@@ -131,7 +131,7 @@
         path={control.path}
         label={control.label}
         spring={controlValue as SpringConfig}
-        onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+        onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
       />
     {:else if control.type === 'transition'}
       <TransitionControl
@@ -139,14 +139,14 @@
         path={control.path}
         label={control.label}
         value={controlValue as TransitionConfig}
-        onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+        onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
         durationControl={transitionDuration}
       />
     {:else if control.type === 'text'}
       <TextControl
         label={control.label}
         value={controlValue as string}
-        onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+        onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
         placeholder={control.placeholder}
       />
     {:else if control.type === 'select'}
@@ -154,13 +154,13 @@
         label={control.label}
         value={controlValue as string}
         options={control.options ?? []}
-        onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+        onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
       />
     {:else if control.type === 'color'}
       <ColorControl
         label={control.label}
         value={controlValue as string}
-        onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+        onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
         alpha={control.alpha}
         palette={control.palette}
       />
@@ -168,13 +168,13 @@
       <GradientControl
         label={control.label}
         value={controlValue as GradientValue}
-        onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+        onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
       />
     {:else if control.type === 'xy'}
       <XYControl
         label={control.label}
         value={controlValue as XYValue}
-        onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+        onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
         x={control.xAxis}
         y={control.yAxis}
         grid={control.grid}
@@ -191,23 +191,23 @@
         value={controlValue as string}
         accept={control.accept}
         multiple={control.multiple}
-        onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
-        onPick={(files) => DialStore.emitEvent(panelId, control.path, { kind: 'file', files })}
+        onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
+        onPick={(files) => TweakStore.emitEvent(panelId, control.path, { kind: 'file', files })}
       />
     {:else if control.type === 'swatch'}
       <SwatchControl
         label={control.label}
         value={controlValue as string}
         options={control.swatchOptions ?? []}
-        onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+        onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
       />
     {:else if control.type === 'chips'}
       <ChipsControl
         label={control.label}
         value={controlValue as string}
         options={control.chipOptions ?? []}
-        onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
-        onRemove={(v) => DialStore.emitEvent(panelId, control.path, { kind: 'remove', value: v })}
+        onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
+        onRemove={(v) => TweakStore.emitEvent(panelId, control.path, { kind: 'remove', value: v })}
       />
     {:else if control.type === 'list'}
       <ListControl
@@ -216,16 +216,16 @@
         itemTypes={control.itemTypes ?? {}}
         addLabel={control.addLabel}
         maxItems={control.maxItems}
-        onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
-        onEvent={(event) => DialStore.emitEvent(panelId, control.path, event)}
+        onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
+        onEvent={(event) => TweakStore.emitEvent(panelId, control.path, event)}
       />
     {:else if control.type === 'action'}
       <!-- The wrapper greys every control out, but only a real `disabled` takes
            a button out of the tab order too. -->
       <button
-        class="dialkit-button"
-        disabled={DialStore.isDisabled(panelId, control.path)}
-        onclick={() => DialStore.triggerAction(panelId, control.path)}
+        class="tweakers-button"
+        disabled={TweakStore.isDisabled(panelId, control.path)}
+        onclick={() => TweakStore.triggerAction(panelId, control.path)}
       >
         {control.label}
       </button>

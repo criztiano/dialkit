@@ -26,7 +26,7 @@ const RAD = Math.PI / 180;
 const vectorToAngle = (dx: number, dy: number) => wrap360(Math.atan2(dx, -dy) / RAD);
 
 export const GradientTransformPad = defineComponent({
-  name: 'DialKitGradientTransformPad',
+  name: 'TweakersGradientTransformPad',
   props: {
     value: { type: Object as PropType<GradientValue>, required: true },
   },
@@ -164,9 +164,9 @@ export const GradientTransformPad = defineComponent({
 
       const fill = gradientFillBox(value, w, hh);
 
-      return h('div', { ref: padRef, class: 'dialkit-gradient-pad dialkit-checker' }, [
+      return h('div', { ref: padRef, class: 'tweakers-gradient-pad tweakers-checker' }, [
         h('div', {
-          class: 'dialkit-gradient-pad-fill',
+          class: 'tweakers-gradient-pad-fill',
           style: {
             background: fill.background,
             transform: fill.transform,
@@ -180,7 +180,7 @@ export const GradientTransformPad = defineComponent({
         ...(radial
           ? [
             h('div', {
-              class: 'dialkit-gradient-pad-line',
+              class: 'tweakers-gradient-pad-line',
               style: {
                 left: `${cxPx}px`,
                 top: `${cyPx}px`,
@@ -190,7 +190,7 @@ export const GradientTransformPad = defineComponent({
             }),
             h('button', {
               type: 'button',
-              class: 'dialkit-gradient-pad-handle',
+              class: 'tweakers-gradient-pad-handle',
               'data-kind': 'major',
               'aria-label': 'Gradient size and rotation',
               style: { left: `${major.x}px`, top: `${major.y}px` },
@@ -198,7 +198,7 @@ export const GradientTransformPad = defineComponent({
             }),
             h('button', {
               type: 'button',
-              class: 'dialkit-gradient-pad-handle',
+              class: 'tweakers-gradient-pad-handle',
               'data-kind': 'minor',
               'aria-label': 'Gradient squash',
               style: { left: `${minor.x}px`, top: `${minor.y}px` },
@@ -207,7 +207,7 @@ export const GradientTransformPad = defineComponent({
           ]
           : [
             h('div', {
-              class: 'dialkit-gradient-pad-line',
+              class: 'tweakers-gradient-pad-line',
               style: {
                 left: `${angleOx}px`,
                 top: `${angleOy}px`,
@@ -217,7 +217,7 @@ export const GradientTransformPad = defineComponent({
             }),
             h('button', {
               type: 'button',
-              class: 'dialkit-gradient-pad-handle',
+              class: 'tweakers-gradient-pad-handle',
               'data-kind': 'angle',
               'aria-label': 'Gradient angle',
               style: { left: `${angleHandle.x}px`, top: `${angleHandle.y}px` },
@@ -228,7 +228,7 @@ export const GradientTransformPad = defineComponent({
           ? [
             h('button', {
               type: 'button',
-              class: 'dialkit-gradient-pad-handle',
+              class: 'tweakers-gradient-pad-handle',
               'data-kind': 'center',
               'aria-label': 'Gradient center',
               style: { left: `${clamp(cxPx, 5, w - 5)}px`, top: `${clamp(cyPx, 5, hh - 5)}px` },

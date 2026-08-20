@@ -4,8 +4,8 @@ import type { ReactTestRenderer, ReactTestInstance } from 'react-test-renderer';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { ControlRenderer } from './components/ControlRenderer';
-import { useDialKit } from './hooks/useDialKit';
-import { DialStore } from './store/DialStore';
+import { useTweakers } from './hooks/useTweakers';
+import { TweakStore } from './store/TweakStore';
 
 // node:test has no DOM; stub what the control tree touches.
 const globals = globalThis as { window?: unknown };
@@ -14,15 +14,15 @@ globals.window ??= { innerHeight: 800, addEventListener() {}, removeEventListene
 let panelSeq = 0;
 
 const curvePath = (root: ReactTestInstance): string =>
-  root.findAllByProps({ className: 'dialkit-curve-stroke' })[0]?.props.d ?? '';
+  root.findAllByProps({ className: 'tweakers-curve-stroke' })[0]?.props.d ?? '';
 
 const markerXs = (root: ReactTestInstance): number[] =>
-  root.findAllByProps({ className: 'dialkit-curve-marker' }).map((line) => line.props.x1 as number);
+  root.findAllByProps({ className: 'tweakers-curve-marker' }).map((line) => line.props.x1 as number);
 
 describe('curve preview row (React)', () => {
-  it('renders the sampled stroke on a dial surface, with and without a label', () => {
+  it('renders the sampled stroke on a control surface, with and without a label', () => {
     const id = `curve-render-${++panelSeq}`;
-    DialStore.registerPanel(id, id, {
+    TweakStore.registerPanel(id, id, {
       arc: { type: 'curve' as const, sample: (t: number) => t },
       bare: { type: 'curve' as const, sample: (t: number) => t, label: false as const },
     });
@@ -32,19 +32,19 @@ describe('curve preview row (React)', () => {
       renderer = create(
         createElement(ControlRenderer, {
           panelId: id,
-          controls: DialStore.getPanel(id)?.controls ?? [],
-          values: DialStore.getValues(id),
+          controls: TweakStore.getPanel(id)?.controls ?? [],
+          values: TweakStore.getValues(id),
         })
       );
     });
 
     assert.ok(curvePath(renderer.root).startsWith('M '));
-    const labels = renderer.root.findAllByProps({ className: 'dialkit-curve-label' });
+    const labels = renderer.root.findAllByProps({ className: 'tweakers-curve-label' });
     assert.equal(labels.length, 1); // `bare` declared label: false
     assert.equal(labels[0].props.children, 'Arc');
 
     act(() => renderer.unmount());
-    DialStore.unregisterPanel(id);
+    TweakStore.unregisterPanel(id);
   });
 
   it('redraws when the host swaps in a new sample function', () => {
@@ -56,10 +56,10 @@ describe('curve preview row (React)', () => {
     function Host() {
       const [gain, setGain] = useState(1);
       bump = () => setGain((g) => g + 1);
-      resolved = useDialKit(`curve-host-${panelSeq}`, {
+      resolved = useTweakers(`curve-host-${panelSeq}`, {
         arc: { type: 'curve' as const, sample: (t: number) => Math.sin(t * Math.PI * gain) },
       });
-      const panel = DialStore.getPanels('panel').find((p) => p.name === `curve-host-${panelSeq}`);
+      const panel = TweakStore.getPanels('panel').find((p) => p.name === `curve-host-${panelSeq}`);
       return panel
         ? createElement(ControlRenderer, { panelId: panel.id, controls: panel.controls, values: panel.values })
         : null;
@@ -95,14 +95,14 @@ describe('curve preview row (React)', () => {
     function Host() {
       const [split, setSplit] = useState(0.25);
       bump = () => setSplit(0.75);
-      useDialKit(`curve-markers-${panelSeq}`, {
+      useTweakers(`curve-markers-${panelSeq}`, {
         arc: {
           type: 'curve' as const,
           sample: (t: number) => t,
           markers: [split, 0.5, -1, NaN, 2],
         },
       });
-      const panel = DialStore.getPanels('panel').find((p) => p.name === `curve-markers-${panelSeq}`);
+      const panel = TweakStore.getPanels('panel').find((p) => p.name === `curve-markers-${panelSeq}`);
       return panel
         ? createElement(ControlRenderer, { panelId: panel.id, controls: panel.controls, values: panel.values })
         : null;
@@ -121,8 +121,8 @@ describe('curve preview row (React)', () => {
     const svg = renderer.root.findAllByType('svg')[0];
     const classes = svg.children
       .map((c) => (typeof c === 'string' ? '' : (c.props as { className?: string }).className ?? ''))
-      .filter((c) => c === 'dialkit-curve-marker' || c === 'dialkit-curve-stroke');
-    assert.deepEqual(classes, ['dialkit-curve-marker', 'dialkit-curve-marker', 'dialkit-curve-stroke']);
+      .filter((c) => c === 'tweakers-curve-marker' || c === 'tweakers-curve-stroke');
+    assert.deepEqual(classes, ['tweakers-curve-marker', 'tweakers-curve-marker', 'tweakers-curve-stroke']);
 
     act(() => bump());
     assert.deepEqual(markerXs(renderer.root), [0.75 * 232, 0.5 * 232]);

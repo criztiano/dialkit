@@ -48,9 +48,9 @@ export function SelectControl({ label, value, options, onChange }: SelectControl
     });
   }, [normalized.length]);
 
-  // Resolve portal target (closest .dialkit-root)
+  // Resolve portal target (closest .tweakers-root)
   useEffect(() => {
-    const root = triggerRef.current?.closest('.dialkit-root') as HTMLElement | null;
+    const root = triggerRef.current?.closest('.tweakers-root') as HTMLElement | null;
     setPortalTarget(root ?? document.body);
   }, []);
 
@@ -79,18 +79,18 @@ export function SelectControl({ label, value, options, onChange }: SelectControl
   }, [isOpen]);
 
   return (
-    <div className="dialkit-select-row">
+    <div className="tweakers-select-row">
       <button
         ref={triggerRef}
-        className="dialkit-select-trigger"
+        className="tweakers-select-trigger"
         onClick={() => setIsOpen(!isOpen)}
         data-open={String(isOpen)}
       >
-        <span className="dialkit-select-label">{label}</span>
-        <div className="dialkit-select-right">
-          <span className="dialkit-select-value">{selectedOption?.label ?? value}</span>
+        <span className="tweakers-select-label">{label}</span>
+        <div className="tweakers-select-right">
+          <span className="tweakers-select-value">{selectedOption?.label ?? value}</span>
           <motion.svg
-            className="dialkit-select-chevron"
+            className="tweakers-select-chevron"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -110,7 +110,7 @@ export function SelectControl({ label, value, options, onChange }: SelectControl
           {isOpen && pos && (
             <PresenceMotionDiv
               divRef={dropdownRef}
-              className="dialkit-select-dropdown"
+              className="tweakers-select-dropdown"
               initial={{ opacity: 0, y: pos.above ? 8 : -8, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: pos.above ? 8 : -8, scale: 0.95 }}
@@ -127,7 +127,7 @@ export function SelectControl({ label, value, options, onChange }: SelectControl
               {normalized.map((option) => (
                 <button
                   key={option.value}
-                  className="dialkit-select-option"
+                  className="tweakers-select-option"
                   data-selected={String(option.value === value)}
                   onClick={() => {
                     onChange(option.value);

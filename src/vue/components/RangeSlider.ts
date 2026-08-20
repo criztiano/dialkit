@@ -10,7 +10,7 @@ import {
   isOutsideSpan,
   handleLeftStyles,
 } from '../../range-slider-core';
-import type { RangeValue } from '../../store/DialStore';
+import type { RangeValue } from '../../store/TweakStore';
 import { decimalsForStep, roundValue } from '../../shortcut-utils';
 
 // Shared with the single Slider: 3px of travel separates a click from a drag.
@@ -29,7 +29,7 @@ const HANDLE_HIT_PX = 12;
 type DragTarget = 'min' | 'max' | 'span';
 
 export const RangeSlider = defineComponent({
-  name: 'DialKitRangeSlider',
+  name: 'TweakersRangeSlider',
   props: {
     label: { type: String, required: true },
     value: { type: Object as PropType<RangeValue>, required: true },
@@ -382,9 +382,9 @@ export const RangeSlider = defineComponent({
       // Both handle lefts derive from BOTH percents (for the shared midpoint splay).
       const handles = handleLeftStyles(lowPercent.value, highPercent.value);
 
-      return h('div', { ref: wrapperRef, class: 'dialkit-range-slider-wrapper' }, [
+      return h('div', { ref: wrapperRef, class: 'tweakers-range-slider-wrapper' }, [
         h('div', {
-          class: `dialkit-range-slider ${isActive.value ? 'dialkit-range-slider-active' : ''}`,
+          class: `tweakers-range-slider ${isActive.value ? 'tweakers-range-slider-active' : ''}`,
           onPointerdown: handlePointerDown,
           onPointermove: handlePointerMove,
           onPointerup: handlePointerUp,
@@ -395,7 +395,7 @@ export const RangeSlider = defineComponent({
         }, [
           h('div', {
             ref: fillRef,
-            class: 'dialkit-range-slider-fill',
+            class: 'tweakers-range-slider-fill',
             style: {
               left: `${lowPercent.value}%`,
               width: `${Math.max(0, highPercent.value - lowPercent.value)}%`,
@@ -403,7 +403,7 @@ export const RangeSlider = defineComponent({
           }),
           h('div', {
             ref: lowHandleRef,
-            class: 'dialkit-range-slider-handle',
+            class: 'tweakers-range-slider-handle',
             style: {
               left: handles.low,
               transform: 'translateY(-50%)',
@@ -412,19 +412,19 @@ export const RangeSlider = defineComponent({
           }),
           h('div', {
             ref: highHandleRef,
-            class: 'dialkit-range-slider-handle',
+            class: 'tweakers-range-slider-handle',
             style: {
               left: handles.high,
               transform: 'translateY(-50%)',
               opacity: handleOpacityFor('max'),
             },
           }),
-          h('span', { class: 'dialkit-range-slider-label' }, props.label),
+          h('span', { class: 'tweakers-range-slider-label' }, props.label),
           editing.value !== null
             ? h('input', {
               ref: inputRef,
               type: 'text',
-              class: 'dialkit-range-slider-input',
+              class: 'tweakers-range-slider-input',
               value: inputValue.value,
               onInput: (event: Event) => {
                 inputValue.value = (event.target as HTMLInputElement).value;
@@ -434,15 +434,15 @@ export const RangeSlider = defineComponent({
               onClick: (event: MouseEvent) => event.stopPropagation(),
               onPointerdown: (event: PointerEvent) => event.stopPropagation(),
             })
-            : h('span', { class: 'dialkit-range-slider-value' }, [
+            : h('span', { class: 'tweakers-range-slider-value' }, [
               h('span', {
-                class: 'dialkit-range-slider-bound',
+                class: 'tweakers-range-slider-bound',
                 onClick: (event: MouseEvent) => openEditor('min', event),
                 onPointerdown: (event: PointerEvent) => event.stopPropagation(),
               }, lowText),
-              h('span', { class: 'dialkit-range-slider-dash' }, '–'),
+              h('span', { class: 'tweakers-range-slider-dash' }, '–'),
               h('span', {
-                class: 'dialkit-range-slider-bound',
+                class: 'tweakers-range-slider-bound',
                 onClick: (event: MouseEvent) => openEditor('max', event),
                 onPointerdown: (event: PointerEvent) => event.stopPropagation(),
               }, highText),

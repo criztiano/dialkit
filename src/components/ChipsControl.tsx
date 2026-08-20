@@ -1,5 +1,5 @@
 import { ICON_CLOSE } from '../icons';
-import type { ChipOption } from '../store/DialStore';
+import type { ChipOption } from '../store/TweakStore';
 
 interface ChipsControlProps {
   label: string;
@@ -11,14 +11,14 @@ interface ChipsControlProps {
 
 export function ChipsControl({ label, value, options, onChange, onRemove }: ChipsControlProps) {
   return (
-    <div className="dialkit-chips">
-      {label && <span className="dialkit-chips-label">{label}</span>}
-      <div className="dialkit-chips-grid" role="listbox" aria-label={label}>
+    <div className="tweakers-chips">
+      {label && <span className="tweakers-chips-label">{label}</span>}
+      <div className="tweakers-chips-grid" role="listbox" aria-label={label}>
         {options.map((option) => (
-          <div key={option.value} className="dialkit-chip" data-active={String(option.value === value)}>
+          <div key={option.value} className="tweakers-chip" data-active={String(option.value === value)}>
             <button
               type="button"
-              className="dialkit-chip-select"
+              className="tweakers-chip-select"
               role="option"
               aria-selected={option.value === value}
               onClick={() => onChange(option.value)}
@@ -28,7 +28,7 @@ export function ChipsControl({ label, value, options, onChange, onRemove }: Chip
             {option.removable && (
               <button
                 type="button"
-                className="dialkit-chip-remove"
+                className="tweakers-chip-remove"
                 aria-label={`Remove ${option.label}`}
                 onClick={() => onRemove(option.value)}
               >

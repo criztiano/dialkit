@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { DialStore, formatLabel } from 'dialkit/store';
-  import type { DialValue } from 'dialkit/store';
+  import { TweakStore, formatLabel } from 'tweakers/store';
+  import type { TweakValue } from 'tweakers/store';
   import {
     TimelineStore,
     buildCopyInstruction,
@@ -9,14 +9,14 @@
     computeClipStaticFromValues,
     formatClock,
     normalizeTimelineValuesForCopy,
-  } from 'dialkit/timeline';
+  } from 'tweakers/timeline';
   import type {
     TimelineClipMeta,
     TimelineClipStatic,
     TimelineMeta,
     TimelineTrackStatic,
     TimelineTransport,
-  } from 'dialkit/timeline';
+  } from 'tweakers/timeline';
   import {
     ICON_ADD_PRESET,
     ICON_CHEVRON,
@@ -29,7 +29,7 @@
   } from '../../../icons';
   import { findControl } from '../../../shortcut-utils';
   import PresetManager from '../PresetManager.svelte';
-  import type { DialTheme } from '../DialRoot.svelte';
+  import type { TweakTheme } from '../TweakRoot.svelte';
   import ClipPopover from './ClipPopover.svelte';
   import type { PopoverState } from './ClipPopover.svelte';
   import TimelineClip from './TimelineClip.svelte';
@@ -110,7 +110,7 @@
   let { meta, defaultOpen, theme, dockVisible } = $props<{
     meta: TimelineMeta;
     defaultOpen: boolean;
-    theme: DialTheme;
+    theme: TweakTheme;
     dockVisible: boolean;
   }>();
 
@@ -121,7 +121,7 @@
   let expandedTracks = $state(new Set<string>());
   let zoom = $state(1);
   let viewStart = $state(0);
-  let values = $state<Record<string, DialValue>>(DialStore.getValues(untrack(() => meta.id)));
+  let values = $state<Record<string, TweakValue>>(TweakStore.getValues(untrack(() => meta.id)));
   let transport = $state<TimelineTransport>(TimelineStore.getTransport(untrack(() => meta.id)));
   // Committed loop region (undefined = looping the whole timeline). Shares the
   // transport notify channel; the stored reference is stable between changes.
@@ -142,11 +142,11 @@
 
   const presets = $derived.by(() => {
     values;
-    return DialStore.getPresets(meta.id);
+    return TweakStore.getPresets(meta.id);
   });
   const activePresetId = $derived.by(() => {
     values;
-    return DialStore.getActivePresetId(meta.id);
+    return TweakStore.getActivePresetId(meta.id);
   });
   const visibleDuration = $derived(meta.duration > 0 ? meta.duration / zoom : meta.duration);
   const safeViewStart = $derived(clampViewStart(viewStart, meta.duration, visibleDuration));
@@ -255,11 +255,11 @@
   });
 
   $effect(() => {
-    values = DialStore.getValues(meta.id);
+    values = TweakStore.getValues(meta.id);
     transport = TimelineStore.getTransport(meta.id);
     loopRegion = TimelineStore.getLoopRegion(meta.id);
-    const unsubscribeValues = DialStore.subscribe(meta.id, () => {
-      values = DialStore.getValues(meta.id);
+    const unsubscribeValues = TweakStore.subscribe(meta.id, () => {
+      values = TweakStore.getValues(meta.id);
     });
     const unsubscribeTransport = TimelineStore.subscribe(meta.id, () => {
       transport = TimelineStore.getTransport(meta.id);
@@ -448,8 +448,8 @@
 
   function handleTrackPointerDown(event: PointerEvent) {
     const target = event.target as HTMLElement;
-    if (target.closest('.dialkit-timeline-label, button')) return;
-    if (!event.shiftKey && target.closest('.dialkit-timeline-clip')) return;
+    if (target.closest('.tweakers-timeline-label, button')) return;
+    if (!event.shiftKey && target.closest('.tweakers-timeline-clip')) return;
     const rect = laneArea?.getBoundingClientRect();
     if (!rect) return;
     event.preventDefault();
@@ -524,14 +524,14 @@
   }
 
   function handleCopy() {
-    const normalized = normalizeTimelineValuesForCopy(DialStore.getValues(meta.id), meta.clips);
-    void navigator.clipboard.writeText(buildCopyInstruction('createDialTimeline', meta.name, normalized));
+    const normalized = normalizeTimelineValuesForCopy(TweakStore.getValues(meta.id), meta.clips);
+    void navigator.clipboard.writeText(buildCopyInstruction('createTweakTimeline', meta.name, normalized));
     copied = true;
     window.setTimeout(() => { copied = false; }, 1500);
   }
 
   function handleAddPreset() {
-    DialStore.savePreset(meta.id, `Version ${presets.length + 2}`);
+    TweakStore.savePreset(meta.id, `Version ${presets.length + 2}`);
   }
 
   function toggleSet(current: Set<string>, key: string): Set<string> {
@@ -554,7 +554,7 @@
   }
 
   function getClipControls(path: string, exclusions?: Set<string>) {
-    const panel = DialStore.getPanel(meta.id);
+    const panel = TweakStore.getPanel(meta.id);
     const folder = panel ? findControl(panel.controls, path) : null;
     if (!folder?.children) return [];
     return folder.children.filter((control) => {
@@ -598,15 +598,15 @@
   }
 </script>
 
-<div class="dialkit-timeline-section">
-  <div class="dialkit-timeline-header" data-open={open || undefined}>
-    <div class="dialkit-timeline-identity">
-      <span class="dialkit-timeline-title">{meta.name}</span>
+<div class="tweakers-timeline-section">
+  <div class="tweakers-timeline-header" data-open={open || undefined}>
+    <div class="tweakers-timeline-identity">
+      <span class="tweakers-timeline-title">{meta.name}</span>
     </div>
 
     {#if !open}
       <div
-        class="dialkit-timeline-overview"
+        class="tweakers-timeline-overview"
         onpointerdown={handleOverviewPointerDown}
         onpointermove={(event) => overviewScrub && seekOverview(event.clientX)}
         onpointerup={finishOverview}
@@ -621,19 +621,19 @@
         aria-valuenow={transport.time}
       >
         <div
-          class="dialkit-timeline-overview-viewport"
+          class="tweakers-timeline-overview-viewport"
           data-zoomed={overviewViewportWidth < 99.999 || undefined}
           style:left={`${meta.duration > 0 ? (safeViewStart / meta.duration) * 100 : 0}%`}
           style:width={`${overviewViewportWidth}%`}
         ></div>
-        <div class="dialkit-timeline-overview-progress" style:width={`${overviewPlayheadPercent}%`}></div>
-        <div class="dialkit-timeline-overview-playhead" style:left={`${overviewPlayheadPercent}%`}></div>
+        <div class="tweakers-timeline-overview-progress" style:width={`${overviewPlayheadPercent}%`}></div>
+        <div class="tweakers-timeline-overview-playhead" style:left={`${overviewPlayheadPercent}%`}></div>
       </div>
     {/if}
 
-    <div class="dialkit-timeline-actions">
+    <div class="tweakers-timeline-actions">
       <button
-        class="dialkit-timeline-loop-toggle"
+        class="tweakers-timeline-loop-toggle"
         data-active={loopRegion ? 'true' : undefined}
         onclick={handleClearLoopRegion}
         disabled={!loopRegion}
@@ -648,47 +648,47 @@
         </svg>
       </button>
       <button
-        class="dialkit-toolbar-add"
+        class="tweakers-toolbar-add"
         onclick={() => transport.playing ? TimelineStore.pause(meta.id) : TimelineStore.play(meta.id)}
         title={transport.playing ? 'Pause' : 'Play'}
         aria-label={transport.playing ? 'Pause' : 'Play'}
       >
         <span style="position:relative;width:16px;height:16px;">
           {#if transport.playing}
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="position:absolute;inset:0;width:16px;height:16px;color:var(--dial-text-label);">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="position:absolute;inset:0;width:16px;height:16px;color:var(--tweak-text-label);">
               {#each ICON_PAUSE as path}<path d={path} fill="currentColor" />{/each}
             </svg>
           {:else}
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="position:absolute;inset:0;width:16px;height:16px;color:var(--dial-text-label);">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="position:absolute;inset:0;width:16px;height:16px;color:var(--tweak-text-label);">
               <path d={ICON_PLAY} fill="currentColor" />
             </svg>
           {/if}
         </span>
       </button>
-      <button class="dialkit-toolbar-add" onclick={handleReplay} title="Replay" aria-label="Replay">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="width:16px;height:16px;color:var(--dial-text-label);">
+      <button class="tweakers-toolbar-add" onclick={handleReplay} title="Replay" aria-label="Replay">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="width:16px;height:16px;color:var(--tweak-text-label);">
           {#each ICON_REPLAY as path}<path d={path} fill="currentColor" />{/each}
         </svg>
       </button>
-      <button class="dialkit-toolbar-add" onclick={handleAddPreset} title="Add timeline version" aria-label="Add timeline version">
+      <button class="tweakers-toolbar-add" onclick={handleAddPreset} title="Add timeline version" aria-label="Add timeline version">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           {#each ICON_ADD_PRESET as path}<path d={path} />{/each}
         </svg>
       </button>
       <PresetManager panelId={meta.id} {presets} {activePresetId} />
       <button
-        class="dialkit-toolbar-add"
+        class="tweakers-toolbar-add"
         onclick={handleCopy}
         title="Copy parameters"
         aria-label={copied ? 'Copied parameters' : 'Copy parameters'}
       >
         <span style="position:relative;width:16px;height:16px;">
           {#if copied}
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position:absolute;inset:0;width:16px;height:16px;color:var(--dial-text-label);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position:absolute;inset:0;width:16px;height:16px;color:var(--tweak-text-label);">
               <path d={ICON_CHECK} />
             </svg>
           {:else}
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="position:absolute;inset:0;width:16px;height:16px;color:var(--dial-text-label);">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="position:absolute;inset:0;width:16px;height:16px;color:var(--tweak-text-label);">
               <path d={ICON_CLIPBOARD.board} stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
               <path d={ICON_CLIPBOARD.sparkle} fill="currentColor" />
               <path d={ICON_CLIPBOARD.body} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -697,7 +697,7 @@
         </span>
       </button>
       <button
-        class="dialkit-timeline-chevron"
+        class="tweakers-timeline-chevron"
         data-open={open}
         aria-expanded={open}
         onclick={() => { open = !open; }}
@@ -712,7 +712,7 @@
 
   {#if open}
     <div
-      class="dialkit-timeline-body"
+      class="tweakers-timeline-body"
       onwheel={handleTimelineWheel}
       onpointerdown={handleTrackPointerDown}
       onpointermove={(event) => trackScrub && seek(trackScrub, event.clientX)}
@@ -721,12 +721,12 @@
       onlostpointercapture={finishTrack}
       role="presentation"
     >
-      <div class="dialkit-timeline-grid">
-        <div class="dialkit-timeline-row dialkit-timeline-ruler-row">
-          <div class="dialkit-timeline-label"></div>
+      <div class="tweakers-timeline-grid">
+        <div class="tweakers-timeline-row tweakers-timeline-ruler-row">
+          <div class="tweakers-timeline-label"></div>
           <div
             bind:this={laneArea}
-            class="dialkit-timeline-ruler"
+            class="tweakers-timeline-ruler"
             onpointerdown={handleRulerPointerDown}
             onpointermove={handleRulerPointerMove}
             onpointerup={finishRuler}
@@ -745,24 +745,24 @@
               {#if region}
                 {@const bandLeft = (region.start - safeViewStart) * pxPerSecond}
                 {@const bandWidth = Math.max(0, (region.end - region.start) * pxPerSecond)}
-                <div class="dialkit-timeline-loop-dim" style={`left:0px;width:${Math.max(0, bandLeft)}px;`}></div>
-                <div class="dialkit-timeline-loop-dim" style={`left:${bandLeft + bandWidth}px;right:0px;`}></div>
+                <div class="tweakers-timeline-loop-dim" style={`left:0px;width:${Math.max(0, bandLeft)}px;`}></div>
+                <div class="tweakers-timeline-loop-dim" style={`left:${bandLeft + bandWidth}px;right:0px;`}></div>
                 <div
-                  class="dialkit-timeline-loop-band"
+                  class="tweakers-timeline-loop-band"
                   data-live={loopDrag ? 'true' : undefined}
                   style={`left:${bandLeft}px;width:${bandWidth}px;`}
                 ></div>
               {/if}
             {/if}
             {#each ticks.fine as time}
-              <div class="dialkit-timeline-tick dialkit-timeline-tick-fine" style:left={`${(time - safeViewStart) * pxPerSecond}px`}></div>
+              <div class="tweakers-timeline-tick tweakers-timeline-tick-fine" style:left={`${(time - safeViewStart) * pxPerSecond}px`}></div>
             {/each}
             {#each ticks.medium as time}
-              <div class="dialkit-timeline-tick dialkit-timeline-tick-medium" style:left={`${(time - safeViewStart) * pxPerSecond}px`}></div>
+              <div class="tweakers-timeline-tick tweakers-timeline-tick-medium" style:left={`${(time - safeViewStart) * pxPerSecond}px`}></div>
             {/each}
             {#each ticks.major as time}
-              <div class="dialkit-timeline-tick" style:left={`${(time - safeViewStart) * pxPerSecond}px`}>
-                <span class="dialkit-timeline-tick-label">{formatRulerSeconds(time, ticks.majorStep)}</span>
+              <div class="tweakers-timeline-tick" style:left={`${(time - safeViewStart) * pxPerSecond}px`}>
+                <span class="tweakers-timeline-tick-label">{formatRulerSeconds(time, ticks.majorStep)}</span>
               </div>
             {/each}
           </div>
@@ -770,10 +770,10 @@
 
         {#each rows as row (row.key)}
           {#if row.kind === 'group'}
-            <div class="dialkit-timeline-row dialkit-timeline-group-row">
-              <div class="dialkit-timeline-label">
+            <div class="tweakers-timeline-row tweakers-timeline-group-row">
+              <div class="tweakers-timeline-label">
                 <button
-                  class="dialkit-timeline-group-toggle"
+                  class="tweakers-timeline-group-toggle"
                   data-open={!row.collapsed}
                   onclick={() => toggleGroup(row.group)}
                   title={row.collapsed ? 'Expand layer' : 'Collapse layer'}
@@ -784,14 +784,14 @@
                 </button>
                 <span>{formatLabel(row.group)}</span>
               </div>
-              <div class="dialkit-timeline-lane"></div>
+              <div class="tweakers-timeline-lane"></div>
             </div>
           {:else if row.kind === 'clip'}
-            <div class="dialkit-timeline-row" data-grouped={row.clip.group ? '' : undefined}>
-              <div class="dialkit-timeline-label">
+            <div class="tweakers-timeline-row" data-grouped={row.clip.group ? '' : undefined}>
+              <div class="tweakers-timeline-label">
                 {#if row.clip.tracks?.length}
                   <button
-                    class="dialkit-timeline-group-toggle"
+                    class="tweakers-timeline-group-toggle"
                     data-open={row.tracksOpen}
                     onclick={(event) => {
                       event.stopPropagation();
@@ -806,7 +806,7 @@
                 {/if}
                 {row.clip.label}
               </div>
-              <div class="dialkit-timeline-lane">
+              <div class="tweakers-timeline-lane">
                 <TimelineClip
                   timelineId={meta.id}
                   clip={row.clip}
@@ -827,9 +827,9 @@
               </div>
             </div>
           {:else}
-            <div class="dialkit-timeline-row dialkit-timeline-track-row" data-grouped={row.parent.group ? '' : undefined}>
-              <div class="dialkit-timeline-label">{formatLabel(row.track.prop ?? '')}</div>
-              <div class="dialkit-timeline-lane">
+            <div class="tweakers-timeline-row tweakers-timeline-track-row" data-grouped={row.parent.group ? '' : undefined}>
+              <div class="tweakers-timeline-label">{formatLabel(row.track.prop ?? '')}</div>
+              <div class="tweakers-timeline-lane">
                 <TimelineClip
                   timelineId={meta.id}
                   clip={row.clip}
@@ -855,9 +855,9 @@
 
         {#if pxPerSecond > 0 && playheadVisible}
           <div
-            class="dialkit-timeline-playhead-control"
+            class="tweakers-timeline-playhead-control"
             data-edge={playheadEdge}
-            style={`left:calc(var(--dial-timeline-label-w) + ${playheadX}px);--dial-timeline-playhead-flag-offset:${playheadFlagOffset}px;`}
+            style={`left:calc(var(--tweak-timeline-label-w) + ${playheadX}px);--tweak-timeline-playhead-flag-offset:${playheadFlagOffset}px;`}
             onpointerdown={handlePlayheadPointerDown}
             onpointermove={(event) => playheadScrub && seek(playheadScrub, event.clientX)}
             onpointerup={finishPlayhead}
@@ -871,19 +871,19 @@
             aria-valuenow={transport.time}
             title="Drag to scrub the timeline"
           >
-            <div class="dialkit-timeline-playhead-stem"></div>
-            <div class="dialkit-timeline-playhead-anchor">
-              <div class="dialkit-timeline-playhead-flag">{transport.time.toFixed(2)}</div>
+            <div class="tweakers-timeline-playhead-stem"></div>
+            <div class="tweakers-timeline-playhead-anchor">
+              <div class="tweakers-timeline-playhead-flag">{transport.time.toFixed(2)}</div>
             </div>
           </div>
         {/if}
       </div>
       {#if zoom > 1}
-        <div class="dialkit-timeline-scroll-row">
-          <div class="dialkit-timeline-label"></div>
+        <div class="tweakers-timeline-scroll-row">
+          <div class="tweakers-timeline-label"></div>
           <div
             bind:this={horizontalScrollElement}
-            class="dialkit-timeline-horizontal-scroll"
+            class="tweakers-timeline-horizontal-scroll"
             onscroll={handleHorizontalScroll}
             aria-label="Timeline horizontal scroll"
           >

@@ -13,26 +13,26 @@ import {
   GalleryControl,
   ButtonGroup,
   Folder,
-  Module as DialModule,
+  Module as TweakModule,
   SpringControl,
   SpringVisualization,
   TransitionControl,
   EasingVisualization,
   ShortcutsMenu,
-  DialRoot,
-  DialStore,
-  useDialKit,
+  TweakRoot,
+  TweakStore,
+  useTweakers,
   gradientToCss,
   gradientFillBox,
   DEFAULT_GRADIENT,
-} from 'dialkit';
-import type { SpringConfig, TransitionConfig, EasingConfig, GalleryItem, GradientValue, RangeValue } from 'dialkit';
+} from 'tweakers';
+import type { SpringConfig, TransitionConfig, EasingConfig, GalleryItem, GradientValue, RangeValue } from 'tweakers';
 import { WaveformShowcase } from './WaveformShowcase';
 import { AnalyserShowcase } from './AnalyserShowcase';
 import { CurveComposerShowcase } from './CurveComposerShowcase';
 import { XYPadShowcase } from './XYPadShowcase';
 import { TimelineShowcase } from './TimelineShowcase';
-import 'dialkit/styles.css';
+import 'tweakers/styles.css';
 
 type Theme = 'dark' | 'light';
 
@@ -95,9 +95,9 @@ const GALLERY_ITEMS: GalleryItem[] = [
 function useLivePanelId(name: string): string | null {
   const [id, setId] = useState<string | null>(null);
   useEffect(() => {
-    const sync = () => setId(DialStore.getPanels().find((p) => p.name === name)?.id ?? null);
+    const sync = () => setId(TweakStore.getPanels().find((p) => p.name === name)?.id ?? null);
     sync();
-    return DialStore.subscribeGlobal(sync);
+    return TweakStore.subscribeGlobal(sync);
   }, [name]);
   return id;
 }
@@ -139,10 +139,10 @@ export function Library() {
   const [transitionVal, setTransitionVal] = useState<TransitionConfig>({ type: 'spring', visualDuration: 0.4, bounce: 0.2 });
   const easingPreview: EasingConfig = { type: 'easing', duration: 0.4, ease: [0.65, -0.4, 0.35, 1.4] };
 
-  // The real, live panel — registers into DialStore and powers the preview.
+  // The real, live panel — registers into TweakStore and powers the preview.
   // `_tabs: true` turns its top-level folders into the panel's tab bar, so one
   // panel holds three groups of sections instead of one long column.
-  const p = useDialKit(LIVE_PANEL, {
+  const p = useTweakers(LIVE_PANEL, {
     _tabs: true,
     shape: {
       size: [120, 60, 200],
@@ -203,7 +203,7 @@ export function Library() {
   })();
 
   return (
-    <div className="dialkit-root lib-page" data-theme={theme}>
+    <div className="tweakers-root lib-page" data-theme={theme}>
       <style>{CSS}</style>
 
       <header className="lib-header">
@@ -218,12 +218,12 @@ export function Library() {
           </div>
         </div>
 
-        <div className="lib-eyebrow"><span className="lib-dot" /> DialKit · Component Library</div>
+        <div className="lib-eyebrow"><span className="lib-dot" /> Tweakers · Component Library</div>
         <h1 className="lib-title">The Whole Kit</h1>
         <p className="lib-lead">
-          Every control DialKit ships with, live and interactive — sliders, selectors, toggles,
+          Every control Tweakers ships with, live and interactive — sliders, selectors, toggles,
           text, gallery, actions, structure, motion, and the real panel itself. One eagle-eye view
-          of everything you compose with <code>useDialKit</code>.
+          of everything you compose with <code>useTweakers</code>.
         </p>
       </header>
 
@@ -377,10 +377,10 @@ export function Library() {
             </Folder>
           </Card>
           <Card title="Module" desc="A group whose header carries an enable switch. The switch is the expand control: turn it off and the body collapses away with a smooth height transition, on reveals it again." code="<Module enabled onEnabledChange />">
-            <DialModule title="reverb" enabled={reverbEnabled} onEnabledChange={setReverbEnabled}>
+            <TweakModule title="reverb" enabled={reverbEnabled} onEnabledChange={setReverbEnabled}>
               <Slider label="mix" value={reverbMix} onChange={setReverbMix} min={0} max={100} step={1} unit="%" />
               <Slider label="decay" value={reverbDecay} onChange={setReverbDecay} min={0.1} max={10} step={0.1} formatValue={(v) => `${v.toFixed(1)}s`} />
-            </DialModule>
+            </TweakModule>
           </Card>
           <Card title="Easing curve" desc="EasingVisualization plots a cubic-bézier curve, overshoot included." code="{ type: 'easing', ease: […] }">
             <div className="lib-viz"><EasingVisualization easing={easingPreview} /></div>
@@ -427,7 +427,7 @@ export function Library() {
         </Section>
 
         <Section index="17" title="Timeline" hint="Define an animation in code, then preview and tune its timing, values, and curves in the dock. Press Play or scrub the playhead — every clip drives the card. Each named clip is one row: an entrance (spring), a looping float (a second row that keeps cycling), and a glow (easing). Open a clip to edit its from/to values, transition, and timing; resize a bar to retime a curve." single>
-          <Card title="useDialTimeline + DialTimeline" desc="useDialTimeline registers clips in the same store as panels (so presets, reset, and Copy work on timing too) and returns per-clip current values plus a transport (time, playing, play/pause/replay/seek). Bind clip.current directly while authoring — DialKit deterministically samples the configured spring/easing so every intermediate frame is scrubbable. The <DialTimeline /> dock is the visual editor; hiding it never changes how the animation renders. from/to accept any leaf values and become editable controls; the bar owns time-based durations while physics springs derive theirs from settle time." code="useDialTimeline('Timeline', { card, float, glow }, { loop }) · <DialTimeline />">
+          <Card title="useTweakTimeline + TweakTimeline" desc="useTweakTimeline registers clips in the same store as panels (so presets, reset, and Copy work on timing too) and returns per-clip current values plus a transport (time, playing, play/pause/replay/seek). Bind clip.current directly while authoring — Tweakers deterministically samples the configured spring/easing so every intermediate frame is scrubbable. The <TweakTimeline /> dock is the visual editor; hiding it never changes how the animation renders. from/to accept any leaf values and become editable controls; the bar owns time-based durations while physics springs derive theirs from settle time." code="useTweakTimeline('Timeline', { card, float, glow }, { loop }) · <TweakTimeline />">
             <TimelineShowcase />
           </Card>
         </Section>
@@ -440,7 +440,7 @@ export function Library() {
               {liveId && <ShortcutsMenu panelId={liveId} />}
             </div>
             <p className="lib-section-hint">
-              The real DialKit panel, embedded inline and driving the preview — presets, copy,
+              The real Tweakers panel, embedded inline and driving the preview — presets, copy,
               folders, the spring editor, and shortcut pills, exactly as in your app. This one
               declares <code>_tabs: true</code>, so its top-level folders become the tab bar in
               the panel header and only one group of sections shows at a time.
@@ -453,14 +453,14 @@ export function Library() {
               <div style={previewStyle}>{p.shape.label}</div>
             </div>
             <div className="lib-window">
-              <DialRoot mode="inline" theme={theme} productionEnabled />
+              <TweakRoot mode="inline" theme={theme} productionEnabled />
             </div>
           </div>
         </section>
       </main>
 
       <footer className="lib-footer">
-        Built entirely from the live DialKit components — the same code that renders inside the panel.
+        Built entirely from the live Tweakers components — the same code that renders inside the panel.
       </footer>
     </div>
   );
@@ -548,12 +548,12 @@ function Card({ title, desc, code, children }: { title: string; desc: string; co
 const CSS = `
 .lib-page {
   --lib-bg: #161616;
-  --lib-accent: var(--dial-accent);
+  --lib-accent: var(--tweak-accent);
   height: 100vh;
   overflow-y: auto;
   background: var(--lib-bg);
-  color: var(--dial-text-root);
-  font-family: var(--dial-font-value);
+  color: var(--tweak-text-root);
+  font-family: var(--tweak-font-value);
   box-sizing: border-box;
 }
 .lib-page[data-theme="light"] { --lib-bg: #efefef; }
@@ -570,59 +570,59 @@ const CSS = `
 .lib-header { padding-top: 28px; padding-bottom: 24px; }
 .lib-header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px; }
 
-.lib-back { font-family: var(--dial-font-label); font-size: 12px; text-transform: uppercase; color: var(--dial-text-label); text-decoration: none; transition: color 0.15s; }
-.lib-back:hover { color: var(--dial-text-root); }
+.lib-back { font-family: var(--tweak-font-label); font-size: 12px; text-transform: uppercase; color: var(--tweak-text-label); text-decoration: none; transition: color 0.15s; }
+.lib-back:hover { color: var(--tweak-text-root); }
 
 .lib-theme-switch { display: inline-flex; gap: 4px; }
-.lib-theme-btn { font-family: var(--dial-font-label); font-size: 12px; text-transform: uppercase; padding: 5px 10px; border: none; border-radius: var(--dial-radius); background: var(--dial-surface); color: var(--dial-text-label); cursor: pointer; transition: background 0.18s, color 0.18s; }
-.lib-theme-btn[data-active="true"] { background: var(--dial-text-root); color: var(--lib-bg); }
+.lib-theme-btn { font-family: var(--tweak-font-label); font-size: 12px; text-transform: uppercase; padding: 5px 10px; border: none; border-radius: var(--tweak-radius); background: var(--tweak-surface); color: var(--tweak-text-label); cursor: pointer; transition: background 0.18s, color 0.18s; }
+.lib-theme-btn[data-active="true"] { background: var(--tweak-text-root); color: var(--lib-bg); }
 
-.lib-eyebrow { display: inline-flex; align-items: center; gap: 8px; font-family: var(--dial-font-label); font-size: 12px; text-transform: uppercase; color: var(--dial-text-tertiary); }
-.lib-dot { width: 8px; height: 8px; border-radius: var(--dial-radius); background: var(--lib-accent); }
+.lib-eyebrow { display: inline-flex; align-items: center; gap: 8px; font-family: var(--tweak-font-label); font-size: 12px; text-transform: uppercase; color: var(--tweak-text-tertiary); }
+.lib-dot { width: 8px; height: 8px; border-radius: var(--tweak-radius); background: var(--lib-accent); }
 
-.lib-title { margin: 14px 0 0; font-family: var(--dial-font-value); font-size: clamp(32px, 5vw, 48px); font-weight: 400; letter-spacing: 0; line-height: 1.1; }
-.lib-lead { margin: 16px 0 0; max-width: 600px; font-size: 15px; line-height: 1.6; color: var(--dial-text-section); }
-.lib-lead code { font-family: var(--dial-font-label); font-size: 0.92em; padding: 1px 5px; border-radius: var(--dial-radius); background: var(--dial-surface); color: var(--dial-text-root); }
+.lib-title { margin: 14px 0 0; font-family: var(--tweak-font-value); font-size: clamp(32px, 5vw, 48px); font-weight: 400; letter-spacing: 0; line-height: 1.1; }
+.lib-lead { margin: 16px 0 0; max-width: 600px; font-size: 15px; line-height: 1.6; color: var(--tweak-text-section); }
+.lib-lead code { font-family: var(--tweak-font-label); font-size: 0.92em; padding: 1px 5px; border-radius: var(--tweak-radius); background: var(--tweak-surface); color: var(--tweak-text-root); }
 
 .lib-main { padding-bottom: 8px; }
 .lib-section { padding-top: 36px; }
 .lib-section-head { padding-bottom: 16px; margin-bottom: 20px; }
 .lib-section-headline { display: flex; align-items: center; gap: 10px; }
-.lib-section-index { font-family: var(--dial-font-label); font-size: 12px; color: var(--lib-accent); }
-.lib-section-title { margin: 0; font-family: var(--dial-font-label); font-size: 18px; font-weight: 400; text-transform: uppercase; letter-spacing: 0; }
-.lib-section-count { font-family: var(--dial-font-label); font-size: 12px; color: var(--dial-text-tertiary); padding: 2px 6px; border-radius: var(--dial-radius); background: var(--dial-surface); }
-.lib-section-hint { margin: 10px 0 0; font-size: 13px; line-height: 1.55; color: var(--dial-text-tertiary); }
+.lib-section-index { font-family: var(--tweak-font-label); font-size: 12px; color: var(--lib-accent); }
+.lib-section-title { margin: 0; font-family: var(--tweak-font-label); font-size: 18px; font-weight: 400; text-transform: uppercase; letter-spacing: 0; }
+.lib-section-count { font-family: var(--tweak-font-label); font-size: 12px; color: var(--tweak-text-tertiary); padding: 2px 6px; border-radius: var(--tweak-radius); background: var(--tweak-surface); }
+.lib-section-hint { margin: 10px 0 0; font-size: 13px; line-height: 1.55; color: var(--tweak-text-tertiary); }
 
 /* Tab bar for the slider type switcher — the panel's tab idiom, in miniature */
 .lib-tabs { display: inline-flex; align-self: center; margin-left: auto; gap: 4px; }
-.lib-tab { font-family: var(--dial-font-label); font-size: 12px; text-transform: uppercase; padding: 5px 10px; border: none; border-radius: var(--dial-radius); background: var(--dial-surface); color: var(--dial-text-label); cursor: pointer; transition: background 0.18s, color 0.18s; }
-.lib-tab:hover { color: var(--dial-text-root); }
-.lib-tab[data-active="true"] { background: var(--dial-text-root); color: var(--lib-bg); }
+.lib-tab { font-family: var(--tweak-font-label); font-size: 12px; text-transform: uppercase; padding: 5px 10px; border: none; border-radius: var(--tweak-radius); background: var(--tweak-surface); color: var(--tweak-text-label); cursor: pointer; transition: background 0.18s, color 0.18s; }
+.lib-tab:hover { color: var(--tweak-text-root); }
+.lib-tab[data-active="true"] { background: var(--tweak-text-root); color: var(--lib-bg); }
 
 /* Surface the ShortcutsMenu trigger (normally inside a panel) on the section head */
-.lib-section-headline .dialkit-shortcuts-trigger { margin-left: auto; align-self: center; }
+.lib-section-headline .tweakers-shortcuts-trigger { margin-left: auto; align-self: center; }
 
 .lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; align-items: start; }
 /* Single-control sections show one card at a comfortable, contained width */
 .lib-single { max-width: 460px; }
 
-.lib-card { display: flex; flex-direction: column; background: var(--dial-glass-bg); border: none; border-radius: var(--dial-radius); padding: 14px; transition: background 0.18s ease; }
-.lib-card:hover { background: var(--dial-dropdown-bg); }
+.lib-card { display: flex; flex-direction: column; background: var(--tweak-glass-bg); border: none; border-radius: var(--tweak-radius); padding: 14px; transition: background 0.18s ease; }
+.lib-card:hover { background: var(--tweak-dropdown-bg); }
 
 .lib-stage { display: flex; flex-direction: column; gap: 6px; padding: 4px 0 16px; }
 .lib-viz { padding: 4px 0; }
 
 .lib-gradient-demo { display: flex; flex-direction: column; gap: 10px; }
-.lib-gradient-swatch { position: relative; overflow: hidden; width: 100%; height: 72px; border-radius: var(--dial-radius); }
+.lib-gradient-swatch { position: relative; overflow: hidden; width: 100%; height: 72px; border-radius: var(--tweak-radius); }
 .lib-gradient-clip { position: absolute; inset: 0; overflow: hidden; z-index: 0; }
 
-.lib-action-log { font-family: var(--dial-font-label); font-size: 11px; text-transform: uppercase; color: var(--dial-text-tertiary); padding-left: 2px; }
-.lib-action-log span { color: var(--dial-text-label); }
+.lib-action-log { font-family: var(--tweak-font-label); font-size: 11px; text-transform: uppercase; color: var(--tweak-text-tertiary); padding-left: 2px; }
+.lib-action-log span { color: var(--tweak-text-label); }
 
 .lib-meta { padding-top: 14px; }
-.lib-card-title { font-family: var(--dial-font-label); font-size: 12px; text-transform: uppercase; color: var(--dial-text-root); }
-.lib-card-desc { margin: 6px 0 12px; font-size: 12.5px; line-height: 1.55; color: var(--dial-text-section); min-height: 38px; }
-.lib-code { display: block; font-family: var(--dial-font-label); font-size: 11.5px; line-height: 1.5; color: var(--dial-text-label); background: var(--dial-surface); border: none; border-radius: var(--dial-radius); padding: 8px 10px; white-space: pre; overflow-x: auto; }
+.lib-card-title { font-family: var(--tweak-font-label); font-size: 12px; text-transform: uppercase; color: var(--tweak-text-root); }
+.lib-card-desc { margin: 6px 0 12px; font-size: 12.5px; line-height: 1.55; color: var(--tweak-text-section); min-height: 38px; }
+.lib-code { display: block; font-family: var(--tweak-font-label); font-size: 11.5px; line-height: 1.5; color: var(--tweak-text-label); background: var(--tweak-surface); border: none; border-radius: var(--tweak-radius); padding: 8px 10px; white-space: pre; overflow-x: auto; }
 .lib-code::-webkit-scrollbar { height: 0; }
 
 /* Live panel section */
@@ -631,18 +631,18 @@ const CSS = `
   position: relative; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
   min-height: 540px;
-  background: var(--dial-glass-bg);
-  border-radius: var(--dial-radius);
+  background: var(--tweak-glass-bg);
+  border-radius: var(--tweak-radius);
 }
 .lib-window {
   height: 540px;
-  background: var(--dial-glass-bg);
-  border-radius: var(--dial-radius);
+  background: var(--tweak-glass-bg);
+  border-radius: var(--tweak-radius);
   overflow: hidden;
   padding: 4px;
 }
 
-.lib-footer { padding: 44px 28px 60px; font-size: 12.5px; color: var(--dial-text-tertiary); text-align: center; }
+.lib-footer { padding: 44px 28px 60px; font-size: 12.5px; color: var(--tweak-text-tertiary); text-align: center; }
 
 @media (max-width: 760px) {
   .lib-live { grid-template-columns: 1fr; }

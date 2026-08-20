@@ -37,26 +37,26 @@ export function ModuleFolder({ title, enabled, onEnabledChange, defaultOpen = tr
   };
 
   return (
-    <div className="dialkit-module dialkit-module-folder" data-open={!headerOnly && enabled && isOpen ? 'true' : 'false'}>
+    <div className="tweakers-module tweakers-module-folder" data-open={!headerOnly && enabled && isOpen ? 'true' : 'false'}>
       <div
-        className={`dialkit-module-header ${headerOnly ? '' : 'dialkit-module-header-toggle'}`}
+        className={`tweakers-module-header ${headerOnly ? '' : 'tweakers-module-header-toggle'}`}
         onClick={() => { if (enabled && !headerOnly) setIsOpen(open => !open); }}
         data-hint={hint ? 'true' : undefined}
         aria-describedby={hint ? hintId : undefined}
       >
         <Checkbox checked={enabled} onChange={handleEnabledChange} label={title} />
-        <span className="dialkit-module-title">{title}</span>
+        <span className="tweakers-module-title">{title}</span>
         {hint && (
-          <span className="dialkit-hint" id={hintId} role="tooltip">
+          <span className="tweakers-hint" id={hintId} role="tooltip">
             {hint}
           </span>
         )}
       </div>
 
       {!headerOnly && (
-        <div className="dialkit-module-collapse" data-open={enabled && isOpen}>
-          <div className="dialkit-module-collapse-clip">
-            <div className="dialkit-module-inner">{children}</div>
+        <div className="tweakers-module-collapse" data-open={enabled && isOpen}>
+          <div className="tweakers-module-collapse-clip">
+            <div className="tweakers-module-inner">{children}</div>
           </div>
         </div>
       )}

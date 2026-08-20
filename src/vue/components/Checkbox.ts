@@ -13,7 +13,7 @@ import { defineComponent, h } from 'vue';
  * attributes, so the state swap animates without any motion code.
  */
 export const Checkbox = defineComponent({
-  name: 'DialKitCheckbox',
+  name: 'TweakersCheckbox',
   props: {
     checked: { type: Boolean, required: true },
     /** Accessible name — the visible label is rendered by the caller. */
@@ -35,7 +35,7 @@ export const Checkbox = defineComponent({
           'aria-checked': props.disabled ? 'mixed' : String(props.checked),
           'aria-label': props.label,
           'aria-disabled': props.disabled || undefined,
-          class: 'dialkit-checkbox',
+          class: 'tweakers-checkbox',
           'data-checked': props.checked && !props.disabled ? 'true' : undefined,
           'data-disabled': props.disabled ? 'true' : undefined,
           onClick: (e: MouseEvent) => {
@@ -45,16 +45,16 @@ export const Checkbox = defineComponent({
         },
         [
           h('svg', { viewBox: '0 0 22 22', width: 22, height: 22, 'aria-hidden': 'true' }, [
-            h('path', { class: 'dialkit-checkbox-slash', d: 'M6 16 16 6', fill: 'none' }),
+            h('path', { class: 'tweakers-checkbox-slash', d: 'M6 16 16 6', fill: 'none' }),
             h('rect', {
-              class: 'dialkit-checkbox-chip',
+              class: 'tweakers-checkbox-chip',
               x: 5,
               y: 5,
               width: 12,
               height: 12,
               rx: 2,
             }),
-            h('path', { class: 'dialkit-checkbox-dash', d: 'M6 11h10', fill: 'none' }),
+            h('path', { class: 'tweakers-checkbox-dash', d: 'M6 11h10', fill: 'none' }),
           ]),
         ]
       );

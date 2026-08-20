@@ -42,11 +42,11 @@ export function SegmentedControl<T extends string>(props: SegmentedControlProps<
   };
 
   return (
-    <div class="dialkit-segmented" ref={containerRef}>
+    <div class="tweakers-segmented" ref={containerRef}>
       <Show when={pillStyle()}>
         {(style) => (
           <div
-            class="dialkit-segmented-pill"
+            class="tweakers-segmented-pill"
             style={{
               left: `${style().left}px`,
               width: `${style().width}px`,
@@ -59,7 +59,7 @@ export function SegmentedControl<T extends string>(props: SegmentedControlProps<
         {(option) => (
           <button
             onClick={() => props.onChange(option.value)}
-            class="dialkit-segmented-button"
+            class="tweakers-segmented-button"
             data-active={String(props.value === option.value)}
           >
             {option.label}

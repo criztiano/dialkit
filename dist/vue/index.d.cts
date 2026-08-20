@@ -228,7 +228,7 @@ type NumberConfig = {
  * holds no value of its own, so nothing lands in ResolvedValues, presets, or
  * persistence. `sample` is a function and therefore invisible to the
  * serialized config diff (like `formatValue`); adapters push replacements
- * through `DialStore.syncCurveConfigs` so the drawing tracks the host.
+ * through `TweakStore.syncCurveConfigs` so the drawing tracks the host.
  */
 type CurveConfig = {
     type: 'curve';
@@ -347,14 +347,14 @@ type ListConfig = {
     /** Label for the add affordance. Defaults to 'Add'. */
     addLabel?: string;
 };
-type DialValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
-type DialConfig = {
-    [key: string]: DialValue | [number, number, number, number?] | CurveConfig | DialConfig;
+type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
+type TweakConfig = {
+    [key: string]: TweakValue | [number, number, number, number?] | CurveConfig | TweakConfig;
 };
 /** UI-only reserved keys: they shape the panel, never resolve to a value. */
 type ReservedKey = '_collapsed' | '_collapsible' | '_tabs';
-type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T as T[K] extends CurveConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends NumberConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+type ResolvedValues<T extends TweakConfig> = {
+    [K in keyof T as T[K] extends CurveConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends NumberConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends TweakConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -365,16 +365,16 @@ type ShortcutConfig = {
     interaction?: ShortcutInteraction;
 };
 /**
- * How lit the affordance dot is. The app pushes this — dialkit owns only how
+ * How lit the affordance dot is. The app pushes this — tweakers owns only how
  * each state looks, never when it applies.
  */
 type AffordanceStatus = 'off' | 'armed' | 'active';
-/** What dialkit hands a popover so it doesn't have to resolve any of it itself. */
+/** What tweakers hands a popover so it doesn't have to resolve any of it itself. */
 type AffordanceContext = {
     panelId: string;
     path: string;
     status: AffordanceStatus;
-    /** Shorthand for `DialStore.setAffordanceStatus(panelId, path, …)`. */
+    /** Shorthand for `TweakStore.setAffordanceStatus(panelId, path, …)`. */
     setStatus: (status: AffordanceStatus) => void;
 };
 /**
@@ -471,7 +471,7 @@ type PanelConfig = {
     id: string;
     name: string;
     controls: ControlMeta[];
-    values: Record<string, DialValue>;
+    values: Record<string, TweakValue>;
     shortcuts: Record<string, ShortcutConfig>;
     /** Help text by control path, retained so a later updatePanel can restate it. */
     hints?: Record<string, string>;
@@ -488,7 +488,7 @@ type ActionListener = (action: string) => void;
  * Delivered through the generic `onEvent(path, event)` channel so the value layer
  * stays JSON-serializable (a File is never stored — it rides on a file event).
  */
-type DialEvent = {
+type TweakEvent = {
     kind: 'file';
     files: FileList;
 } | {
@@ -502,11 +502,11 @@ type DialEvent = {
     to?: number;
     itemType?: string;
 };
-type EventListener = (path: string, event: DialEvent) => void;
+type EventListener = (path: string, event: TweakEvent) => void;
 type Preset = {
     id: string;
     name: string;
-    values: Record<string, DialValue>;
+    values: Record<string, TweakValue>;
 };
 type PresetProviderPreset = {
     id: string;
@@ -518,7 +518,7 @@ type PresetProviderPreset = {
  * Host-owned backing for the panel toolbar's preset UI. When a provider is set
  * the toolbar renders the host's list instead of the built-in snapshots: the
  * store never captures or restores values itself — the host applies them in
- * `onSelect` (e.g. via `DialStore.updateValues`) and owns persistence. The
+ * `onSelect` (e.g. via `TweakStore.updateValues`) and owns persistence. The
  * stock auto-save-to-active-preset behavior is off because the store's own
  * active-preset state is never engaged in provider mode.
  */
@@ -543,14 +543,14 @@ type PresetItem = {
     deletable: boolean;
     renamable: boolean;
 };
-type DialKitPersistOptions = boolean | {
+type TweakersPersistOptions = boolean | {
     key?: string;
     storage?: 'localStorage' | 'sessionStorage';
     presets?: boolean;
 };
-type DialStorePanelOptions = {
+type TweakStorePanelOptions = {
     retainOnUnmount?: boolean;
-    persist?: DialKitPersistOptions;
+    persist?: TweakersPersistOptions;
     /**
      * Help text by control path — the same keying as `shortcuts`. Keyed rather
      * than declared inline because most controls are bare shorthand
@@ -573,10 +573,10 @@ type DialStorePanelOptions = {
      * persisted entry and its shortcut binding.
      */
     labels?: Record<string, string>;
-    /** Timeline panels render in DialTimeline and are filtered out of the panel dock. */
+    /** Timeline panels render in TweakTimeline and are filtered out of the panel dock. */
     kind?: 'timeline';
 };
-declare class DialStoreClass {
+declare class TweakStoreClass {
     private panels;
     private listeners;
     private globalListeners;
@@ -591,19 +591,19 @@ declare class DialStoreClass {
     private presetProviders;
     private baseValues;
     private persistTargets;
-    registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, options?: DialStorePanelOptions): void;
-    updatePanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, options?: DialStorePanelOptions): void;
+    registerPanel(id: string, name: string, config: TweakConfig, shortcuts?: Record<string, ShortcutConfig>, options?: TweakStorePanelOptions): void;
+    updatePanel(id: string, name: string, config: TweakConfig, shortcuts?: Record<string, ShortcutConfig>, options?: TweakStorePanelOptions): void;
     unregisterPanel(id: string): void;
     private overlayPersistedValues;
     private savePanelValues;
-    updateValue(panelId: string, path: string, value: DialValue): void;
-    updateValues(panelId: string, updates: Record<string, DialValue>): void;
+    updateValue(panelId: string, path: string, value: TweakValue): void;
+    updateValues(panelId: string, updates: Record<string, TweakValue>): void;
     updateSpringMode(panelId: string, path: string, mode: 'simple' | 'advanced'): void;
     getSpringMode(panelId: string, path: string): 'simple' | 'advanced';
     updateTransitionMode(panelId: string, path: string, mode: 'easing' | 'simple' | 'advanced'): void;
     getTransitionMode(panelId: string, path: string): 'easing' | 'simple' | 'advanced';
-    getValue(panelId: string, path: string): DialValue | undefined;
-    getValues(panelId: string): Record<string, DialValue>;
+    getValue(panelId: string, path: string): TweakValue | undefined;
+    getValues(panelId: string): Record<string, TweakValue>;
     getPanels(kind?: 'panel' | 'timeline'): PanelConfig[];
     getPanel(id: string): PanelConfig | undefined;
     subscribe(panelId: string, listener: Listener$1): () => void;
@@ -611,7 +611,7 @@ declare class DialStoreClass {
     subscribeActions(panelId: string, listener: ActionListener): () => void;
     triggerAction(panelId: string, path: string): void;
     subscribeEvents(panelId: string, listener: EventListener): () => void;
-    emitEvent(panelId: string, path: string, event: DialEvent): void;
+    emitEvent(panelId: string, path: string, event: TweakEvent): void;
     /**
      * How lit a control's affordance dot is. Callers may push this as often as
      * they like — an unchanged status is dropped without notifying, so driving it
@@ -642,7 +642,7 @@ declare class DialStoreClass {
      * closure would notify again, forever). Markers are compared by value, not
      * identity, because a per-render rebuild remakes the array every time.
      */
-    syncCurveConfigs(panelId: string, config: DialConfig): void;
+    syncCurveConfigs(panelId: string, config: TweakConfig): void;
     savePreset(panelId: string, name: string): string;
     loadPreset(panelId: string, presetId: string): void;
     deletePreset(panelId: string, presetId: string): void;
@@ -734,9 +734,9 @@ declare class DialStoreClass {
     private applyControlExtras;
     private mapControlsByPath;
 }
-declare const DialStore: DialStoreClass;
+declare const TweakStore: TweakStoreClass;
 
-interface UseDialOptions {
+interface UseTweakersOptions {
     onAction?: (action: string) => void;
     shortcuts?: Record<string, ShortcutConfig>;
     /** One line of help per control path, revealed on hover or keyboard focus. */
@@ -751,14 +751,14 @@ interface UseDialOptions {
      */
     presets?: PresetProvider;
 }
-declare function useDialKit<T extends DialConfig>(name: string, config: T, options?: UseDialOptions): ComputedRef<ResolvedValues<T>>;
+declare function useTweakers<T extends TweakConfig>(name: string, config: T, options?: UseTweakersOptions): ComputedRef<ResolvedValues<T>>;
 
-type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
-type DialMode = 'popover' | 'inline';
-type DialTheme = 'light' | 'dark' | 'system';
-declare const DialRoot: vue.DefineComponent<vue.ExtractPropTypes<{
+type TweakPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
+type TweakMode = 'popover' | 'inline';
+type TweakTheme = 'light' | 'dark' | 'system';
+declare const TweakRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     position: {
-        type: () => DialPosition;
+        type: () => TweakPosition;
         default: string;
     };
     defaultOpen: {
@@ -766,11 +766,11 @@ declare const DialRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: boolean;
     };
     mode: {
-        type: () => DialMode;
+        type: () => TweakMode;
         default: string;
     };
     theme: {
-        type: () => DialTheme;
+        type: () => TweakTheme;
         default: string;
     };
     productionEnabled: {
@@ -781,7 +781,7 @@ declare const DialRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     [key: string]: any;
 }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     position: {
-        type: () => DialPosition;
+        type: () => TweakPosition;
         default: string;
     };
     defaultOpen: {
@@ -789,11 +789,11 @@ declare const DialRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: boolean;
     };
     mode: {
-        type: () => DialMode;
+        type: () => TweakMode;
         default: string;
     };
     theme: {
-        type: () => DialTheme;
+        type: () => TweakTheme;
         default: string;
     };
     productionEnabled: {
@@ -801,23 +801,23 @@ declare const DialRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: boolean;
     };
 }>> & Readonly<{}>, {
-    position: DialPosition;
-    mode: DialMode;
+    position: TweakPosition;
+    mode: TweakMode;
     defaultOpen: boolean;
-    theme: DialTheme;
+    theme: TweakTheme;
     productionEnabled: boolean;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
-interface DialKitDirectiveOptions {
-    position?: DialPosition;
+interface TweakersDirectiveOptions {
+    position?: TweakPosition;
     defaultOpen?: boolean;
-    mode?: DialMode;
+    mode?: TweakMode;
 }
-type DialKitDirectiveValue = DialMode | DialKitDirectiveOptions | undefined;
-declare const vDialKit: ObjectDirective<HTMLElement, DialKitDirectiveValue>;
+type TweakersDirectiveValue = TweakMode | TweakersDirectiveOptions | undefined;
+declare const vTweakers: ObjectDirective<HTMLElement, TweakersDirectiveValue>;
 
 /**
- * Fail-soft browser persistence shared by DialStore (panel values) and
+ * Fail-soft browser persistence shared by TweakStore (panel values) and
  * TimelineStore (loop regions). Kept separate so the stores stay node-safe and
  * side-effect-free: nothing here touches `window` at import time, and every
  * storage access is guarded + try/caught. When storage is unavailable (SSR,
@@ -826,8 +826,8 @@ declare const vDialKit: ObjectDirective<HTMLElement, DialKitDirectiveValue>;
  *
  * Mirrors the style of color-palette-store.ts.
  */
-/** Structural mirror of DialKitPersistOptions — duplicated here to keep this
- * module free of a DialStore import (avoids a store ↔ persist cycle). */
+/** Structural mirror of TweakersPersistOptions — duplicated here to keep this
+ * module free of a TweakStore import (avoids a store ↔ persist cycle). */
 type PersistConfig = boolean | {
     key?: string;
     storage?: 'localStorage' | 'sessionStorage';
@@ -843,7 +843,7 @@ type TimelineClipMeta = {
     key: string;
     label: string;
     color: string;
-    /** Code-defined playback behavior; intentionally not exposed as a dial. */
+    /** Code-defined playback behavior; intentionally not exposed as a control. */
     loop: 'off' | 'repeat';
     /** Group key when the clip lives inside a nested layer, e.g. "circle". */
     group?: string;
@@ -926,7 +926,7 @@ declare const TimelineStore: TimelineStoreClass;
 
 type TimelineClipLoop = 'off' | 'repeat';
 type TimelineStepValues = {
-    [key: string]: DialConfig[string] | undefined;
+    [key: string]: TweakConfig[string] | undefined;
 };
 type TimelineStepConfig = {
     duration?: number;
@@ -954,12 +954,12 @@ type TimelineClipBase = {
     loop?: boolean | TimelineClipLoop;
 };
 type TimelineClipConfig = TimelineClipBase & ({
-    from?: DialConfig;
-    to?: DialConfig;
+    from?: TweakConfig;
+    to?: TweakConfig;
     steps?: never;
     props?: never;
 } | {
-    from?: DialConfig;
+    from?: TweakConfig;
     to?: never;
     /** Sequential legs on one row — a segmented bar; boundaries retime legs. */
     steps: TimelineStepConfig[];
@@ -1008,31 +1008,31 @@ type TimelineClipValues<C extends TimelineClipConfig = TimelineClipConfig> = {
     step: C['steps'] extends TimelineStepConfig[] ? number : undefined;
     from: C['props'] extends Record<string, TimelinePropConfig> ? {
         [K in keyof C['props']]: number | string;
-    } : C['from'] extends DialConfig ? ResolvedValues<C['from']> : undefined;
+    } : C['from'] extends TweakConfig ? ResolvedValues<C['from']> : undefined;
     to: C['props'] extends Record<string, TimelinePropConfig> ? {
         [K in keyof C['props']]: number | string;
-    } : C['steps'] extends TimelineStepConfig[] ? C['from'] extends DialConfig ? ResolvedValues<C['from']> : Record<string, number | string> : C['to'] extends DialConfig ? ResolvedValues<C['to']> : undefined;
+    } : C['steps'] extends TimelineStepConfig[] ? C['from'] extends TweakConfig ? ResolvedValues<C['from']> : Record<string, number | string> : C['to'] extends TweakConfig ? ResolvedValues<C['to']> : undefined;
     /** `to` once the clip has started, `from` before — hand it to Motion's animate.
      * For sequences this is the final merged state; for props clips, per-track
      * endpoint records. */
     animate: C['props'] extends Record<string, TimelinePropConfig> ? {
         [K in keyof C['props']]: number | string;
-    } : C['steps'] extends TimelineStepConfig[] ? C['from'] extends DialConfig ? ResolvedValues<C['from']> : Record<string, number | string> | undefined : C['to'] extends DialConfig ? C['from'] extends DialConfig ? ResolvedValues<C['from']> | ResolvedValues<C['to']> : ResolvedValues<C['to']> | undefined : undefined;
+    } : C['steps'] extends TimelineStepConfig[] ? C['from'] extends TweakConfig ? ResolvedValues<C['from']> : Record<string, number | string> | undefined : C['to'] extends TweakConfig ? C['from'] extends TweakConfig ? ResolvedValues<C['from']> | ResolvedValues<C['to']> : ResolvedValues<C['to']> | undefined : undefined;
     /** The clip's editable curve — single-curve clips only. */
     transition: C['props'] extends Record<string, TimelinePropConfig> ? undefined : C['steps'] extends TimelineStepConfig[] ? undefined : C extends {
         transition: TransitionConfig;
     } | {
-        from: DialConfig;
+        from: TweakConfig;
     } | {
-        to: DialConfig;
+        to: TweakConfig;
     } ? TransitionConfig : undefined;
     /** Duration + timing-function for native CSS transitions — single-curve clips only. */
     css: C['props'] extends Record<string, TimelinePropConfig> ? undefined : C['steps'] extends TimelineStepConfig[] ? undefined : C extends {
         transition: TransitionConfig;
     } | {
-        from: DialConfig;
+        from: TweakConfig;
     } | {
-        to: DialConfig;
+        to: TweakConfig;
     } ? TimelineClipCss : undefined;
     /**
      * Values interpolated through the clip's curves at the current playhead —
@@ -1043,12 +1043,12 @@ type TimelineClipValues<C extends TimelineClipConfig = TimelineClipConfig> = {
      */
     current: C['props'] extends Record<string, TimelinePropConfig> ? {
         [K in keyof C['props']]: number | string;
-    } : C['steps'] extends TimelineStepConfig[] ? C['from'] extends DialConfig ? ResolvedValues<C['from']> : Record<string, number | string> : C['to'] extends DialConfig ? C['from'] extends DialConfig ? ResolvedValues<C['from']> | ResolvedValues<C['to']> : undefined : undefined;
+    } : C['steps'] extends TimelineStepConfig[] ? C['from'] extends TweakConfig ? ResolvedValues<C['from']> : Record<string, number | string> : C['to'] extends TweakConfig ? C['from'] extends TweakConfig ? ResolvedValues<C['from']> | ResolvedValues<C['to']> : undefined : undefined;
 };
 type TimelineGroupValues<G extends TimelineGroupConfig> = {
     [K in keyof G as G[K] extends TimelineClipConfig ? K : never]: TimelineClipValues<Extract<G[K], TimelineClipConfig>>;
 };
-type DialTimelineValues<T extends TimelineConfig> = {
+type TweakTimelineValues<T extends TimelineConfig> = {
     time: number;
     playing: boolean;
     duration: number;
@@ -1062,9 +1062,9 @@ type DialTimelineValues<T extends TimelineConfig> = {
     [K in keyof T as T[K] extends TimelineClipConfig ? never : T[K] extends TimelineGroupConfig ? K : never]: TimelineGroupValues<Extract<T[K], TimelineGroupConfig>>;
 };
 
-interface DialTimelineOptions {
+interface TweakTimelineOptions {
     id?: string;
-    persist?: DialKitPersistOptions;
+    persist?: TweakersPersistOptions;
     /** Start playing on mount. Defaults to true. */
     autoplay?: boolean;
     /**
@@ -1077,12 +1077,12 @@ interface DialTimelineOptions {
     };
 }
 
-type UseDialTimelineOptions = DialTimelineOptions;
-declare function useDialTimeline<T extends TimelineConfig>(name: string, config: T, options?: UseDialTimelineOptions): ComputedRef<DialTimelineValues<T>>;
+type UseTweakTimelineOptions = TweakTimelineOptions;
+declare function useTweakTimeline<T extends TimelineConfig>(name: string, config: T, options?: UseTweakTimelineOptions): ComputedRef<TweakTimelineValues<T>>;
 
-declare const DialTimeline: vue.DefineComponent<vue.ExtractPropTypes<{
+declare const TweakTimeline: vue.DefineComponent<vue.ExtractPropTypes<{
     theme: {
-        type: PropType<DialTheme>;
+        type: PropType<TweakTheme>;
         default: string;
     };
     defaultVisible: {
@@ -1106,7 +1106,7 @@ declare const DialTimeline: vue.DefineComponent<vue.ExtractPropTypes<{
     [key: string]: any;
 }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     theme: {
-        type: PropType<DialTheme>;
+        type: PropType<TweakTheme>;
         default: string;
     };
     defaultVisible: {
@@ -1129,7 +1129,7 @@ declare const DialTimeline: vue.DefineComponent<vue.ExtractPropTypes<{
 }>> & Readonly<{}>, {
     defaultOpen: boolean;
     visible: boolean | undefined;
-    theme: DialTheme;
+    theme: TweakTheme;
     productionEnabled: boolean;
     defaultVisible: boolean;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
@@ -1207,7 +1207,7 @@ declare const ControlRenderer: vue.DefineComponent<vue.ExtractPropTypes<{
         required: true;
     };
     values: {
-        type: PropType<Record<string, DialValue>>;
+        type: PropType<Record<string, TweakValue>>;
         required: true;
     };
     transitionDuration: PropType<TransitionDurationControl>;
@@ -1223,7 +1223,7 @@ declare const ControlRenderer: vue.DefineComponent<vue.ExtractPropTypes<{
         required: true;
     };
     values: {
-        type: PropType<Record<string, DialValue>>;
+        type: PropType<Record<string, TweakValue>>;
         required: true;
     };
     transitionDuration: PropType<TransitionDurationControl>;
@@ -3113,4 +3113,4 @@ declare const PresetManager: vue.DefineComponent<vue.ExtractPropTypes<{
     providerMode: boolean;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
-export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, ButtonGroup, Checkbox, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, type DialConfig, type DialKitDirectiveOptions, type DialKitDirectiveValue, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, DialTimeline, type DialTimelineValues, type DialValue, type DriverDirection, type EasingConfig, EasingVisualization, Folder, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientType, type GradientValue, MIN_STOPS, Module, NumberControl, type PanelConfig, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, RangeSlider, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, ShortcutKey, ShortcutListener, type ShortcutState, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, TimelineToggleButton, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type UseDialTimelineOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYValue, addStop, colorAtPosition, gradientToCss, moveStop, normalizeGradient, removeStop, setGradientAngle, setGradientType, setStopColor, useDialKit, useDialTimeline, useShortcutContext, vDialKit };
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, ButtonGroup, Checkbox, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, type DriverDirection, type EasingConfig, EasingVisualization, Folder, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientType, type GradientValue, MIN_STOPS, Module, NumberControl, type PanelConfig, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, RangeSlider, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, ShortcutKey, ShortcutListener, type ShortcutState, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, TimelineToggleButton, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type TweakConfig, type TweakMode, type TweakPosition, TweakRoot, TweakStore, type TweakTheme, TweakTimeline, type TweakTimelineValues, type TweakValue, type TweakersDirectiveOptions, type TweakersDirectiveValue, type UseTweakTimelineOptions, type UseTweakersOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYValue, addStop, colorAtPosition, gradientToCss, moveStop, normalizeGradient, removeStop, setGradientAngle, setGradientType, setStopColor, useShortcutContext, useTweakTimeline, useTweakers, vTweakers };

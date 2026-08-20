@@ -60,7 +60,7 @@ export function GradientControl({ label, value, onChange }: GradientControlProps
   };
 
   useEffect(() => {
-    const root = triggerRef.current?.closest('.dialkit-root') as HTMLElement | null;
+    const root = triggerRef.current?.closest('.tweakers-root') as HTMLElement | null;
     setPortalTarget(root ?? document.body);
   }, []);
 
@@ -92,11 +92,11 @@ export function GradientControl({ label, value, onChange }: GradientControlProps
   }, [isOpen, updatePos]);
 
   return (
-    <div className="dialkit-gradient-control">
-      <span className="dialkit-gradient-label">{label}</span>
+    <div className="tweakers-gradient-control">
+      <span className="tweakers-gradient-label">{label}</span>
       <button
         ref={triggerRef}
-        className="dialkit-gradient-preview dialkit-checker"
+        className="tweakers-gradient-preview tweakers-checker"
         style={{ '--gradient-preview': gradientToCss(value) } as React.CSSProperties}
         onClick={() => (isOpen ? setIsOpen(false) : open())}
         data-open={String(isOpen)}
@@ -110,7 +110,7 @@ export function GradientControl({ label, value, onChange }: GradientControlProps
           {isOpen && pos && (
             <motion.div
               ref={panelRef}
-              className="dialkit-gradient-popover"
+              className="tweakers-gradient-popover"
               initial={{ opacity: 0, y: pos.above ? 8 : -8, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: pos.above ? 8 : -8, scale: 0.95 }}

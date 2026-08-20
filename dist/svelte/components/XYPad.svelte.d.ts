@@ -1,4 +1,4 @@
-import type { ShortcutConfig, XYAxis } from 'dialkit/store';
+import type { ShortcutConfig, XYAxis } from 'tweakers/store';
 import { type XYValue } from '../../xy-pad-core';
 type $$ComponentProps = {
     label: string;

@@ -101,8 +101,8 @@ describe('parse', () => {
     ]);
   });
 
-  it('keeps loop behavior in code instead of the editable dial config', () => {
-    const circle = parsed.dialConfig.circle as Record<string, Record<string, unknown>>;
+  it('keeps loop behavior in code instead of the editable control config', () => {
+    const circle = parsed.tweakConfig.circle as Record<string, Record<string, unknown>>;
     assert.equal(parsed.clips[0].loop, 'repeat');
     assert.equal(parsed.clips[1].loop, 'repeat');
     assert.ok(!('loop' in circle.path));
@@ -142,8 +142,8 @@ describe('parse', () => {
 
       assert.equal(malformed.duration, 0.05);
       assert.deepEqual(malformed.clips.map((clip) => clip.key), ['clamped']);
-      assert.equal((malformed.dialConfig.clamped as Record<string, unknown>).at?.[0], 0);
-      const clamped = malformed.dialConfig.clamped as Record<string, Record<string, unknown>>;
+      assert.equal((malformed.tweakConfig.clamped as Record<string, unknown>).at?.[0], 0);
+      const clamped = malformed.tweakConfig.clamped as Record<string, Record<string, unknown>>;
       assert.equal((clamped.x.delay as number[])[0], 0);
       assert.equal((clamped.x.duration as number[])[0], 0.05);
     });
@@ -533,7 +533,7 @@ describe('duration defaults', () => {
 
     assert.equal(p.duration, 1.06);
     assert.equal(clip.duration, 1.06);
-    assert.equal(((p.dialConfig.a as Record<string, unknown>).duration as number[])[0], 1.06);
+    assert.equal(((p.tweakConfig.a as Record<string, unknown>).duration as number[])[0], 1.06);
   });
 
   it('extends a live timeline when an edited physics spring outgrows its authored window', () => {

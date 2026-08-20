@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { EasingConfig } from 'dialkit/store';
+  import type { EasingConfig } from 'tweakers/store';
 
   let { easing } = $props<{ easing: EasingConfig }>();
 
@@ -35,7 +35,7 @@
   });
 </script>
 
-<svg viewBox={`0 0 ${s} ${s}`} preserveAspectRatio="xMidYMid slice" class="dialkit-spring-viz dialkit-easing-viz">
+<svg viewBox={`0 0 ${s} ${s}`} preserveAspectRatio="xMidYMid slice" class="tweakers-spring-viz tweakers-easing-viz">
   <line
     x1={points.start.x}
     y1={points.start.y}

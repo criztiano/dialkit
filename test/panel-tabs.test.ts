@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { splitPanelTabs } from '../src/panel-tabs';
-import type { ControlMeta } from '../src/store/DialStore';
+import type { ControlMeta } from '../src/store/TweakStore';
 
 const row = (path: string): ControlMeta => ({ type: 'slider', path, label: path, min: 0, max: 1 });
 

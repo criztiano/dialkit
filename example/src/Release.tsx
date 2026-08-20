@@ -1,6 +1,6 @@
 import { CSSProperties } from 'react';
-import { useDialKit, DialRoot } from 'dialkit';
-import 'dialkit/styles.css';
+import { useTweakers, TweakRoot } from 'tweakers';
+import 'tweakers/styles.css';
 
 const features = [
   'Light and dark mode. System preference detection',
@@ -15,7 +15,7 @@ const features = [
   'Dynamic config updates with memoization',
   'Preset manager with portal dropdown',
   'Production guard. Dev-only rendering',
-  'DialStore extracted to dedicated subpath export',
+  'TweakStore extracted to dedicated subpath export',
   'Explicit slider step values',
   'Folder _collapsed option for default state',
   'Segmented control pill alignment fix',
@@ -24,7 +24,7 @@ const features = [
   'Icon refactor resolving issue #19',
   'Panel trigger fix resolving issue #17',
   'Svelte slots to snippets migration',
-  'Vue directive export renamed to vDialKit',
+  'Vue directive export renamed to vTweakers',
   'Spring-animated segmented control pill',
   'Instant panel open. Spring expand for folders',
   'Slider rubber band clipping fix',
@@ -36,7 +36,7 @@ const features = [
 ];
 
 function ReleaseContent() {
-  const values = useDialKit('Release', {
+  const values = useTweakers('Release', {
     Typography: {
       fontSize: [910, 200, 1000, 10],
       fontWeight: [900, 100, 900, 100],
@@ -145,7 +145,7 @@ export function Release() {
   return (
     <>
       <ReleaseContent />
-      <DialRoot position="top-right" theme="light" />
+      <TweakRoot position="top-right" theme="light" />
     </>
   );
 }

@@ -348,10 +348,10 @@ export function CurveComposer(props: CurveComposerProps) {
   };
 
   return (
-    <div class="dialkit-cc-wrap" style={{ width: `${W()}px` }}>
+    <div class="tweakers-cc-wrap" style={{ width: `${W()}px` }}>
       <svg
         ref={svgEl}
-        class="dialkit-cc"
+        class="tweakers-cc"
         viewBox={`0 0 ${W()} ${totalH()}`}
         width={W()}
         height={totalH()}
@@ -364,9 +364,9 @@ export function CurveComposer(props: CurveComposerProps) {
         onDblClick={onDoubleClick}
       >
         {/* main lane */}
-        <rect class="dialkit-cc-lane" x={mainRect().x} y={mainRect().y} width={mainRect().w} height={mainRect().h} rx={8} />
+        <rect class="tweakers-cc-lane" x={mainRect().x} y={mainRect().y} width={mainRect().w} height={mainRect().h} rx={8} />
         <For each={laneGridLines(mainRect())}>
-          {(g) => <line class="dialkit-cc-grid" x1={g.gx} y1={g.y1} x2={g.gx} y2={g.y2} />}
+          {(g) => <line class="tweakers-cc-grid" x1={g.gx} y1={g.y1} x2={g.gx} y2={g.y2} />}
         </For>
 
         {/* selected segment highlight */}
@@ -382,7 +382,7 @@ export function CurveComposer(props: CurveComposerProps) {
             const mr = mainRect();
             return (
               <rect
-                class="dialkit-cc-seg-selected"
+                class="tweakers-cc-seg-selected"
                 x={span[0] * W()}
                 y={mr.y}
                 width={(span[1] - span[0]) * W()}
@@ -400,7 +400,7 @@ export function CurveComposer(props: CurveComposerProps) {
             const mr = mainRect();
             return (
               <rect
-                class="dialkit-cc-seg-hover"
+                class="tweakers-cc-seg-hover"
                 x={span[0] * W()}
                 y={mr.y}
                 width={(span[1] - span[0]) * W()}
@@ -419,14 +419,14 @@ export function CurveComposer(props: CurveComposerProps) {
             return (
               <g>
                 <line
-                  class="dialkit-cc-diagonal"
+                  class="tweakers-cc-diagonal"
                   x1={diag().x1}
                   y1={diag().y1}
                   x2={diag().x2}
                   y2={diag().y2}
                 />
-                <path class="dialkit-cc-curve" d={curvePath(seg, mr(), span(), W())} />
-                <text class="dialkit-cc-label" x={(span()[0] + span()[1]) * 0.5 * W()} y={mr().y + 13}>
+                <path class="tweakers-cc-curve" d={curvePath(seg, mr(), span(), W())} />
+                <text class="tweakers-cc-label" x={(span()[0] + span()[1]) * 0.5 * W()} y={mr().y + 13}>
                   {seg.type}
                 </text>
               </g>
@@ -439,7 +439,7 @@ export function CurveComposer(props: CurveComposerProps) {
           <For each={timelineSlots(p.segments, p.gap).filter((slot) => slot.kind === 'gap' && slot.b > slot.a)}>
             {(slot) => (
               <path
-                class="dialkit-cc-connector"
+                class="tweakers-cc-connector"
                 d={connectorPath(slot, samplers(), p.segments.length, mainRect(), W())}
               />
             )}
@@ -456,7 +456,7 @@ export function CurveComposer(props: CurveComposerProps) {
             };
             return (
               <line
-                class="dialkit-cc-boundary"
+                class="tweakers-cc-boundary"
                 data-active={String(active())}
                 x1={bx * W()}
                 y1={mr.y}
@@ -470,7 +470,7 @@ export function CurveComposer(props: CurveComposerProps) {
         {/* series playhead + value dot (rides the curve; this is the signal triggers read) */}
         <line
           ref={seriesPlayheadEl}
-          class="dialkit-cc-playhead"
+          class="tweakers-cc-playhead"
           x1={0}
           y1={mainRect().y}
           x2={0}
@@ -479,7 +479,7 @@ export function CurveComposer(props: CurveComposerProps) {
         />
         <circle
           ref={seriesDotEl}
-          class="dialkit-cc-dot"
+          class="tweakers-cc-dot"
           cx={0}
           cy={mapY(mainRect(), 0)}
           r={3}
@@ -490,26 +490,26 @@ export function CurveComposer(props: CurveComposerProps) {
         <Show when={driverRect()}>
           {(dr) => (
             <>
-              <rect class="dialkit-cc-lane" x={dr().x} y={dr().y} width={dr().w} height={dr().h} rx={8} />
+              <rect class="tweakers-cc-lane" x={dr().x} y={dr().y} width={dr().w} height={dr().h} rx={8} />
               <For each={laneGridLines(dr())}>
-                {(g) => <line class="dialkit-cc-grid" x1={g.gx} y1={g.y1} x2={g.gx} y2={g.y2} />}
+                {(g) => <line class="tweakers-cc-grid" x1={g.gx} y1={g.y1} x2={g.gx} y2={g.y2} />}
               </For>
               <Show when={hover()?.kind === 'driver' && !drag}>
-                <rect class="dialkit-cc-seg-hover" x={0} y={dr().y} width={W()} height={dr().h} rx={8} />
+                <rect class="tweakers-cc-seg-hover" x={0} y={dr().y} width={W()} height={dr().h} rx={8} />
               </Show>
               {(() => {
                 const diag = diagonalLine(dr(), [0, 1], W());
                 return (
-                  <line class="dialkit-cc-diagonal" x1={diag.x1} y1={diag.y1} x2={diag.x2} y2={diag.y2} />
+                  <line class="tweakers-cc-diagonal" x1={diag.x1} y1={diag.y1} x2={diag.x2} y2={diag.y2} />
                 );
               })()}
-              <path class="dialkit-cc-curve dialkit-cc-curve-driver" d={curvePath(p.driver!, dr(), [0, 1], W())} />
-              <text class="dialkit-cc-label" x={W() * 0.5} y={dr().y + 13}>
+              <path class="tweakers-cc-curve tweakers-cc-curve-driver" d={curvePath(p.driver!, dr(), [0, 1], W())} />
+              <text class="tweakers-cc-label" x={W() * 0.5} y={dr().y + 13}>
                 driver · {p.driver!.type}
               </text>
               <line
                 ref={driverPlayheadEl}
-                class="dialkit-cc-playhead"
+                class="tweakers-cc-playhead"
                 x1={0}
                 y1={dr().y}
                 x2={0}

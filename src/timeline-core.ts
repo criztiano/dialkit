@@ -13,8 +13,8 @@
 // clip holds one step-list per property track (each with its own cycle and
 // phase offset). Untouched properties hold their prior value through a step.
 
-import { formatLabel, inferStep, isHexColor, resolveDialValues } from './store/DialStore';
-import type { DialConfig, DialValue, ResolvedValues, TransitionConfig } from './store/DialStore';
+import { formatLabel, inferStep, isHexColor, resolveTweakValues } from './store/TweakStore';
+import type { TweakConfig, TweakValue, ResolvedValues, TransitionConfig } from './store/TweakStore';
 import {
   clamp,
   cubicBezierProgress,
@@ -34,7 +34,7 @@ import type { TimelineClipMeta, TimelineClipTrackMeta } from './store/TimelineSt
 
 // A clip is a named span on the timeline — one row each: when it starts, how
 // long it runs, and (optionally) the values it animates between plus the
-// curve it animates with. `from`/`to` accept any normal DialKit leaf values
+// curve it animates with. `from`/`to` accept any normal Tweakers leaf values
 // (numbers, colors, etc.). Everything is editable by clicking the clip in
 // the dock. Clips with from/to get a default spring transition when none is
 // specified.
@@ -50,7 +50,7 @@ export type TimelineClipLoop = 'off' | 'repeat';
 // The index allows `undefined` because TypeScript synthesizes `prop?:
 // undefined` union arms for legs that touch different property sets.
 export type TimelineStepValues = {
-  [key: string]: DialConfig[string] | undefined;
+  [key: string]: TweakConfig[string] | undefined;
 };
 
 export type TimelineStepConfig = {
@@ -94,13 +94,13 @@ type TimelineClipBase = {
 export type TimelineClipConfig = TimelineClipBase &
   (
     | {
-        from?: DialConfig;
-        to?: DialConfig;
+        from?: TweakConfig;
+        to?: TweakConfig;
         steps?: never;
         props?: never;
       }
     | {
-        from?: DialConfig;
+        from?: TweakConfig;
         to?: never;
         /** Sequential legs on one row — a segmented bar; boundaries retime legs. */
         steps: TimelineStepConfig[];
@@ -153,16 +153,16 @@ export type TimelineClipValues<C extends TimelineClipConfig = TimelineClipConfig
   step: C['steps'] extends TimelineStepConfig[] ? number : undefined;
   from: C['props'] extends Record<string, TimelinePropConfig>
     ? { [K in keyof C['props']]: number | string }
-    : C['from'] extends DialConfig
+    : C['from'] extends TweakConfig
       ? ResolvedValues<C['from']>
       : undefined;
   to: C['props'] extends Record<string, TimelinePropConfig>
     ? { [K in keyof C['props']]: number | string }
     : C['steps'] extends TimelineStepConfig[]
-      ? C['from'] extends DialConfig
+      ? C['from'] extends TweakConfig
         ? ResolvedValues<C['from']>
         : Record<string, number | string>
-      : C['to'] extends DialConfig
+      : C['to'] extends TweakConfig
         ? ResolvedValues<C['to']>
         : undefined;
   /** `to` once the clip has started, `from` before — hand it to Motion's animate.
@@ -171,11 +171,11 @@ export type TimelineClipValues<C extends TimelineClipConfig = TimelineClipConfig
   animate: C['props'] extends Record<string, TimelinePropConfig>
     ? { [K in keyof C['props']]: number | string }
     : C['steps'] extends TimelineStepConfig[]
-      ? C['from'] extends DialConfig
+      ? C['from'] extends TweakConfig
         ? ResolvedValues<C['from']>
         : Record<string, number | string> | undefined
-      : C['to'] extends DialConfig
-        ? C['from'] extends DialConfig
+      : C['to'] extends TweakConfig
+        ? C['from'] extends TweakConfig
           ? ResolvedValues<C['from']> | ResolvedValues<C['to']>
           : ResolvedValues<C['to']> | undefined
         : undefined;
@@ -184,7 +184,7 @@ export type TimelineClipValues<C extends TimelineClipConfig = TimelineClipConfig
     ? undefined
     : C['steps'] extends TimelineStepConfig[]
       ? undefined
-      : C extends { transition: TransitionConfig } | { from: DialConfig } | { to: DialConfig }
+      : C extends { transition: TransitionConfig } | { from: TweakConfig } | { to: TweakConfig }
         ? TransitionConfig
         : undefined;
   /** Duration + timing-function for native CSS transitions — single-curve clips only. */
@@ -192,7 +192,7 @@ export type TimelineClipValues<C extends TimelineClipConfig = TimelineClipConfig
     ? undefined
     : C['steps'] extends TimelineStepConfig[]
       ? undefined
-      : C extends { transition: TransitionConfig } | { from: DialConfig } | { to: DialConfig }
+      : C extends { transition: TransitionConfig } | { from: TweakConfig } | { to: TweakConfig }
         ? TimelineClipCss
         : undefined;
   /**
@@ -205,11 +205,11 @@ export type TimelineClipValues<C extends TimelineClipConfig = TimelineClipConfig
   current: C['props'] extends Record<string, TimelinePropConfig>
     ? { [K in keyof C['props']]: number | string }
     : C['steps'] extends TimelineStepConfig[]
-      ? C['from'] extends DialConfig
+      ? C['from'] extends TweakConfig
         ? ResolvedValues<C['from']>
         : Record<string, number | string>
-      : C['to'] extends DialConfig
-        ? C['from'] extends DialConfig
+      : C['to'] extends TweakConfig
+        ? C['from'] extends TweakConfig
           ? ResolvedValues<C['from']> | ResolvedValues<C['to']>
           : undefined
         : undefined;
@@ -221,7 +221,7 @@ export type TimelineGroupValues<G extends TimelineGroupConfig> = {
   >;
 };
 
-export type DialTimelineValues<T extends TimelineConfig> = {
+export type TweakTimelineValues<T extends TimelineConfig> = {
   time: number;
   playing: boolean;
   duration: number;
@@ -251,7 +251,7 @@ const RESERVED_KEYS = new Set(['time', 'playing', 'duration', 'play', 'pause', '
 
 export type ParsedTimeline = {
   duration: number;
-  dialConfig: DialConfig;
+  tweakConfig: TweakConfig;
   clips: TimelineClipMeta[];
 };
 
@@ -383,7 +383,7 @@ function collectClipEntries(config: TimelineConfig): ClipParseEntry[] {
   for (const [key, value] of Object.entries(config)) {
     if (key === 'duration') continue;
     if (RESERVED_KEYS.has(key)) {
-      console.warn(`[dialkit] Timeline key "${key}" collides with a reserved key and was skipped.`);
+      console.warn(`[tweakers] Timeline key "${key}" collides with a reserved key and was skipped.`);
       continue;
     }
     if (isClipConfig(value)) {
@@ -394,13 +394,13 @@ function collectClipEntries(config: TimelineConfig): ClipParseEntry[] {
           entries.push({ path: `${key}.${childKey}`, childKey, group: key, clip: childClip });
         } else {
           console.warn(
-            `[dialkit] Timeline clip "${key}.${childKey}" is missing a numeric "at" and was skipped.`
+            `[tweakers] Timeline clip "${key}.${childKey}" is missing a numeric "at" and was skipped.`
           );
         }
       }
     } else {
       console.warn(
-        `[dialkit] Timeline entry "${key}" is neither a clip (needs a numeric "at") nor a group of clips and was skipped.`
+        `[tweakers] Timeline entry "${key}" is neither a clip (needs a numeric "at") nor a group of clips and was skipped.`
       );
     }
   }
@@ -408,20 +408,20 @@ function collectClipEntries(config: TimelineConfig): ClipParseEntry[] {
 }
 
 /** Strips explicit-undefined leaves so step targets are safe to merge/range. */
-function definedValues(values: TimelineStepValues | undefined): DialConfig | undefined {
+function definedValues(values: TimelineStepValues | undefined): TweakConfig | undefined {
   if (!values) return undefined;
-  const result: DialConfig = {};
+  const result: TweakConfig = {};
   for (const [key, value] of Object.entries(values)) {
     if (value !== undefined) result[key] = value;
   }
   return result;
 }
 
-function setDialPath(dialConfig: DialConfig, path: string, value: DialConfig): void {
+function setTweakPath(tweakConfig: TweakConfig, path: string, value: TweakConfig): void {
   const segments = path.split('.');
-  let node = dialConfig;
+  let node = tweakConfig;
   for (const segment of segments.slice(0, -1)) {
-    node = (node[segment] ??= {}) as DialConfig;
+    node = (node[segment] ??= {}) as TweakConfig;
   }
   node[segments[segments.length - 1]] = value;
 }
@@ -445,25 +445,25 @@ export function parseTimelineConfig(config: TimelineConfig): ParsedTimeline {
         ? Math.ceil(maxEnd * 100 - 1e-4) / 100
         : 1;
 
-  const dialConfig: DialConfig = {};
+  const tweakConfig: TweakConfig = {};
   const clips: TimelineClipMeta[] = [];
 
   entries.forEach(({ path, childKey, group, clip }, index) => {
     // These combinations are untypeable (optional-never fields) but reachable
     // from plain JS — warn and pick a deterministic winner.
     const raw = clip as TimelineClipBase & {
-      from?: DialConfig;
-      to?: DialConfig;
+      from?: TweakConfig;
+      to?: TweakConfig;
       steps?: TimelineStepConfig[];
       props?: Record<string, TimelinePropConfig>;
     };
     if (raw.props && (raw.steps?.length || raw.from || raw.to)) {
       console.warn(
-        `[dialkit] Timeline clip "${path}": "props" is mutually exclusive with from/to/steps — using "props".`
+        `[tweakers] Timeline clip "${path}": "props" is mutually exclusive with from/to/steps — using "props".`
       );
     } else if (raw.steps?.length && raw.to) {
       console.warn(
-        `[dialkit] Timeline clip "${path}": "to" is ignored when "steps" is present — each leg's "to" defines its targets.`
+        `[tweakers] Timeline clip "${path}": "to" is ignored when "steps" is present — each leg's "to" defines its targets.`
       );
     }
 
@@ -474,19 +474,19 @@ export function parseTimelineConfig(config: TimelineConfig): ParsedTimeline {
     const defaultCurve = single ?? DEFAULT_CLIP_TRANSITION;
     const clipAt = nonNegativeFinite(clip.at);
 
-    const clipDial: DialConfig = {
+    const clipTweak: TweakConfig = {
       at: [clipAt, 0, duration, CLIP_VALUE_STEP],
     };
     // Sequence and props clips derive their length from their parts — no
-    // duration dial.
+    // duration control.
     if (!hasSteps && !hasProps) {
-      clipDial.duration = [total, 0, duration, CLIP_VALUE_STEP];
+      clipTweak.duration = [total, 0, duration, CLIP_VALUE_STEP];
     }
 
     // Every animating single-curve clip gets an editable curve; the bar
     // drives its duration.
     if (!hasSteps && !hasProps && (clip.transition || clip.from || clip.to)) {
-      clipDial.transition = normalizeStoredTransition(defaultCurve, total);
+      clipTweak.transition = normalizeStoredTransition(defaultCurve, total);
     }
 
     // Independent property tracks: each is a full mini-clip folder — delay
@@ -497,30 +497,30 @@ export function parseTimelineConfig(config: TimelineConfig): ParsedTimeline {
       tracks = [];
       for (const [prop, track] of Object.entries(clip.props)) {
         if (TRACK_RESERVED.has(prop) || /^step\d+$/.test(prop)) {
-          console.warn(`[dialkit] Timeline property "${prop}" collides with a clip field and was skipped.`);
+          console.warn(`[tweakers] Timeline property "${prop}" collides with a clip field and was skipped.`);
           continue;
         }
         const trackDuration = defaultTrackDuration(track, defaultCurve);
         const trackCurve = track.transition ?? defaultCurve;
         const hasTrackSteps = Boolean(track.steps?.length);
-        const trackDial: DialConfig = {
+        const trackTweak: TweakConfig = {
           delay: [nonNegativeFinite(track.delay), 0, duration, CLIP_VALUE_STEP],
         };
         if (!hasTrackSteps) {
-          trackDial.duration = [trackDuration, 0, duration, CLIP_VALUE_STEP];
-          trackDial.transition = normalizeStoredTransition(trackCurve, trackDuration);
+          trackTweak.duration = [trackDuration, 0, duration, CLIP_VALUE_STEP];
+          trackTweak.transition = normalizeStoredTransition(trackCurve, trackDuration);
         }
         const fromValue = track.from ?? (hasTrackSteps ? undefined : track.to);
         if (hasTrackSteps && fromValue === undefined) {
           console.warn(
-            `[dialkit] Timeline clip "${path}": track "${prop}" has steps but no "from" — declare its starting value.`
+            `[tweakers] Timeline clip "${path}": track "${prop}" has steps but no "from" — declare its starting value.`
           );
         }
         if (fromValue !== undefined) {
-          trackDial.from = scalarDial(prop, fromValue, hasTrackSteps ? track.steps![0]?.to : track.to);
+          trackTweak.from = scalarTweak(prop, fromValue, hasTrackSteps ? track.steps![0]?.to : track.to);
         }
         if (!hasTrackSteps && track.to !== undefined) {
-          trackDial.to = scalarDial(prop, track.to, fromValue);
+          trackTweak.to = scalarTweak(prop, track.to, fromValue);
         }
         let trackStepKeys: string[] | undefined;
         if (hasTrackSteps) {
@@ -530,30 +530,30 @@ export function parseTimelineConfig(config: TimelineConfig): ParsedTimeline {
             const stepKey = `step${stepIndex + 1}`;
             trackStepKeys!.push(stepKey);
             const stepDuration = defaultStepDuration(step, trackCurve);
-            const stepDial: DialConfig = {
+            const stepTweak: TweakConfig = {
               duration: [stepDuration, 0, duration, CLIP_VALUE_STEP],
               transition: normalizeStoredTransition(step.transition ?? trackCurve, stepDuration),
             };
             if (step.to !== undefined) {
-              stepDial.to = scalarDial(prop, step.to, previous);
+              stepTweak.to = scalarTweak(prop, step.to, previous);
               previous = step.to;
             }
-            trackDial[stepKey] = stepDial;
+            trackTweak[stepKey] = stepTweak;
           });
         }
-        clipDial[prop] = trackDial;
+        clipTweak[prop] = trackTweak;
         tracks.push({ prop, stepKeys: trackStepKeys });
       }
     }
 
     if (clip.from && !hasProps) {
-      clipDial.from = withFromToRanges(
+      clipTweak.from = withFromToRanges(
         clip.from,
         hasSteps ? definedValues(clip.steps![0]?.to) : clip.to
       );
     }
     if (!hasSteps && !hasProps && clip.to) {
-      clipDial.to = withFromToRanges(clip.to, clip.from);
+      clipTweak.to = withFromToRanges(clip.to, clip.from);
     }
 
     // One folder per leg: duration (the segment), target values, curve.
@@ -561,12 +561,12 @@ export function parseTimelineConfig(config: TimelineConfig): ParsedTimeline {
     let stepKeys: string[] | undefined;
     if (hasSteps) {
       stepKeys = [];
-      let running: DialConfig | undefined = clip.from;
+      let running: TweakConfig | undefined = clip.from;
       clip.steps!.forEach((step, stepIndex) => {
         const stepKey = `step${stepIndex + 1}`;
         stepKeys!.push(stepKey);
         const stepDuration = defaultStepDuration(step, defaultCurve);
-        const stepDial: DialConfig = {
+        const stepTweak: TweakConfig = {
           duration: [stepDuration, 0, duration, CLIP_VALUE_STEP],
           transition: normalizeStoredTransition(step.transition ?? defaultCurve, stepDuration),
         };
@@ -577,18 +577,18 @@ export function parseTimelineConfig(config: TimelineConfig): ParsedTimeline {
           for (const prop of Object.keys(stepTo)) {
             if (!running || !(prop in running)) {
               console.warn(
-                `[dialkit] Timeline clip "${path}": property "${prop}" first animates in step ${stepIndex + 1} with no starting value — declare it in "from".`
+                `[tweakers] Timeline clip "${path}": property "${prop}" first animates in step ${stepIndex + 1} with no starting value — declare it in "from".`
               );
             }
           }
-          stepDial.to = withFromToRanges(stepTo, running);
+          stepTweak.to = withFromToRanges(stepTo, running);
         }
-        clipDial[stepKey] = stepDial;
+        clipTweak[stepKey] = stepTweak;
         running = { ...(running ?? {}), ...(stepTo ?? {}) };
       });
     }
 
-    setDialPath(dialConfig, path, clipDial);
+    setTweakPath(tweakConfig, path, clipTweak);
 
     clips.push({
       key: path,
@@ -601,17 +601,17 @@ export function parseTimelineConfig(config: TimelineConfig): ParsedTimeline {
     });
   });
 
-  return { duration, dialConfig, clips };
+  return { duration, tweakConfig, clips };
 }
 
 const TRACK_RESERVED = new Set(['at', 'duration', 'loop', 'from', 'to', 'transition', 'delay']);
 
-// A scalar track value as a dial — wraps it in a single-key record so
+// A scalar track value as a control — wraps it in a single-key record so
 // tracks and clips share exactly one range-inference policy.
-function scalarDial(prop: string, value: number | string, counterpart: number | string | undefined): DialConfig[string] {
+function scalarTweak(prop: string, value: number | string, counterpart: number | string | undefined): TweakConfig[string] {
   const record = withFromToRanges(
-    { [prop]: value } as DialConfig,
-    counterpart === undefined ? undefined : ({ [prop]: counterpart } as DialConfig)
+    { [prop]: value } as TweakConfig,
+    counterpart === undefined ? undefined : ({ [prop]: counterpart } as TweakConfig)
   );
   return record[prop];
 }
@@ -619,7 +619,7 @@ function scalarDial(prop: string, value: number | string, counterpart: number | 
 // ── from/to slider ranges ──
 
 // Bare numbers in from/to get property-aware slider ranges (the generic
-// DialKit inference is value-based, which turns `y: 0` into a 0–1 slider).
+// Tweakers inference is value-based, which turns `y: 0` into a 0–1 slider).
 // Ranges expand to include the actual from/to endpoints when they fall outside.
 const FROM_TO_RANGE_PRESETS: [RegExp, { min: number; max: number; step: number }][] = [
   [/^(x|y|z|tx|ty|offsetx|offsety|translatex|translatey)$/i, { min: -100, max: 100, step: 1 }],
@@ -651,19 +651,19 @@ function inferFromToRange(key: string, value: number, counterpart: number | unde
 
 // Rewrites bare-number leaves in a from/to config as explicit range tuples,
 // using the matching key in the counterpart config to size the range.
-function withFromToRanges(config: DialConfig, counterpart: DialConfig | undefined): DialConfig {
-  const result: DialConfig = {};
+function withFromToRanges(config: TweakConfig, counterpart: TweakConfig | undefined): TweakConfig {
+  const result: TweakConfig = {};
   for (const [key, value] of Object.entries(config)) {
     const other = counterpart?.[key];
     if (typeof value === 'number') {
       result[key] = inferFromToRange(key, value, typeof other === 'number' ? other : undefined);
     } else if (isPlainObject(value) && !('type' in value)) {
       result[key] = withFromToRanges(
-        value as DialConfig,
-        isPlainObject(other) && !('type' in other) ? (other as DialConfig) : undefined
+        value as TweakConfig,
+        isPlainObject(other) && !('type' in other) ? (other as TweakConfig) : undefined
       );
     } else {
-      result[key] = value as DialConfig[string];
+      result[key] = value as TweakConfig[string];
     }
   }
   return result;
@@ -761,9 +761,9 @@ function resolvedAtPath(resolved: Record<string, unknown>, path: string): Record
 
 export function computeStaticClips(
   parsed: ParsedTimeline,
-  flatValues: Record<string, DialValue>
+  flatValues: Record<string, TweakValue>
 ): TimelineClipStatic[] {
-  const resolved = resolveDialValues(parsed.dialConfig, flatValues) as Record<string, unknown>;
+  const resolved = resolveTweakValues(parsed.tweakConfig, flatValues) as Record<string, unknown>;
   return parsed.clips.map((clip) =>
     buildClipStatic(resolvedAtPath(resolved, clip.key), clip, parsed.duration)
   );
@@ -783,7 +783,7 @@ export type TimelineStaticState = {
  */
 export function computeStaticTimeline(
   parsed: ParsedTimeline,
-  flatValues: Record<string, DialValue>
+  flatValues: Record<string, TweakValue>
 ): TimelineStaticState {
   let clips = computeStaticClips(parsed, flatValues);
   const maxEnd = clips.reduce(
@@ -807,7 +807,7 @@ export function computeStaticTimeline(
  * rebuilt from flat stored values — bars, popovers, and playback can never
  * disagree about geometry. */
 export function computeClipStaticFromValues(
-  values: Record<string, DialValue>,
+  values: Record<string, TweakValue>,
   clip: TimelineClipMeta,
   timelineDuration: number
 ): TimelineClipStatic {
@@ -1210,11 +1210,11 @@ export function transitionToCss(transition: TransitionConfig | undefined): Timel
  * effective configs (duration injected from the bar/segment) so the curve
  * editor shows the transition as it actually runs. */
 export function timelinePopoverDisplayValues(
-  values: Record<string, DialValue>,
+  values: Record<string, TweakValue>,
   clipKey: string,
   stepKeys?: string[],
   stepKey?: string
-): Record<string, DialValue> {
+): Record<string, TweakValue> {
   const display = { ...values };
   const swap = (path: string, duration: number) => {
     const raw = display[path];
@@ -1243,7 +1243,7 @@ function numberValue(value: unknown): number {
 /** Rebuilds the nested resolved shape for one clip from flat stored values —
  * the dock's inverse of the panel's path flattening. */
 function unflattenClipValues(
-  values: Record<string, DialValue>,
+  values: Record<string, TweakValue>,
   clipKey: string
 ): Record<string, unknown> {
   const prefix = `${clipKey}.`;
@@ -1315,12 +1315,12 @@ export function clampStepResize(
 /** Copy-for-agent export: strip editor-only state, normalize shape-only
  * transitions, resolve physics durations, and drop zero-value defaults. */
 export function normalizeTimelineValuesForCopy(
-  values: Record<string, DialValue>,
+  values: Record<string, TweakValue>,
   clips: TimelineClipMeta[]
-): Record<string, DialValue> {
-  const normalized: Record<string, DialValue> = { ...values };
+): Record<string, TweakValue> {
+  const normalized: Record<string, TweakValue> = { ...values };
 
-  // Transition mode is editor UI state, not part of a DialKit config. It is
+  // Transition mode is editor UI state, not part of a Tweakers config. It is
   // stored beside values so mode switches survive presets, but must never be
   // included in the tune → copy → remove payload.
   for (const path of Object.keys(normalized)) {

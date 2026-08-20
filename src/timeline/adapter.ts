@@ -1,17 +1,17 @@
-import type { DialKitPersistOptions } from '../store/DialStore';
+import type { TweakersPersistOptions } from '../store/TweakStore';
 import type { TimelineMeta, TimelineTransport } from '../store/TimelineStore';
 import { loopSpan } from '../store/TimelineStore';
 import {
   computeClipState,
-  type DialTimelineValues,
+  type TweakTimelineValues,
   type ParsedTimeline,
   type TimelineClipStatic,
   type TimelineConfig,
 } from '../timeline-core';
 
-export interface DialTimelineOptions {
+export interface TweakTimelineOptions {
   id?: string;
-  persist?: DialKitPersistOptions;
+  persist?: TweakersPersistOptions;
   /** Start playing on mount. Defaults to true. */
   autoplay?: boolean;
   /**
@@ -31,7 +31,7 @@ export type TimelineActions = {
 
 /** One resolution of the public loop option, shared by every adapter. */
 export function resolveTimelineLoop(
-  loop: DialTimelineOptions['loop']
+  loop: TweakTimelineOptions['loop']
 ): { enabled: boolean; start: number } {
   if (typeof loop === 'object' && loop !== null) {
     return {
@@ -47,7 +47,7 @@ export function buildTimelineMeta(
   name: string,
   duration: number,
   parsed: ParsedTimeline,
-  loop: DialTimelineOptions['loop']
+  loop: TweakTimelineOptions['loop']
 ): TimelineMeta {
   const resolvedLoop = resolveTimelineLoop(loop);
   return {
@@ -71,7 +71,7 @@ export function buildTimelineValues<T extends TimelineConfig>(
   loopStart: number,
   loopEnd: number,
   actions: TimelineActions
-): DialTimelineValues<T> {
+): TweakTimelineValues<T> {
   const result: Record<string, unknown> = {
     time: transport.time,
     playing: transport.playing,
@@ -91,5 +91,5 @@ export function buildTimelineValues<T extends TimelineConfig>(
     }
   }
 
-  return result as DialTimelineValues<T>;
+  return result as TweakTimelineValues<T>;
 }

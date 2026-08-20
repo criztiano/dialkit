@@ -1,14 +1,14 @@
 import { defineConfig } from 'tsup';
 import { solidPlugin } from 'esbuild-plugin-solid';
 
-// Rewrite the shared DialStore import to the `dialkit/store` package subpath so
+// Rewrite the shared TweakStore import to the `tweakers/store` package subpath so
 // framework-neutral bundles reference the single shared store instead of
 // inlining a second, desynced copy.
-const externalizeDialStore = {
-  name: 'externalize-dialstore',
+const externalizeTweakStore = {
+  name: 'externalize-tweakstore',
   setup(build: { onResolve: (o: { filter: RegExp }, cb: () => { path: string; external: boolean }) => void }) {
-    build.onResolve({ filter: /store\/DialStore$/ }, () => ({
-      path: 'dialkit/store',
+    build.onResolve({ filter: /store\/TweakStore$/ }, () => ({
+      path: 'tweakers/store',
       external: true,
     }));
   },
@@ -17,14 +17,14 @@ const externalizeDialStore = {
 export default defineConfig([
   // Store build (shared across all framework entries)
   {
-    entry: { index: 'src/store/DialStore.ts' },
+    entry: { index: 'src/store/TweakStore.ts' },
     outDir: 'dist/store',
     format: ['esm', 'cjs'],
     dts: true,
     splitting: false,
     sourcemap: true,
   },
-  // Framework-neutral timeline runtime, consumed via the `dialkit/timeline`
+  // Framework-neutral timeline runtime, consumed via the `tweakers/timeline`
   // subpath. Externalizes the shared store; bundles the timeline-only modules.
   {
     entry: { index: 'src/timeline/index.ts' },
@@ -33,7 +33,7 @@ export default defineConfig([
     dts: true,
     splitting: false,
     sourcemap: true,
-    esbuildPlugins: [externalizeDialStore],
+    esbuildPlugins: [externalizeTweakStore],
   },
   // React build
   {
@@ -82,12 +82,12 @@ export default defineConfig([
   // their `../../icons` / `../../shortcut-utils` import specifiers (svelte-package
   // does not reach outside src/svelte), so those files must exist at dist root.
   // React/Solid/Vue bundle them inline, so this standalone emission is for Svelte.
-  // shortcut-utils references the DialStore singleton — externalize it to the shared
+  // shortcut-utils references the TweakStore singleton — externalize it to the shared
   // dist/store rather than inlining a second, desynced store instance.
   //
   // THIS LIST MUST COVER EVERY `../../x` SPECIFIER IN src/svelte. It does not
   // update itself, and a missing entry fails only in a downstream consumer that
-  // bundles dialkit/svelte — never in this repo's own build or example app. Any
+  // bundles tweakers/svelte — never in this repo's own build or example app. Any
   // new leaf module a Svelte component imports has to be added here in the same
   // change, or that consumer's build breaks with "Could not resolve ../../x".
   {
@@ -111,10 +111,10 @@ export default defineConfig([
     sourcemap: true,
     esbuildPlugins: [
       {
-        name: 'externalize-dialstore',
+        name: 'externalize-tweakstore',
         setup(build) {
-          build.onResolve({ filter: /store\/DialStore$/ }, () => ({
-            path: 'dialkit/store',
+          build.onResolve({ filter: /store\/TweakStore$/ }, () => ({
+            path: 'tweakers/store',
             external: true,
           }));
         },

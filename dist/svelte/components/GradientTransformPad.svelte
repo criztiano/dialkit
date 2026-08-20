@@ -143,9 +143,9 @@
   };
 </script>
 
-<div bind:this={padRef} class="dialkit-gradient-pad dialkit-checker">
+<div bind:this={padRef} class="tweakers-gradient-pad tweakers-checker">
   <div
-    class="dialkit-gradient-pad-fill"
+    class="tweakers-gradient-pad-fill"
     style:background={fill.background}
     style:transform={fill.transform}
     style:transform-origin={fill.transformOrigin}
@@ -156,7 +156,7 @@
   ></div>
   {#if radial}
     <div
-      class="dialkit-gradient-pad-line"
+      class="tweakers-gradient-pad-line"
       style:left="{cxPx}px"
       style:top="{cyPx}px"
       style:width="{majorLineLen}px"
@@ -164,7 +164,7 @@
     ></div>
     <button
       type="button"
-      class="dialkit-gradient-pad-handle"
+      class="tweakers-gradient-pad-handle"
       data-kind="major"
       aria-label="Gradient size and rotation"
       style:left="{major.x}px"
@@ -177,7 +177,7 @@
     ></button>
     <button
       type="button"
-      class="dialkit-gradient-pad-handle"
+      class="tweakers-gradient-pad-handle"
       data-kind="minor"
       aria-label="Gradient squash"
       style:left="{minor.x}px"
@@ -191,7 +191,7 @@
   {/if}
   {#if !radial}
     <div
-      class="dialkit-gradient-pad-line"
+      class="tweakers-gradient-pad-line"
       style:left="{angleOx}px"
       style:top="{angleOy}px"
       style:width="{angleLineLen}px"
@@ -199,7 +199,7 @@
     ></div>
     <button
       type="button"
-      class="dialkit-gradient-pad-handle"
+      class="tweakers-gradient-pad-handle"
       data-kind="angle"
       aria-label="Gradient angle"
       style:left="{angleHandle.x}px"
@@ -214,7 +214,7 @@
   {#if radial || conic}
     <button
       type="button"
-      class="dialkit-gradient-pad-handle"
+      class="tweakers-gradient-pad-handle"
       data-kind="center"
       aria-label="Gradient center"
       style:left="{clamp(cxPx, 5, size.w - 5)}px"

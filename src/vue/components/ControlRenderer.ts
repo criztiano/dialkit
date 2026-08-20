@@ -1,13 +1,13 @@
 import { Fragment, defineComponent, h, inject, type PropType } from 'vue';
-import { DialStore, hintDomId } from '../../store/DialStore';
+import { TweakStore, hintDomId } from '../../store/TweakStore';
 import type {
   ControlMeta,
-  DialValue,
+  TweakValue,
   RangeValue,
   SpringConfig,
   TransitionConfig,
   XYValue,
-} from '../../store/DialStore';
+} from '../../store/TweakStore';
 import type { GradientValue } from '../../gradient-core';
 import { ColorControl } from './ColorControl';
 import { Folder } from './Folder';
@@ -26,13 +26,13 @@ import { TransitionControl, type TransitionDurationControl } from './TransitionC
 import { XYControl } from './XYControl';
 
 // Single control switch shared by the settings Panel and the timeline clip
-// popover, so every DialKit control type renders identically in both places.
+// popover, so every Tweakers control type renders identically in both places.
 export const ControlRenderer = defineComponent({
-  name: 'DialKitControlRenderer',
+  name: 'TweakersControlRenderer',
   props: {
     panelId: { type: String, required: true },
     controls: { type: Array as PropType<ControlMeta[]>, required: true },
-    values: { type: Object as PropType<Record<string, DialValue>>, required: true },
+    values: { type: Object as PropType<Record<string, TweakValue>>, required: true },
     transitionDuration: Object as PropType<TransitionDurationControl>,
   },
   setup(props) {
@@ -55,7 +55,7 @@ export const ControlRenderer = defineComponent({
             orientation: control.orientation,
             shortcut: control.shortcut,
             shortcutActive: isShortcutActive(control.path),
-            onChange: (next: number) => DialStore.updateValue(props.panelId, control.path, next),
+            onChange: (next: number) => TweakStore.updateValue(props.panelId, control.path, next),
           });
         case 'number':
           return h(NumberControl, {
@@ -68,7 +68,7 @@ export const ControlRenderer = defineComponent({
             unit: control.unit,
             formatValue: control.formatValue,
             orientation: control.orientation,
-            onChange: (next: number) => DialStore.updateValue(props.panelId, control.path, next),
+            onChange: (next: number) => TweakStore.updateValue(props.panelId, control.path, next),
           });
         case 'range':
           return h(RangeSlider, {
@@ -79,7 +79,7 @@ export const ControlRenderer = defineComponent({
             max: control.max ?? 1,
             step: control.step,
             defaultValue: control.rangeDefault,
-            onChange: (next: RangeValue) => DialStore.updateValue(props.panelId, control.path, next),
+            onChange: (next: RangeValue) => TweakStore.updateValue(props.panelId, control.path, next),
           });
         case 'toggle':
           return h(Toggle, {
@@ -88,7 +88,7 @@ export const ControlRenderer = defineComponent({
             checked: value as boolean,
             shortcut: control.shortcut,
             shortcutActive: isShortcutActive(control.path),
-            onChange: (next: boolean) => DialStore.updateValue(props.panelId, control.path, next),
+            onChange: (next: boolean) => TweakStore.updateValue(props.panelId, control.path, next),
           });
         case 'spring':
           return h(SpringControl, {
@@ -97,7 +97,7 @@ export const ControlRenderer = defineComponent({
             path: control.path,
             label: control.label,
             spring: value as SpringConfig,
-            onChange: (next: SpringConfig) => DialStore.updateValue(props.panelId, control.path, next),
+            onChange: (next: SpringConfig) => TweakStore.updateValue(props.panelId, control.path, next),
           });
         case 'transition':
           return h(TransitionControl, {
@@ -107,7 +107,7 @@ export const ControlRenderer = defineComponent({
             label: control.label,
             value: value as TransitionConfig,
             durationControl: props.transitionDuration,
-            onChange: (next: TransitionConfig) => DialStore.updateValue(props.panelId, control.path, next),
+            onChange: (next: TransitionConfig) => TweakStore.updateValue(props.panelId, control.path, next),
           });
         case 'folder':
           // A folder that declared `_enabled` renders as a module: the header
@@ -118,7 +118,7 @@ export const ControlRenderer = defineComponent({
               key: control.path,
               title: control.label,
               enabled: props.values[enabledPath] as boolean,
-              onEnabledChange: (next: boolean) => DialStore.updateValue(props.panelId, enabledPath, next),
+              onEnabledChange: (next: boolean) => TweakStore.updateValue(props.panelId, enabledPath, next),
               defaultOpen: control.defaultOpen ?? true,
               hint: control.hint,
               hintId: hintId(control),
@@ -138,7 +138,7 @@ export const ControlRenderer = defineComponent({
             label: control.label,
             value: value as string,
             placeholder: control.placeholder,
-            onChange: (next: string) => DialStore.updateValue(props.panelId, control.path, next),
+            onChange: (next: string) => TweakStore.updateValue(props.panelId, control.path, next),
           });
         case 'select':
           return h(SelectControl, {
@@ -146,7 +146,7 @@ export const ControlRenderer = defineComponent({
             label: control.label,
             value: value as string,
             options: control.options ?? [],
-            onChange: (next: string) => DialStore.updateValue(props.panelId, control.path, next),
+            onChange: (next: string) => TweakStore.updateValue(props.panelId, control.path, next),
           });
         case 'color':
           return h(ColorControl, {
@@ -155,14 +155,14 @@ export const ControlRenderer = defineComponent({
             value: value as string,
             alpha: control.alpha,
             palette: control.palette,
-            onChange: (next: string) => DialStore.updateValue(props.panelId, control.path, next),
+            onChange: (next: string) => TweakStore.updateValue(props.panelId, control.path, next),
           });
         case 'gradient':
           return h(GradientControl, {
             key: control.path,
             label: control.label,
             value: value as GradientValue,
-            onChange: (next: GradientValue) => DialStore.updateValue(props.panelId, control.path, next),
+            onChange: (next: GradientValue) => TweakStore.updateValue(props.panelId, control.path, next),
           });
         case 'xy':
           return h(XYControl, {
@@ -178,16 +178,16 @@ export const ControlRenderer = defineComponent({
             showValues: control.showValues,
             shortcut: control.shortcut,
             shortcutActive: isShortcutActive(control.path),
-            onChange: (next: XYValue) => DialStore.updateValue(props.panelId, control.path, next),
+            onChange: (next: XYValue) => TweakStore.updateValue(props.panelId, control.path, next),
           });
         case 'action':
           return h('button', {
             key: control.path,
-            class: 'dialkit-button',
+            class: 'tweakers-button',
             // The wrapper greys every control out, but only a real `disabled`
             // takes a button out of the tab order too.
-            disabled: DialStore.isDisabled(props.panelId, control.path),
-            onClick: () => DialStore.triggerAction(props.panelId, control.path),
+            disabled: TweakStore.isDisabled(props.panelId, control.path),
+            onClick: () => TweakStore.triggerAction(props.panelId, control.path),
           }, control.label);
         default:
           return null;

@@ -1,5 +1,5 @@
 import { createContext, useEffect, useRef, useState, useCallback } from 'react';
-import { DialStore } from '../store/DialStore';
+import { TweakStore } from '../store/TweakStore';
 import {
   getEffectiveStep,
   applySliderDelta,
@@ -29,7 +29,7 @@ export function ShortcutListener({ children }: { children: React.ReactNode }) {
   const resolveActiveTarget = useCallback((interaction: string) => {
     for (const key of activeKeysRef.current) {
       // We can't get the modifier from a stored key, so we check all panels
-      const panels = DialStore.getPanels();
+      const panels = TweakStore.getPanels();
       for (const panel of panels) {
         for (const [path, shortcut] of Object.entries(panel.shortcuts)) {
           if (!shortcut.key) continue;
@@ -69,14 +69,14 @@ export function ShortcutListener({ children }: { children: React.ReactNode }) {
       activeKeysRef.current.add(key);
 
       const modifier = getActiveModifier(e);
-      const target = DialStore.resolveShortcutTarget(key, modifier);
+      const target = TweakStore.resolveShortcutTarget(key, modifier);
       if (target) {
         setActiveShortcut({ activePanelId: target.panelId, activePath: target.path });
 
         // Toggle: flip on first keydown only (not on key repeat)
         if (!wasAlreadyHeld && target.control.type === 'toggle') {
-          const currentValue = DialStore.getValue(target.panelId, target.path) as boolean;
-          DialStore.updateValue(target.panelId, target.path, !currentValue);
+          const currentValue = TweakStore.getValue(target.panelId, target.path) as boolean;
+          TweakStore.updateValue(target.panelId, target.path, !currentValue);
         }
       }
 
@@ -102,7 +102,7 @@ export function ShortcutListener({ children }: { children: React.ReactNode }) {
         let found = false;
         for (const remainingKey of activeKeysRef.current) {
           const modifier = getActiveModifier(e);
-          const target = DialStore.resolveShortcutTarget(remainingKey, modifier);
+          const target = TweakStore.resolveShortcutTarget(remainingKey, modifier);
           if (target) {
             setActiveShortcut({ activePanelId: target.panelId, activePath: target.path });
             found = true;
@@ -124,7 +124,7 @@ export function ShortcutListener({ children }: { children: React.ReactNode }) {
       // Key+scroll shortcuts
       if (activeKeysRef.current.size > 0) {
         for (const key of activeKeysRef.current) {
-          const target = DialStore.resolveShortcutTarget(key, modifier);
+          const target = TweakStore.resolveShortcutTarget(key, modifier);
           if (!target) continue;
 
           const { panelId, path, control } = target;
@@ -140,7 +140,7 @@ export function ShortcutListener({ children }: { children: React.ReactNode }) {
       }
 
       // Scroll-only shortcuts (no key needed)
-      const scrollOnlyTargets = DialStore.resolveScrollOnlyTargets();
+      const scrollOnlyTargets = TweakStore.resolveScrollOnlyTargets();
       for (const { panelId, path, control, shortcut } of scrollOnlyTargets) {
         if (control.type !== 'slider') continue;
 

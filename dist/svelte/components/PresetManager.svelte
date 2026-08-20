@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Spring } from 'svelte/motion';
   import Portal from '../Portal.svelte';
-  import { DialStore } from 'dialkit/store';
+  import { TweakStore } from 'tweakers/store';
   import { dropdownTransition } from './transitions';
   import { ICON_CHEVRON, ICON_TRASH } from '../../icons';
 
@@ -47,7 +47,7 @@
 
   $effect(() => {
     if (typeof document === 'undefined' || !triggerRef) return;
-    portalTarget = (triggerRef.closest('.dialkit-root') as HTMLElement | null) ?? document.body;
+    portalTarget = (triggerRef.closest('.tweakers-root') as HTMLElement | null) ?? document.body;
   });
 
   $effect(() => {
@@ -78,30 +78,30 @@
   });
 
   const handleSelect = (presetId: string | null) => {
-    DialStore.selectPreset(panelId, presetId);
+    TweakStore.selectPreset(panelId, presetId);
     closeDropdown();
   };
 
   const handleDelete = (e: MouseEvent, presetId: string) => {
     e.stopPropagation();
-    DialStore.removePreset(panelId, presetId);
+    TweakStore.removePreset(panelId, presetId);
   };
 </script>
 
-<div class="dialkit-preset-manager">
+<div class="tweakers-preset-manager">
   <button
     bind:this={triggerRef}
-    class="dialkit-preset-trigger"
+    class="tweakers-preset-trigger"
     onclick={() => (isOpen ? closeDropdown() : openDropdown())}
     data-open={String(isOpen)}
     data-has-preset={String(!!activePreset)}
     data-disabled={String(!hasPresets)}
   >
-    <span class="dialkit-preset-label">
+    <span class="tweakers-preset-label">
       {activePreset ? activePreset.name : providerMode ? 'Presets' : 'Version 1'}
     </span>
     <svg
-      class="dialkit-select-chevron"
+      class="tweakers-select-chevron"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -120,30 +120,30 @@
       {#if isOpen}
         <div
           bind:this={dropdownRef}
-          class="dialkit-root dialkit-preset-dropdown"
+          class="tweakers-root tweakers-preset-dropdown"
           style={`position:fixed;top:${pos.top}px;left:${pos.left}px;min-width:${pos.width}px;`}
           transition:dropdownTransition={{ above: false }}
         >
           {#if !providerMode}
             <div
-              class="dialkit-preset-item"
+              class="tweakers-preset-item"
               data-active={String(!activePresetId)}
               onclick={() => handleSelect(null)}
             >
-              <span class="dialkit-preset-name">Version 1</span>
+              <span class="tweakers-preset-name">Version 1</span>
             </div>
           {/if}
 
           {#each presets as preset (preset.id)}
             <div
-              class="dialkit-preset-item"
+              class="tweakers-preset-item"
               data-active={String(preset.id === activePresetId)}
               onclick={() => handleSelect(preset.id)}
             >
-              <span class="dialkit-preset-name">{preset.name}</span>
+              <span class="tweakers-preset-name">{preset.name}</span>
               {#if preset.deletable ?? true}
                 <button
-                  class="dialkit-preset-delete"
+                  class="tweakers-preset-delete"
                   onclick={(e) => handleDelete(e, preset.id)}
                   title="Delete preset"
                 >

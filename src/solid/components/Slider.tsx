@@ -1,7 +1,7 @@
 import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { animate, motionValue } from 'motion';
-import type { ShortcutConfig } from '../../store/DialStore';
+import type { ShortcutConfig } from '../../store/TweakStore';
 import {
   decimalsForStep,
   roundValue,
@@ -446,29 +446,29 @@ export function Slider(props: SliderProps) {
     if (ds <= 10) {
       return Array.from({ length: ds - 1 }, (_, i) => {
         const pct = ((i + 1) * step()) / (max() - min()) * 100;
-        return <div class="dialkit-slider-hashmark" style={{ left: `${pct}%` }} />;
+        return <div class="tweakers-slider-hashmark" style={{ left: `${pct}%` }} />;
       });
     }
     return Array.from({ length: 9 }, (_, i) => {
       const pct = (i + 1) * 10;
-      return <div class="dialkit-slider-hashmark" style={{ left: `${pct}%` }} />;
+      return <div class="tweakers-slider-hashmark" style={{ left: `${pct}%` }} />;
     });
   };
 
   const cardClass = () =>
     [
-      'dialkit-slider',
-      isVertical() ? 'dialkit-slider-vertical' : '',
-      isActive() ? 'dialkit-slider-active' : '',
-      isInteracting() ? 'dialkit-slider-engaged' : '',
-      isMetaHeld() ? 'dialkit-slider-text-mode' : '',
+      'tweakers-slider',
+      isVertical() ? 'tweakers-slider-vertical' : '',
+      isActive() ? 'tweakers-slider-active' : '',
+      isInteracting() ? 'tweakers-slider-engaged' : '',
+      isMetaHeld() ? 'tweakers-slider-text-mode' : '',
     ]
       .filter(Boolean)
       .join(' ');
 
   const shortcutPill = () => (
     <Show when={props.shortcut}>
-      <span class={`dialkit-shortcut-pill${props.shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`}>
+      <span class={`tweakers-shortcut-pill${props.shortcutActive ? ' tweakers-shortcut-pill-active' : ''}`}>
         {formatSliderShortcut(props.shortcut!)}
       </span>
     </Show>
@@ -477,7 +477,7 @@ export function Slider(props: SliderProps) {
   return (
     <div
       ref={wrapperRef}
-      class={`dialkit-slider-wrapper${isVertical() ? ' dialkit-slider-wrapper-vertical' : ''}`}
+      class={`tweakers-slider-wrapper${isVertical() ? ' tweakers-slider-wrapper-vertical' : ''}`}
     >
       <div
         ref={cardRef}
@@ -499,10 +499,10 @@ export function Slider(props: SliderProps) {
           when={isVertical()}
           fallback={
             <>
-              <div class="dialkit-slider-track">
+              <div class="tweakers-slider-track">
                 <div
                   ref={fillRef}
-                  class="dialkit-slider-fill"
+                  class="tweakers-slider-fill"
                   style={{
                     left: fillStart(fillPercent.get()),
                     width: fillExtent(fillPercent.get()),
@@ -510,27 +510,27 @@ export function Slider(props: SliderProps) {
                 />
                 <div
                   ref={handleRef}
-                  class="dialkit-slider-handle"
+                  class="tweakers-slider-handle"
                   style={{ left: handleLeft(fillPercent.get()), opacity: 0 }}
                 />
               </div>
 
-              <div class="dialkit-slider-hashmarks">{hashMarks()}</div>
+              <div class="tweakers-slider-hashmarks">{hashMarks()}</div>
 
-              <span class="dialkit-slider-label">
+              <span class="tweakers-slider-label">
                 {props.label}
                 {shortcutPill()}
               </span>
 
               {props.valueIcon != null ? (
-                <span class="dialkit-slider-value dialkit-slider-value-icon">
+                <span class="tweakers-slider-value tweakers-slider-value-icon">
                   {props.valueIcon}
                 </span>
               ) : showInput() ? (
                 <input
                   ref={inputRef}
                   type="text"
-                  class="dialkit-slider-input"
+                  class="tweakers-slider-input"
                   value={inputValue()}
                   onInput={(e) => setInputValue(e.currentTarget.value)}
                   onKeyDown={handleInputKeyDown}
@@ -540,7 +540,7 @@ export function Slider(props: SliderProps) {
                 />
               ) : (
                 <span
-                  class={`dialkit-slider-value ${isValueEditable() ? 'dialkit-slider-value-editable' : ''}`}
+                  class={`tweakers-slider-value ${isValueEditable() ? 'tweakers-slider-value-editable' : ''}`}
                   onMouseEnter={() => setIsValueHovered(true)}
                   onMouseLeave={() => setIsValueHovered(false)}
                   onClick={handleValueClick}
@@ -549,17 +549,17 @@ export function Slider(props: SliderProps) {
                 >
                   {displayValue()}
                   <Show when={props.unit}>
-                    <span class="dialkit-slider-unit">{props.unit}</span>
+                    <span class="tweakers-slider-unit">{props.unit}</span>
                   </Show>
                 </span>
               )}
             </>
           }
         >
-          <div class="dialkit-slider-fill-area">
+          <div class="tweakers-slider-fill-area">
             <div
               ref={fillRef}
-              class="dialkit-slider-fill-vertical"
+              class="tweakers-slider-fill-vertical"
               style={{
                 bottom: fillStart(fillPercent.get()),
                 height: fillExtent(fillPercent.get()),
@@ -571,7 +571,7 @@ export function Slider(props: SliderProps) {
             <input
               ref={inputRef}
               type="text"
-              class="dialkit-slider-input dialkit-slider-input-vertical"
+              class="tweakers-slider-input tweakers-slider-input-vertical"
               value={inputValue()}
               onInput={(e) => setInputValue(e.currentTarget.value)}
               onKeyDown={handleInputKeyDown}
@@ -581,7 +581,7 @@ export function Slider(props: SliderProps) {
             />
           ) : (
             <span
-              class={`dialkit-slider-value-vertical ${isValueEditable() ? 'dialkit-slider-value-editable' : ''}`}
+              class={`tweakers-slider-value-vertical ${isValueEditable() ? 'tweakers-slider-value-editable' : ''}`}
               onMouseEnter={() => setIsValueHovered(true)}
               onMouseLeave={() => setIsValueHovered(false)}
               onClick={handleValueClick}
@@ -590,12 +590,12 @@ export function Slider(props: SliderProps) {
             >
               {displayValue()}
               <Show when={props.unit}>
-                <span class="dialkit-slider-unit">{props.unit}</span>
+                <span class="tweakers-slider-unit">{props.unit}</span>
               </Show>
             </span>
           )}
 
-          <span class="dialkit-slider-label-vertical">
+          <span class="tweakers-slider-label-vertical">
             {props.label}
             {shortcutPill()}
           </span>

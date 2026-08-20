@@ -1,4 +1,4 @@
-import type { ListItemValue, ListItemType, DialEvent } from 'dialkit/store';
+import type { ListItemValue, ListItemType, TweakEvent } from 'tweakers/store';
 type $$ComponentProps = {
     label: string;
     value: ListItemValue[];
@@ -6,7 +6,7 @@ type $$ComponentProps = {
     addLabel?: string;
     maxItems?: number;
     onChange: (value: ListItemValue[]) => void;
-    onEvent: (event: DialEvent) => void;
+    onEvent: (event: TweakEvent) => void;
 };
 declare const ListControl: import("svelte").Component<$$ComponentProps, {}, "">;
 type ListControl = ReturnType<typeof ListControl>;

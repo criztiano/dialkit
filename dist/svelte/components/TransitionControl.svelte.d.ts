@@ -1,4 +1,4 @@
-import type { TransitionConfig } from 'dialkit/store';
+import type { TransitionConfig } from 'tweakers/store';
 export type TransitionDurationControl = {
     value: number;
     onChange: (value: number) => void;

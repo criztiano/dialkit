@@ -32,25 +32,25 @@ export function ModuleFolder(props: ModuleFolderProps) {
   };
 
   return (
-    <div class="dialkit-module dialkit-module-folder" data-open={props.enabled && isOpen() ? 'true' : 'false'}>
+    <div class="tweakers-module tweakers-module-folder" data-open={props.enabled && isOpen() ? 'true' : 'false'}>
       <div
-        class="dialkit-module-header dialkit-module-header-toggle"
+        class="tweakers-module-header tweakers-module-header-toggle"
         onClick={() => { if (props.enabled) setIsOpen(open => !open); }}
         data-hint={props.hint ? 'true' : undefined}
         aria-describedby={props.hint ? props.hintId : undefined}
       >
         <Checkbox checked={props.enabled} onChange={handleEnabledChange} label={props.title} />
-        <span class="dialkit-module-title">{props.title}</span>
+        <span class="tweakers-module-title">{props.title}</span>
         <Show when={props.hint}>
-          <span class="dialkit-hint" id={props.hintId} role="tooltip">
+          <span class="tweakers-hint" id={props.hintId} role="tooltip">
             {props.hint}
           </span>
         </Show>
       </div>
 
-      <div class="dialkit-module-collapse" data-open={props.enabled && isOpen()}>
-        <div class="dialkit-module-collapse-clip">
-          <div class="dialkit-module-inner">{props.children}</div>
+      <div class="tweakers-module-collapse" data-open={props.enabled && isOpen()}>
+        <div class="tweakers-module-collapse-clip">
+          <div class="tweakers-module-inner">{props.children}</div>
         </div>
       </div>
     </div>

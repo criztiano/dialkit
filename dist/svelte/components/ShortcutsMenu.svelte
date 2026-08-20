@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { DialStore } from 'dialkit/store';
-  import type { ShortcutConfig } from 'dialkit/store';
+  import { TweakStore } from 'tweakers/store';
+  import type { ShortcutConfig } from 'tweakers/store';
   import Portal from '../Portal.svelte';
 
   let { panelId } = $props<{ panelId: string }>();
@@ -60,7 +60,7 @@
     return () => document.removeEventListener('mousedown', handler);
   });
 
-  const panel = $derived(DialStore.getPanel(panelId));
+  const panel = $derived(TweakStore.getPanel(panelId));
 
   const rows = $derived.by(() => {
     if (!panel) return [];
@@ -86,7 +86,7 @@
 {#if panel && rows.length > 0}
   <button
     bind:this={triggerEl}
-    class="dialkit-shortcuts-trigger"
+    class="tweakers-shortcuts-trigger"
     onclick={toggle}
     title="Keyboard shortcuts"
   >
@@ -104,24 +104,24 @@
     {#if isOpen}
       <div
         bind:this={dropdownEl}
-        class="dialkit-root dialkit-shortcuts-dropdown"
+        class="tweakers-root tweakers-shortcuts-dropdown"
         style:position="fixed"
         style:top="{pos.top}px"
         style:right="{pos.right}px"
       >
-        <div class="dialkit-shortcuts-title">Keyboard Shortcuts</div>
-        <div class="dialkit-shortcuts-list">
+        <div class="tweakers-shortcuts-title">Keyboard Shortcuts</div>
+        <div class="tweakers-shortcuts-list">
           {#each rows as row (row.path)}
-            <div class="dialkit-shortcuts-row">
-              <span class="dialkit-shortcuts-row-key">
+            <div class="tweakers-shortcuts-row">
+              <span class="tweakers-shortcuts-row-key">
                 {formatShortcutKey(row.shortcut)}
               </span>
-              <span class="dialkit-shortcuts-row-label">{row.label}</span>
-              <span class="dialkit-shortcuts-row-mode">{formatInteraction(row.shortcut)}</span>
+              <span class="tweakers-shortcuts-row-label">{row.label}</span>
+              <span class="tweakers-shortcuts-row-mode">{formatInteraction(row.shortcut)}</span>
             </div>
           {/each}
         </div>
-        <div class="dialkit-shortcuts-hint">See pill badges on controls for keys</div>
+        <div class="tweakers-shortcuts-hint">See pill badges on controls for keys</div>
       </div>
     {/if}
   </Portal>

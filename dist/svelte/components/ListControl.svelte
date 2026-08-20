@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ICON_GRIP, ICON_PLUS, ICON_TRASH } from '../../icons';
-  import { parseListItemSchema, groupListFields, defaultListItemParams, hintDomId } from 'dialkit/store';
-  import type { ListItemValue, ListItemType, ListField, DialEvent } from 'dialkit/store';
+  import { parseListItemSchema, groupListFields, defaultListItemParams, hintDomId } from 'tweakers/store';
+  import type { ListItemValue, ListItemType, ListField, TweakEvent } from 'tweakers/store';
   import Folder from './Folder.svelte';
   import ControlShell from './ControlShell.svelte';
   import Slider from './Slider.svelte';
@@ -18,7 +18,7 @@
     addLabel?: string;
     maxItems?: number;
     onChange: (value: ListItemValue[]) => void;
-    onEvent: (event: DialEvent) => void;
+    onEvent: (event: TweakEvent) => void;
   }>();
 
   let picking = $state(false);
@@ -129,7 +129,7 @@
 <svelte:window onmouseup={() => (armed = -1)} />
 
 {#snippet fieldList(fields: ListField[], params: Record<string, number | boolean | string>, rowId: string, index: number)}
-  <div class="dialkit-list-item-fields">
+  <div class="tweakers-list-item-fields">
     {#each fields as field (field.key)}
       <ControlShell hint={field.hint} id={hintDomId(rowId, field.key)}>
         {#if field.kind === 'slider'}
@@ -183,7 +183,7 @@
 
 
 <Folder title={label} defaultOpen>
-  <div class="dialkit-list-items" ondragover={(e) => e.preventDefault()} ondrop={onDrop} role="list">
+  <div class="tweakers-list-items" ondragover={(e) => e.preventDefault()} ondrop={onDrop} role="list">
     {#each value as item, index (index)}
       {@const type = itemTypes[item.type]}
       {#if type}
@@ -194,7 +194,7 @@
         <!-- A draggable ancestor swallows text selection, so the row stops being
              draggable while its title is being edited. -->
         <div
-          class="dialkit-list-item"
+          class="tweakers-list-item"
           draggable={editing === index ? 'false' : 'true'}
           role="listitem"
           data-dragging={dragIndex === index ? 'true' : undefined}
@@ -203,10 +203,10 @@
           ondragover={(e) => onDragOver(e, index)}
           ondragend={onDragEnd}
         >
-          <div class="dialkit-list-item-head">
+          <div class="tweakers-list-item-head">
             <button
               type="button"
-              class="dialkit-list-drag"
+              class="tweakers-list-drag"
               aria-label="Drag to reorder"
               onmousedown={() => (armed = index)}
             >
@@ -220,7 +220,7 @@
               <!-- Unbound: the field owns the draft, so Escape can restore the
                    original and let the shared blur path no-op it away. -->
               <input
-                class="dialkit-list-item-title"
+                class="tweakers-list-item-title"
                 value={item.title ?? ''}
                 placeholder={type.label}
                 use:focusSelect
@@ -236,17 +236,17 @@
             {:else}
               <button
                 type="button"
-                class="dialkit-list-item-title"
+                class="tweakers-list-item-title"
                 aria-label={`Rename ${rowTitle}`}
                 onclick={() => (editing = index)}
               >
                 {rowTitle}
               </button>
             {/if}
-            <div class="dialkit-list-item-actions">
+            <div class="tweakers-list-item-actions">
               <button
                 type="button"
-                class="dialkit-list-icon-btn dialkit-list-remove"
+                class="tweakers-list-icon-btn tweakers-list-remove"
                 onclick={() => removeItem(index)}
                 aria-label={`Remove ${rowTitle}`}
               >
@@ -275,13 +275,13 @@
     {/each}
 
     {#if value.length === 0 && !picking}
-      <div class="dialkit-list-empty">No items yet</div>
+      <div class="tweakers-list-empty">No items yet</div>
     {/if}
   </div>
 
   {#if !atCapacity}
-    <div class="dialkit-list-add">
-      <button type="button" class="dialkit-list-add-btn" data-open={String(picking)} onclick={handleAdd}>
+    <div class="tweakers-list-add">
+      <button type="button" class="tweakers-list-add-btn" data-open={String(picking)} onclick={handleAdd}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d={ICON_PLUS} />
         </svg>
@@ -289,12 +289,12 @@
       </button>
 
       {#if typeEntries.length > 1}
-        <div class="dialkit-list-picker" data-open={String(picking)}>
-          <div class="dialkit-list-picker-inner">
+        <div class="tweakers-list-picker" data-open={String(picking)}>
+          <div class="tweakers-list-picker-inner">
             {#each typeEntries as [key, type] (key)}
               <button
                 type="button"
-                class="dialkit-list-picker-chip"
+                class="tweakers-list-picker-chip"
                 onclick={() => { addItem(key); picking = false; }}
               >
                 {type.label}

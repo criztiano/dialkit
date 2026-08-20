@@ -4,7 +4,7 @@ import type { ReactTestRenderer, ReactTestInstance } from 'react-test-renderer';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { ListControl } from './components/ListControl';
-import type { DialEvent, ListItemType, ListItemValue } from './store/DialStore';
+import type { TweakEvent, ListItemType, ListItemValue } from './store/TweakStore';
 
 // ListControl disarms drag-to-reorder on a window listener, and Folder measures
 // window height; neither exists under node:test.
@@ -17,7 +17,7 @@ const itemTypes: Record<string, ListItemType> = {
 
 function renderList(value: ListItemValue[]) {
   const changes: ListItemValue[][] = [];
-  const events: DialEvent[] = [];
+  const events: TweakEvent[] = [];
   let renderer!: ReactTestRenderer;
 
   act(() => {
@@ -27,7 +27,7 @@ function renderList(value: ListItemValue[]) {
         value,
         itemTypes,
         onChange: (next: ListItemValue[]) => changes.push(next),
-        onEvent: (event: DialEvent) => events.push(event),
+        onEvent: (event: TweakEvent) => events.push(event),
       })
     );
   });
@@ -35,7 +35,7 @@ function renderList(value: ListItemValue[]) {
   // Resolved fresh each time: the same class names the static button and the
   // editing input, and only one of the two is mounted.
   const title = (): ReactTestInstance =>
-    renderer.root.findByProps({ className: 'dialkit-list-item-title' });
+    renderer.root.findByProps({ className: 'tweakers-list-item-title' });
 
   const rename = (raw: string) => {
     act(() => title().props.onClick());
