@@ -29,14 +29,15 @@
      their shape stays distinct from the lane without replacing custom hues. */
   --dial-timeline-clip-overlay: transparent;
 
-  /* Timeline loop region (drag on the ruler). */
-  --dial-timeline-loop-bg: rgba(129, 140, 248, 0.20);
-  --dial-timeline-loop-border: rgba(129, 140, 248, 0.75);
+  /* Timeline loop region (drag on the ruler) — the panel accent, so nothing
+     in the set lights up in a second violet. */
+  --dial-timeline-loop-bg: rgba(122, 111, 255, 0.20);
+  --dial-timeline-loop-border: rgba(122, 111, 255, 0.75);
 
   /* Affordance dot — barely there at rest, accent once something is bound. */
   --dial-affordance-idle: rgba(255, 255, 255, 0.22);
-  --dial-affordance-armed: #818cf8;
-  --dial-affordance-active: #a5b4fc;
+  --dial-affordance-armed: #7a6fff;
+  --dial-affordance-active: #a79fff;
 
   /* Accent (active tab indicators, armed states) */
   --dial-accent: #7a6fff;
@@ -120,6 +121,26 @@
   letter-spacing: 0;
   line-height: 1.35;
   color: var(--dial-text-root);
+}
+
+/* The other half of the voice: values, inputs and buttons read at the same
+   size as the labels beside them. A row where the two halves differ in size
+   reads as two different systems sharing a card. */
+.dialkit-root .dialkit-text-input,
+.dialkit-root .dialkit-file-name,
+.dialkit-root .dialkit-preset-name,
+.dialkit-root .dialkit-preset-name-input,
+.dialkit-root .dialkit-preset-input,
+.dialkit-root .dialkit-color-hash,
+.dialkit-root .dialkit-timeline-time,
+.dialkit-root .dialkit-timeline-loop-infinity,
+.dialkit-root .dialkit-segmented-button,
+.dialkit-root .dialkit-button,
+.dialkit-root .dialkit-action-button,
+.dialkit-root .dialkit-preset-save-btn {
+  font-family: var(--dial-font-value);
+  font-size: var(--dial-font-size);
+  font-weight: 400;
 }
 
 /* Field labels inside the colour picker keep their own small size. */
@@ -1273,7 +1294,7 @@
   top: 2px;
   bottom: 2px;
   background: var(--dial-surface-active);
-  border-radius: 6px;
+  border-radius: var(--dial-radius);
   z-index: 0;
   pointer-events: none;
 }
@@ -1387,7 +1408,7 @@
   justify-content: space-between;
   gap: 12px;
   height: var(--dial-row-height);
-  padding: 2px 10px 2px 12px;
+  padding: 2px 8px;
   background: var(--dial-surface);
   border-radius: var(--dial-radius);
 }
@@ -1659,26 +1680,67 @@
   overflow: hidden;
 }
 
-/* Panel Tabs — the root's tab bar, under the toolbar. It draws no rule of its
-   own: the panel header already carries one. */
+/* Panel Tabs — the root's tab bar, under the toolbar. Each tab is its own
+   card carrying a state bar, so the bar has no container of its own and the
+   segmented control's sliding pill has nothing left to say. */
 .dialkit-panel-tabs {
   margin-bottom: 6px;
 }
 
 .dialkit-panel-tabs .dialkit-segmented {
-  background: var(--dial-surface);
+  background: transparent;
+  gap: 4px;
+  padding: 0;
+}
+
+.dialkit-panel-tabs .dialkit-segmented-pill {
+  display: none;
 }
 
 /* Tabs share the row evenly, and a long name ellipsizes rather than widening
-   its tab — a 300px panel has no room to spare. */
+   its tab — a 300px panel has no room to spare. `display: block` (not flex)
+   is what keeps that ellipsis working on the button's bare text node. */
 .dialkit-panel-tabs .dialkit-segmented-button {
+  display: block;
   flex: 1 1 0;
   min-width: 0;
-  padding: 5px 6px;
-  font-size: 12px;
+  padding: 3px;
+  font-family: var(--dial-font-label);
+  font-size: var(--dial-font-size);
+  font-weight: 400;
+  line-height: 16px;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--dial-text-root);
+  background: var(--dial-surface);
+  border-radius: var(--dial-radius);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The state bar: accent on the page you are on, a dim slab otherwise. Drawn
+   by the button itself, so no framework has to add an element for it. */
+.dialkit-panel-tabs .dialkit-segmented-button::before {
+  content: '';
+  display: inline-block;
+  vertical-align: middle;
+  width: 8px;
+  height: 16px;
+  margin-right: 6px;
+  border-radius: var(--dial-radius);
+  background: var(--dial-text-primary);
+  opacity: 0.15;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.dialkit-panel-tabs .dialkit-segmented-button[data-active="true"]::before {
+  background: var(--dial-accent);
+  opacity: 1;
+}
+
+.dialkit-panel-tabs .dialkit-segmented-button[data-active="false"]:hover {
+  background: var(--dial-surface-hover);
 }
 
 .dialkit-panel-tab-page {
@@ -1707,22 +1769,22 @@
 }
 
 .dialkit-toolbar-add svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   color: var(--dial-text-label);
 }
 
+/* The copy button is the preset row's second square: same box as the add
+   button, icon only — the row has no width to spend on a word. */
 .dialkit-toolbar-copy {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  width: var(--dial-row-height);
   height: var(--dial-row-height);
-  padding: 0 12px;
+  padding: 0;
   flex-shrink: 0;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 500;
   color: var(--dial-text-label);
   background: var(--dial-surface);
   border: none;
@@ -1737,16 +1799,17 @@
 
 .dialkit-toolbar-copy-icon-wrap {
   position: relative;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
 }
 
-.dialkit-toolbar-copy-icon {
+.dialkit-toolbar-copy-icon,
+.dialkit-toolbar-copy-icon svg {
   position: absolute;
   inset: 0;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 /* Text Control */
@@ -1756,7 +1819,7 @@
   justify-content: space-between;
   gap: 12px;
   height: var(--dial-row-height);
-  padding: 0 12px;
+  padding: 0 8px;
   background: var(--dial-surface);
   border-radius: var(--dial-radius);
 }
@@ -1801,7 +1864,7 @@
   justify-content: space-between;
   width: 100%;
   height: var(--dial-row-height);
-  padding: 0 12px;
+  padding: 0 8px;
   font-family: inherit;
   font-size: 13px;
   font-weight: 500;
@@ -1832,26 +1895,29 @@
 .dialkit-select-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
+  min-width: 0;
 }
 
 .dialkit-select-value {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--dial-text-label);
-  transform: translateY(-0.5px);
+  font-family: var(--dial-font-value);
+  font-size: var(--dial-font-size);
+  font-weight: 400;
+  color: var(--dial-text-root);
+  opacity: var(--dial-value-opacity);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* The caret only has to say "this opens" — it never competes with the value. */
 .dialkit-select-chevron {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   padding: 2px;
   box-sizing: border-box;
   flex-shrink: 0;
-  opacity: 0.6;
+  opacity: 0.35;
 }
 
 /* Select Dropdown (portaled to body) */
@@ -1867,17 +1933,18 @@
 .dialkit-select-option {
   display: block;
   width: 100%;
-  padding: 8px 10px;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--dial-text-label);
+  padding: 6px 8px;
+  font-family: var(--dial-font-value);
+  font-size: var(--dial-font-size);
+  font-weight: 400;
+  color: var(--dial-text-root);
+  opacity: var(--dial-value-opacity);
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--dial-radius);
   cursor: pointer;
   text-align: left;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
 }
 
 .dialkit-select-option:hover {
@@ -1885,7 +1952,7 @@
 }
 
 .dialkit-select-option[data-selected="true"] {
-  color: var(--dial-text-primary);
+  opacity: 1;
   background: var(--dial-surface-active);
 }
 
@@ -1903,7 +1970,7 @@
   flex: 1;
   min-width: 0;
   height: var(--dial-row-height);
-  padding: 0 12px;
+  padding: 0 8px;
   font-family: inherit;
   font-size: 13px;
   font-weight: 500;
@@ -2452,7 +2519,7 @@ input.dialkit-list-item-title:focus {
   justify-content: space-between;
   width: 100%;
   height: var(--dial-row-height);
-  padding: 0 10px 0 12px;
+  padding: 0 8px;
   font-family: inherit;
   font-size: 13px;
   font-weight: 500;
@@ -2728,7 +2795,7 @@ input.dialkit-list-item-title:focus {
   justify-content: space-between;
   gap: 12px;
   height: var(--dial-row-height);
-  padding: 0 12px;
+  padding: 0 8px;
   background: var(--dial-surface);
   border-radius: var(--dial-radius);
 }
@@ -2744,45 +2811,48 @@ input.dialkit-list-item-title:focus {
 .dialkit-color-inputs {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .dialkit-color-hex {
   /* Same fixed box as the edit input so the row doesn't shift on edit toggle. */
   display: inline-block;
   width: 6.5ch;
-  font-size: 13px;
-  font-weight: 500;
-  font-family: 'Geist Mono', monospace;
-  color: var(--dial-text-label);
+  font-family: var(--dial-font-value);
+  font-size: var(--dial-font-size);
+  font-weight: 400;
+  color: var(--dial-text-root);
+  opacity: var(--dial-value-opacity);
   cursor: text;
-  transform: translateY(-0.5px);
 }
 
 .dialkit-color-hex-input {
   width: 6.5ch;
-  font-size: 13px;
-  font-weight: 500;
-  font-family: 'Geist Mono', monospace;
-  color: var(--dial-text-label);
+  font-family: var(--dial-font-value);
+  font-size: var(--dial-font-size);
+  font-weight: 400;
+  color: var(--dial-text-root);
+  opacity: var(--dial-value-opacity);
   background: transparent;
   border: none;
   padding: 0;
   outline: none;
   text-transform: uppercase;
-  transform: translateY(-0.5px);
 }
 
 .dialkit-color-hex-input:focus {
   color: var(--dial-text-focus);
+  opacity: 1;
 }
 
+/* The chip is the colour itself — no border to tint it, and the checkerboard
+   underneath keeps translucent values honest. */
 .dialkit-color-swatch {
-  width: 20px;
-  height: 20px;
+  width: 19px;
+  height: 21px;
   padding: 0;
-  border-radius: 4px;
-  border: 1px solid var(--dial-border-hover);
+  border-radius: var(--dial-radius);
+  border: none;
   cursor: pointer;
   transition: transform 0.15s;
   /* Current color layered over a checkerboard so translucent values read correctly. */
@@ -2800,11 +2870,11 @@ input.dialkit-list-item-title:focus {
 }
 
 .dialkit-color-opacity {
-  font-size: 13px;
-  font-weight: 500;
-  font-family: 'Geist Mono', monospace;
-  color: var(--dial-text-label);
-  transform: translateY(-0.5px);
+  font-family: var(--dial-font-value);
+  font-size: var(--dial-font-size);
+  font-weight: 400;
+  color: var(--dial-text-root);
+  opacity: var(--dial-value-opacity);
   white-space: nowrap;
 }
 
@@ -2812,28 +2882,25 @@ input.dialkit-list-item-title:focus {
   color: var(--dial-text-tertiary);
 }
 
+/* The hash belongs to the value, not beside it — "#6366F1" is one word. */
 .dialkit-color-hex-wrap {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 0;
   cursor: text;
 }
 
 /* Fixed hash symbol — the editable value carries only the hex digits. */
 .dialkit-color-hash {
-  font-size: 13px;
-  font-weight: 500;
-  font-family: 'Geist Mono', monospace;
-  color: var(--dial-text-tertiary);
-  transform: translateY(-0.5px);
+  color: var(--dial-text-root);
+  opacity: var(--dial-value-opacity);
   user-select: none;
 }
 
+/* No dividers anywhere — the row's own gap already separates the hex from the
+   opacity readout. The element stays for the frameworks that render it. */
 .dialkit-color-divider {
-  width: 1px;
-  height: 14px;
-  flex-shrink: 0;
-  background: var(--dial-surface-active);
+  display: none;
 }
 
 /* ── Color picker popover ── */
@@ -3008,7 +3075,7 @@ input.dialkit-list-item-title:focus {
   justify-content: space-between;
   gap: 12px;
   height: var(--dial-row-height);
-  padding: 0 12px;
+  padding: 0 8px;
   background: var(--dial-surface);
   border-radius: var(--dial-radius);
 }
@@ -3257,11 +3324,11 @@ input.dialkit-list-item-title:focus {
   justify-content: space-between;
   width: 100%;
   height: var(--dial-row-height);
-  padding: 0 12px;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--dial-text-label);
+  padding: 0 8px;
+  font-family: var(--dial-font-value);
+  font-size: var(--dial-font-size);
+  font-weight: 400;
+  color: var(--dial-text-root);
   background: var(--dial-surface);
   border: none;
   border-radius: var(--dial-radius);

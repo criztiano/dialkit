@@ -7411,7 +7411,7 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
         title: "Copy parameters",
         whileTap: { scale: 0.9 },
         transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-        children: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(import_react37.AnimatePresence, { initial: false, mode: "wait", children: copied ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { style: { position: "relative", width: 14, height: 14 }, children: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(import_react37.AnimatePresence, { initial: false, mode: "wait", children: copied ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
           import_react37.motion.svg,
           {
             viewBox: "0 0 24 24",
@@ -7420,7 +7420,7 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
             strokeWidth: "2",
             strokeLinecap: "round",
             strokeLinejoin: "round",
-            style: { position: "absolute", inset: 0, width: 16, height: 16, color: "var(--dial-text-label)" },
+            style: { position: "absolute", inset: 0, width: 14, height: 14, color: "var(--dial-text-label)" },
             initial: { scale: 0.8, opacity: 0 },
             animate: { scale: 1, opacity: 1 },
             exit: { scale: 0.8, opacity: 0 },
@@ -7433,7 +7433,7 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
           {
             viewBox: "0 0 24 24",
             fill: "none",
-            style: { position: "absolute", inset: 0, width: 16, height: 16, color: "var(--dial-text-label)" },
+            style: { position: "absolute", inset: 0, width: 14, height: 14, color: "var(--dial-text-label)" },
             initial: { scale: 0.8, opacity: 0 },
             animate: { scale: 1, opacity: 1 },
             exit: { scale: 0.8, opacity: 0 },

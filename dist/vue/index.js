@@ -6607,8 +6607,7 @@ Apply these values as the new defaults in the useDialKit call.`;
                 }, [h26("path", { d: ICON_CHECK })])
               ])] : []
             })
-          ]),
-          "Copy"
+          ])
         ]),
         props.toolbarExtra?.()
       ]);

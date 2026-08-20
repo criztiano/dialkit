@@ -160,7 +160,6 @@ export const Panel = defineComponent({
                 : [],
             }),
           ]),
-          'Copy',
         ]),
         props.toolbarExtra?.(),
       ]);

@@ -6677,8 +6677,7 @@ Apply these values as the new defaults in the useDialKit call.`;
                 }, [(0, import_vue27.h)("path", { d: ICON_CHECK })])
               ])] : []
             })
-          ]),
-          "Copy"
+          ])
         ]),
         props.toolbarExtra?.()
       ]);

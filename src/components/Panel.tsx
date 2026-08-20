@@ -110,7 +110,7 @@ export function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra 
         whileTap={{ scale: 0.9 }}
         transition={{ type: 'spring', visualDuration: 0.15, bounce: 0.3 }}
       >
-        <span style={{ position: 'relative', width: 16, height: 16 }}>
+        <span style={{ position: 'relative', width: 14, height: 14 }}>
           <AnimatePresence initial={false} mode="wait">
             {copied ? (
               <motion.svg
@@ -121,7 +121,7 @@ export function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra 
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                style={{ position: 'absolute', inset: 0, width: 16, height: 16, color: 'var(--dial-text-label)' }}
+                style={{ position: 'absolute', inset: 0, width: 14, height: 14, color: 'var(--dial-text-label)' }}
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.8, opacity: 0 }}
@@ -134,7 +134,7 @@ export function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra 
                 key="clipboard"
                 viewBox="0 0 24 24"
                 fill="none"
-                style={{ position: 'absolute', inset: 0, width: 16, height: 16, color: 'var(--dial-text-label)' }}
+                style={{ position: 'absolute', inset: 0, width: 14, height: 14, color: 'var(--dial-text-label)' }}
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.8, opacity: 0 }}
