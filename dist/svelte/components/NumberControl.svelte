@@ -54,6 +54,9 @@
 
   const handlePointerDown = (e: PointerEvent) => {
     if (showInput) return;
+    // ⌘ hands the card over to the text: skipping preventDefault lets the
+    // browser select the label or value instead of scrubbing.
+    if (e.metaKey) return;
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     pointerDownPos = { x: e.clientX, y: e.clientY };

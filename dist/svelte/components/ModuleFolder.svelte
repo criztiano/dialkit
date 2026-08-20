@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import SegmentedControl from './SegmentedControl.svelte';
+  import Checkbox from './Checkbox.svelte';
 
   let {
     title,
@@ -45,17 +45,8 @@
     data-hint={hint ? 'true' : undefined}
     aria-describedby={hint ? hintId : undefined}
   >
+    <Checkbox checked={enabled} onChange={handleEnabledChange} label={title} />
     <span class="dialkit-module-title">{title}</span>
-    <div class="dialkit-module-switch" onclick={(e) => e.stopPropagation()}>
-      <SegmentedControl
-        options={[
-          { value: 'off', label: 'Off' },
-          { value: 'on', label: 'On' },
-        ]}
-        value={enabled ? 'on' : 'off'}
-        onChange={(val) => handleEnabledChange(val === 'on')}
-      />
-    </div>
     {#if hint}
       <span class="dialkit-hint" id={hintId} role="tooltip">{hint}</span>
     {/if}

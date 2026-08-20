@@ -70,13 +70,14 @@
   const hasOrigin = $derived(resolvedOrigin > min);
   const originPercent = $derived(((resolvedOrigin - min) / (max - min)) * 100);
 
-  let wrapperRef: HTMLDivElement | undefined;
+  let wrapperRef = $state<HTMLDivElement | undefined>(undefined);
   let inputRef: HTMLInputElement | undefined;
 
   let isInteracting = $state(false);
   let isDragging = $state(false);
   let isHovered = $state(false);
   let isValueHovered = $state(false);
+  let isMetaHeld = $state(false);
   let isValueEditable = $state(false);
   let showInput = $state(false);
   let inputValue = $state('');
@@ -89,6 +90,8 @@
   let wrapperRect: DOMRect | null = null;
   let scaleVal = 1;
   let hoverTimeout: ReturnType<typeof setTimeout> | null = null;
+  /** Running value for wheel notches, which arrive faster than a re-render. */
+  let wheelValue = value;
 
   const percentFromValue = (nextValue: number) => ((nextValue - min) / (max - min)) * 100;
 
@@ -128,10 +131,64 @@
   };
 
   $effect(() => {
-    value;
+    // Also re-seeds the wheel's running value: a burst runs ahead of the prop,
+    // but every other move of the slider has to reset it.
+    wheelValue = value;
     if (!isInteracting) {
       fillPercent.set(((value - min) / (max - min)) * 100, { instant: true });
     }
+  });
+
+  // Wheel over the card adjusts the value — the pointer is already on the
+  // control, so the scroll belongs to it, not to the page behind it. Bound
+  // natively because only a non-passive listener can preventDefault;
+  // stopPropagation keeps the window-level scroll shortcuts from firing twice.
+  $effect(() => {
+    const el = wrapperRef;
+    if (!el) return;
+
+    const onWheel = (e: WheelEvent) => {
+      if (showInput) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const raw = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (raw === 0) return;
+
+      const stepMultiplier = e.shiftKey ? 10 : e.altKey ? 0.1 : 1;
+      const delta = (raw > 0 ? -1 : 1) * step * stepMultiplier;
+      // A trackpad fires several wheel events per frame, all before the new
+      // value comes back — so each notch reads the running value, not the stale prop.
+      const next = roundValue(Math.max(min, Math.min(max, wheelValue + delta)), step);
+      wheelValue = next;
+
+      fillPercent.set(percentFromValue(next), { instant: true });
+      onChange(next);
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  });
+
+  // ⌘ turns the card into text for as long as it is held. Only listened for
+  // while hovered, so an idle panel adds no key handlers.
+  $effect(() => {
+    if (!isHovered) {
+      isMetaHeld = false;
+      return;
+    }
+
+    const sync = (e: KeyboardEvent) => (isMetaHeld = e.metaKey);
+    const clear = () => (isMetaHeld = false);
+
+    window.addEventListener('keydown', sync);
+    window.addEventListener('keyup', sync);
+    window.addEventListener('blur', clear);
+    return () => {
+      window.removeEventListener('keydown', sync);
+      window.removeEventListener('keyup', sync);
+      window.removeEventListener('blur', clear);
+    };
   });
 
   $effect(() => {
@@ -187,6 +244,9 @@
 
   const handlePointerDown = (e: PointerEvent) => {
     if (showInput) return;
+    // ⌘ hands the card over to the text: no drag, no preventDefault, so the
+    // browser's own selection starts and a click reaches the value span.
+    if (e.metaKey) return;
     e.preventDefault();
 
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -281,7 +341,7 @@
   };
 
   const handleValueClick = (e: MouseEvent) => {
-    if (!isValueEditable) return;
+    if (!isValueEditable && !e.metaKey) return;
     e.stopPropagation();
     e.preventDefault();
     showInput = true;
@@ -306,6 +366,7 @@
       isVertical ? 'dialkit-slider-vertical' : '',
       isActive ? 'dialkit-slider-active' : '',
       isInteracting ? 'dialkit-slider-engaged' : '',
+      isMetaHeld ? 'dialkit-slider-text-mode' : '',
     ]
       .filter(Boolean)
       .join(' ')
@@ -345,7 +406,12 @@
       onpointermove={handlePointerMove}
       onpointerup={handlePointerUp}
       onpointercancel={handlePointerCancel}
-      onmouseenter={() => (isHovered = true)}
+      onmouseenter={(e) => {
+        isHovered = true;
+        // Read ⌘ on entry too: the key listeners only exist while hovered, so
+        // a key already held before the pointer arrived would go unseen.
+        isMetaHeld = e.metaKey;
+      }}
       onmouseleave={() => (isHovered = false)}
     >
       <div class="dialkit-slider-fill-area">
@@ -375,7 +441,7 @@
           onmouseleave={() => (isValueHovered = false)}
           onclick={handleValueClick}
           onpointerdown={(e) => isValueEditable && e.stopPropagation()}
-          style:cursor={isValueEditable ? 'text' : 'default'}
+          style:cursor={isValueEditable || isMetaHeld ? 'text' : 'default'}
         >
           {displayValue}{#if unit}<span class="dialkit-slider-unit">{unit}</span>{/if}
         </span>
@@ -401,7 +467,12 @@
       onpointermove={handlePointerMove}
       onpointerup={handlePointerUp}
       onpointercancel={handlePointerCancel}
-      onmouseenter={() => (isHovered = true)}
+      onmouseenter={(e) => {
+        isHovered = true;
+        // Read ⌘ on entry too: the key listeners only exist while hovered, so
+        // a key already held before the pointer arrived would go unseen.
+        isMetaHeld = e.metaKey;
+      }}
       onmouseleave={() => (isHovered = false)}
     >
       <div class="dialkit-slider-track">
@@ -448,7 +519,7 @@
           onmouseleave={() => (isValueHovered = false)}
           onclick={handleValueClick}
           onpointerdown={(e) => isValueEditable && e.stopPropagation()}
-          style:cursor={isValueEditable ? 'text' : 'default'}
+          style:cursor={isValueEditable || isMetaHeld ? 'text' : 'default'}
         >
           {displayValue}{#if unit}<span class="dialkit-slider-unit">{unit}</span>{/if}
         </span>

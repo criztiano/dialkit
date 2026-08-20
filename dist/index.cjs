@@ -727,10 +727,10 @@ function isOutsideSpan(atValue, current) {
 }
 function handleLeftStyles(lowPercent, highPercent) {
   const gap = `(${highPercent}% - ${lowPercent}%)`;
-  const ramp = `clamp(0px, calc(30px - ${gap}), 12px)`;
+  const ramp = `clamp(0px, calc(6px - ${gap}), 2px)`;
   return {
-    low: `max(2px, min(calc(100% - 5px), calc(${lowPercent}% + 6px - ${ramp})))`,
-    high: `min(calc(100% - 5px), max(2px, calc(${highPercent}% - 9px + ${ramp})))`
+    low: `max(0px, min(calc(100% - 2px), calc(${lowPercent}% - 1px - ${ramp})))`,
+    high: `min(calc(100% - 2px), max(0px, calc(${highPercent}% - 1px + ${ramp})))`
   };
 }
 
@@ -2167,7 +2167,7 @@ function getFirstOptionValue(options) {
 }
 
 // src/components/DialRoot.tsx
-var import_react41 = require("react");
+var import_react40 = require("react");
 var import_react_dom7 = require("react-dom");
 
 // src/store/TimelineStore.ts
@@ -2624,8 +2624,8 @@ function Folder({ title, children, defaultOpen = true, collapsible = true, isRoo
 }
 
 // src/components/Panel.tsx
-var import_react37 = require("react");
-var import_react38 = require("motion/react");
+var import_react36 = require("react");
+var import_react37 = require("motion/react");
 
 // src/panel-tabs.ts
 function splitPanelTabs(controls, activeValue) {
@@ -2673,7 +2673,7 @@ Apply these values as the new defaults in the ${hookName} call.`;
 }
 
 // src/components/ControlRenderer.tsx
-var import_react34 = require("react");
+var import_react33 = require("react");
 
 // src/components/ShortcutListener.tsx
 var import_react5 = require("react");
@@ -2951,10 +2951,9 @@ function ShortcutListener({ children }) {
 }
 
 // src/components/ModuleFolder.tsx
-var import_react7 = require("react");
+var import_react6 = require("react");
 
 // src/components/Checkbox.tsx
-var import_react6 = require("motion/react");
 var import_jsx_runtime3 = require("react/jsx-runtime");
 function Checkbox({ checked, onChange, label, disabled = false, id }) {
   return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
@@ -2973,31 +2972,11 @@ function Checkbox({ checked, onChange, label, disabled = false, id }) {
         e.stopPropagation();
         if (!disabled) onChange(!checked);
       },
-      children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("svg", { viewBox: "0 0 16 16", width: "10", height: "10", "aria-hidden": "true", children: disabled ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-        import_react6.motion.path,
-        {
-          d: "M3.5 8h9",
-          fill: "none",
-          stroke: "currentColor",
-          strokeWidth: "2",
-          strokeLinecap: "round",
-          initial: { opacity: 0 },
-          animate: { opacity: 1 }
-        }
-      ) : /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-        import_react6.motion.path,
-        {
-          d: "M2.5 8.5 6.5 12.5 13.5 3.5",
-          fill: "none",
-          stroke: "currentColor",
-          strokeWidth: "2.2",
-          strokeLinecap: "round",
-          strokeLinejoin: "round",
-          initial: false,
-          animate: { pathLength: checked ? 1 : 0, opacity: checked ? 1 : 0 },
-          transition: { duration: 0.15, ease: "easeOut" }
-        }
-      ) })
+      children: /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("svg", { viewBox: "0 0 22 22", width: "22", height: "22", "aria-hidden": "true", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("path", { className: "dialkit-checkbox-slash", d: "M6 16 16 6", fill: "none" }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("rect", { className: "dialkit-checkbox-chip", x: "5", y: "5", width: "12", height: "12", rx: "2" }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("path", { className: "dialkit-checkbox-dash", d: "M6 11h10", fill: "none" })
+      ] })
     }
   );
 }
@@ -3005,7 +2984,7 @@ function Checkbox({ checked, onChange, label, disabled = false, id }) {
 // src/components/ModuleFolder.tsx
 var import_jsx_runtime4 = require("react/jsx-runtime");
 function ModuleFolder({ title, enabled, onEnabledChange, defaultOpen = true, hint, hintId, children }) {
-  const [isOpen, setIsOpen] = (0, import_react7.useState)(defaultOpen);
+  const [isOpen, setIsOpen] = (0, import_react6.useState)(defaultOpen);
   const headerOnly = children == null || Array.isArray(children) && children.length === 0;
   const handleEnabledChange = (next) => {
     onEnabledChange(next);
@@ -3033,7 +3012,7 @@ function ModuleFolder({ title, enabled, onEnabledChange, defaultOpen = true, hin
 }
 
 // src/components/ControlShell.tsx
-var import_react8 = require("react");
+var import_react7 = require("react");
 var import_react_dom = require("react-dom");
 
 // src/affordance-core.ts
@@ -3055,13 +3034,13 @@ function placePopover(anchor, popoverHeight, viewportHeight, width = AFFORDANCE_
 // src/components/ControlShell.tsx
 var import_jsx_runtime5 = require("react/jsx-runtime");
 function ControlShell({ hint, title, id, affordance, panelId, path, children }) {
-  const [open, setOpen] = (0, import_react8.useState)(false);
-  const readDisabled = (0, import_react8.useCallback)(
+  const [open, setOpen] = (0, import_react7.useState)(false);
+  const readDisabled = (0, import_react7.useCallback)(
     () => panelId && path ? DialStore.isDisabled(panelId, path) : false,
     [panelId, path]
   );
-  const disabled = (0, import_react8.useSyncExternalStore)(
-    (0, import_react8.useCallback)((cb) => panelId ? DialStore.subscribeControlState(panelId, cb) : () => {
+  const disabled = (0, import_react7.useSyncExternalStore)(
+    (0, import_react7.useCallback)((cb) => panelId ? DialStore.subscribeControlState(panelId, cb) : () => {
     }, [panelId]),
     readDisabled,
     readDisabled
@@ -3096,28 +3075,28 @@ function ControlShell({ hint, title, id, affordance, panelId, path, children }) 
   );
 }
 function Affordance({ affordance, panelId, path, open, onOpenChange }) {
-  const dotRef = (0, import_react8.useRef)(null);
-  const popoverRef = (0, import_react8.useRef)(null);
-  const [pos, setPos] = (0, import_react8.useState)(null);
-  const [portalTarget, setPortalTarget] = (0, import_react8.useState)(null);
+  const dotRef = (0, import_react7.useRef)(null);
+  const popoverRef = (0, import_react7.useRef)(null);
+  const [pos, setPos] = (0, import_react7.useState)(null);
+  const [portalTarget, setPortalTarget] = (0, import_react7.useState)(null);
   const label = affordance.label ?? "Options";
-  const status = (0, import_react8.useSyncExternalStore)(
-    (0, import_react8.useCallback)((cb) => DialStore.subscribeControlState(panelId, cb), [panelId]),
-    (0, import_react8.useCallback)(() => DialStore.getAffordanceStatus(panelId, path), [panelId, path]),
-    (0, import_react8.useCallback)(() => DialStore.getAffordanceStatus(panelId, path), [panelId, path])
+  const status = (0, import_react7.useSyncExternalStore)(
+    (0, import_react7.useCallback)((cb) => DialStore.subscribeControlState(panelId, cb), [panelId]),
+    (0, import_react7.useCallback)(() => DialStore.getAffordanceStatus(panelId, path), [panelId, path]),
+    (0, import_react7.useCallback)(() => DialStore.getAffordanceStatus(panelId, path), [panelId, path])
   );
-  (0, import_react8.useEffect)(() => {
+  (0, import_react7.useEffect)(() => {
     const root = dotRef.current?.closest?.(".dialkit-root");
     const target = root ?? (typeof document === "undefined" ? null : document.body);
     setPortalTarget(target?.nodeType === 1 ? target : null);
   }, []);
-  const place = (0, import_react8.useCallback)(() => {
+  const place = (0, import_react7.useCallback)(() => {
     const rect = dotRef.current?.getBoundingClientRect();
     if (!rect) return;
     const next = placePopover(rect, popoverRef.current?.offsetHeight ?? 0, window.innerHeight);
     setPos((cur) => cur && cur.top === next.top && cur.left === next.left ? cur : next);
   }, []);
-  (0, import_react8.useLayoutEffect)(() => {
+  (0, import_react7.useLayoutEffect)(() => {
     if (!open) {
       setPos(null);
       return;
@@ -3130,17 +3109,17 @@ function Affordance({ affordance, panelId, path, open, onOpenChange }) {
       window.removeEventListener("resize", place);
     };
   }, [open, place]);
-  (0, import_react8.useLayoutEffect)(() => {
+  (0, import_react7.useLayoutEffect)(() => {
     if (open && pos) place();
   }, [open, pos, place]);
-  (0, import_react8.useEffect)(() => {
+  (0, import_react7.useEffect)(() => {
     if (!open) return;
     const first = popoverRef.current?.querySelector(
       'input, button, select, textarea, [tabindex]:not([tabindex="-1"])'
     );
     (first ?? popoverRef.current)?.focus();
   }, [open, pos !== null]);
-  (0, import_react8.useEffect)(() => {
+  (0, import_react7.useEffect)(() => {
     if (!open) return;
     const onPointerDown = (e) => {
       const target = e.target;
@@ -3176,7 +3155,7 @@ function Affordance({ affordance, panelId, path, open, onOpenChange }) {
       },
       children: [
         /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "dialkit-affordance-popover-title", children: label }),
-        (0, import_react8.createElement)(affordance.content, {
+        (0, import_react7.createElement)(affordance.content, {
           panelId,
           path,
           status,
@@ -3204,8 +3183,8 @@ function Affordance({ affordance, panelId, path, open, onOpenChange }) {
 }
 
 // src/components/Slider.tsx
-var import_react9 = require("react");
-var import_react10 = require("motion/react");
+var import_react8 = require("react");
+var import_react9 = require("motion/react");
 var import_jsx_runtime6 = require("react/jsx-runtime");
 var CLICK_THRESHOLD = 3;
 var DEAD_ZONE = 32;
@@ -3232,56 +3211,59 @@ function Slider({
   const resolvedOrigin = Math.min(max, Math.max(min, origin ?? (bipolar ? 0 : min)));
   const hasOrigin = resolvedOrigin > min;
   const originPercent = (resolvedOrigin - min) / (max - min) * 100;
-  const wrapperRef = (0, import_react9.useRef)(null);
-  const inputRef = (0, import_react9.useRef)(null);
-  const [isInteracting, setIsInteracting] = (0, import_react9.useState)(false);
-  const [isDragging, setIsDragging] = (0, import_react9.useState)(false);
-  const [isHovered, setIsHovered] = (0, import_react9.useState)(false);
-  const [isValueHovered, setIsValueHovered] = (0, import_react9.useState)(false);
-  const [isValueEditable, setIsValueEditable] = (0, import_react9.useState)(false);
-  const [showInput, setShowInput] = (0, import_react9.useState)(false);
-  const [inputValue, setInputValue] = (0, import_react9.useState)("");
-  const hoverTimeoutRef = (0, import_react9.useRef)(null);
-  const pointerDownPos = (0, import_react9.useRef)(null);
-  const isClickRef = (0, import_react9.useRef)(true);
-  const animRef = (0, import_react9.useRef)(null);
-  const wrapperRectRef = (0, import_react9.useRef)(null);
-  const scaleRef = (0, import_react9.useRef)(1);
+  const wrapperRef = (0, import_react8.useRef)(null);
+  const inputRef = (0, import_react8.useRef)(null);
+  const [isInteracting, setIsInteracting] = (0, import_react8.useState)(false);
+  const [isDragging, setIsDragging] = (0, import_react8.useState)(false);
+  const [isHovered, setIsHovered] = (0, import_react8.useState)(false);
+  const [isValueHovered, setIsValueHovered] = (0, import_react8.useState)(false);
+  const [isMetaHeld, setIsMetaHeld] = (0, import_react8.useState)(false);
+  const [isValueEditable, setIsValueEditable] = (0, import_react8.useState)(false);
+  const [showInput, setShowInput] = (0, import_react8.useState)(false);
+  const [inputValue, setInputValue] = (0, import_react8.useState)("");
+  const hoverTimeoutRef = (0, import_react8.useRef)(null);
+  const pointerDownPos = (0, import_react8.useRef)(null);
+  const isClickRef = (0, import_react8.useRef)(true);
+  const animRef = (0, import_react8.useRef)(null);
+  const wrapperRectRef = (0, import_react8.useRef)(null);
+  const scaleRef = (0, import_react8.useRef)(1);
+  const wheelValueRef = (0, import_react8.useRef)(value);
+  wheelValueRef.current = value;
   const percentage = (value - min) / (max - min) * 100;
   const isActive = isInteracting || isHovered;
-  const fillPercent = (0, import_react10.useMotionValue)(percentage);
-  const fillExtent = (0, import_react10.useTransform)(
+  const fillPercent = (0, import_react9.useMotionValue)(percentage);
+  const fillExtent = (0, import_react9.useTransform)(
     fillPercent,
     (pct) => hasOrigin ? `${Math.abs(pct - originPercent)}%` : `${pct}%`
   );
-  const fillStart = (0, import_react10.useTransform)(
+  const fillStart = (0, import_react9.useTransform)(
     fillPercent,
     (pct) => hasOrigin ? `${Math.min(pct, originPercent)}%` : "0%"
   );
-  const handleLeft = (0, import_react10.useTransform)(
+  const handleLeft = (0, import_react9.useTransform)(
     fillPercent,
     (pct) => `min(calc(100% - 1px), max(0px, calc(${pct}% - 0.5px)))`
   );
-  const rubberStretchPx = (0, import_react10.useMotionValue)(0);
-  const rubberBandSize = (0, import_react10.useTransform)(
+  const rubberStretchPx = (0, import_react9.useMotionValue)(0);
+  const rubberBandSize = (0, import_react9.useTransform)(
     rubberStretchPx,
     (stretch) => `calc(100% + ${Math.abs(stretch)}px)`
   );
-  const rubberBandShift = (0, import_react10.useTransform)(
+  const rubberBandShift = (0, import_react9.useTransform)(
     rubberStretchPx,
     (stretch) => stretch < 0 ? stretch : 0
   );
-  (0, import_react9.useEffect)(() => {
+  (0, import_react8.useEffect)(() => {
     if (!isInteracting && !animRef.current) {
       fillPercent.jump(percentage);
     }
   }, [percentage, isInteracting, fillPercent]);
-  const trackExtent = (0, import_react9.useCallback)(() => {
+  const trackExtent = (0, import_react8.useCallback)(() => {
     const el = wrapperRef.current;
     if (!el) return 0;
     return isVertical ? el.offsetHeight : el.offsetWidth;
   }, [isVertical]);
-  const positionToValue = (0, import_react9.useCallback)(
+  const positionToValue = (0, import_react8.useCallback)(
     (clientX, clientY) => {
       const rect = wrapperRectRef.current;
       if (!rect) return value;
@@ -3295,11 +3277,11 @@ function Slider({
     },
     [min, max, value, isVertical, trackExtent]
   );
-  const percentFromValue = (0, import_react9.useCallback)(
+  const percentFromValue = (0, import_react8.useCallback)(
     (v) => (v - min) / (max - min) * 100,
     [min, max]
   );
-  const applyDetent = (0, import_react9.useCallback)(
+  const applyDetent = (0, import_react8.useCallback)(
     (v) => {
       if (!hasOrigin) return v;
       const extent = trackExtent();
@@ -3309,7 +3291,7 @@ function Slider({
     },
     [hasOrigin, max, min, resolvedOrigin, trackExtent]
   );
-  const computeRubberStretch = (0, import_react9.useCallback)(
+  const computeRubberStretch = (0, import_react8.useCallback)(
     (clientPos, sign) => {
       const rect = wrapperRectRef.current;
       if (!rect) return 0;
@@ -3321,9 +3303,10 @@ function Slider({
     },
     [isVertical]
   );
-  const handlePointerDown = (0, import_react9.useCallback)(
+  const handlePointerDown = (0, import_react8.useCallback)(
     (e) => {
       if (showInput) return;
+      if (e.metaKey) return;
       e.preventDefault();
       e.target.setPointerCapture(e.pointerId);
       pointerDownPos.current = { x: e.clientX, y: e.clientY };
@@ -3338,7 +3321,7 @@ function Slider({
     },
     [showInput, isVertical, trackExtent]
   );
-  const handlePointerMove = (0, import_react9.useCallback)(
+  const handlePointerMove = (0, import_react8.useCallback)(
     (e) => {
       if (!isInteracting || !pointerDownPos.current) return;
       const dx = e.clientX - pointerDownPos.current.x;
@@ -3385,7 +3368,7 @@ function Slider({
       step
     ]
   );
-  const handlePointerUp = (0, import_react9.useCallback)(
+  const handlePointerUp = (0, import_react8.useCallback)(
     (e) => {
       if (!isInteracting) return;
       if (isClickRef.current) {
@@ -3396,7 +3379,7 @@ function Slider({
         if (animRef.current) {
           animRef.current.stop();
         }
-        animRef.current = (0, import_react10.animate)(fillPercent, newPct, {
+        animRef.current = (0, import_react9.animate)(fillPercent, newPct, {
           type: "spring",
           stiffness: 300,
           damping: 25,
@@ -3408,7 +3391,7 @@ function Slider({
         onChange(roundValue(snappedValue, step));
       }
       if (rubberStretchPx.get() !== 0) {
-        (0, import_react10.animate)(rubberStretchPx, 0, {
+        (0, import_react9.animate)(rubberStretchPx, 0, {
           type: "spring",
           visualDuration: 0.35,
           bounce: 0.15
@@ -3430,7 +3413,49 @@ function Slider({
       rubberStretchPx
     ]
   );
-  (0, import_react9.useEffect)(() => {
+  (0, import_react8.useEffect)(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const onWheel = (e) => {
+      if (showInput) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const raw = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (raw === 0) return;
+      const stepMultiplier = e.shiftKey ? 10 : e.altKey ? 0.1 : 1;
+      const delta = (raw > 0 ? -1 : 1) * step * stepMultiplier;
+      const next = roundValue(
+        Math.max(min, Math.min(max, wheelValueRef.current + delta)),
+        step
+      );
+      wheelValueRef.current = next;
+      if (animRef.current) {
+        animRef.current.stop();
+        animRef.current = null;
+      }
+      fillPercent.jump(percentFromValue(next));
+      onChange(next);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [showInput, min, max, step, onChange, fillPercent, percentFromValue]);
+  (0, import_react8.useEffect)(() => {
+    if (!isHovered) {
+      setIsMetaHeld(false);
+      return;
+    }
+    const sync = (e) => setIsMetaHeld(e.metaKey);
+    const clear = () => setIsMetaHeld(false);
+    window.addEventListener("keydown", sync);
+    window.addEventListener("keyup", sync);
+    window.addEventListener("blur", clear);
+    return () => {
+      window.removeEventListener("keydown", sync);
+      window.removeEventListener("keyup", sync);
+      window.removeEventListener("blur", clear);
+    };
+  }, [isHovered]);
+  (0, import_react8.useEffect)(() => {
     if (isValueHovered && !showInput && !isValueEditable) {
       hoverTimeoutRef.current = setTimeout(() => {
         setIsValueEditable(true);
@@ -3448,7 +3473,7 @@ function Slider({
       }
     };
   }, [isValueHovered, showInput, isValueEditable]);
-  (0, import_react9.useEffect)(() => {
+  (0, import_react8.useEffect)(() => {
     if (showInput && inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select();
@@ -3468,7 +3493,7 @@ function Slider({
     setIsValueEditable(false);
   };
   const handleValueClick = (e) => {
-    if (isValueEditable) {
+    if (isValueEditable || e.metaKey) {
       e.stopPropagation();
       e.preventDefault();
       setShowInput(true);
@@ -3513,13 +3538,19 @@ function Slider({
     "dialkit-slider",
     isVertical ? "dialkit-slider-vertical" : "",
     isActive ? "dialkit-slider-active" : "",
-    isInteracting ? "dialkit-slider-engaged" : ""
+    isInteracting ? "dialkit-slider-engaged" : "",
+    isMetaHeld ? "dialkit-slider-text-mode" : ""
   ].filter(Boolean).join(" ");
   const pointerHandlers = {
     onPointerDown: handlePointerDown,
     onPointerMove: handlePointerMove,
     onPointerUp: handlePointerUp,
-    onMouseEnter: () => setIsHovered(true),
+    // Read ⌘ on entry too: the key listeners only exist while hovered, so a
+    // key already held before the pointer arrived would otherwise go unseen.
+    onMouseEnter: (e) => {
+      setIsHovered(true);
+      setIsMetaHeld(e.metaKey);
+    },
     onMouseLeave: () => setIsHovered(false)
   };
   if (isVertical) {
@@ -3529,7 +3560,7 @@ function Slider({
         ref: wrapperRef,
         className: "dialkit-slider-wrapper dialkit-slider-wrapper-vertical",
         children: /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(
-          import_react10.motion.div,
+          import_react9.motion.div,
           {
             className: cardClassName,
             "data-origin": hasOrigin ? "true" : void 0,
@@ -3537,7 +3568,7 @@ function Slider({
             style: { height: rubberBandSize, y: rubberBandShift },
             children: [
               /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { className: "dialkit-slider-fill-area", children: /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
-                import_react10.motion.div,
+                import_react9.motion.div,
                 {
                   className: "dialkit-slider-fill-vertical",
                   style: { bottom: fillStart, height: fillExtent }
@@ -3564,7 +3595,7 @@ function Slider({
                   onMouseLeave: () => setIsValueHovered(false),
                   onClick: handleValueClick,
                   onPointerDown: (e) => isValueEditable && e.stopPropagation(),
-                  style: { cursor: isValueEditable ? "text" : "default" },
+                  style: { cursor: isValueEditable || isMetaHeld ? "text" : "default" },
                   children: [
                     displayValue,
                     unit && /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "dialkit-slider-unit", children: unit })
@@ -3582,7 +3613,7 @@ function Slider({
     );
   }
   return /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { ref: wrapperRef, className: "dialkit-slider-wrapper", children: /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(
-    import_react10.motion.div,
+    import_react9.motion.div,
     {
       className: cardClassName,
       "data-origin": hasOrigin ? "true" : void 0,
@@ -3591,7 +3622,7 @@ function Slider({
       children: [
         /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "dialkit-slider-track", children: [
           /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
-            import_react10.motion.div,
+            import_react9.motion.div,
             {
               className: "dialkit-slider-fill",
               style: {
@@ -3601,7 +3632,7 @@ function Slider({
             }
           ),
           /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
-            import_react10.motion.div,
+            import_react9.motion.div,
             {
               className: "dialkit-slider-handle",
               style: { left: handleLeft },
@@ -3636,7 +3667,7 @@ function Slider({
             onMouseLeave: () => setIsValueHovered(false),
             onClick: handleValueClick,
             onPointerDown: (e) => isValueEditable && e.stopPropagation(),
-            style: { cursor: isValueEditable ? "text" : "default" },
+            style: { cursor: isValueEditable || isMetaHeld ? "text" : "default" },
             children: [
               displayValue,
               unit && /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "dialkit-slider-unit", children: unit })
@@ -3649,7 +3680,7 @@ function Slider({
 }
 
 // src/components/NumberControl.tsx
-var import_react11 = require("react");
+var import_react10 = require("react");
 var import_jsx_runtime7 = require("react/jsx-runtime");
 var CLICK_THRESHOLD2 = 3;
 function NumberControl({
@@ -3664,15 +3695,15 @@ function NumberControl({
   orientation = "horizontal"
 }) {
   const isVertical = orientation === "vertical";
-  const inputRef = (0, import_react11.useRef)(null);
-  const [isScrubbing, setIsScrubbing] = (0, import_react11.useState)(false);
-  const [showInput, setShowInput] = (0, import_react11.useState)(false);
-  const [inputValue, setInputValue] = (0, import_react11.useState)("");
-  const pointerDownPos = (0, import_react11.useRef)(null);
-  const isClickRef = (0, import_react11.useRef)(true);
-  const scrubStartValue = (0, import_react11.useRef)(0);
-  const isPointerHeld = (0, import_react11.useRef)(false);
-  const clamp6 = (0, import_react11.useCallback)(
+  const inputRef = (0, import_react10.useRef)(null);
+  const [isScrubbing, setIsScrubbing] = (0, import_react10.useState)(false);
+  const [showInput, setShowInput] = (0, import_react10.useState)(false);
+  const [inputValue, setInputValue] = (0, import_react10.useState)("");
+  const pointerDownPos = (0, import_react10.useRef)(null);
+  const isClickRef = (0, import_react10.useRef)(true);
+  const scrubStartValue = (0, import_react10.useRef)(0);
+  const isPointerHeld = (0, import_react10.useRef)(false);
+  const clamp6 = (0, import_react10.useCallback)(
     (v) => {
       let out = v;
       if (min != null) out = Math.max(min, out);
@@ -3681,9 +3712,10 @@ function NumberControl({
     },
     [min, max]
   );
-  const handlePointerDown = (0, import_react11.useCallback)(
+  const handlePointerDown = (0, import_react10.useCallback)(
     (e) => {
       if (showInput) return;
+      if (e.metaKey) return;
       e.preventDefault();
       e.target.setPointerCapture(e.pointerId);
       pointerDownPos.current = { x: e.clientX, y: e.clientY };
@@ -3693,7 +3725,7 @@ function NumberControl({
     },
     [showInput, value]
   );
-  const handlePointerMove = (0, import_react11.useCallback)(
+  const handlePointerMove = (0, import_react10.useCallback)(
     (e) => {
       if (!isPointerHeld.current || !pointerDownPos.current) return;
       const dx = e.clientX - pointerDownPos.current.x;
@@ -3712,7 +3744,7 @@ function NumberControl({
     },
     [isVertical, step, clamp6, onChange]
   );
-  const handlePointerUp = (0, import_react11.useCallback)(() => {
+  const handlePointerUp = (0, import_react10.useCallback)(() => {
     if (!isPointerHeld.current) return;
     if (isClickRef.current) {
       setShowInput(true);
@@ -3722,7 +3754,7 @@ function NumberControl({
     pointerDownPos.current = null;
     setIsScrubbing(false);
   }, [value, step]);
-  (0, import_react11.useEffect)(() => {
+  (0, import_react10.useEffect)(() => {
     if (showInput && inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select();
@@ -3780,8 +3812,8 @@ function NumberControl({
 }
 
 // src/components/RangeSlider.tsx
-var import_react12 = require("react");
-var import_react13 = require("motion/react");
+var import_react11 = require("react");
+var import_react12 = require("motion/react");
 var import_jsx_runtime8 = require("react/jsx-runtime");
 var CLICK_THRESHOLD3 = 3;
 var HANDLE_HIT_PX = 12;
@@ -3794,51 +3826,51 @@ function RangeSlider({
   step = 0.01,
   defaultValue
 }) {
-  const wrapperRef = (0, import_react12.useRef)(null);
-  const trackRef = (0, import_react12.useRef)(null);
-  const inputRef = (0, import_react12.useRef)(null);
-  const [isInteracting, setIsInteracting] = (0, import_react12.useState)(false);
-  const [isDragging, setIsDragging] = (0, import_react12.useState)(false);
-  const [isHovered, setIsHovered] = (0, import_react12.useState)(false);
-  const [editing, setEditing] = (0, import_react12.useState)(null);
-  const [inputValue, setInputValue] = (0, import_react12.useState)("");
-  const pointerDownPos = (0, import_react12.useRef)(null);
-  const isClickRef = (0, import_react12.useRef)(true);
-  const dragTargetRef = (0, import_react12.useRef)(null);
-  const clickMovesRef = (0, import_react12.useRef)(false);
-  const dragStartValueRef = (0, import_react12.useRef)(rawValue);
-  const dragStartValueAtRef = (0, import_react12.useRef)(0);
-  const lowAnimRef = (0, import_react12.useRef)(null);
-  const highAnimRef = (0, import_react12.useRef)(null);
-  const stopAnims = (0, import_react12.useCallback)(() => {
+  const wrapperRef = (0, import_react11.useRef)(null);
+  const trackRef = (0, import_react11.useRef)(null);
+  const inputRef = (0, import_react11.useRef)(null);
+  const [isInteracting, setIsInteracting] = (0, import_react11.useState)(false);
+  const [isDragging, setIsDragging] = (0, import_react11.useState)(false);
+  const [isHovered, setIsHovered] = (0, import_react11.useState)(false);
+  const [editing, setEditing] = (0, import_react11.useState)(null);
+  const [inputValue, setInputValue] = (0, import_react11.useState)("");
+  const pointerDownPos = (0, import_react11.useRef)(null);
+  const isClickRef = (0, import_react11.useRef)(true);
+  const dragTargetRef = (0, import_react11.useRef)(null);
+  const clickMovesRef = (0, import_react11.useRef)(false);
+  const dragStartValueRef = (0, import_react11.useRef)(rawValue);
+  const dragStartValueAtRef = (0, import_react11.useRef)(0);
+  const lowAnimRef = (0, import_react11.useRef)(null);
+  const highAnimRef = (0, import_react11.useRef)(null);
+  const stopAnims = (0, import_react11.useCallback)(() => {
     lowAnimRef.current?.stop();
     highAnimRef.current?.stop();
     lowAnimRef.current = null;
     highAnimRef.current = null;
   }, []);
-  const wrapperRectRef = (0, import_react12.useRef)(null);
-  const scaleRef = (0, import_react12.useRef)(1);
+  const wrapperRectRef = (0, import_react11.useRef)(null);
+  const scaleRef = (0, import_react11.useRef)(1);
   const value = isInteracting ? rawValue : clampRange(rawValue, min, max);
   const span = max - min;
   const lowPercent = span === 0 ? 0 : (value.min - min) / span * 100;
   const highPercent = span === 0 ? 0 : (value.max - min) / span * 100;
   const isActive = isInteracting || isHovered;
-  const lowMotion = (0, import_react13.useMotionValue)(lowPercent);
-  const highMotion = (0, import_react13.useMotionValue)(highPercent);
-  const fillLeft = (0, import_react13.useTransform)(lowMotion, (pct) => `${pct}%`);
-  const fillWidth = (0, import_react13.useTransform)(
+  const lowMotion = (0, import_react12.useMotionValue)(lowPercent);
+  const highMotion = (0, import_react12.useMotionValue)(highPercent);
+  const fillLeft = (0, import_react12.useTransform)(lowMotion, (pct) => `${pct}%`);
+  const fillWidth = (0, import_react12.useTransform)(
     [lowMotion, highMotion],
     ([lo, hi]) => `${Math.max(0, hi - lo)}%`
   );
-  const lowHandleLeft = (0, import_react13.useTransform)([lowMotion, highMotion], ([lo, hi]) => handleLeftStyles(lo, hi).low);
-  const highHandleLeft = (0, import_react13.useTransform)([lowMotion, highMotion], ([lo, hi]) => handleLeftStyles(lo, hi).high);
-  (0, import_react12.useEffect)(() => {
+  const lowHandleLeft = (0, import_react12.useTransform)([lowMotion, highMotion], ([lo, hi]) => handleLeftStyles(lo, hi).low);
+  const highHandleLeft = (0, import_react12.useTransform)([lowMotion, highMotion], ([lo, hi]) => handleLeftStyles(lo, hi).high);
+  (0, import_react11.useEffect)(() => {
     if (!isInteracting && !lowAnimRef.current && !highAnimRef.current) {
       lowMotion.jump(lowPercent);
       highMotion.jump(highPercent);
     }
   }, [lowPercent, highPercent, isInteracting, lowMotion, highMotion]);
-  const positionToValue = (0, import_react12.useCallback)(
+  const positionToValue = (0, import_react11.useCallback)(
     (clientX) => {
       const rect = wrapperRectRef.current;
       if (!rect) return value.min;
@@ -3851,18 +3883,18 @@ function RangeSlider({
     },
     [min, max, value.min]
   );
-  const percentFromValue = (0, import_react12.useCallback)(
+  const percentFromValue = (0, import_react11.useCallback)(
     (v) => span === 0 ? 0 : (v - min) / span * 100,
     [min, span]
   );
-  const syncMotion = (0, import_react12.useCallback)(
+  const syncMotion = (0, import_react11.useCallback)(
     (next) => {
       lowMotion.jump(percentFromValue(next.min));
       highMotion.jump(percentFromValue(next.max));
     },
     [lowMotion, highMotion, percentFromValue]
   );
-  const handlePointerDown = (0, import_react12.useCallback)(
+  const handlePointerDown = (0, import_react11.useCallback)(
     (e) => {
       if (editing) return;
       e.preventDefault();
@@ -3886,7 +3918,7 @@ function RangeSlider({
     },
     [editing, positionToValue, value, min, max]
   );
-  const handlePointerMove = (0, import_react12.useCallback)(
+  const handlePointerMove = (0, import_react11.useCallback)(
     (e) => {
       if (!isInteracting || !pointerDownPos.current) return;
       const dx = e.clientX - pointerDownPos.current.x;
@@ -3914,17 +3946,17 @@ function RangeSlider({
     },
     [isInteracting, positionToValue, step, min, max, value, syncMotion, onChange, stopAnims]
   );
-  const handlePointerUp = (0, import_react12.useCallback)(
+  const handlePointerUp = (0, import_react11.useCallback)(
     (e) => {
       if (!isInteracting) return;
       if (isClickRef.current && clickMovesRef.current) {
         const raw = roundValue(positionToValue(e.clientX), step);
         const which = dragTargetRef.current ?? nearestHandle(raw, value);
         const next = which === "min" ? setLow(raw, value, min) : setHigh(raw, value, max);
-        const motion15 = which === "min" ? lowMotion : highMotion;
+        const motion14 = which === "min" ? lowMotion : highMotion;
         const targetPct = percentFromValue(which === "min" ? next.min : next.max);
         stopAnims();
-        const anim = (0, import_react13.animate)(motion15, targetPct, {
+        const anim = (0, import_react12.animate)(motion14, targetPct, {
           type: "spring",
           stiffness: 300,
           damping: 25,
@@ -3945,18 +3977,18 @@ function RangeSlider({
     },
     [isInteracting, positionToValue, step, value, min, max, lowMotion, highMotion, percentFromValue, onChange, stopAnims]
   );
-  const handlePointerCancel = (0, import_react12.useCallback)(() => {
+  const handlePointerCancel = (0, import_react11.useCallback)(() => {
     if (!isInteracting) return;
     setIsInteracting(false);
     setIsDragging(false);
     pointerDownPos.current = null;
     dragTargetRef.current = null;
   }, [isInteracting]);
-  const handleDoubleClick = (0, import_react12.useCallback)(() => {
+  const handleDoubleClick = (0, import_react11.useCallback)(() => {
     if (editing !== null) return;
     const d = clampRange(defaultValue ?? { min, max }, min, max);
     stopAnims();
-    lowAnimRef.current = (0, import_react13.animate)(lowMotion, percentFromValue(d.min), {
+    lowAnimRef.current = (0, import_react12.animate)(lowMotion, percentFromValue(d.min), {
       type: "spring",
       stiffness: 300,
       damping: 25,
@@ -3965,7 +3997,7 @@ function RangeSlider({
         lowAnimRef.current = null;
       }
     });
-    highAnimRef.current = (0, import_react13.animate)(highMotion, percentFromValue(d.max), {
+    highAnimRef.current = (0, import_react12.animate)(highMotion, percentFromValue(d.max), {
       type: "spring",
       stiffness: 300,
       damping: 25,
@@ -3976,21 +4008,21 @@ function RangeSlider({
     });
     onChange(d);
   }, [editing, defaultValue, min, max, lowMotion, highMotion, percentFromValue, onChange, stopAnims]);
-  (0, import_react12.useEffect)(() => {
+  (0, import_react11.useEffect)(() => {
     if (editing && inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select();
     }
   }, [editing]);
   const decimals = decimalsForStep2(step);
-  const openEditor = (0, import_react12.useCallback)(
+  const openEditor = (0, import_react11.useCallback)(
     (which) => {
       setEditing(which);
       setInputValue((which === "min" ? value.min : value.max).toFixed(decimals));
     },
     [value.min, value.max, decimals]
   );
-  const commitEditor = (0, import_react12.useCallback)(() => {
+  const commitEditor = (0, import_react11.useCallback)(() => {
     if (!editing) return;
     const parsed = parseFloat(inputValue);
     if (!isNaN(parsed)) {
@@ -4013,7 +4045,7 @@ function RangeSlider({
   const lowOpacity = !isActive ? restOpacity : isDragging && dragTargetRef.current === "min" ? 0.95 : 0.7;
   const highOpacity = !isActive ? restOpacity : isDragging && dragTargetRef.current === "max" ? 0.95 : 0.7;
   return /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { ref: wrapperRef, className: "dialkit-range-slider-wrapper", children: /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
-    import_react13.motion.div,
+    import_react12.motion.div,
     {
       ref: trackRef,
       className: `dialkit-range-slider ${isActive ? "dialkit-range-slider-active" : ""}`,
@@ -4026,14 +4058,14 @@ function RangeSlider({
       onMouseLeave: () => setIsHovered(false),
       children: [
         /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
-          import_react13.motion.div,
+          import_react12.motion.div,
           {
             className: "dialkit-range-slider-fill",
             style: { left: fillLeft, width: fillWidth }
           }
         ),
         /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
-          import_react13.motion.div,
+          import_react12.motion.div,
           {
             className: "dialkit-range-slider-handle",
             style: { left: lowHandleLeft, y: "-50%" },
@@ -4042,7 +4074,7 @@ function RangeSlider({
           }
         ),
         /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
-          import_react13.motion.div,
+          import_react12.motion.div,
           {
             className: "dialkit-range-slider-handle",
             style: { left: highHandleLeft, y: "-50%" },
@@ -4109,17 +4141,17 @@ function Toggle({ label, checked, onChange, shortcut, shortcutActive }) {
 }
 
 // src/components/SegmentedControl.tsx
-var import_react14 = require("react");
+var import_react13 = require("react");
 var import_jsx_runtime10 = require("react/jsx-runtime");
 function SegmentedControl({
   options,
   value,
   onChange
 }) {
-  const containerRef = (0, import_react14.useRef)(null);
-  const hasAnimated = (0, import_react14.useRef)(false);
-  const [pillStyle, setPillStyle] = (0, import_react14.useState)(null);
-  const measure = (0, import_react14.useCallback)(() => {
+  const containerRef = (0, import_react13.useRef)(null);
+  const hasAnimated = (0, import_react13.useRef)(false);
+  const [pillStyle, setPillStyle] = (0, import_react13.useState)(null);
+  const measure = (0, import_react13.useCallback)(() => {
     const container = containerRef.current;
     if (!container) return;
     const activeButton = container.querySelector('[data-active="true"]');
@@ -4131,10 +4163,10 @@ function SegmentedControl({
       height: activeButton.offsetHeight
     });
   }, []);
-  (0, import_react14.useLayoutEffect)(() => {
+  (0, import_react13.useLayoutEffect)(() => {
     measure();
   }, [value, options.length, measure]);
-  (0, import_react14.useLayoutEffect)(() => {
+  (0, import_react13.useLayoutEffect)(() => {
     const container = containerRef.current;
     if (!container) return;
     const observer = new ResizeObserver(() => measure());
@@ -4263,16 +4295,16 @@ function SpringVisualization({ spring, isSimpleMode }) {
 }
 
 // src/components/SpringControl.tsx
-var import_react15 = require("react");
+var import_react14 = require("react");
 var import_jsx_runtime12 = require("react/jsx-runtime");
 function SpringControl({ panelId, path, label, spring, onChange }) {
-  const mode = (0, import_react15.useSyncExternalStore)(
+  const mode = (0, import_react14.useSyncExternalStore)(
     (cb) => DialStore.subscribe(panelId, cb),
     () => DialStore.getSpringMode(panelId, path),
     () => DialStore.getSpringMode(panelId, path)
   );
   const isSimpleMode = mode === "simple";
-  const cache2 = (0, import_react15.useRef)({
+  const cache2 = (0, import_react14.useRef)({
     simple: spring.visualDuration !== void 0 ? spring : { type: "spring", visualDuration: 0.3, bounce: 0.2 },
     advanced: spring.stiffness !== void 0 ? spring : { type: "spring", stiffness: 200, damping: 25, mass: 1 }
   });
@@ -4419,7 +4451,7 @@ function EasingVisualization({ easing }) {
 }
 
 // src/components/TransitionControl.tsx
-var import_react16 = require("react");
+var import_react15 = require("react");
 var import_jsx_runtime14 = require("react/jsx-runtime");
 function TransitionControl({
   panelId,
@@ -4430,14 +4462,14 @@ function TransitionControl({
   hideDuration = false,
   durationControl
 }) {
-  const mode = (0, import_react16.useSyncExternalStore)(
+  const mode = (0, import_react15.useSyncExternalStore)(
     (cb) => DialStore.subscribe(panelId, cb),
     () => DialStore.getTransitionMode(panelId, path),
     () => DialStore.getTransitionMode(panelId, path)
   );
   const isEasing = mode === "easing";
   const isSimpleSpring = mode === "simple";
-  const cache2 = (0, import_react16.useRef)({
+  const cache2 = (0, import_react15.useRef)({
     easing: value.type === "easing" ? value : { type: "easing", duration: 0.3, ease: [1, -0.4, 0.5, 1] },
     simple: value.type === "spring" && value.visualDuration !== void 0 ? value : { type: "spring", visualDuration: 0.3, bounce: 0.2 },
     advanced: value.type === "spring" && value.stiffness !== void 0 ? value : { type: "spring", stiffness: 200, damping: 25, mass: 1 }
@@ -4532,8 +4564,8 @@ function parseEase(str) {
   return null;
 }
 function EaseTextInput({ ease, onChange }) {
-  const [editing, setEditing] = (0, import_react16.useState)(false);
-  const [draft, setDraft] = (0, import_react16.useState)("");
+  const [editing, setEditing] = (0, import_react15.useState)(false);
+  const [draft, setDraft] = (0, import_react15.useState)("");
   const handleFocus = () => {
     setDraft(formatEase(ease));
     setEditing(true);
@@ -4585,15 +4617,15 @@ function TextControl({ label, value, onChange, placeholder }) {
 }
 
 // src/components/SelectControl.tsx
-var import_react18 = require("react");
+var import_react17 = require("react");
 var import_react_dom2 = require("react-dom");
-var import_react19 = require("motion/react");
+var import_react18 = require("motion/react");
 
 // src/components/PresenceMotionDiv.tsx
-var import_react17 = require("motion/react");
+var import_react16 = require("motion/react");
 var import_jsx_runtime16 = require("react/jsx-runtime");
 function PresenceMotionDiv({ divRef, ...props }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(import_react17.motion.div, { ref: divRef, ...props });
+  return /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(import_react16.motion.div, { ref: divRef, ...props });
 }
 
 // src/components/SelectControl.tsx
@@ -4607,14 +4639,14 @@ function normalizeOptions(options) {
   );
 }
 function SelectControl({ label, value, options, onChange }) {
-  const [isOpen, setIsOpen] = (0, import_react18.useState)(false);
-  const triggerRef = (0, import_react18.useRef)(null);
-  const dropdownRef = (0, import_react18.useRef)(null);
-  const [portalTarget, setPortalTarget] = (0, import_react18.useState)(null);
-  const [pos, setPos] = (0, import_react18.useState)(null);
+  const [isOpen, setIsOpen] = (0, import_react17.useState)(false);
+  const triggerRef = (0, import_react17.useRef)(null);
+  const dropdownRef = (0, import_react17.useRef)(null);
+  const [portalTarget, setPortalTarget] = (0, import_react17.useState)(null);
+  const [pos, setPos] = (0, import_react17.useState)(null);
   const normalized = normalizeOptions(options);
   const selectedOption = normalized.find((o) => o.value === value);
-  const updatePos = (0, import_react18.useCallback)(() => {
+  const updatePos = (0, import_react17.useCallback)(() => {
     const el = triggerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -4628,15 +4660,15 @@ function SelectControl({ label, value, options, onChange }) {
       above
     });
   }, [normalized.length]);
-  (0, import_react18.useEffect)(() => {
+  (0, import_react17.useEffect)(() => {
     const root = triggerRef.current?.closest(".dialkit-root");
     setPortalTarget(root ?? document.body);
   }, []);
-  (0, import_react18.useEffect)(() => {
+  (0, import_react17.useEffect)(() => {
     if (!isOpen) return;
     updatePos();
   }, [isOpen, updatePos]);
-  (0, import_react18.useEffect)(() => {
+  (0, import_react17.useEffect)(() => {
     if (!isOpen) return;
     const handleClick = (e) => {
       const target = e.target;
@@ -4660,7 +4692,7 @@ function SelectControl({ label, value, options, onChange }) {
           /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "dialkit-select-right", children: [
             /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "dialkit-select-value", children: selectedOption?.label ?? value }),
             /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
-              import_react19.motion.svg,
+              import_react18.motion.svg,
               {
                 className: "dialkit-select-chevron",
                 viewBox: "0 0 24 24",
@@ -4679,7 +4711,7 @@ function SelectControl({ label, value, options, onChange }) {
       }
     ),
     portalTarget && (0, import_react_dom2.createPortal)(
-      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(import_react19.AnimatePresence, { children: isOpen && pos && /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(import_react18.AnimatePresence, { children: isOpen && pos && /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
         PresenceMotionDiv,
         {
           divRef: dropdownRef,
@@ -4715,12 +4747,12 @@ function SelectControl({ label, value, options, onChange }) {
 }
 
 // src/components/ColorControl.tsx
-var import_react21 = require("react");
+var import_react20 = require("react");
 var import_react_dom3 = require("react-dom");
-var import_react22 = require("motion/react");
+var import_react21 = require("motion/react");
 
 // src/components/ColorPickerPanel.tsx
-var import_react20 = require("react");
+var import_react19 = require("react");
 
 // src/color-palette-store.ts
 var cache = null;
@@ -4783,9 +4815,9 @@ var FORMAT_OPTIONS = [
 var stickyFormat = "hex";
 var BLACK = { h: 0, s: 0, v: 0, a: 1 };
 function useAreaDrag(onPoint) {
-  const ref = (0, import_react20.useRef)(null);
-  const draggingRef = (0, import_react20.useRef)(false);
-  const readPoint = (0, import_react20.useCallback)(
+  const ref = (0, import_react19.useRef)(null);
+  const draggingRef = (0, import_react19.useRef)(false);
+  const readPoint = (0, import_react19.useCallback)(
     (e) => {
       const el = ref.current;
       if (!el) return;
@@ -4815,7 +4847,7 @@ function useAreaDrag(onPoint) {
   return { ref, onPointerDown, onPointerMove, onPointerUp: endDrag, onPointerCancel: endDrag };
 }
 function ChannelField({ spec, value, onCommit }) {
-  const [draft, setDraft] = (0, import_react20.useState)(null);
+  const [draft, setDraft] = (0, import_react19.useState)(null);
   const display = draft ?? String(value);
   const commit = () => {
     if (draft !== null) onCommit(Number(draft));
@@ -4850,7 +4882,7 @@ function ChannelField({ spec, value, onCommit }) {
   ] });
 }
 function HexField({ value, alpha, onCommit }) {
-  const [draft, setDraft] = (0, import_react20.useState)(null);
+  const [draft, setDraft] = (0, import_react19.useState)(null);
   const commit = () => {
     if (draft !== null) {
       const normalized = normalizeHex(draft, alpha);
@@ -4892,17 +4924,17 @@ function PaletteSlot({
   onApply,
   onClear
 }) {
-  const [holding, setHolding] = (0, import_react20.useState)(false);
-  const timerRef = (0, import_react20.useRef)(null);
-  const originRef = (0, import_react20.useRef)(null);
-  const firedRef = (0, import_react20.useRef)(false);
+  const [holding, setHolding] = (0, import_react19.useState)(false);
+  const timerRef = (0, import_react19.useRef)(null);
+  const originRef = (0, import_react19.useRef)(null);
+  const firedRef = (0, import_react19.useRef)(false);
   const cancelHold = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = null;
     originRef.current = null;
     setHolding(false);
   };
-  (0, import_react20.useEffect)(() => () => cancelHold(), []);
+  (0, import_react19.useEffect)(() => () => cancelHold(), []);
   return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
     "button",
     {
@@ -4945,24 +4977,24 @@ function PaletteSlot({
   );
 }
 function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
-  const [hsva, setHsva] = (0, import_react20.useState)(() => {
+  const [hsva, setHsva] = (0, import_react19.useState)(() => {
     const rgba2 = parseHex(value);
     return rgba2 ? rgbToHsv(rgba2) : BLACK;
   });
-  const [format, setFormat] = (0, import_react20.useState)(stickyFormat);
-  const [slots, setSlots] = (0, import_react20.useState)(() => palette ? loadPalette() : emptyPalette());
-  const lastEmittedRef = (0, import_react20.useRef)(value);
-  (0, import_react20.useEffect)(() => {
+  const [format, setFormat] = (0, import_react19.useState)(stickyFormat);
+  const [slots, setSlots] = (0, import_react19.useState)(() => palette ? loadPalette() : emptyPalette());
+  const lastEmittedRef = (0, import_react19.useRef)(value);
+  (0, import_react19.useEffect)(() => {
     if (value === lastEmittedRef.current) return;
     lastEmittedRef.current = value;
     const rgba2 = parseHex(value);
     if (rgba2) setHsva(rgbToHsv(rgba2));
   }, [value]);
-  (0, import_react20.useEffect)(() => {
+  (0, import_react19.useEffect)(() => {
     if (!palette) return;
     return subscribePalette(setSlots);
   }, [palette]);
-  const emit = (0, import_react20.useCallback)(
+  const emit = (0, import_react19.useCallback)(
     (next) => {
       setHsva(next);
       const hex = formatHex(hsvToRgb(next), alpha);
@@ -4971,7 +5003,7 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
     },
     [alpha, onChange]
   );
-  const applyHex = (0, import_react20.useCallback)(
+  const applyHex = (0, import_react19.useCallback)(
     (hex) => {
       const rgba2 = parseHex(hex);
       if (!rgba2) return;
@@ -4982,16 +5014,16 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
     },
     [alpha, onChange]
   );
-  const hsvaRef = (0, import_react20.useRef)(hsva);
+  const hsvaRef = (0, import_react19.useRef)(hsva);
   hsvaRef.current = hsva;
   const svDrag = useAreaDrag(
-    (0, import_react20.useCallback)((x, y) => emit({ ...hsvaRef.current, s: x, v: 1 - y }), [emit])
+    (0, import_react19.useCallback)((x, y) => emit({ ...hsvaRef.current, s: x, v: 1 - y }), [emit])
   );
   const hueDrag = useAreaDrag(
-    (0, import_react20.useCallback)((x) => emit({ ...hsvaRef.current, h: Math.min(x * 360, 359.999) }), [emit])
+    (0, import_react19.useCallback)((x) => emit({ ...hsvaRef.current, h: Math.min(x * 360, 359.999) }), [emit])
   );
   const alphaDrag = useAreaDrag(
-    (0, import_react20.useCallback)((x) => emit({ ...hsvaRef.current, a: x }), [emit])
+    (0, import_react19.useCallback)((x) => emit({ ...hsvaRef.current, a: x }), [emit])
   );
   const rgba = hsvToRgb(hsva);
   const opaqueHex = formatHex(rgba, false);
@@ -5116,27 +5148,27 @@ var PICKER_BASE_HEIGHT = 270;
 var PICKER_ALPHA_HEIGHT = 22;
 var PICKER_PALETTE_HEIGHT = 30;
 function ColorControl({ label, value, onChange, alpha = false, palette = false }) {
-  const [isEditing, setIsEditing] = (0, import_react21.useState)(false);
-  const [editValue, setEditValue] = (0, import_react21.useState)(() => bareHex(value));
-  const [isOpen, setIsOpen] = (0, import_react21.useState)(false);
-  const swatchRef = (0, import_react21.useRef)(null);
-  const pickerRef = (0, import_react21.useRef)(null);
-  const [portalTarget, setPortalTarget] = (0, import_react21.useState)(null);
-  const [pos, setPos] = (0, import_react21.useState)(null);
-  const hexInputRef = (0, import_react21.useRef)(null);
+  const [isEditing, setIsEditing] = (0, import_react20.useState)(false);
+  const [editValue, setEditValue] = (0, import_react20.useState)(() => bareHex(value));
+  const [isOpen, setIsOpen] = (0, import_react20.useState)(false);
+  const swatchRef = (0, import_react20.useRef)(null);
+  const pickerRef = (0, import_react20.useRef)(null);
+  const [portalTarget, setPortalTarget] = (0, import_react20.useState)(null);
+  const [pos, setPos] = (0, import_react20.useState)(null);
+  const hexInputRef = (0, import_react20.useRef)(null);
   const rgba = parseHex(value);
-  (0, import_react21.useEffect)(() => {
+  (0, import_react20.useEffect)(() => {
     if (!isEditing) {
       setEditValue(bareHex(value));
     }
   }, [value, isEditing]);
-  (0, import_react21.useEffect)(() => {
+  (0, import_react20.useEffect)(() => {
     if (isEditing) {
       hexInputRef.current?.focus();
       hexInputRef.current?.select();
     }
   }, [isEditing]);
-  const updatePos = (0, import_react21.useCallback)(() => {
+  const updatePos = (0, import_react20.useCallback)(() => {
     const el = swatchRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -5150,11 +5182,11 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
     updatePos();
     setIsOpen(true);
   };
-  (0, import_react21.useEffect)(() => {
+  (0, import_react20.useEffect)(() => {
     const root = swatchRef.current?.closest(".dialkit-root");
     setPortalTarget(root ?? document.body);
   }, []);
-  (0, import_react21.useEffect)(() => {
+  (0, import_react20.useEffect)(() => {
     if (!isOpen) return;
     updatePos();
     const onViewport = () => updatePos();
@@ -5240,8 +5272,8 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
       )
     ] }),
     portalTarget && (0, import_react_dom3.createPortal)(
-      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(import_react22.AnimatePresence, { children: isOpen && pos && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
-        import_react22.motion.div,
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(import_react21.AnimatePresence, { children: isOpen && pos && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+        import_react21.motion.div,
         {
           ref: pickerRef,
           className: "dialkit-color-picker-popover",
@@ -5264,25 +5296,25 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
 }
 
 // src/components/GradientControl.tsx
-var import_react25 = require("react");
+var import_react24 = require("react");
 var import_react_dom4 = require("react-dom");
-var import_react26 = require("motion/react");
+var import_react25 = require("motion/react");
 
 // src/components/GradientPanel.tsx
-var import_react24 = require("react");
+var import_react23 = require("react");
 
 // src/components/GradientTransformPad.tsx
-var import_react23 = require("react");
+var import_react22 = require("react");
 var import_jsx_runtime20 = require("react/jsx-runtime");
 var clamp4 = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 var wrap360 = (deg) => (deg % 360 + 360) % 360;
 var RAD = Math.PI / 180;
 var vectorToAngle = (dx, dy) => wrap360(Math.atan2(dx, -dy) / RAD);
 function GradientTransformPad({ value, onChange }) {
-  const padRef = (0, import_react23.useRef)(null);
-  const drag = (0, import_react23.useRef)(null);
-  const [size, setSize] = (0, import_react23.useState)({ w: 0, h: 0 });
-  (0, import_react23.useLayoutEffect)(() => {
+  const padRef = (0, import_react22.useRef)(null);
+  const drag = (0, import_react22.useRef)(null);
+  const [size, setSize] = (0, import_react22.useState)({ w: 0, h: 0 });
+  (0, import_react22.useLayoutEffect)(() => {
     const el = padRef.current;
     if (!el) return;
     const measure = () => setSize({ w: el.clientWidth, h: el.clientHeight });
@@ -5459,12 +5491,12 @@ function rampCss(stops) {
   return gradientToCss({ type: "linear", angle: 90, stops });
 }
 function GradientPanel({ value, onChange, onDrag }) {
-  const [selectedIndex, setSelectedIndex] = (0, import_react24.useState)(0);
-  const [holdingIndex, setHoldingIndex] = (0, import_react24.useState)(-1);
-  const [detach, setDetach] = (0, import_react24.useState)(null);
-  const stripRef = (0, import_react24.useRef)(null);
-  const gripRef = (0, import_react24.useRef)(null);
-  const gripOrigin = (0, import_react24.useRef)(null);
+  const [selectedIndex, setSelectedIndex] = (0, import_react23.useState)(0);
+  const [holdingIndex, setHoldingIndex] = (0, import_react23.useState)(-1);
+  const [detach, setDetach] = (0, import_react23.useState)(null);
+  const stripRef = (0, import_react23.useRef)(null);
+  const gripRef = (0, import_react23.useRef)(null);
+  const gripOrigin = (0, import_react23.useRef)(null);
   const onGripDown = (e) => {
     e.preventDefault();
     try {
@@ -5481,10 +5513,10 @@ function GradientPanel({ value, onChange, onDrag }) {
   const onGripUp = () => {
     gripOrigin.current = null;
   };
-  const drag = (0, import_react24.useRef)({ mode: "idle", activeIndex: -1, originX: 0, originY: 0, timer: null, working: value });
-  const valueRef = (0, import_react24.useRef)(value);
+  const drag = (0, import_react23.useRef)({ mode: "idle", activeIndex: -1, originX: 0, originY: 0, timer: null, working: value });
+  const valueRef = (0, import_react23.useRef)(value);
   valueRef.current = value;
-  (0, import_react24.useEffect)(() => () => {
+  (0, import_react23.useEffect)(() => () => {
     if (drag.current.timer) clearTimeout(drag.current.timer);
   }, []);
   const safeIndex = Math.min(selectedIndex, value.stops.length - 1);
@@ -5676,13 +5708,13 @@ var PANEL_WIDTH = 240;
 var PANEL_HEIGHT_ANGLED = 470;
 var PANEL_HEIGHT_RADIAL = 430;
 function GradientControl({ label, value, onChange }) {
-  const [isOpen, setIsOpen] = (0, import_react25.useState)(false);
-  const triggerRef = (0, import_react25.useRef)(null);
-  const panelRef = (0, import_react25.useRef)(null);
-  const [portalTarget, setPortalTarget] = (0, import_react25.useState)(null);
-  const [pos, setPos] = (0, import_react25.useState)(null);
-  const [dragPos, setDragPos] = (0, import_react25.useState)(null);
-  const onPanelDrag = (0, import_react25.useCallback)((dx, dy) => {
+  const [isOpen, setIsOpen] = (0, import_react24.useState)(false);
+  const triggerRef = (0, import_react24.useRef)(null);
+  const panelRef = (0, import_react24.useRef)(null);
+  const [portalTarget, setPortalTarget] = (0, import_react24.useState)(null);
+  const [pos, setPos] = (0, import_react24.useState)(null);
+  const [dragPos, setDragPos] = (0, import_react24.useState)(null);
+  const onPanelDrag = (0, import_react24.useCallback)((dx, dy) => {
     setDragPos((prev) => {
       let base = prev;
       if (!base) {
@@ -5695,7 +5727,7 @@ function GradientControl({ label, value, onChange }) {
       return { left, top };
     });
   }, [pos]);
-  const updatePos = (0, import_react25.useCallback)(() => {
+  const updatePos = (0, import_react24.useCallback)(() => {
     const el = triggerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -5710,11 +5742,11 @@ function GradientControl({ label, value, onChange }) {
     updatePos();
     setIsOpen(true);
   };
-  (0, import_react25.useEffect)(() => {
+  (0, import_react24.useEffect)(() => {
     const root = triggerRef.current?.closest(".dialkit-root");
     setPortalTarget(root ?? document.body);
   }, []);
-  (0, import_react25.useEffect)(() => {
+  (0, import_react24.useEffect)(() => {
     if (!isOpen) return;
     updatePos();
     const onViewport = () => updatePos();
@@ -5756,8 +5788,8 @@ function GradientControl({ label, value, onChange }) {
       }
     ),
     portalTarget && (0, import_react_dom4.createPortal)(
-      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(import_react26.AnimatePresence, { children: isOpen && pos && /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
-        import_react26.motion.div,
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(import_react25.AnimatePresence, { children: isOpen && pos && /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
+        import_react25.motion.div,
         {
           ref: panelRef,
           className: "dialkit-gradient-popover",
@@ -5779,7 +5811,7 @@ function GradientControl({ label, value, onChange }) {
 }
 
 // src/components/XYPad.tsx
-var import_react27 = require("react");
+var import_react26 = require("react");
 var import_jsx_runtime23 = require("react/jsx-runtime");
 var DEFAULT_GRID_X = 5;
 var DEFAULT_GRID_Y = 5;
@@ -5811,13 +5843,13 @@ function XYPad({
 }) {
   const xAxis = resolveAxis(x);
   const yAxis = resolveAxis(y);
-  const areaRef = (0, import_react27.useRef)(null);
-  const draggingRef = (0, import_react27.useRef)(false);
-  const [active, setActive] = (0, import_react27.useState)(false);
-  const [dragging, setDragging] = (0, import_react27.useState)(false);
-  const valueRef = (0, import_react27.useRef)(value);
+  const areaRef = (0, import_react26.useRef)(null);
+  const draggingRef = (0, import_react26.useRef)(false);
+  const [active, setActive] = (0, import_react26.useState)(false);
+  const [dragging, setDragging] = (0, import_react26.useState)(false);
+  const valueRef = (0, import_react26.useRef)(value);
   valueRef.current = value;
-  const pointToValue = (0, import_react27.useCallback)(
+  const pointToValue = (0, import_react26.useCallback)(
     (clientX, clientY, fine) => {
       const el = areaRef.current;
       if (!el) return valueRef.current;
@@ -5842,7 +5874,7 @@ function XYPad({
     },
     [xAxis, yAxis, snap]
   );
-  const emit = (0, import_react27.useCallback)(
+  const emit = (0, import_react26.useCallback)(
     (next) => {
       valueRef.current = next;
       onChange(next);
@@ -6035,7 +6067,7 @@ function XYControl({ label, value, onChange, x, y, grid, density, snap, returnTo
 }
 
 // src/components/GalleryControl.tsx
-var import_react28 = require("react");
+var import_react27 = require("react");
 var import_jsx_runtime25 = require("react/jsx-runtime");
 function itemContent(item, skeleton) {
   if (item.render) return item.render();
@@ -6043,9 +6075,9 @@ function itemContent(item, skeleton) {
   return skeleton ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(GalleryImage, { item }) : /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("img", { src: item.src, alt: "", draggable: false });
 }
 function GalleryImage({ item }) {
-  const [loaded, setLoaded] = (0, import_react28.useState)(false);
-  const imgRef = (0, import_react28.useRef)(null);
-  (0, import_react28.useEffect)(() => {
+  const [loaded, setLoaded] = (0, import_react27.useState)(false);
+  const imgRef = (0, import_react27.useRef)(null);
+  (0, import_react27.useEffect)(() => {
     const img = imgRef.current;
     if (!img) return;
     if (img.complete && img.naturalWidth > 0) {
@@ -6086,7 +6118,7 @@ function GalleryImage({ item }) {
   );
 }
 function GalleryControl({ label, value, items, onChange, columns = 2 }) {
-  const [isOpen, setIsOpen] = (0, import_react28.useState)(false);
+  const [isOpen, setIsOpen] = (0, import_react27.useState)(false);
   const selected = items.find((it) => it.id === value) ?? items[0];
   const preview = selected ? itemContent(selected, false) : null;
   return /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "dialkit-gallery", "data-open": String(isOpen), children: [
@@ -6142,10 +6174,10 @@ function GalleryControl({ label, value, items, onChange, columns = 2 }) {
 }
 
 // src/components/FileControl.tsx
-var import_react29 = require("react");
+var import_react28 = require("react");
 var import_jsx_runtime26 = require("react/jsx-runtime");
 function FileControl({ label, value, accept, multiple = false, onChange, onPick }) {
-  const inputRef = (0, import_react29.useRef)(null);
+  const inputRef = (0, import_react28.useRef)(null);
   const handleChange = (e) => {
     const files = e.currentTarget.files;
     if (!files || files.length === 0) return;
@@ -6194,23 +6226,23 @@ function FileControl({ label, value, accept, multiple = false, onChange, onPick 
 }
 
 // src/components/SwatchControl.tsx
-var import_react30 = require("react");
+var import_react29 = require("react");
 var import_react_dom5 = require("react-dom");
-var import_react31 = require("motion/react");
+var import_react30 = require("motion/react");
 var import_jsx_runtime27 = require("react/jsx-runtime");
 function Preview({ colors }) {
   return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "dialkit-swatch-preview", "aria-hidden": "true", children: colors.map((c, i) => /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "dialkit-swatch-chip", style: { background: c } }, i)) });
 }
 function SwatchControl({ label, value, options, onChange }) {
-  const [isOpen, setIsOpen] = (0, import_react30.useState)(false);
-  const [highlight, setHighlight] = (0, import_react30.useState)(-1);
-  const triggerRef = (0, import_react30.useRef)(null);
-  const dropdownRef = (0, import_react30.useRef)(null);
-  const [portalTarget, setPortalTarget] = (0, import_react30.useState)(null);
-  const [pos, setPos] = (0, import_react30.useState)(null);
+  const [isOpen, setIsOpen] = (0, import_react29.useState)(false);
+  const [highlight, setHighlight] = (0, import_react29.useState)(-1);
+  const triggerRef = (0, import_react29.useRef)(null);
+  const dropdownRef = (0, import_react29.useRef)(null);
+  const [portalTarget, setPortalTarget] = (0, import_react29.useState)(null);
+  const [pos, setPos] = (0, import_react29.useState)(null);
   const selectedOption = options.find((o) => o.value === value);
   const selectedIndex = options.findIndex((o) => o.value === value);
-  const updatePos = (0, import_react30.useCallback)(() => {
+  const updatePos = (0, import_react29.useCallback)(() => {
     const el = triggerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -6250,11 +6282,11 @@ function SwatchControl({ label, value, options, onChange }) {
       if (highlight >= 0 && highlight < options.length) select(options[highlight].value);
     }
   };
-  (0, import_react30.useEffect)(() => {
+  (0, import_react29.useEffect)(() => {
     const root = triggerRef.current?.closest(".dialkit-root");
     setPortalTarget(root ?? document.body);
   }, []);
-  (0, import_react30.useEffect)(() => {
+  (0, import_react29.useEffect)(() => {
     if (!isOpen) return;
     updatePos();
     const onViewport = () => updatePos();
@@ -6287,7 +6319,7 @@ function SwatchControl({ label, value, options, onChange }) {
             selectedOption && /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Preview, { colors: selectedOption.colors }),
             /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "dialkit-select-value", children: selectedOption?.label ?? value }),
             /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
-              import_react31.motion.svg,
+              import_react30.motion.svg,
               {
                 className: "dialkit-select-chevron",
                 viewBox: "0 0 24 24",
@@ -6306,7 +6338,7 @@ function SwatchControl({ label, value, options, onChange }) {
       }
     ),
     portalTarget && (0, import_react_dom5.createPortal)(
-      /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(import_react31.AnimatePresence, { children: isOpen && pos && /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(import_react30.AnimatePresence, { children: isOpen && pos && /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
         PresenceMotionDiv,
         {
           divRef: dropdownRef,
@@ -6414,7 +6446,7 @@ function MultiSelectControl({ label, value, options, onChange }) {
 }
 
 // src/components/ListControl.tsx
-var import_react32 = require("react");
+var import_react31 = require("react");
 var import_jsx_runtime30 = require("react/jsx-runtime");
 function FieldControl({ field, value, onChange }) {
   switch (field.kind) {
@@ -6450,18 +6482,18 @@ function FieldList({
   ) }, field.key)) });
 }
 function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, onEvent }) {
-  const idCounter = (0, import_react32.useRef)(0);
+  const idCounter = (0, import_react31.useRef)(0);
   const mkId = () => `li-${idCounter.current++}`;
-  const [ids, setIds] = (0, import_react32.useState)(() => value.map(mkId));
-  const [picking, setPicking] = (0, import_react32.useState)(false);
-  const [editing, setEditing] = (0, import_react32.useState)(null);
-  const armedRef = (0, import_react32.useRef)(null);
-  const [dragIndex, setDragIndex] = (0, import_react32.useState)(null);
-  const [over, setOver] = (0, import_react32.useState)(null);
+  const [ids, setIds] = (0, import_react31.useState)(() => value.map(mkId));
+  const [picking, setPicking] = (0, import_react31.useState)(false);
+  const [editing, setEditing] = (0, import_react31.useState)(null);
+  const armedRef = (0, import_react31.useRef)(null);
+  const [dragIndex, setDragIndex] = (0, import_react31.useState)(null);
+  const [over, setOver] = (0, import_react31.useState)(null);
   if (ids.length !== value.length) {
     setIds((cur) => value.map((_, i) => cur[i] ?? mkId()));
   }
-  (0, import_react32.useEffect)(() => {
+  (0, import_react31.useEffect)(() => {
     const disarm = () => {
       armedRef.current = null;
     };
@@ -6666,7 +6698,7 @@ function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, on
 }
 
 // src/components/CurvePreview.tsx
-var import_react33 = require("react");
+var import_react32 = require("react");
 
 // src/curve-preview-core.ts
 var CURVE_SAMPLE_COUNT = 160;
@@ -6748,12 +6780,12 @@ var import_jsx_runtime31 = require("react/jsx-runtime");
 var VIEW_WIDTH = 232;
 var PAD_Y = 4;
 function CurvePreview({ panelId, control }) {
-  const subscribe = (0, import_react33.useCallback)(
+  const subscribe = (0, import_react32.useCallback)(
     (callback) => DialStore.subscribeControlState(panelId, callback),
     [panelId]
   );
-  const sample = (0, import_react33.useSyncExternalStore)(subscribe, () => control.sample, () => control.sample);
-  const markers = (0, import_react33.useSyncExternalStore)(subscribe, () => control.markers, () => control.markers);
+  const sample = (0, import_react32.useSyncExternalStore)(subscribe, () => control.sample, () => control.sample);
+  const markers = (0, import_react32.useSyncExternalStore)(subscribe, () => control.markers, () => control.markers);
   const height = clampCurveHeight(control.height);
   const plot = plotCurve(sample ?? (() => NaN), { domain: control.domain });
   const pathData = curvePathData(plot.segments, VIEW_WIDTH, height, PAD_Y);
@@ -6804,7 +6836,7 @@ function CurvePreview({ panelId, control }) {
 // src/components/ControlRenderer.tsx
 var import_jsx_runtime32 = require("react/jsx-runtime");
 function ControlRenderer({ panelId, controls, values, transitionDuration }) {
-  const shortcutCtx = (0, import_react34.useContext)(ShortcutContext);
+  const shortcutCtx = (0, import_react33.useContext)(ShortcutContext);
   const renderControlNode = (control) => {
     const value = values[control.path];
     if (value === void 0 && control.type !== "folder" && control.type !== "action" && control.type !== "curve") {
@@ -7135,22 +7167,22 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
 }
 
 // src/components/PresetManager.tsx
-var import_react35 = require("react");
+var import_react34 = require("react");
 var import_react_dom6 = require("react-dom");
-var import_react36 = require("motion/react");
+var import_react35 = require("motion/react");
 var import_jsx_runtime33 = require("react/jsx-runtime");
 function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode = false, editSignal = 0 }) {
-  const [isOpen, setIsOpen] = (0, import_react35.useState)(false);
-  const triggerRef = (0, import_react35.useRef)(null);
-  const dropdownRef = (0, import_react35.useRef)(null);
-  const [pos, setPos] = (0, import_react35.useState)({ top: 0, left: 0, width: 0 });
-  const [editingId, setEditingId] = (0, import_react35.useState)(null);
-  const [draftName, setDraftName] = (0, import_react35.useState)("");
-  const editInputRef = (0, import_react35.useRef)(null);
-  const lastEditSignal = (0, import_react35.useRef)(editSignal);
+  const [isOpen, setIsOpen] = (0, import_react34.useState)(false);
+  const triggerRef = (0, import_react34.useRef)(null);
+  const dropdownRef = (0, import_react34.useRef)(null);
+  const [pos, setPos] = (0, import_react34.useState)({ top: 0, left: 0, width: 0 });
+  const [editingId, setEditingId] = (0, import_react34.useState)(null);
+  const [draftName, setDraftName] = (0, import_react34.useState)("");
+  const editInputRef = (0, import_react34.useRef)(null);
+  const lastEditSignal = (0, import_react34.useRef)(editSignal);
   const hasPresets = presets.length > 0;
   const activePreset = presets.find((p) => p.id === activePresetId);
-  const open = (0, import_react35.useCallback)(() => {
+  const open = (0, import_react34.useCallback)(() => {
     if (!hasPresets) return;
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
@@ -7158,12 +7190,12 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
     }
     setIsOpen(true);
   }, [hasPresets]);
-  const close = (0, import_react35.useCallback)(() => setIsOpen(false), []);
-  const toggle2 = (0, import_react35.useCallback)(() => {
+  const close = (0, import_react34.useCallback)(() => setIsOpen(false), []);
+  const toggle2 = (0, import_react34.useCallback)(() => {
     if (isOpen) close();
     else open();
   }, [isOpen, open, close]);
-  (0, import_react35.useEffect)(() => {
+  (0, import_react34.useEffect)(() => {
     if (!isOpen) return;
     const handler = (e) => {
       const target = e.target;
@@ -7181,17 +7213,17 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
     e.stopPropagation();
     DialStore.removePreset(panelId, presetId);
   };
-  const startEditing = (0, import_react35.useCallback)((presetId, name) => {
+  const startEditing = (0, import_react34.useCallback)((presetId, name) => {
     setEditingId(presetId);
     setDraftName(name);
   }, []);
-  const commitEdit = (0, import_react35.useCallback)(() => {
+  const commitEdit = (0, import_react34.useCallback)(() => {
     if (editingId && draftName.trim()) {
       DialStore.renamePreset(panelId, editingId, draftName);
     }
     setEditingId(null);
   }, [panelId, editingId, draftName]);
-  (0, import_react35.useEffect)(() => {
+  (0, import_react34.useEffect)(() => {
     if (editSignal === lastEditSignal.current) return;
     const active = presets.find((p) => p.id === activePresetId);
     if (!active || !(active.renamable ?? true)) return;
@@ -7199,7 +7231,7 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
     open();
     startEditing(active.id, active.name);
   }, [editSignal, activePresetId, presets, open, startEditing]);
-  (0, import_react35.useEffect)(() => {
+  (0, import_react34.useEffect)(() => {
     if (editingId) editInputRef.current?.select();
   }, [editingId]);
   return /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { className: "dialkit-preset-manager", children: [
@@ -7215,7 +7247,7 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
         children: [
           /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: "dialkit-preset-label", children: activePreset ? activePreset.name : providerMode ? "Presets" : "Version 1" }),
           /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
-            import_react36.motion.svg,
+            import_react35.motion.svg,
             {
               className: "dialkit-select-chevron",
               viewBox: "0 0 24 24",
@@ -7233,7 +7265,7 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
       }
     ),
     (0, import_react_dom6.createPortal)(
-      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(import_react36.AnimatePresence, { children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(import_react35.AnimatePresence, { children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(
         PresenceMotionDiv,
         {
           divRef: dropdownRef,
@@ -7312,10 +7344,10 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
 // src/components/Panel.tsx
 var import_jsx_runtime34 = require("react/jsx-runtime");
 function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
-  const [copied, setCopied] = (0, import_react37.useState)(false);
-  const [isPanelOpen, setIsPanelOpen] = (0, import_react37.useState)(defaultOpen);
+  const [copied, setCopied] = (0, import_react36.useState)(false);
+  const [isPanelOpen, setIsPanelOpen] = (0, import_react36.useState)(defaultOpen);
   const hasShortcuts = Object.keys(panel.shortcuts).length > 0;
-  const values = (0, import_react37.useSyncExternalStore)(
+  const values = (0, import_react36.useSyncExternalStore)(
     (cb) => DialStore.subscribe(panel.id, cb),
     () => DialStore.getValues(panel.id),
     () => DialStore.getValues(panel.id)
@@ -7323,7 +7355,7 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
   const presets = DialStore.getPresetItems(panel.id);
   const activePresetId = DialStore.getActivePresetId(panel.id);
   const providerMode = DialStore.hasPresetProvider(panel.id);
-  const [presetEditSignal, setPresetEditSignal] = (0, import_react37.useState)(0);
+  const [presetEditSignal, setPresetEditSignal] = (0, import_react36.useState)(0);
   const handleAddPreset = () => {
     DialStore.createPreset(panel.id);
     setPresetEditSignal((n) => n + 1);
@@ -7350,7 +7382,7 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
   const iconTransition = { type: "spring", visualDuration: 0.4, bounce: 0.1 };
   const toolbar = /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)(import_jsx_runtime34.Fragment, { children: [
     /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
-      import_react38.motion.button,
+      import_react37.motion.button,
       {
         className: "dialkit-toolbar-add",
         onClick: handleAddPreset,
@@ -7372,15 +7404,15 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
       }
     ),
     /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
-      import_react38.motion.button,
+      import_react37.motion.button,
       {
         className: "dialkit-toolbar-add",
         onClick: handleCopy,
         title: "Copy parameters",
         whileTap: { scale: 0.9 },
         transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-        children: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(import_react38.AnimatePresence, { initial: false, mode: "wait", children: copied ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
-          import_react38.motion.svg,
+        children: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(import_react37.AnimatePresence, { initial: false, mode: "wait", children: copied ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+          import_react37.motion.svg,
           {
             viewBox: "0 0 24 24",
             fill: "none",
@@ -7397,7 +7429,7 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
           },
           "check"
         ) : /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)(
-          import_react38.motion.svg,
+          import_react37.motion.svg,
           {
             viewBox: "0 0 24 24",
             fill: "none",
@@ -7422,8 +7454,8 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
 }
 
 // src/components/Timeline/TimelineToggleButton.tsx
-var import_react39 = require("react");
-var import_react40 = require("motion/react");
+var import_react38 = require("react");
+var import_react39 = require("motion/react");
 
 // src/store/TimelineUiStore.ts
 var TimelineUiStoreClass = class {
@@ -7490,15 +7522,15 @@ var TimelineUiStore = /* @__PURE__ */ new TimelineUiStoreClass();
 // src/components/Timeline/TimelineToggleButton.tsx
 var import_jsx_runtime35 = require("react/jsx-runtime");
 function TimelineToggleButton() {
-  const subscribe = (0, import_react39.useCallback)(
+  const subscribe = (0, import_react38.useCallback)(
     (listener) => TimelineUiStore.subscribe(listener),
     []
   );
-  const getVisible = (0, import_react39.useCallback)(() => TimelineUiStore.getVisible(), []);
-  const visible = (0, import_react39.useSyncExternalStore)(subscribe, getVisible, getVisible);
+  const getVisible = (0, import_react38.useCallback)(() => TimelineUiStore.getVisible(), []);
+  const visible = (0, import_react38.useSyncExternalStore)(subscribe, getVisible, getVisible);
   const label = visible ? "Hide timeline" : "Show timeline";
   return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
-    import_react40.motion.button,
+    import_react39.motion.button,
     {
       className: "dialkit-toolbar-add dialkit-timeline-toolbar-toggle",
       "data-active": visible || void 0,
@@ -7517,18 +7549,18 @@ function TimelineToggleButton() {
 var import_jsx_runtime36 = require("react/jsx-runtime");
 function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover", theme = "system", productionEnabled = isDevDefault }) {
   if (!productionEnabled) return null;
-  const [panels, setPanels] = (0, import_react41.useState)([]);
-  const [timelineCount, setTimelineCount] = (0, import_react41.useState)(0);
-  const [mounted, setMounted] = (0, import_react41.useState)(false);
+  const [panels, setPanels] = (0, import_react40.useState)([]);
+  const [timelineCount, setTimelineCount] = (0, import_react40.useState)(0);
+  const [mounted, setMounted] = (0, import_react40.useState)(false);
   const inline = mode === "inline";
-  const panelRef = (0, import_react41.useRef)(null);
-  const [dragOffset, setDragOffset] = (0, import_react41.useState)(null);
-  const [activePosition, setActivePosition] = (0, import_react41.useState)(position);
-  const lastDragOffset = (0, import_react41.useRef)(null);
-  const draggingRef = (0, import_react41.useRef)(false);
-  const dragStartRef = (0, import_react41.useRef)(null);
-  const didDragRef = (0, import_react41.useRef)(false);
-  (0, import_react41.useEffect)(() => {
+  const panelRef = (0, import_react40.useRef)(null);
+  const [dragOffset, setDragOffset] = (0, import_react40.useState)(null);
+  const [activePosition, setActivePosition] = (0, import_react40.useState)(position);
+  const lastDragOffset = (0, import_react40.useRef)(null);
+  const draggingRef = (0, import_react40.useRef)(false);
+  const dragStartRef = (0, import_react40.useRef)(null);
+  const didDragRef = (0, import_react40.useRef)(false);
+  (0, import_react40.useEffect)(() => {
     setMounted(true);
     setPanels(DialStore.getPanels("panel"));
     setTimelineCount(TimelineStore.getTimelines().length);
@@ -7543,7 +7575,7 @@ function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover"
       unsubscribeTimelines();
     };
   }, []);
-  (0, import_react41.useEffect)(() => {
+  (0, import_react40.useEffect)(() => {
     if (!panelRef.current || inline) return;
     const observer = new MutationObserver(() => {
       const inner = panelRef.current?.querySelector(".dialkit-panel-inner");
@@ -7566,7 +7598,7 @@ function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover"
     observer.observe(panelRef.current, { subtree: true, attributes: true, attributeFilter: ["data-collapsed"] });
     return () => observer.disconnect();
   }, [inline, dragOffset, position]);
-  const handlePointerDown = (0, import_react41.useCallback)((e) => {
+  const handlePointerDown = (0, import_react40.useCallback)((e) => {
     const inner = panelRef.current?.querySelector(".dialkit-panel-inner");
     if (!inner || inner.getAttribute("data-collapsed") !== "true") return;
     const rect = panelRef.current.getBoundingClientRect();
@@ -7580,7 +7612,7 @@ function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover"
     draggingRef.current = true;
     e.target.setPointerCapture(e.pointerId);
   }, []);
-  const handlePointerMove = (0, import_react41.useCallback)((e) => {
+  const handlePointerMove = (0, import_react40.useCallback)((e) => {
     if (!draggingRef.current || !dragStartRef.current) return;
     const dx = e.clientX - dragStartRef.current.pointerX;
     const dy = e.clientY - dragStartRef.current.pointerY;
@@ -7591,7 +7623,7 @@ function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover"
       y: dragStartRef.current.elY + dy
     });
   }, []);
-  const handlePointerUp = (0, import_react41.useCallback)((e) => {
+  const handlePointerUp = (0, import_react40.useCallback)((e) => {
     if (!draggingRef.current) return;
     draggingRef.current = false;
     dragStartRef.current = null;
@@ -7650,7 +7682,7 @@ function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover"
 }
 
 // src/hooks/useDialTimeline.ts
-var import_react42 = require("react");
+var import_react41 = require("react");
 
 // src/transition-math.ts
 function round22(value) {
@@ -8568,58 +8600,58 @@ function buildTimelineValues(staticClips, transport, timelineDuration, loopStart
 // src/hooks/useDialTimeline.ts
 function useDialTimeline(name, config, options) {
   const serializedConfig = useSerialized(config);
-  const parsed = (0, import_react42.useMemo)(() => parseTimelineConfig(config), [serializedConfig]);
+  const parsed = (0, import_react41.useMemo)(() => parseTimelineConfig(config), [serializedConfig]);
   const { panelId, flatValues } = useDialStorePanel(name, parsed.dialConfig, {
     id: options?.id,
     persist: options?.persist,
     kind: "timeline"
   });
-  const staticTimeline = (0, import_react42.useMemo)(
+  const staticTimeline = (0, import_react41.useMemo)(
     () => computeStaticTimeline(parsed, flatValues),
     [parsed, flatValues]
   );
   const timelineDuration = staticTimeline.duration;
   const staticClips = staticTimeline.clips;
-  const parsedRef = (0, import_react42.useRef)(parsed);
+  const parsedRef = (0, import_react41.useRef)(parsed);
   parsedRef.current = parsed;
-  const optionsRef = (0, import_react42.useRef)(options);
+  const optionsRef = (0, import_react41.useRef)(options);
   optionsRef.current = options;
-  const buildMeta = (0, import_react42.useCallback)(
+  const buildMeta = (0, import_react41.useCallback)(
     () => buildTimelineMeta(panelId, name, timelineDuration, parsedRef.current, options?.loop),
     [panelId, name, timelineDuration, options?.loop]
   );
-  const buildMetaRef = (0, import_react42.useRef)(buildMeta);
+  const buildMetaRef = (0, import_react41.useRef)(buildMeta);
   buildMetaRef.current = buildMeta;
-  (0, import_react42.useEffect)(() => {
+  (0, import_react41.useEffect)(() => {
     TimelineStore.register(buildMetaRef.current(), {
       autoplay: optionsRef.current?.autoplay ?? true,
       persist: optionsRef.current?.persist
     });
     return () => TimelineStore.unregister(panelId);
   }, [panelId, name]);
-  const mountedRef = (0, import_react42.useRef)(false);
-  (0, import_react42.useEffect)(() => {
+  const mountedRef = (0, import_react41.useRef)(false);
+  (0, import_react41.useEffect)(() => {
     if (!mountedRef.current) {
       mountedRef.current = true;
       return;
     }
     TimelineStore.update(buildMeta());
   }, [buildMeta, parsed]);
-  const subscribeTransport = (0, import_react42.useCallback)(
+  const subscribeTransport = (0, import_react41.useCallback)(
     (callback) => TimelineStore.subscribe(panelId, callback),
     [panelId]
   );
-  const getTransport = (0, import_react42.useCallback)(() => TimelineStore.getTransport(panelId), [panelId]);
-  const transport = (0, import_react42.useSyncExternalStore)(subscribeTransport, getTransport, getTransport);
-  const getLoopRegion = (0, import_react42.useCallback)(() => TimelineStore.getLoopRegion(panelId), [panelId]);
-  const loopRegion = (0, import_react42.useSyncExternalStore)(subscribeTransport, getLoopRegion, getLoopRegion);
+  const getTransport = (0, import_react41.useCallback)(() => TimelineStore.getTransport(panelId), [panelId]);
+  const transport = (0, import_react41.useSyncExternalStore)(subscribeTransport, getTransport, getTransport);
+  const getLoopRegion = (0, import_react41.useCallback)(() => TimelineStore.getLoopRegion(panelId), [panelId]);
+  const loopRegion = (0, import_react41.useSyncExternalStore)(subscribeTransport, getLoopRegion, getLoopRegion);
   const loopStart = loopRegion ? loopRegion.start : 0;
   const loopEnd = loopRegion ? loopRegion.end : timelineDuration;
-  const play = (0, import_react42.useCallback)(() => TimelineStore.play(panelId), [panelId]);
-  const pause = (0, import_react42.useCallback)(() => TimelineStore.pause(panelId), [panelId]);
-  const replay = (0, import_react42.useCallback)(() => TimelineStore.replay(panelId), [panelId]);
-  const seek = (0, import_react42.useCallback)((time) => TimelineStore.seek(panelId, time), [panelId]);
-  return (0, import_react42.useMemo)(
+  const play = (0, import_react41.useCallback)(() => TimelineStore.play(panelId), [panelId]);
+  const pause = (0, import_react41.useCallback)(() => TimelineStore.pause(panelId), [panelId]);
+  const replay = (0, import_react41.useCallback)(() => TimelineStore.replay(panelId), [panelId]);
+  const seek = (0, import_react41.useCallback)((time) => TimelineStore.seek(panelId, time), [panelId]);
+  return (0, import_react41.useMemo)(
     () => buildTimelineValues(staticClips, transport, timelineDuration, loopStart, loopEnd, {
       play,
       pause,
@@ -8631,9 +8663,9 @@ function useDialTimeline(name, config, options) {
 }
 
 // src/components/Timeline/DialTimeline.tsx
-var import_react43 = require("react");
+var import_react42 = require("react");
 var import_react_dom8 = require("react-dom");
-var import_react44 = require("motion/react");
+var import_react43 = require("motion/react");
 var import_jsx_runtime37 = require("react/jsx-runtime");
 var DRAG_THRESHOLD_PX = 3;
 var LOOP_DRAG_THRESHOLD_PX = 4;
@@ -8671,7 +8703,7 @@ var subscribeGlobalTimelines = (callback) => TimelineStore.subscribeGlobal(callb
 var getTimelines = () => TimelineStore.getTimelines();
 var subscribeTimelineVisibility = (callback) => TimelineUiStore.subscribe(callback);
 var getTimelineVisibility = () => TimelineUiStore.getVisible();
-var DialTimeline = (0, import_react43.memo)(function DialTimeline2({
+var DialTimeline = (0, import_react42.memo)(function DialTimeline2({
   theme = "system",
   defaultVisible = true,
   visible,
@@ -8698,28 +8730,28 @@ function DialTimelineDock({
   onVisibilityChange,
   defaultOpen
 }) {
-  const [mounted, setMounted] = (0, import_react43.useState)(false);
-  const [dockMaxHeight, setDockMaxHeight] = (0, import_react43.useState)(DEFAULT_DOCK_MAX_HEIGHT);
-  const visibilityControllerId = (0, import_react43.useRef)(/* @__PURE__ */ Symbol("dialkit-timeline-visibility"));
-  const dockRef = (0, import_react43.useRef)(null);
-  const resizeCleanupRef = (0, import_react43.useRef)(null);
-  (0, import_react43.useEffect)(() => TimelineUiStore.registerController(visibilityControllerId.current, {
+  const [mounted, setMounted] = (0, import_react42.useState)(false);
+  const [dockMaxHeight, setDockMaxHeight] = (0, import_react42.useState)(DEFAULT_DOCK_MAX_HEIGHT);
+  const visibilityControllerId = (0, import_react42.useRef)(/* @__PURE__ */ Symbol("dialkit-timeline-visibility"));
+  const dockRef = (0, import_react42.useRef)(null);
+  const resizeCleanupRef = (0, import_react42.useRef)(null);
+  (0, import_react42.useEffect)(() => TimelineUiStore.registerController(visibilityControllerId.current, {
     visible,
     defaultVisible,
     onVisibilityChange
   }), []);
-  (0, import_react43.useEffect)(() => {
+  (0, import_react42.useEffect)(() => {
     TimelineUiStore.updateController(visibilityControllerId.current, {
       visible,
       defaultVisible,
       onVisibilityChange
     });
   }, [defaultVisible, onVisibilityChange, visible]);
-  (0, import_react43.useEffect)(() => {
+  (0, import_react42.useEffect)(() => {
     setMounted(true);
   }, []);
-  (0, import_react43.useEffect)(() => () => resizeCleanupRef.current?.(), []);
-  const handleResizePointerDown = (0, import_react43.useCallback)((e) => {
+  (0, import_react42.useEffect)(() => () => resizeCleanupRef.current?.(), []);
+  const handleResizePointerDown = (0, import_react42.useCallback)((e) => {
     const dock = dockRef.current;
     if (!dock) return;
     e.preventDefault();
@@ -8743,8 +8775,8 @@ function DialTimelineDock({
     window.addEventListener("pointercancel", finishResize);
     resizeCleanupRef.current = finishResize;
   }, []);
-  const timelines = (0, import_react43.useSyncExternalStore)(subscribeGlobalTimelines, getTimelines, getTimelines);
-  const dockVisible = (0, import_react43.useSyncExternalStore)(
+  const timelines = (0, import_react42.useSyncExternalStore)(subscribeGlobalTimelines, getTimelines, getTimelines);
+  const dockVisible = (0, import_react42.useSyncExternalStore)(
     subscribeTimelineVisibility,
     getTimelineVisibility,
     getTimelineVisibility
@@ -8788,14 +8820,14 @@ function DialTimelineDock({
   );
 }
 function useTransportSubscribe(id) {
-  return (0, import_react43.useCallback)((callback) => TimelineStore.subscribe(id, callback), [id]);
+  return (0, import_react42.useCallback)((callback) => TimelineStore.subscribe(id, callback), [id]);
 }
 function PlayPauseButton({ id }) {
   const subscribe = useTransportSubscribe(id);
-  const getPlaying = (0, import_react43.useCallback)(() => TimelineStore.getTransport(id).playing, [id]);
-  const playing = (0, import_react43.useSyncExternalStore)(subscribe, getPlaying, getPlaying);
+  const getPlaying = (0, import_react42.useCallback)(() => TimelineStore.getTransport(id).playing, [id]);
+  const playing = (0, import_react42.useSyncExternalStore)(subscribe, getPlaying, getPlaying);
   return /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
-    import_react44.motion.button,
+    import_react43.motion.button,
     {
       className: "dialkit-toolbar-add",
       onClick: () => playing ? TimelineStore.pause(id) : TimelineStore.play(id),
@@ -8803,8 +8835,8 @@ function PlayPauseButton({ id }) {
       "aria-label": playing ? "Pause" : "Play",
       whileTap: { scale: 0.9 },
       transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-      children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(import_react44.AnimatePresence, { initial: false, mode: "wait", children: playing ? /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
-        import_react44.motion.svg,
+      children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(import_react43.AnimatePresence, { initial: false, mode: "wait", children: playing ? /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
+        import_react43.motion.svg,
         {
           viewBox: "0 0 24 24",
           fill: "none",
@@ -8818,7 +8850,7 @@ function PlayPauseButton({ id }) {
         },
         "pause"
       ) : /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
-        import_react44.motion.svg,
+        import_react43.motion.svg,
         {
           viewBox: "0 0 24 24",
           fill: "none",
@@ -8837,7 +8869,7 @@ function PlayPauseButton({ id }) {
 }
 function ReplayButton({ onReplay }) {
   return /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
-    import_react44.motion.button,
+    import_react43.motion.button,
     {
       className: "dialkit-toolbar-add",
       onClick: onReplay,
@@ -8860,11 +8892,11 @@ function TimelinePlayheadFlag({
   onResetView
 }) {
   const subscribe = useTransportSubscribe(id);
-  const getTime = (0, import_react43.useCallback)(() => TimelineStore.getTransport(id).time, [id]);
-  const time = (0, import_react43.useSyncExternalStore)(subscribe, getTime, getTime);
-  const scrubRef = (0, import_react43.useRef)(null);
-  const cleanupScrubRef = (0, import_react43.useRef)(null);
-  const seekFromClientX = (0, import_react43.useCallback)((clientX) => {
+  const getTime = (0, import_react42.useCallback)(() => TimelineStore.getTransport(id).time, [id]);
+  const time = (0, import_react42.useSyncExternalStore)(subscribe, getTime, getTime);
+  const scrubRef = (0, import_react42.useRef)(null);
+  const cleanupScrubRef = (0, import_react42.useRef)(null);
+  const seekFromClientX = (0, import_react42.useCallback)((clientX) => {
     const rect = scrubRef.current?.rect;
     const scrub = scrubRef.current;
     const contentWidth = rect?.width ?? 0;
@@ -8876,7 +8908,7 @@ function TimelinePlayheadFlag({
     );
     TimelineStore.seek(id, nextTime);
   }, [id]);
-  const handlePointerDown = (0, import_react43.useCallback)((e) => {
+  const handlePointerDown = (0, import_react42.useCallback)((e) => {
     const rect = rulerRef.current?.getBoundingClientRect();
     if (!rect) return;
     e.preventDefault();
@@ -8909,7 +8941,7 @@ function TimelinePlayheadFlag({
     window.addEventListener("pointercancel", finishWindowScrub);
     cleanupScrubRef.current = finishWindowScrub;
   }, [duration, id, onResetView, rulerRef, seekFromClientX, viewEnd, viewStart]);
-  (0, import_react43.useEffect)(() => () => cleanupScrubRef.current?.(), []);
+  (0, import_react42.useEffect)(() => () => cleanupScrubRef.current?.(), []);
   if (time < viewStart || time > viewEnd || laneWidth <= 0) return null;
   const x = clamp5(
     (time - viewStart) * pxPerSecond,
@@ -8954,17 +8986,17 @@ function TimelineOverview({
   onNavigate
 }) {
   const subscribe = useTransportSubscribe(id);
-  const getTime = (0, import_react43.useCallback)(() => TimelineStore.getTransport(id).time, [id]);
-  const time = (0, import_react43.useSyncExternalStore)(subscribe, getTime, getTime);
-  const scrubRef = (0, import_react43.useRef)(null);
-  const seekFromClientX = (0, import_react43.useCallback)((clientX) => {
+  const getTime = (0, import_react42.useCallback)(() => TimelineStore.getTransport(id).time, [id]);
+  const time = (0, import_react42.useSyncExternalStore)(subscribe, getTime, getTime);
+  const scrubRef = (0, import_react42.useRef)(null);
+  const seekFromClientX = (0, import_react42.useCallback)((clientX) => {
     const rect = scrubRef.current?.rect;
     if (!rect || rect.width <= 0 || duration <= 0) return;
     const nextTime = clamp5((clientX - rect.left) / rect.width * duration, 0, duration);
     TimelineStore.seek(id, nextTime);
     onNavigate(nextTime);
   }, [duration, id, onNavigate]);
-  const handlePointerDown = (0, import_react43.useCallback)((e) => {
+  const handlePointerDown = (0, import_react42.useCallback)((e) => {
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     scrubRef.current = {
@@ -8974,10 +9006,10 @@ function TimelineOverview({
     TimelineStore.pause(id);
     seekFromClientX(e.clientX);
   }, [id, seekFromClientX]);
-  const handlePointerMove = (0, import_react43.useCallback)((e) => {
+  const handlePointerMove = (0, import_react42.useCallback)((e) => {
     if (scrubRef.current) seekFromClientX(e.clientX);
   }, [seekFromClientX]);
-  const finishScrub = (0, import_react43.useCallback)(() => {
+  const finishScrub = (0, import_react42.useCallback)(() => {
     if (scrubRef.current?.wasPlaying) TimelineStore.play(id);
     scrubRef.current = null;
   }, [id]);
@@ -9017,38 +9049,38 @@ function formatRulerSeconds(time, step) {
   const decimals = Math.min(3, Math.max(1, Math.ceil(-Math.log10(step))));
   return `${time.toFixed(decimals)}s`;
 }
-var TimelineSection = (0, import_react43.memo)(function TimelineSection2({
+var TimelineSection = (0, import_react42.memo)(function TimelineSection2({
   meta,
   defaultOpen,
   theme,
   dockVisible
 }) {
-  const [open, setOpen] = (0, import_react43.useState)(defaultOpen);
-  const [copied, setCopied] = (0, import_react43.useState)(false);
-  const [popover, setPopover] = (0, import_react43.useState)(null);
-  const [collapsedGroups, setCollapsedGroups] = (0, import_react43.useState)(() => /* @__PURE__ */ new Set());
-  const [expandedTracks, setExpandedTracks] = (0, import_react43.useState)(() => /* @__PURE__ */ new Set());
-  const [zoom, setZoom] = (0, import_react43.useState)(1);
-  const [viewStart, setViewStart] = (0, import_react43.useState)(0);
-  const subscribeValues = (0, import_react43.useCallback)(
+  const [open, setOpen] = (0, import_react42.useState)(defaultOpen);
+  const [copied, setCopied] = (0, import_react42.useState)(false);
+  const [popover, setPopover] = (0, import_react42.useState)(null);
+  const [collapsedGroups, setCollapsedGroups] = (0, import_react42.useState)(() => /* @__PURE__ */ new Set());
+  const [expandedTracks, setExpandedTracks] = (0, import_react42.useState)(() => /* @__PURE__ */ new Set());
+  const [zoom, setZoom] = (0, import_react42.useState)(1);
+  const [viewStart, setViewStart] = (0, import_react42.useState)(0);
+  const subscribeValues = (0, import_react42.useCallback)(
     (callback) => DialStore.subscribe(meta.id, callback),
     [meta.id]
   );
-  const getValues = (0, import_react43.useCallback)(() => DialStore.getValues(meta.id), [meta.id]);
-  const values = (0, import_react43.useSyncExternalStore)(subscribeValues, getValues, getValues);
+  const getValues = (0, import_react42.useCallback)(() => DialStore.getValues(meta.id), [meta.id]);
+  const values = (0, import_react42.useSyncExternalStore)(subscribeValues, getValues, getValues);
   const presets = DialStore.getPresets(meta.id);
   const activePresetId = DialStore.getActivePresetId(meta.id);
-  const subscribeLoopRegion = (0, import_react43.useCallback)(
+  const subscribeLoopRegion = (0, import_react42.useCallback)(
     (callback) => TimelineStore.subscribe(meta.id, callback),
     [meta.id]
   );
-  const getLoopRegion = (0, import_react43.useCallback)(() => TimelineStore.getLoopRegion(meta.id), [meta.id]);
-  const loopRegion = (0, import_react43.useSyncExternalStore)(subscribeLoopRegion, getLoopRegion, getLoopRegion);
-  const [loopDrag, setLoopDrag] = (0, import_react43.useState)(null);
-  const laneAreaRef = (0, import_react43.useRef)(null);
-  const horizontalScrollRef = (0, import_react43.useRef)(null);
-  const [laneWidth, setLaneWidth] = (0, import_react43.useState)(0);
-  (0, import_react43.useLayoutEffect)(() => {
+  const getLoopRegion = (0, import_react42.useCallback)(() => TimelineStore.getLoopRegion(meta.id), [meta.id]);
+  const loopRegion = (0, import_react42.useSyncExternalStore)(subscribeLoopRegion, getLoopRegion, getLoopRegion);
+  const [loopDrag, setLoopDrag] = (0, import_react42.useState)(null);
+  const laneAreaRef = (0, import_react42.useRef)(null);
+  const horizontalScrollRef = (0, import_react42.useRef)(null);
+  const [laneWidth, setLaneWidth] = (0, import_react42.useState)(0);
+  (0, import_react42.useLayoutEffect)(() => {
     if (!open) return;
     const ruler = laneAreaRef.current;
     if (!ruler) return;
@@ -9066,13 +9098,13 @@ var TimelineSection = (0, import_react43.memo)(function TimelineSection2({
   const pxPerSecond = visibleDuration > 0 && laneWidth > 0 ? laneWidth / visibleDuration : 0;
   const millisecondReadableZoom = laneWidth > 0 && meta.duration > 0 ? MAJOR_TICK_TARGET_PX * meta.duration / (MILLISECOND_STEP * 10 * laneWidth) : MIN_TIMELINE_MAX_ZOOM;
   const maxZoom = Math.max(MIN_TIMELINE_MAX_ZOOM, millisecondReadableZoom);
-  (0, import_react43.useEffect)(() => {
+  (0, import_react42.useEffect)(() => {
     setZoom((current) => clamp5(current, 1, maxZoom));
   }, [maxZoom]);
-  (0, import_react43.useEffect)(() => {
+  (0, import_react42.useEffect)(() => {
     setViewStart((current) => clampViewStart(current, meta.duration, meta.duration / zoom));
   }, [meta.duration, zoom]);
-  (0, import_react43.useLayoutEffect)(() => {
+  (0, import_react42.useLayoutEffect)(() => {
     const scroller = horizontalScrollRef.current;
     if (!scroller || pxPerSecond <= 0) return;
     const nextScrollLeft = safeViewStart * pxPerSecond;
@@ -9080,26 +9112,26 @@ var TimelineSection = (0, import_react43.memo)(function TimelineSection2({
       scroller.scrollLeft = nextScrollLeft;
     }
   }, [open, pxPerSecond, safeViewStart]);
-  (0, import_react43.useEffect)(() => {
+  (0, import_react42.useEffect)(() => {
     if (!dockVisible) setPopover(null);
   }, [dockVisible]);
-  const centerViewAt = (0, import_react43.useCallback)((time) => {
+  const centerViewAt = (0, import_react42.useCallback)((time) => {
     if (zoom <= 1 || meta.duration <= 0) return;
     const windowDuration = meta.duration / zoom;
     setViewStart(clampViewStart(time - windowDuration / 2, meta.duration, windowDuration));
   }, [meta.duration, zoom]);
-  const resetView = (0, import_react43.useCallback)(() => {
+  const resetView = (0, import_react42.useCallback)(() => {
     setZoom(1);
     setViewStart(0);
   }, []);
-  const handleReplay = (0, import_react43.useCallback)(() => {
+  const handleReplay = (0, import_react42.useCallback)(() => {
     setViewStart(0);
     TimelineStore.replay(meta.id);
   }, [meta.id]);
-  const handleClearLoopRegion = (0, import_react43.useCallback)(() => {
+  const handleClearLoopRegion = (0, import_react42.useCallback)(() => {
     TimelineStore.clearLoopRegion(meta.id);
   }, [meta.id]);
-  const handleHorizontalScroll = (0, import_react43.useCallback)((e) => {
+  const handleHorizontalScroll = (0, import_react42.useCallback)((e) => {
     if (pxPerSecond <= 0) return;
     setViewStart(clampViewStart(
       e.currentTarget.scrollLeft / pxPerSecond,
@@ -9107,7 +9139,7 @@ var TimelineSection = (0, import_react43.memo)(function TimelineSection2({
       visibleDuration
     ));
   }, [meta.duration, pxPerSecond, visibleDuration]);
-  const handleTimelineWheel = (0, import_react43.useCallback)((e) => {
+  const handleTimelineWheel = (0, import_react42.useCallback)((e) => {
     const scroller = horizontalScrollRef.current;
     if (!scroller || zoom <= 1) return;
     const horizontalDelta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.shiftKey ? e.deltaY : 0;
@@ -9115,9 +9147,9 @@ var TimelineSection = (0, import_react43.memo)(function TimelineSection2({
     e.preventDefault();
     scroller.scrollLeft += horizontalDelta;
   }, [zoom]);
-  const zoomDragRef = (0, import_react43.useRef)(null);
-  const rulerGestureRef = (0, import_react43.useRef)(null);
-  const rulerTimeFromClientX = (0, import_react43.useCallback)(
+  const zoomDragRef = (0, import_react42.useRef)(null);
+  const rulerGestureRef = (0, import_react42.useRef)(null);
+  const rulerTimeFromClientX = (0, import_react42.useCallback)(
     (clientX, rect, viewStartAt, visibleAt) => clamp5(
       viewStartAt + (clientX - rect.left) / rect.width * visibleAt,
       viewStartAt,
@@ -9125,7 +9157,7 @@ var TimelineSection = (0, import_react43.memo)(function TimelineSection2({
     ),
     []
   );
-  const handleRulerPointerDown = (0, import_react43.useCallback)((e) => {
+  const handleRulerPointerDown = (0, import_react42.useCallback)((e) => {
     e.preventDefault();
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
@@ -9161,7 +9193,7 @@ var TimelineSection = (0, import_react43.memo)(function TimelineSection2({
       moved: false
     };
   }, [meta.duration, rulerTimeFromClientX, safeViewStart, visibleDuration, zoom]);
-  const handleRulerPointerMove = (0, import_react43.useCallback)((e) => {
+  const handleRulerPointerMove = (0, import_react42.useCallback)((e) => {
     const gesture = rulerGestureRef.current;
     if (gesture) {
       const dx2 = e.clientX - gesture.downClientX;
@@ -9189,7 +9221,7 @@ var TimelineSection = (0, import_react43.memo)(function TimelineSection2({
     setZoom(nextZoom);
     setViewStart(nextStart);
   }, [maxZoom, meta.duration, rulerTimeFromClientX]);
-  const handleRulerPointerUp = (0, import_react43.useCallback)(() => {
+  const handleRulerPointerUp = (0, import_react42.useCallback)(() => {
     const gesture = rulerGestureRef.current;
     rulerGestureRef.current = null;
     zoomDragRef.current = null;
@@ -9202,13 +9234,13 @@ var TimelineSection = (0, import_react43.memo)(function TimelineSection2({
       setLoopDrag(null);
     }
   }, [loopDrag, meta.id]);
-  const handleRulerPointerCancel = (0, import_react43.useCallback)(() => {
+  const handleRulerPointerCancel = (0, import_react42.useCallback)(() => {
     rulerGestureRef.current = null;
     zoomDragRef.current = null;
     setLoopDrag(null);
   }, []);
-  const trackScrubRef = (0, import_react43.useRef)(null);
-  const seekTrackFromClientX = (0, import_react43.useCallback)((clientX) => {
+  const trackScrubRef = (0, import_react42.useRef)(null);
+  const seekTrackFromClientX = (0, import_react42.useCallback)((clientX) => {
     const scrub = trackScrubRef.current;
     const contentWidth = scrub?.rect.width ?? 0;
     if (!scrub || contentWidth <= 0) return;
@@ -9219,7 +9251,7 @@ var TimelineSection = (0, import_react43.memo)(function TimelineSection2({
     );
     TimelineStore.seek(meta.id, nextTime);
   }, [meta.id]);
-  const handleTrackPointerDown = (0, import_react43.useCallback)((e) => {
+  const handleTrackPointerDown = (0, import_react42.useCallback)((e) => {
     const target = e.target;
     if (target.closest(".dialkit-timeline-label, button")) return;
     if (!e.shiftKey && target.closest(".dialkit-timeline-clip")) return;
@@ -9242,24 +9274,24 @@ var TimelineSection = (0, import_react43.memo)(function TimelineSection2({
     TimelineStore.pause(meta.id);
     seekTrackFromClientX(e.clientX);
   }, [meta.duration, meta.id, safeViewStart, seekTrackFromClientX, visibleDuration]);
-  const handleTrackPointerMove = (0, import_react43.useCallback)((e) => {
+  const handleTrackPointerMove = (0, import_react42.useCallback)((e) => {
     if (trackScrubRef.current) seekTrackFromClientX(e.clientX);
   }, [seekTrackFromClientX]);
-  const finishTrackScrub = (0, import_react43.useCallback)(() => {
+  const finishTrackScrub = (0, import_react42.useCallback)(() => {
     if (trackScrubRef.current?.wasPlaying) TimelineStore.play(meta.id);
     trackScrubRef.current = null;
   }, [meta.id]);
-  const handleCopy = (0, import_react43.useCallback)(() => {
+  const handleCopy = (0, import_react42.useCallback)(() => {
     const normalized = normalizeTimelineValuesForCopy(DialStore.getValues(meta.id), meta.clips);
     navigator.clipboard.writeText(buildCopyInstruction("useDialTimeline", meta.name, normalized));
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }, [meta.clips, meta.id, meta.name]);
-  const handleAddPreset = (0, import_react43.useCallback)(() => {
+  const handleAddPreset = (0, import_react42.useCallback)(() => {
     DialStore.savePreset(meta.id, `Version ${presets.length + 2}`);
   }, [meta.id, presets.length]);
-  const closePopover = (0, import_react43.useCallback)(() => setPopover(null), []);
-  const openClipPopover = (0, import_react43.useCallback)(
+  const closePopover = (0, import_react42.useCallback)(() => setPopover(null), []);
+  const openClipPopover = (0, import_react42.useCallback)(
     (clip, rect, stepKey) => {
       const targetPath = stepKey ? `${clip.key}.${stepKey}` : clip.key;
       const exclude = stepKey ? void 0 : clipPopoverExclusions(clip);
@@ -9281,7 +9313,7 @@ var TimelineSection = (0, import_react43.memo)(function TimelineSection2({
     },
     [meta.id]
   );
-  const toggleTracks = (0, import_react43.useCallback)((clipKey) => {
+  const toggleTracks = (0, import_react42.useCallback)((clipKey) => {
     setExpandedTracks((prev) => {
       const next = new Set(prev);
       if (next.has(clipKey)) next.delete(clipKey);
@@ -9289,7 +9321,7 @@ var TimelineSection = (0, import_react43.memo)(function TimelineSection2({
       return next;
     });
   }, []);
-  const handleBarClick = (0, import_react43.useCallback)(
+  const handleBarClick = (0, import_react42.useCallback)(
     (clip, rect, stepKey) => {
       if (!stepKey && clip.tracks?.length) {
         toggleTracks(clip.key);
@@ -9299,7 +9331,7 @@ var TimelineSection = (0, import_react43.memo)(function TimelineSection2({
     },
     [openClipPopover, toggleTracks]
   );
-  const toggleGroup = (0, import_react43.useCallback)((group) => {
+  const toggleGroup = (0, import_react42.useCallback)((group) => {
     setCollapsedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(group)) next.delete(group);
@@ -9463,7 +9495,7 @@ var TimelineSection = (0, import_react43.memo)(function TimelineSection2({
       ),
       /* @__PURE__ */ (0, import_jsx_runtime37.jsxs)("div", { className: "dialkit-timeline-actions", children: [
         /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
-          import_react44.motion.button,
+          import_react43.motion.button,
           {
             className: "dialkit-timeline-loop-toggle",
             "data-active": loopRegion ? "true" : void 0,
@@ -9480,7 +9512,7 @@ var TimelineSection = (0, import_react43.memo)(function TimelineSection2({
         /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(PlayPauseButton, { id: meta.id }),
         /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(ReplayButton, { onReplay: handleReplay }),
         /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
-          import_react44.motion.button,
+          import_react43.motion.button,
           {
             className: "dialkit-toolbar-add",
             onClick: handleAddPreset,
@@ -9501,7 +9533,7 @@ var TimelineSection = (0, import_react43.memo)(function TimelineSection2({
           }
         ),
         /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
-          import_react44.motion.button,
+          import_react43.motion.button,
           {
             className: "dialkit-toolbar-add",
             onClick: handleCopy,
@@ -9509,8 +9541,8 @@ var TimelineSection = (0, import_react43.memo)(function TimelineSection2({
             "aria-label": copied ? "Copied parameters" : "Copy parameters",
             whileTap: { scale: 0.9 },
             transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-            children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(import_react44.AnimatePresence, { initial: false, mode: "wait", children: copied ? /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
-              import_react44.motion.svg,
+            children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(import_react43.AnimatePresence, { initial: false, mode: "wait", children: copied ? /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
+              import_react43.motion.svg,
               {
                 viewBox: "0 0 24 24",
                 fill: "none",
@@ -9528,7 +9560,7 @@ var TimelineSection = (0, import_react43.memo)(function TimelineSection2({
               },
               "check"
             ) : /* @__PURE__ */ (0, import_jsx_runtime37.jsxs)(
-              import_react44.motion.svg,
+              import_react43.motion.svg,
               {
                 viewBox: "0 0 24 24",
                 fill: "none",
@@ -9662,15 +9694,15 @@ function ClipPopover({
   theme,
   onClose
 }) {
-  const ref = (0, import_react43.useRef)(null);
-  const [naturalHeight, setNaturalHeight] = (0, import_react43.useState)(0);
-  const [viewport, setViewport] = (0, import_react43.useState)(() => ({
+  const ref = (0, import_react42.useRef)(null);
+  const [naturalHeight, setNaturalHeight] = (0, import_react42.useState)(0);
+  const [viewport, setViewport] = (0, import_react42.useState)(() => ({
     width: window.visualViewport?.width ?? window.innerWidth,
     height: window.visualViewport?.height ?? window.innerHeight,
     offsetLeft: window.visualViewport?.offsetLeft ?? 0,
     offsetTop: window.visualViewport?.offsetTop ?? 0
   }));
-  (0, import_react43.useLayoutEffect)(() => {
+  (0, import_react42.useLayoutEffect)(() => {
     const element = ref.current;
     if (!element) return;
     const measure = () => setNaturalHeight(element.scrollHeight + 2);
@@ -9680,7 +9712,7 @@ function ClipPopover({
     observer.observe(body ?? element);
     return () => observer.disconnect();
   }, [popover.clip.key, popover.stepKey]);
-  (0, import_react43.useEffect)(() => {
+  (0, import_react42.useEffect)(() => {
     const updateViewport = () => setViewport({
       width: window.visualViewport?.width ?? window.innerWidth,
       height: window.visualViewport?.height ?? window.innerHeight,
@@ -9696,7 +9728,7 @@ function ClipPopover({
       window.visualViewport?.removeEventListener("scroll", updateViewport);
     };
   }, []);
-  (0, import_react43.useEffect)(() => {
+  (0, import_react42.useEffect)(() => {
     const handlePointerDown = (e) => {
       const target = e.target;
       if (ref.current?.contains(target)) return;
@@ -9837,10 +9869,10 @@ function TimelineClip({
   onClick,
   onDrag
 }) {
-  const dragRef = (0, import_react43.useRef)(null);
-  const [dragging, setDragging] = (0, import_react43.useState)(false);
+  const dragRef = (0, import_react42.useRef)(null);
+  const [dragging, setDragging] = (0, import_react42.useState)(false);
   const isSteps = Boolean(steps?.length);
-  const handlePointerDown = (0, import_react43.useCallback)(
+  const handlePointerDown = (0, import_react42.useCallback)(
     (e) => {
       if (e.shiftKey) return;
       e.stopPropagation();
@@ -9869,7 +9901,7 @@ function TimelineClip({
     },
     [at, duration, fixedDuration, steps]
   );
-  const handlePointerMove = (0, import_react43.useCallback)(
+  const handlePointerMove = (0, import_react42.useCallback)(
     (e) => {
       const drag = dragRef.current;
       if (!drag || pxPerSecond <= 0) return;
@@ -9923,7 +9955,7 @@ function TimelineClip({
     },
     [baseAt, clip.key, delayMode, onDrag, pxPerSecond, steps, timelineId, timelineDuration]
   );
-  const handlePointerUp = (0, import_react43.useCallback)(
+  const handlePointerUp = (0, import_react42.useCallback)(
     (e) => {
       const drag = dragRef.current;
       dragRef.current = null;
@@ -9936,7 +9968,7 @@ function TimelineClip({
     },
     [clip, onClick]
   );
-  const handlePointerCancel = (0, import_react43.useCallback)(() => {
+  const handlePointerCancel = (0, import_react42.useCallback)(() => {
     dragRef.current = null;
     setDragging(false);
   }, []);
@@ -10078,7 +10110,7 @@ function ButtonGroup({ buttons }) {
 }
 
 // src/components/WaveformVisualization.tsx
-var import_react45 = require("react");
+var import_react44 = require("react");
 
 // src/waveform-dsp.ts
 function mixToMono(buffer) {
@@ -10491,9 +10523,9 @@ function WaveformVisualization({
   width = 256,
   height = 140
 }) {
-  const canvasRef = (0, import_react45.useRef)(null);
-  const [zoom, setZoom] = (0, import_react45.useState)(1);
-  const runtimeRef = (0, import_react45.useRef)(null);
+  const canvasRef = (0, import_react44.useRef)(null);
+  const [zoom, setZoom] = (0, import_react44.useState)(1);
+  const runtimeRef = (0, import_react44.useRef)(null);
   runtimeRef.current = {
     buffer,
     progress,
@@ -10514,7 +10546,7 @@ function WaveformVisualization({
     onSeek,
     onLoopChange
   };
-  (0, import_react45.useEffect)(() => {
+  (0, import_react44.useEffect)(() => {
     if (!canvasRef.current) return;
     const engine = createWaveformEngine(canvasRef.current, () => runtimeRef.current);
     return () => engine.destroy();
@@ -10540,7 +10572,7 @@ function WaveformVisualization({
 }
 
 // src/components/AnalyserVisualization.tsx
-var import_react46 = require("react");
+var import_react45 = require("react");
 
 // src/analyser-core.ts
 function byteFreqToUnit(v) {
@@ -11013,8 +11045,8 @@ function AnalyserVisualization({
   width = 256,
   height = 140
 }) {
-  const canvasRef = (0, import_react46.useRef)(null);
-  const runtimeRef = (0, import_react46.useRef)(null);
+  const canvasRef = (0, import_react45.useRef)(null);
+  const runtimeRef = (0, import_react45.useRef)(null);
   runtimeRef.current = {
     analyser,
     source,
@@ -11031,7 +11063,7 @@ function AnalyserVisualization({
     width,
     height
   };
-  (0, import_react46.useEffect)(() => {
+  (0, import_react45.useEffect)(() => {
     if (!canvasRef.current) return;
     const engine = createAnalyserEngine(canvasRef.current, () => runtimeRef.current);
     return () => engine.destroy();
@@ -11046,7 +11078,7 @@ function AnalyserVisualization({
 }
 
 // src/components/CurveComposer.tsx
-var import_react47 = require("react");
+var import_react46 = require("react");
 
 // src/curve-composer-core.ts
 var CURVE_CYCLE = ["linear", "easeIn", "easeOut", "easeInOut", "spring"];
@@ -11561,25 +11593,25 @@ function CurveComposer({
 }) {
   const layout = composerLayout(width, height, driver != null);
   const { W, totalH, mainRect, driverRect } = layout;
-  const composition = (0, import_react47.useMemo)(
+  const composition = (0, import_react46.useMemo)(
     () => ({ segments, driver, direction, gap }),
     [segments, driver, direction, gap]
   );
-  const samplers = (0, import_react47.useMemo)(() => buildSamplers(composition), [composition]);
-  const liveRef = (0, import_react47.useRef)({ composition, samplers, getPhase, phase, mode, triggerSteps });
+  const samplers = (0, import_react46.useMemo)(() => buildSamplers(composition), [composition]);
+  const liveRef = (0, import_react46.useRef)({ composition, samplers, getPhase, phase, mode, triggerSteps });
   liveRef.current = { composition, samplers, getPhase, phase, mode, triggerSteps };
-  const onTriggerRef = (0, import_react47.useRef)(onTrigger);
+  const onTriggerRef = (0, import_react46.useRef)(onTrigger);
   onTriggerRef.current = onTrigger;
-  const svgRef = (0, import_react47.useRef)(null);
-  const seriesPlayheadRef = (0, import_react47.useRef)(null);
-  const seriesDotRef = (0, import_react47.useRef)(null);
-  const driverPlayheadRef = (0, import_react47.useRef)(null);
-  const prevTrigValue = (0, import_react47.useRef)(Number.NaN);
-  const [drag, setDrag] = (0, import_react47.useState)(null);
-  const [hover, setHover] = (0, import_react47.useState)(null);
-  const dragRef = (0, import_react47.useRef)(null);
+  const svgRef = (0, import_react46.useRef)(null);
+  const seriesPlayheadRef = (0, import_react46.useRef)(null);
+  const seriesDotRef = (0, import_react46.useRef)(null);
+  const driverPlayheadRef = (0, import_react46.useRef)(null);
+  const prevTrigValue = (0, import_react46.useRef)(Number.NaN);
+  const [drag, setDrag] = (0, import_react46.useState)(null);
+  const [hover, setHover] = (0, import_react46.useState)(null);
+  const dragRef = (0, import_react46.useRef)(null);
   dragRef.current = drag;
-  (0, import_react47.useEffect)(() => {
+  (0, import_react46.useEffect)(() => {
     let raf = 0;
     prevTrigValue.current = Number.NaN;
     const tick = () => {
@@ -11837,9 +11869,9 @@ function CurveComposer({
 }
 
 // src/components/ShortcutsMenu.tsx
-var import_react48 = require("react");
+var import_react47 = require("react");
 var import_react_dom9 = require("react-dom");
-var import_react49 = require("motion/react");
+var import_react48 = require("motion/react");
 var import_jsx_runtime43 = require("react/jsx-runtime");
 function formatShortcutKey(sc) {
   if (!sc.key) return "\u2014";
@@ -11860,23 +11892,23 @@ function formatInteraction(sc) {
   }
 }
 function ShortcutsMenu({ panelId }) {
-  const [isOpen, setIsOpen] = (0, import_react48.useState)(false);
-  const triggerRef = (0, import_react48.useRef)(null);
-  const dropdownRef = (0, import_react48.useRef)(null);
-  const [pos, setPos] = (0, import_react48.useState)({ top: 0, right: 0 });
-  const open = (0, import_react48.useCallback)(() => {
+  const [isOpen, setIsOpen] = (0, import_react47.useState)(false);
+  const triggerRef = (0, import_react47.useRef)(null);
+  const dropdownRef = (0, import_react47.useRef)(null);
+  const [pos, setPos] = (0, import_react47.useState)({ top: 0, right: 0 });
+  const open = (0, import_react47.useCallback)(() => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
       setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
     }
     setIsOpen(true);
   }, []);
-  const close = (0, import_react48.useCallback)(() => setIsOpen(false), []);
-  const toggle2 = (0, import_react48.useCallback)(() => {
+  const close = (0, import_react47.useCallback)(() => setIsOpen(false), []);
+  const toggle2 = (0, import_react47.useCallback)(() => {
     if (isOpen) close();
     else open();
   }, [isOpen, open, close]);
-  (0, import_react48.useEffect)(() => {
+  (0, import_react47.useEffect)(() => {
     if (!isOpen) return;
     const handler = (e) => {
       const target = e.target;
@@ -11909,7 +11941,7 @@ function ShortcutsMenu({ panelId }) {
   });
   return /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)(import_jsx_runtime43.Fragment, { children: [
     /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(
-      import_react49.motion.button,
+      import_react48.motion.button,
       {
         ref: triggerRef,
         className: "dialkit-shortcuts-trigger",
@@ -11928,7 +11960,7 @@ function ShortcutsMenu({ panelId }) {
       }
     ),
     (0, import_react_dom9.createPortal)(
-      /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(import_react49.AnimatePresence, { children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(import_react48.AnimatePresence, { children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)(
         PresenceMotionDiv,
         {
           divRef: dropdownRef,
@@ -11955,7 +11987,7 @@ function ShortcutsMenu({ panelId }) {
 }
 
 // src/components/AudioLevelMeter.tsx
-var import_react50 = require("react");
+var import_react49 = require("react");
 var import_jsx_runtime44 = require("react/jsx-runtime");
 var DEFAULT_CELL_COUNT = 10;
 var MIN_CELL_COUNT = 8;
@@ -12004,8 +12036,8 @@ function getCellColor(colors, indexFromBottom, cellCount) {
   return colors[colorIndex];
 }
 function usePrefersReducedMotion() {
-  const [reducedMotion, setReducedMotion] = (0, import_react50.useState)(false);
-  (0, import_react50.useEffect)(() => {
+  const [reducedMotion, setReducedMotion] = (0, import_react49.useState)(false);
+  (0, import_react49.useEffect)(() => {
     const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     const updatePreference = () => setReducedMotion(mediaQuery.matches);
     updatePreference();
@@ -12047,17 +12079,17 @@ function AudioLevelMeter(props) {
   const activeCellCounts = levels.map((level) => levelToCellCount(level, cellCount));
   const activeCellKey = activeCellCounts.join(":");
   const clippedBandKey = clippedBands.map(Number).join(":");
-  const currentTopCellsRef = (0, import_react50.useRef)(activeCellCounts.map((count) => count - 1));
-  const currentClippedBandsRef = (0, import_react50.useRef)(clippedBands);
-  const cellCountRef = (0, import_react50.useRef)(cellCount);
-  const peakStatesRef = (0, import_react50.useRef)([]);
-  const clipHoldUntilRef = (0, import_react50.useRef)(clippedBands.map(() => 0));
-  const animationFrameRef = (0, import_react50.useRef)(null);
+  const currentTopCellsRef = (0, import_react49.useRef)(activeCellCounts.map((count) => count - 1));
+  const currentClippedBandsRef = (0, import_react49.useRef)(clippedBands);
+  const cellCountRef = (0, import_react49.useRef)(cellCount);
+  const peakStatesRef = (0, import_react49.useRef)([]);
+  const clipHoldUntilRef = (0, import_react49.useRef)(clippedBands.map(() => 0));
+  const animationFrameRef = (0, import_react49.useRef)(null);
   const reducedMotion = usePrefersReducedMotion();
-  const [peakIndices, setPeakIndices] = (0, import_react50.useState)(
+  const [peakIndices, setPeakIndices] = (0, import_react49.useState)(
     () => activeCellCounts.map((count) => count - 1)
   );
-  const [heldClippedBands, setHeldClippedBands] = (0, import_react50.useState)(clippedBands.map(() => false));
+  const [heldClippedBands, setHeldClippedBands] = (0, import_react49.useState)(clippedBands.map(() => false));
   const displayedClippedBands = heldClippedBands.map(
     (isHeld, index) => isHeld || clippedBands[index]
   );
@@ -12067,7 +12099,7 @@ function AudioLevelMeter(props) {
   const colors = (props.colors ?? []).slice(0, 3).filter(
     (color) => typeof color === "string" && color.trim().length > 0
   );
-  (0, import_react50.useEffect)(() => {
+  (0, import_react49.useEffect)(() => {
     const timestamp = performance.now();
     const currentTopCells = activeCellKey.split(":").map(Number).map((count) => count - 1);
     const currentClippedBands = clippedBandKey.split(":").map((value) => value === "1");
@@ -12194,7 +12226,7 @@ function AudioLevelMeter(props) {
     };
     animationFrameRef.current = requestAnimationFrame(animatePeaks);
   }, [activeCellKey, cellCount, clippedBandKey, reducedMotion]);
-  (0, import_react50.useEffect)(
+  (0, import_react49.useEffect)(
     () => () => {
       if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
     },

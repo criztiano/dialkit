@@ -59,6 +59,7 @@ export const Slider = defineComponent({
     const isDragging = ref(false);
     const isHovered = ref(false);
     const isValueHovered = ref(false);
+    const isMetaHeld = ref(false);
     const isValueEditable = ref(false);
     const showInput = ref(false);
     const inputValue = ref('');
@@ -75,6 +76,8 @@ export const Slider = defineComponent({
     let wrapperRect: DOMRect | null = null;
     let scaleVal = 1;
     let hoverTimeout: ReturnType<typeof setTimeout> | null = null;
+    /** Running value for wheel notches, which arrive faster than prop updates. */
+    let wheelValue = props.value;
 
     let snapAnim: ReturnType<typeof animate> | null = null;
     let rubberAnim: ReturnType<typeof animate> | null = null;
@@ -161,6 +164,9 @@ export const Slider = defineComponent({
 
     const handlePointerDown = (event: PointerEvent) => {
       if (showInput.value) return;
+      // ⌘ hands the card over to the text: no drag, no preventDefault, so the
+      // browser's own selection starts and a click reaches the value span.
+      if (event.metaKey) return;
       event.preventDefault();
       (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
       pointerDownPos = { x: event.clientX, y: event.clientY };
@@ -262,6 +268,50 @@ export const Slider = defineComponent({
       pointerDownPos = null;
     };
 
+    // Wheel over the card adjusts the value — the pointer is already on the
+    // control, so the scroll belongs to it, not to the page behind it. Bound
+    // natively so the listener is non-passive and can preventDefault;
+    // stopPropagation keeps the window-level scroll shortcuts from firing twice.
+    const handleWheel = (event: WheelEvent) => {
+      if (showInput.value) return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      const raw = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+      if (raw === 0) return;
+
+      const stepMultiplier = event.shiftKey ? 10 : event.altKey ? 0.1 : 1;
+      const delta = (raw > 0 ? -1 : 1) * step.value * stepMultiplier;
+      // A trackpad fires several wheel events per frame, all before the value
+      // prop comes back — so each notch reads the running value, not the stale prop.
+      const next = roundValue(
+        Math.max(min.value, Math.min(max.value, wheelValue + delta)),
+        step.value
+      );
+      wheelValue = next;
+
+      if (snapAnim) {
+        snapAnim.stop();
+        snapAnim = null;
+      }
+      fillPercent.jump(percentFromValue(next));
+      emit('change', next);
+    };
+
+    // ⌘ turns the card into text for as long as it is held. Only listened for
+    // while hovered, so an idle panel adds no key handlers.
+    const syncMetaHeld = (event: KeyboardEvent) => {
+      isMetaHeld.value = event.metaKey;
+    };
+    const clearMetaHeld = () => {
+      isMetaHeld.value = false;
+    };
+    const unbindMetaKeys = () => {
+      window.removeEventListener('keydown', syncMetaHeld);
+      window.removeEventListener('keyup', syncMetaHeld);
+      window.removeEventListener('blur', clearMetaHeld);
+    };
+
     const handleInputSubmit = () => {
       const parsed = parseFloat(inputValue.value);
       if (!Number.isNaN(parsed)) {
@@ -274,7 +324,7 @@ export const Slider = defineComponent({
     };
 
     const handleValueClick = (event: MouseEvent) => {
-      if (!isValueEditable.value) return;
+      if (!isValueEditable.value && !event.metaKey) return;
       event.stopPropagation();
       event.preventDefault();
       showInput.value = true;
@@ -290,10 +340,23 @@ export const Slider = defineComponent({
       }
     };
 
-    watch(() => props.value, () => {
+    watch(() => props.value, (next) => {
+      // The wheel accumulates on its own running value, so it must follow the prop.
+      wheelValue = next;
       if (!isInteracting.value && !snapAnim) {
         fillPercent.jump(percentage.value);
       }
+    });
+
+    watch(isHovered, (hovered) => {
+      if (!hovered) {
+        unbindMetaKeys();
+        isMetaHeld.value = false;
+        return;
+      }
+      window.addEventListener('keydown', syncMetaHeld);
+      window.addEventListener('keyup', syncMetaHeld);
+      window.addEventListener('blur', clearMetaHeld);
     });
 
     // The handle only shows while dragging: 0.9 while engaged, hidden at rest.
@@ -357,6 +420,8 @@ export const Slider = defineComponent({
       applyFillStyles(fillPercent.get());
       applyRubberStyles(rubberStretchPx.get());
       applyHandleOpacity(handleOpacityMv.get());
+
+      wrapperRef.value?.addEventListener('wheel', handleWheel, { passive: false });
     });
 
     onUnmounted(() => {
@@ -364,6 +429,9 @@ export const Slider = defineComponent({
       snapAnim?.stop();
       rubberAnim?.stop();
       handleOpacityAnim?.stop();
+
+      wrapperRef.value?.removeEventListener('wheel', handleWheel);
+      unbindMetaKeys();
 
       unsubFill?.();
       unsubRubber?.();
@@ -376,6 +444,7 @@ export const Slider = defineComponent({
         isVertical.value ? 'dialkit-slider-vertical' : '',
         isActive.value ? 'dialkit-slider-active' : '',
         isInteracting.value ? 'dialkit-slider-engaged' : '',
+        isMetaHeld.value ? 'dialkit-slider-text-mode' : '',
       ]
         .filter(Boolean)
         .join(' ')
@@ -389,8 +458,11 @@ export const Slider = defineComponent({
       onPointermove: handlePointerMove,
       onPointerup: handlePointerUp,
       onPointercancel: handlePointerCancel,
-      onMouseenter: () => {
+      // Read ⌘ on entry too: the key listeners only exist while hovered, so a
+      // key already held before the pointer arrived would go unseen.
+      onMouseenter: (e: MouseEvent) => {
         isHovered.value = true;
+        isMetaHeld.value = e.metaKey;
       },
       onMouseleave: () => {
         isHovered.value = false;
@@ -425,7 +497,7 @@ export const Slider = defineComponent({
         onPointerdown: (event: PointerEvent) => {
           if (isValueEditable.value) event.stopPropagation();
         },
-        style: { cursor: isValueEditable.value ? 'text' : 'default' },
+        style: { cursor: isValueEditable.value || isMetaHeld.value ? 'text' : 'default' },
       }, [
         displayValue.value,
         props.unit ? h('span', { class: 'dialkit-slider-unit' }, props.unit) : null,

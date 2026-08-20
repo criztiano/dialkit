@@ -57,6 +57,9 @@ export function NumberControl({
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (showInput) return;
+      // ⌘ hands the card over to the text: skipping preventDefault lets the
+      // browser select the label or value instead of scrubbing.
+      if (e.metaKey) return;
       e.preventDefault();
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
       pointerDownPos.current = { x: e.clientX, y: e.clientY };

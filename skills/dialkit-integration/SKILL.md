@@ -112,8 +112,8 @@ live outside the panel.
 
 **All controls live in the side panel.** Mount `DialRoot mode="inline"` inside
 a fixed-width sidebar (~300px, full height, `overflow: hidden`). The inline
-panel keeps dialkit's card chrome — glass surface, hairline border, rounded
-corners — so give the sidebar container a little padding (~12px) and let the
+panel keeps dialkit's card chrome — panel ground, cards, 2px corners — so give
+the sidebar container a little padding (~12px) and let the
 card float on the app ground; never strip the panel chrome to make it flush. The floating
 popover mode is for tweaking during development, not for a real app surface.
 Don't scatter individual controls across the app: one panel, one place to
@@ -163,19 +163,20 @@ them wholesale. The panel's theme is the design anchor for the whole window:
   radius, row height, shadows) for app-owned chrome — the center pane, status
   bars, headers — so panel and stage read as one instrument, not a panel
   bolted onto a foreign app.
-- Match the text hierarchy: root title / section title / label are three
-  deliberate levels; don't invent a fourth.
-- Numeric readouts anywhere in the app use the same monospace treatment as
-  panel values.
-- **Never draw your own dividers.** Separation is a property the components
-  already carry: collapsible sections rule themselves off from the next one,
-  and the last section carries none, because a trailing line separates
-  nothing. If a layout looks like it needs a rule between two things, the
-  answer is spacing, a section, or an existing component — not a new border.
-  A hand-added divider is how a surface starts drifting away from the set.
-- Dark glassmorphic surfaces, 1px low-alpha borders, ~8px radius: custom
-  canvases (waveforms, diagrams) drawn in the center pane should sample the
-  same palette so they look native to the set.
+- Match the two typographic voices: every label and section title is uppercase
+  mono (`--dial-font-label`), every value is the reading face
+  (`--dial-font-value`) at `--dial-value-opacity`. Labels name things, values
+  report them; nothing in the app should speak in a third voice.
+- Both faces are host-provided by licence: load System85 in the app, and keep
+  the fallback stacks in the tokens intact.
+- **No dividers, anywhere.** The set separates things with space and with the
+  card each row already carries — never with a rule. If a layout looks like it
+  needs a line between two things, the answer is spacing, a section, or an
+  existing component. A hand-added divider is how a surface starts drifting
+  away from the set.
+- Dark instrument surfaces, 2px radius, uppercase mono labels against
+  reading-face values: custom canvases (waveforms, diagrams) drawn in the
+  center pane should sample the same palette so they look native to the set.
 
 ## Refinement pass (do this once it works)
 

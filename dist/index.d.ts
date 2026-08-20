@@ -337,14 +337,13 @@ declare function pickDragTarget(atValue: number, current: RangeValue, hitValue: 
  */
 declare function isOutsideSpan(atValue: number, current: RangeValue): boolean;
 /**
- * CSS `left` strings for the two 3px handle lines. `gap` is the fill width, resolved to
- * px at layout. Wide apart the `ramp` is 0 and each handle keeps its inside offset
- * (low `+6px`, high `-9px` — the unchanged look). As the fill shrinks below ~30px the
- * `clamp` ramp grows to 12px, sliding each handle from ~inside its fill edge to ~4.5px
- * OUTSIDE it (low `-6px`, high `+3px`), so a small range is framed by two distinct
- * handles just BEYOND the fill and a collapsed range shows them symmetric around the
- * point (± 4.5px). The lines never cross (min ~9px center separation). Pure string math —
- * no DOM; CSS min()/max()/clamp() resolve the px/%% mix at layout.
+ * CSS `left` strings for the two 2px handle ticks. Each tick is centered on its own
+ * value, so a bound at the extreme sits flush with the track edge (the clamps keep the
+ * 2px body inside, never half off it). `gap` is the fill width, resolved to px at
+ * layout: wide apart the `ramp` is 0, and as the fill shrinks below ~6px the `clamp`
+ * ramp grows to 2px, easing the ticks apart so a collapsed range still reads as two
+ * handles (± 2px around the point) instead of one thick mark. The ticks never cross.
+ * Pure string math — no DOM; CSS min()/max()/clamp() resolve the px/%% mix at layout.
  */
 declare function handleLeftStyles(lowPercent: number, highPercent: number): {
     low: string;
@@ -1465,13 +1464,16 @@ interface CheckboxProps {
     id?: string;
 }
 /**
- * A compact tri-state box: on (accent, ticked), off (empty), and disabled
+ * A compact tri-state box: on (a filled chip), off (a slash), and disabled
  * (a dash).
  *
  * This replaces the Off/On segmented pair for boolean rows and module
  * headers. A two-tab switch spends ~84px and a whole row of attention on
- * one bit; a box spends 16px and reads instantly. The segmented control
+ * one bit; a box spends 22px and reads instantly. The segmented control
  * stays where it belongs — three or more genuinely different modes.
+ *
+ * All three marks are always in the DOM; CSS reveals one from the data
+ * attributes, so the state swap animates without any motion code.
  */
 declare function Checkbox({ checked, onChange, label, disabled, id }: CheckboxProps): react.JSX.Element;
 

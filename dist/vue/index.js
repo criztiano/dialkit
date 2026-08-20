@@ -13,12 +13,12 @@ function parseHex(input) {
   let s = input.trim();
   if (!s.startsWith("#")) s = `#${s}`;
   if (!HEX_COLOR_REGEX.test(s)) return null;
-  let h36 = s.slice(1);
-  if (h36.length <= 4) h36 = h36.split("").map((c) => c + c).join("");
-  const r = parseInt(h36.slice(0, 2), 16);
-  const g = parseInt(h36.slice(2, 4), 16);
-  const b = parseInt(h36.slice(4, 6), 16);
-  const a = h36.length === 8 ? parseInt(h36.slice(6, 8), 16) / 255 : 1;
+  let h37 = s.slice(1);
+  if (h37.length <= 4) h37 = h37.split("").map((c) => c + c).join("");
+  const r = parseInt(h37.slice(0, 2), 16);
+  const g = parseInt(h37.slice(2, 4), 16);
+  const b = parseInt(h37.slice(4, 6), 16);
+  const a = h37.length === 8 ? parseInt(h37.slice(6, 8), 16) / 255 : 1;
   return { r, g, b, a };
 }
 function formatHex(rgba, alphaEnabled) {
@@ -52,36 +52,36 @@ function rgbToHsv(rgba) {
   const r = rgba.r / 255, g = rgba.g / 255, b = rgba.b / 255;
   const max = Math.max(r, g, b), min = Math.min(r, g, b);
   const d = max - min;
-  let h36 = 0;
+  let h37 = 0;
   if (d !== 0) {
-    if (max === r) h36 = (g - b) / d % 6;
-    else if (max === g) h36 = (b - r) / d + 2;
-    else h36 = (r - g) / d + 4;
-    h36 *= 60;
-    if (h36 < 0) h36 += 360;
+    if (max === r) h37 = (g - b) / d % 6;
+    else if (max === g) h37 = (b - r) / d + 2;
+    else h37 = (r - g) / d + 4;
+    h37 *= 60;
+    if (h37 < 0) h37 += 360;
   }
-  return { h: h36, s: max === 0 ? 0 : d / max, v: max, a: rgba.a };
+  return { h: h37, s: max === 0 ? 0 : d / max, v: max, a: rgba.a };
 }
 function hsvToRgb(hsva) {
-  const h36 = (hsva.h % 360 + 360) % 360;
+  const h37 = (hsva.h % 360 + 360) % 360;
   const s = clamp01(hsva.s), v = clamp01(hsva.v);
   const c = v * s;
-  const x = c * (1 - Math.abs(h36 / 60 % 2 - 1));
+  const x = c * (1 - Math.abs(h37 / 60 % 2 - 1));
   const m = v - c;
   let r = 0, g = 0, b = 0;
-  if (h36 < 60) [r, g, b] = [c, x, 0];
-  else if (h36 < 120) [r, g, b] = [x, c, 0];
-  else if (h36 < 180) [r, g, b] = [0, c, x];
-  else if (h36 < 240) [r, g, b] = [0, x, c];
-  else if (h36 < 300) [r, g, b] = [x, 0, c];
+  if (h37 < 60) [r, g, b] = [c, x, 0];
+  else if (h37 < 120) [r, g, b] = [x, c, 0];
+  else if (h37 < 180) [r, g, b] = [0, c, x];
+  else if (h37 < 240) [r, g, b] = [0, x, c];
+  else if (h37 < 300) [r, g, b] = [x, 0, c];
   else [r, g, b] = [c, 0, x];
   return { r: byte((r + m) * 255), g: byte((g + m) * 255), b: byte((b + m) * 255), a: hsva.a };
 }
 function rgbToHsl(rgba) {
-  const { h: h36, s, v, a } = rgbToHsv(rgba);
+  const { h: h37, s, v, a } = rgbToHsv(rgba);
   const l = v * (1 - s / 2);
   const sl = l === 0 || l === 1 ? 0 : (v - l) / Math.min(l, 1 - l);
-  return { h: h36, s: sl, l, a };
+  return { h: h37, s: sl, l, a };
 }
 function hslToRgb(hsla) {
   const l = clamp01(hsla.l), s = clamp01(hsla.s);
@@ -117,32 +117,32 @@ function oklabToLinearRgb(L, A, B) {
 function rgbToOklch(rgba) {
   const { L, A, B } = rgbToOklab(rgba);
   const c = Math.sqrt(A * A + B * B);
-  let h36 = Math.atan2(B, A) * 180 / Math.PI;
-  if (h36 < 0) h36 += 360;
-  return { l: L, c, h: c < 1e-6 ? 0 : h36, a: rgba.a };
+  let h37 = Math.atan2(B, A) * 180 / Math.PI;
+  if (h37 < 0) h37 += 360;
+  return { l: L, c, h: c < 1e-6 ? 0 : h37, a: rgba.a };
 }
 var GAMUT_EPS = 1e-4;
-function inSrgbGamut(l, c, h36) {
-  const rad = h36 * Math.PI / 180;
+function inSrgbGamut(l, c, h37) {
+  const rad = h37 * Math.PI / 180;
   const { r, g, b } = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
   return r >= -GAMUT_EPS && r <= 1 + GAMUT_EPS && g >= -GAMUT_EPS && g <= 1 + GAMUT_EPS && b >= -GAMUT_EPS && b <= 1 + GAMUT_EPS;
 }
 function clampOklchToSrgb(oklch) {
   const l = clamp01(oklch.l);
-  const h36 = (oklch.h % 360 + 360) % 360;
+  const h37 = (oklch.h % 360 + 360) % 360;
   const c = Math.max(0, oklch.c);
-  if (inSrgbGamut(l, c, h36)) return { l, c, h: h36, a: clamp01(oklch.a) };
+  if (inSrgbGamut(l, c, h37)) return { l, c, h: h37, a: clamp01(oklch.a) };
   let lo = 0, hi = c;
   for (let i = 0; i < 24; i++) {
     const mid = (lo + hi) / 2;
-    if (inSrgbGamut(l, mid, h36)) lo = mid;
+    if (inSrgbGamut(l, mid, h37)) lo = mid;
     else hi = mid;
   }
-  return { l, c: lo, h: h36, a: clamp01(oklch.a) };
+  return { l, c: lo, h: h37, a: clamp01(oklch.a) };
 }
 function oklchToRgb(oklch) {
-  const { l, c, h: h36, a } = clampOklchToSrgb(oklch);
-  const rad = h36 * Math.PI / 180;
+  const { l, c, h: h37, a } = clampOklchToSrgb(oklch);
+  const rad = h37 * Math.PI / 180;
   const lin = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
   return {
     r: byte(linearToSrgb(clamp01(lin.r)) * 255),
@@ -181,11 +181,11 @@ function rgbaToChannels(rgba, format, alphaEnabled) {
   if (format === "rgb") {
     values = [rgba.r, rgba.g, rgba.b];
   } else if (format === "hsl") {
-    const { h: h36, s, l } = rgbToHsl(rgba);
-    values = [round(h36, 0), round(s * 100, 0), round(l * 100, 0)];
+    const { h: h37, s, l } = rgbToHsl(rgba);
+    values = [round(h37, 0), round(s * 100, 0), round(l * 100, 0)];
   } else {
-    const { l, c, h: h36 } = rgbToOklch(rgba);
-    values = [round(l, 2), round(c, 3), round(h36, 0)];
+    const { l, c, h: h37 } = rgbToOklch(rgba);
+    values = [round(l, 2), round(c, 3), round(h37, 0)];
   }
   if (alphaEnabled) values.push(opacityPercent(rgba));
   return values;
@@ -540,10 +540,10 @@ function isOutsideSpan(atValue, current) {
 }
 function handleLeftStyles(lowPercent, highPercent) {
   const gap = `(${highPercent}% - ${lowPercent}%)`;
-  const ramp = `clamp(0px, calc(30px - ${gap}), 12px)`;
+  const ramp = `clamp(0px, calc(6px - ${gap}), 2px)`;
   return {
-    low: `max(2px, min(calc(100% - 5px), calc(${lowPercent}% + 6px - ${ramp})))`,
-    high: `min(calc(100% - 5px), max(2px, calc(${highPercent}% - 9px + ${ramp})))`
+    low: `max(0px, min(calc(100% - 2px), calc(${lowPercent}% - 1px - ${ramp})))`,
+    high: `min(calc(100% - 2px), max(0px, calc(${highPercent}% - 1px + ${ramp})))`
   };
 }
 
@@ -1897,13 +1897,13 @@ function getFirstOptionValue(options) {
 // src/vue/directives/dialkit.ts
 import {
   createApp,
-  defineComponent as defineComponent28,
-  h as h28,
+  defineComponent as defineComponent29,
+  h as h29,
   shallowRef as shallowRef2
 } from "vue";
 
 // src/vue/components/DialRoot.ts
-import { defineComponent as defineComponent27, h as h27, onMounted as onMounted17, onUnmounted as onUnmounted11, ref as ref23, Teleport as Teleport6 } from "vue";
+import { defineComponent as defineComponent28, h as h28, onMounted as onMounted17, onUnmounted as onUnmounted11, ref as ref23, Teleport as Teleport6 } from "vue";
 
 // src/store/TimelineStore.ts
 var MIN_LOOP_REGION = 0.02;
@@ -2167,7 +2167,7 @@ var TimelineStoreClass = class {
 var TimelineStore = /* @__PURE__ */ new TimelineStoreClass();
 
 // src/vue/components/Panel.ts
-import { Fragment as Fragment2, defineComponent as defineComponent25, h as h25, onMounted as onMounted15, onUnmounted as onUnmounted9, ref as ref21 } from "vue";
+import { Fragment as Fragment2, defineComponent as defineComponent26, h as h26, onMounted as onMounted15, onUnmounted as onUnmounted9, ref as ref21 } from "vue";
 import { AnimatePresence as AnimatePresence6, motion as motion6 } from "motion-v";
 
 // src/icons.ts
@@ -2391,7 +2391,7 @@ var Folder = defineComponent({
 });
 
 // src/vue/components/ControlRenderer.ts
-import { Fragment, defineComponent as defineComponent23, h as h23, inject as inject2 } from "vue";
+import { Fragment, defineComponent as defineComponent24, h as h24, inject as inject2 } from "vue";
 
 // src/vue/components/ColorControl.ts
 import { Teleport, defineComponent as defineComponent4, h as h4, nextTick as nextTick2, onMounted as onMounted5, ref as ref5, watch as watch4 } from "vue";
@@ -3100,8 +3100,60 @@ var ColorControl = defineComponent4({
 });
 
 // src/vue/components/ModuleFolder.ts
-import { defineComponent as defineComponent5, h as h5, ref as ref6 } from "vue";
-var ModuleFolder = defineComponent5({
+import { defineComponent as defineComponent6, h as h6, ref as ref6 } from "vue";
+
+// src/vue/components/Checkbox.ts
+import { defineComponent as defineComponent5, h as h5 } from "vue";
+var Checkbox = defineComponent5({
+  name: "DialKitCheckbox",
+  props: {
+    checked: { type: Boolean, required: true },
+    /** Accessible name — the visible label is rendered by the caller. */
+    label: { type: String, default: void 0 },
+    /** The control exists but cannot act right now: reads as a dash, not a
+     *  blank box, so "unavailable" never looks like "off". */
+    disabled: { type: Boolean, default: false },
+    id: { type: String, default: void 0 }
+  },
+  emits: ["change"],
+  setup(props, { emit }) {
+    return () => h5(
+      "button",
+      {
+        type: "button",
+        id: props.id,
+        role: "checkbox",
+        "aria-checked": props.disabled ? "mixed" : String(props.checked),
+        "aria-label": props.label,
+        "aria-disabled": props.disabled || void 0,
+        class: "dialkit-checkbox",
+        "data-checked": props.checked && !props.disabled ? "true" : void 0,
+        "data-disabled": props.disabled ? "true" : void 0,
+        onClick: (e) => {
+          e.stopPropagation();
+          if (!props.disabled) emit("change", !props.checked);
+        }
+      },
+      [
+        h5("svg", { viewBox: "0 0 22 22", width: 22, height: 22, "aria-hidden": "true" }, [
+          h5("path", { class: "dialkit-checkbox-slash", d: "M6 16 16 6", fill: "none" }),
+          h5("rect", {
+            class: "dialkit-checkbox-chip",
+            x: 5,
+            y: 5,
+            width: 12,
+            height: 12,
+            rx: 2
+          }),
+          h5("path", { class: "dialkit-checkbox-dash", d: "M6 11h10", fill: "none" })
+        ])
+      ]
+    );
+  }
+});
+
+// src/vue/components/ModuleFolder.ts
+var ModuleFolder = defineComponent6({
   name: "DialKitModuleFolder",
   props: {
     title: { type: String, required: true },
@@ -3117,8 +3169,8 @@ var ModuleFolder = defineComponent5({
       props.onEnabledChange?.(enabled);
       if (enabled) isOpen.value = true;
     };
-    return () => h5("div", { class: "dialkit-module dialkit-module-folder", "data-open": props.enabled && isOpen.value ? "true" : "false" }, [
-      h5(
+    return () => h6("div", { class: "dialkit-module dialkit-module-folder", "data-open": props.enabled && isOpen.value ? "true" : "false" }, [
+      h6(
         "div",
         {
           class: "dialkit-module-header dialkit-module-header-toggle",
@@ -3129,23 +3181,18 @@ var ModuleFolder = defineComponent5({
           "aria-describedby": props.hint ? props.hintId : void 0
         },
         [
-          h5("span", { class: "dialkit-module-title" }, props.title),
-          h5("div", { class: "dialkit-module-switch", onClick: (e) => e.stopPropagation() }, [
-            h5(SegmentedControl, {
-              options: [
-                { value: "off", label: "Off" },
-                { value: "on", label: "On" }
-              ],
-              value: props.enabled ? "on" : "off",
-              onChange: (value) => setEnabled(value === "on")
-            })
-          ]),
-          ...props.hint ? [h5("span", { class: "dialkit-hint", id: props.hintId, role: "tooltip" }, props.hint)] : []
+          h6(Checkbox, {
+            checked: props.enabled,
+            label: props.title,
+            onChange: (next) => setEnabled(next)
+          }),
+          h6("span", { class: "dialkit-module-title" }, props.title),
+          ...props.hint ? [h6("span", { class: "dialkit-hint", id: props.hintId, role: "tooltip" }, props.hint)] : []
         ]
       ),
-      h5("div", { class: "dialkit-module-collapse", "data-open": props.enabled && isOpen.value }, [
-        h5("div", { class: "dialkit-module-collapse-clip" }, [
-          h5("div", { class: "dialkit-module-inner" }, slots.default ? slots.default() : [])
+      h6("div", { class: "dialkit-module-collapse", "data-open": props.enabled && isOpen.value }, [
+        h6("div", { class: "dialkit-module-collapse-clip" }, [
+          h6("div", { class: "dialkit-module-inner" }, slots.default ? slots.default() : [])
         ])
       ])
     ]);
@@ -3153,7 +3200,7 @@ var ModuleFolder = defineComponent5({
 });
 
 // src/vue/components/NumberControl.ts
-import { defineComponent as defineComponent6, h as h6, computed as computed3, nextTick as nextTick3, ref as ref7, watch as watch5 } from "vue";
+import { defineComponent as defineComponent7, h as h7, computed as computed3, nextTick as nextTick3, ref as ref7, watch as watch5 } from "vue";
 
 // src/shortcut-utils.ts
 function decimalsForStep2(step) {
@@ -3242,7 +3289,7 @@ function formatModifier(modifier) {
 
 // src/vue/components/NumberControl.ts
 var CLICK_THRESHOLD = 3;
-var NumberControl = defineComponent6({
+var NumberControl = defineComponent7({
   name: "DialKitNumberControl",
   props: {
     label: { type: String, required: true },
@@ -3277,6 +3324,7 @@ var NumberControl = defineComponent6({
     };
     const handlePointerDown = (event) => {
       if (showInput.value) return;
+      if (event.metaKey) return;
       event.preventDefault();
       event.currentTarget.setPointerCapture(event.pointerId);
       pointerDownPos = { x: event.clientX, y: event.clientY };
@@ -3340,14 +3388,14 @@ var NumberControl = defineComponent6({
         isScrubbing.value ? "dialkit-number-control-engaged" : ""
       ].filter(Boolean).join(" ")
     );
-    return () => h6("div", {
+    return () => h7("div", {
       class: className.value,
       onPointerdown: handlePointerDown,
       onPointermove: handlePointerMove,
       onPointerup: handlePointerUp
     }, [
-      h6("span", { class: "dialkit-number-label" }, props.label),
-      showInput.value ? h6("input", {
+      h7("span", { class: "dialkit-number-label" }, props.label),
+      showInput.value ? h7("input", {
         ref: inputRef,
         type: "text",
         class: "dialkit-number-input",
@@ -3359,16 +3407,16 @@ var NumberControl = defineComponent6({
         onBlur: handleInputSubmit,
         onClick: (event) => event.stopPropagation(),
         onPointerdown: (event) => event.stopPropagation()
-      }) : h6("span", { class: "dialkit-number-value" }, [
+      }) : h7("span", { class: "dialkit-number-value" }, [
         displayValue.value,
-        props.unit ? h6("span", { class: "dialkit-number-unit" }, props.unit) : null
+        props.unit ? h7("span", { class: "dialkit-number-unit" }, props.unit) : null
       ])
     ]);
   }
 });
 
 // src/vue/components/ControlShell.ts
-import { computed as computed4, defineComponent as defineComponent7, h as h7, onBeforeUnmount as onBeforeUnmount2, onMounted as onMounted6, ref as ref8, Teleport as Teleport2, watch as watch6 } from "vue";
+import { computed as computed4, defineComponent as defineComponent8, h as h8, onBeforeUnmount as onBeforeUnmount2, onMounted as onMounted6, ref as ref8, Teleport as Teleport2, watch as watch6 } from "vue";
 
 // src/affordance-core.ts
 var AFFORDANCE_POPOVER_WIDTH = 200;
@@ -3387,7 +3435,7 @@ function placePopover(anchor, popoverHeight, viewportHeight, width = AFFORDANCE_
 }
 
 // src/vue/components/ControlShell.ts
-var ControlShell = defineComponent7({
+var ControlShell = defineComponent8({
   name: "DialKitControlShell",
   props: {
     /** Help text for this control. Without one the tooltip is not rendered. */
@@ -3478,7 +3526,7 @@ var ControlShell = defineComponent7({
     });
     return () => {
       const children = slots.default ? slots.default() : [];
-      const wrapper = h7("div", {
+      const wrapper = h8("div", {
         class: "dialkit-control-tip",
         "data-hint": props.hint ? "true" : void 0,
         "data-affordance": hasAffordance.value ? "true" : void 0,
@@ -3490,8 +3538,8 @@ var ControlShell = defineComponent7({
         title: props.hint ? void 0 : props.title
       }, [
         ...children,
-        props.hint ? h7("span", { class: "dialkit-hint", id: props.id, role: "tooltip" }, props.hint) : null,
-        hasAffordance.value ? h7("button", {
+        props.hint ? h8("span", { class: "dialkit-hint", id: props.id, role: "tooltip" }, props.hint) : null,
+        hasAffordance.value ? h8("button", {
           ref: dotEl,
           type: "button",
           class: "dialkit-affordance-dot",
@@ -3507,8 +3555,8 @@ var ControlShell = defineComponent7({
       if (!open.value || !hasAffordance.value || !portalTarget.value) return wrapper;
       return [
         wrapper,
-        h7(Teleport2, { to: portalTarget.value }, [
-          h7("div", {
+        h8(Teleport2, { to: portalTarget.value }, [
+          h8("div", {
             ref: popoverEl,
             class: "dialkit-affordance-popover",
             role: "dialog",
@@ -3522,10 +3570,10 @@ var ControlShell = defineComponent7({
               visibility: pos.value ? void 0 : "hidden"
             }
           }, [
-            h7("span", { class: "dialkit-affordance-popover-title" }, label.value),
+            h8("span", { class: "dialkit-affordance-popover-title" }, label.value),
             // Rendered as a component, not called: a stateful popover needs its
             // own instance.
-            h7(props.affordance.content, {
+            h8(props.affordance.content, {
               panelId: props.panelId,
               path: props.path,
               status: status.value,
@@ -3539,19 +3587,19 @@ var ControlShell = defineComponent7({
 });
 
 // src/vue/components/GradientControl.ts
-import { Teleport as Teleport3, defineComponent as defineComponent10, h as h10, onMounted as onMounted8, ref as ref11, watch as watch7 } from "vue";
+import { Teleport as Teleport3, defineComponent as defineComponent11, h as h11, onMounted as onMounted8, ref as ref11, watch as watch7 } from "vue";
 import { AnimatePresence as AnimatePresence3, motion as motion3 } from "motion-v";
 
 // src/vue/components/GradientPanel.ts
-import { computed as computed5, defineComponent as defineComponent9, h as h9, ref as ref10, onBeforeUnmount as onBeforeUnmount4 } from "vue";
+import { computed as computed5, defineComponent as defineComponent10, h as h10, ref as ref10, onBeforeUnmount as onBeforeUnmount4 } from "vue";
 
 // src/vue/components/GradientTransformPad.ts
-import { defineComponent as defineComponent8, h as h8, onBeforeUnmount as onBeforeUnmount3, onMounted as onMounted7, ref as ref9 } from "vue";
+import { defineComponent as defineComponent9, h as h9, onBeforeUnmount as onBeforeUnmount3, onMounted as onMounted7, ref as ref9 } from "vue";
 var clamp4 = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 var wrap360 = (deg) => (deg % 360 + 360) % 360;
 var RAD = Math.PI / 180;
 var vectorToAngle = (dx, dy) => wrap360(Math.atan2(dx, -dy) / RAD);
-var GradientTransformPad = defineComponent8({
+var GradientTransformPad = defineComponent9({
   name: "DialKitGradientTransformPad",
   props: {
     value: { type: Object, required: true }
@@ -3658,8 +3706,8 @@ var GradientTransformPad = defineComponent8({
       const angleLineLen = Math.hypot(angleHandle.x - angleOx, angleHandle.y - angleOy);
       const angleLineAngle = Math.atan2(angleHandle.y - angleOy, angleHandle.x - angleOx) / RAD;
       const fill = gradientFillBox(value, w, hh);
-      return h8("div", { ref: padRef, class: "dialkit-gradient-pad dialkit-checker" }, [
-        h8("div", {
+      return h9("div", { ref: padRef, class: "dialkit-gradient-pad dialkit-checker" }, [
+        h9("div", {
           class: "dialkit-gradient-pad-fill",
           style: {
             background: fill.background,
@@ -3672,7 +3720,7 @@ var GradientTransformPad = defineComponent8({
           }
         }),
         ...radial ? [
-          h8("div", {
+          h9("div", {
             class: "dialkit-gradient-pad-line",
             style: {
               left: `${cxPx}px`,
@@ -3681,7 +3729,7 @@ var GradientTransformPad = defineComponent8({
               transform: `rotate(${majorLineAngle}deg)`
             }
           }),
-          h8("button", {
+          h9("button", {
             type: "button",
             class: "dialkit-gradient-pad-handle",
             "data-kind": "major",
@@ -3689,7 +3737,7 @@ var GradientTransformPad = defineComponent8({
             style: { left: `${major.x}px`, top: `${major.y}px` },
             ...handleProps("major")
           }),
-          h8("button", {
+          h9("button", {
             type: "button",
             class: "dialkit-gradient-pad-handle",
             "data-kind": "minor",
@@ -3698,7 +3746,7 @@ var GradientTransformPad = defineComponent8({
             ...handleProps("minor")
           })
         ] : [
-          h8("div", {
+          h9("div", {
             class: "dialkit-gradient-pad-line",
             style: {
               left: `${angleOx}px`,
@@ -3707,7 +3755,7 @@ var GradientTransformPad = defineComponent8({
               transform: `rotate(${angleLineAngle}deg)`
             }
           }),
-          h8("button", {
+          h9("button", {
             type: "button",
             class: "dialkit-gradient-pad-handle",
             "data-kind": "angle",
@@ -3717,7 +3765,7 @@ var GradientTransformPad = defineComponent8({
           })
         ],
         ...radial || conic ? [
-          h8("button", {
+          h9("button", {
             type: "button",
             class: "dialkit-gradient-pad-handle",
             "data-kind": "center",
@@ -3740,7 +3788,7 @@ var TYPE_OPTIONS = [
 function rampCss(stops) {
   return gradientToCss({ type: "linear", angle: 90, stops });
 }
-var GradientPanel = defineComponent9({
+var GradientPanel = defineComponent10({
   name: "DialKitGradientPanel",
   props: {
     value: { type: Object, required: true }
@@ -3884,9 +3932,9 @@ var GradientPanel = defineComponent9({
     return () => {
       const value = props.value;
       const previewStops = detach.value ? value.stops.filter((_, i) => i !== detach.value.index) : value.stops;
-      return h9("div", { class: "dialkit-gradient-panel" }, [
-        h9("div", { class: "dialkit-gradient-toolbar" }, [
-          h9("button", {
+      return h10("div", { class: "dialkit-gradient-panel" }, [
+        h10("div", { class: "dialkit-gradient-toolbar" }, [
+          h10("button", {
             ref: gripRef,
             type: "button",
             class: "dialkit-gradient-grip",
@@ -3898,23 +3946,23 @@ var GradientPanel = defineComponent9({
             onPointercancel: onGripUp,
             onLostpointercapture: onGripUp
           }, [
-            h9(
+            h10(
               "svg",
               { viewBox: "0 0 24 24", fill: "currentColor", "aria-hidden": "true" },
-              ICON_GRIP.map((c) => h9("circle", { cx: c.cx, cy: c.cy, r: "1.5" }))
+              ICON_GRIP.map((c) => h10("circle", { cx: c.cx, cy: c.cy, r: "1.5" }))
             )
           ]),
-          h9(SegmentedControl, {
+          h10(SegmentedControl, {
             options: TYPE_OPTIONS,
             value: value.type,
             onChange: (t) => emit("change", setGradientType(value, t))
           })
         ]),
-        h9(GradientTransformPad, {
+        h10(GradientTransformPad, {
           value,
           onChange: (v) => emit("change", v)
         }),
-        h9("div", {
+        h10("div", {
           ref: stripRef,
           class: "dialkit-gradient-strip",
           style: { "--gradient-ramp": rampCss(previewStops) },
@@ -3924,7 +3972,7 @@ var GradientPanel = defineComponent9({
           onPointercancel: onPointerUp
         }, value.stops.map((stop, i) => {
           const detaching = detach.value?.index === i;
-          return h9("button", {
+          return h10("button", {
             key: i,
             type: "button",
             class: "dialkit-gradient-stop",
@@ -3941,8 +3989,8 @@ var GradientPanel = defineComponent9({
             "aria-label": `Gradient stop ${i + 1}`
           });
         })),
-        h9("span", { class: "dialkit-gradient-divider", "aria-hidden": "true" }),
-        h9(ColorPickerPanel, {
+        h10("span", { class: "dialkit-gradient-divider", "aria-hidden": "true" }),
+        h10(ColorPickerPanel, {
           key: safeIndex.value,
           value: value.stops[safeIndex.value].color,
           alpha: true,
@@ -3958,7 +4006,7 @@ var GradientPanel = defineComponent9({
 var PANEL_WIDTH = 240;
 var PANEL_HEIGHT_ANGLED = 470;
 var PANEL_HEIGHT_RADIAL = 430;
-var GradientControl = defineComponent10({
+var GradientControl = defineComponent11({
   name: "DialKitGradientControl",
   props: {
     label: { type: String, required: true },
@@ -4051,9 +4099,9 @@ var GradientControl = defineComponent10({
       const root = triggerRef.value?.closest(".dialkit-root");
       portalTarget.value = root ?? document.body;
     });
-    return () => h10("div", { class: "dialkit-gradient-control" }, [
-      h10("span", { class: "dialkit-gradient-label" }, props.label),
-      h10("button", {
+    return () => h11("div", { class: "dialkit-gradient-control" }, [
+      h11("span", { class: "dialkit-gradient-label" }, props.label),
+      h11("button", {
         ref: triggerRef,
         class: "dialkit-gradient-preview dialkit-checker",
         style: { "--gradient-preview": gradientToCss(props.value) },
@@ -4063,9 +4111,9 @@ var GradientControl = defineComponent10({
         "aria-expanded": isOpen.value,
         onClick: togglePanel
       }),
-      portalTarget.value ? h10(Teleport3, { to: portalTarget.value }, [
-        h10(AnimatePresence3, null, {
-          default: () => isOpen.value && pos.value ? [h10(motion3.div, {
+      portalTarget.value ? h11(Teleport3, { to: portalTarget.value }, [
+        h11(AnimatePresence3, null, {
+          default: () => isOpen.value && pos.value ? [h11(motion3.div, {
             key: "dialkit-gradient-popover",
             ref: setPanelRef,
             class: "dialkit-gradient-popover",
@@ -4091,7 +4139,7 @@ var GradientControl = defineComponent10({
               }
             }
           }, [
-            h10(GradientPanel, {
+            h11(GradientPanel, {
               value: props.value,
               onChange: (next) => emit("change", next),
               onDrag: onPanelDrag
@@ -4104,11 +4152,11 @@ var GradientControl = defineComponent10({
 });
 
 // src/vue/components/RangeSlider.ts
-import { defineComponent as defineComponent11, h as h11, computed as computed6, nextTick as nextTick4, onMounted as onMounted9, onUnmounted as onUnmounted4, ref as ref12, watch as watch8 } from "vue";
+import { defineComponent as defineComponent12, h as h12, computed as computed6, nextTick as nextTick4, onMounted as onMounted9, onUnmounted as onUnmounted4, ref as ref12, watch as watch8 } from "vue";
 import { animate as animate2, motionValue } from "motion-v";
 var CLICK_THRESHOLD2 = 3;
 var HANDLE_HIT_PX = 12;
-var RangeSlider = defineComponent11({
+var RangeSlider = defineComponent12({
   name: "DialKitRangeSlider",
   props: {
     label: { type: String, required: true },
@@ -4358,8 +4406,8 @@ var RangeSlider = defineComponent11({
       const lowText = current.min.toFixed(decimals.value);
       const highText = current.max.toFixed(decimals.value);
       const handles = handleLeftStyles(lowPercent.value, highPercent.value);
-      return h11("div", { ref: wrapperRef, class: "dialkit-range-slider-wrapper" }, [
-        h11("div", {
+      return h12("div", { ref: wrapperRef, class: "dialkit-range-slider-wrapper" }, [
+        h12("div", {
           class: `dialkit-range-slider ${isActive.value ? "dialkit-range-slider-active" : ""}`,
           onPointerdown: handlePointerDown,
           onPointermove: handlePointerMove,
@@ -4373,7 +4421,7 @@ var RangeSlider = defineComponent11({
             isHovered.value = false;
           }
         }, [
-          h11("div", {
+          h12("div", {
             ref: fillRef,
             class: "dialkit-range-slider-fill",
             style: {
@@ -4381,7 +4429,7 @@ var RangeSlider = defineComponent11({
               width: `${Math.max(0, highPercent.value - lowPercent.value)}%`
             }
           }),
-          h11("div", {
+          h12("div", {
             ref: lowHandleRef,
             class: "dialkit-range-slider-handle",
             style: {
@@ -4390,7 +4438,7 @@ var RangeSlider = defineComponent11({
               opacity: handleOpacityFor("min")
             }
           }),
-          h11("div", {
+          h12("div", {
             ref: highHandleRef,
             class: "dialkit-range-slider-handle",
             style: {
@@ -4399,8 +4447,8 @@ var RangeSlider = defineComponent11({
               opacity: handleOpacityFor("max")
             }
           }),
-          h11("span", { class: "dialkit-range-slider-label" }, props.label),
-          editing.value !== null ? h11("input", {
+          h12("span", { class: "dialkit-range-slider-label" }, props.label),
+          editing.value !== null ? h12("input", {
             ref: inputRef,
             type: "text",
             class: "dialkit-range-slider-input",
@@ -4412,14 +4460,14 @@ var RangeSlider = defineComponent11({
             onBlur: commitEditor,
             onClick: (event) => event.stopPropagation(),
             onPointerdown: (event) => event.stopPropagation()
-          }) : h11("span", { class: "dialkit-range-slider-value" }, [
-            h11("span", {
+          }) : h12("span", { class: "dialkit-range-slider-value" }, [
+            h12("span", {
               class: "dialkit-range-slider-bound",
               onClick: (event) => openEditor("min", event),
               onPointerdown: (event) => event.stopPropagation()
             }, lowText),
-            h11("span", { class: "dialkit-range-slider-dash" }, "\u2013"),
-            h11("span", {
+            h12("span", { class: "dialkit-range-slider-dash" }, "\u2013"),
+            h12("span", {
               class: "dialkit-range-slider-bound",
               onClick: (event) => openEditor("max", event),
               onPointerdown: (event) => event.stopPropagation()
@@ -4432,7 +4480,7 @@ var RangeSlider = defineComponent11({
 });
 
 // src/vue/components/SelectControl.ts
-import { Teleport as Teleport4, defineComponent as defineComponent12, h as h12, onMounted as onMounted10, ref as ref13, watch as watch9 } from "vue";
+import { Teleport as Teleport4, defineComponent as defineComponent13, h as h13, onMounted as onMounted10, ref as ref13, watch as watch9 } from "vue";
 import { AnimatePresence as AnimatePresence4, motion as motion4 } from "motion-v";
 function toTitleCase(value) {
   return value.replace(/\b\w/g, (char) => char.toUpperCase());
@@ -4442,7 +4490,7 @@ function normalizeOptions(options) {
     (option) => typeof option === "string" ? { value: option, label: toTitleCase(option) } : option
   );
 }
-var SelectControl = defineComponent12({
+var SelectControl = defineComponent13({
   name: "DialKitSelectControl",
   props: {
     label: { type: String, required: true },
@@ -4519,17 +4567,17 @@ var SelectControl = defineComponent12({
       const root = triggerRef.value?.closest(".dialkit-root");
       portalTarget.value = root ?? document.body;
     });
-    return () => h12("div", { class: "dialkit-select-row" }, [
-      h12("button", {
+    return () => h13("div", { class: "dialkit-select-row" }, [
+      h13("button", {
         ref: triggerRef,
         class: "dialkit-select-trigger",
         "data-open": String(isOpen.value),
         onClick: toggleDropdown
       }, [
-        h12("span", { class: "dialkit-select-label" }, props.label),
-        h12("div", { class: "dialkit-select-right" }, [
-          h12("span", { class: "dialkit-select-value" }, selectedLabel()),
-          h12(motion4.svg, {
+        h13("span", { class: "dialkit-select-label" }, props.label),
+        h13("div", { class: "dialkit-select-right" }, [
+          h13("span", { class: "dialkit-select-value" }, selectedLabel()),
+          h13(motion4.svg, {
             class: "dialkit-select-chevron",
             viewBox: "0 0 24 24",
             fill: "none",
@@ -4539,12 +4587,12 @@ var SelectControl = defineComponent12({
             "stroke-linejoin": "round",
             animate: { rotate: isOpen.value ? 180 : 0 },
             transition: { type: "spring", visualDuration: 0.2, bounce: 0.15 }
-          }, [h12("path", { d: "M6 9.5L12 15.5L18 9.5" })])
+          }, [h13("path", { d: "M6 9.5L12 15.5L18 9.5" })])
         ])
       ]),
-      portalTarget.value ? h12(Teleport4, { to: portalTarget.value }, [
-        h12(AnimatePresence4, null, {
-          default: () => isOpen.value && pos.value ? [h12(motion4.div, {
+      portalTarget.value ? h13(Teleport4, { to: portalTarget.value }, [
+        h13(AnimatePresence4, null, {
+          default: () => isOpen.value && pos.value ? [h13(motion4.div, {
             key: "dialkit-select-dropdown",
             ref: setDropdownRef,
             class: "dialkit-select-dropdown",
@@ -4564,7 +4612,7 @@ var SelectControl = defineComponent12({
                 transformOrigin: "top"
               }
             }
-          }, normalizedOptions().map((option) => h12("button", {
+          }, normalizedOptions().map((option) => h13("button", {
             key: option.value,
             class: "dialkit-select-option",
             "data-selected": String(option.value === props.value),
@@ -4580,7 +4628,7 @@ var SelectControl = defineComponent12({
 });
 
 // src/vue/components/ShortcutListener.ts
-import { defineComponent as defineComponent13, inject, onMounted as onMounted11, onUnmounted as onUnmounted5, provide, ref as ref14 } from "vue";
+import { defineComponent as defineComponent14, inject, onMounted as onMounted11, onUnmounted as onUnmounted5, provide, ref as ref14 } from "vue";
 var ShortcutKey = /* @__PURE__ */ Symbol("DialKitShortcut");
 function useShortcutContext() {
   return inject(ShortcutKey, {
@@ -4588,7 +4636,7 @@ function useShortcutContext() {
     activePath: ref14(null)
   });
 }
-var ShortcutListener = defineComponent13({
+var ShortcutListener = defineComponent14({
   name: "DialKitShortcutListener",
   setup(_, { slots }) {
     const activePanelId = ref14(null);
@@ -4783,14 +4831,14 @@ var ShortcutListener = defineComponent13({
 });
 
 // src/vue/components/Slider.ts
-import { defineComponent as defineComponent14, h as h14, computed as computed7, nextTick as nextTick5, onMounted as onMounted12, onUnmounted as onUnmounted6, ref as ref15, watch as watch10 } from "vue";
+import { defineComponent as defineComponent15, h as h15, computed as computed7, nextTick as nextTick5, onMounted as onMounted12, onUnmounted as onUnmounted6, ref as ref15, watch as watch10 } from "vue";
 import { animate as animate3, motionValue as motionValue2 } from "motion-v";
 var CLICK_THRESHOLD3 = 3;
 var DEAD_ZONE = 32;
 var MAX_CURSOR_RANGE = 200;
 var MAX_STRETCH = 8;
 var DETENT_PX = 6;
-var Slider = defineComponent14({
+var Slider = defineComponent15({
   name: "DialKitSlider",
   props: {
     label: { type: String, required: true },
@@ -4837,6 +4885,7 @@ var Slider = defineComponent14({
     const isDragging = ref15(false);
     const isHovered = ref15(false);
     const isValueHovered = ref15(false);
+    const isMetaHeld = ref15(false);
     const isValueEditable = ref15(false);
     const showInput = ref15(false);
     const inputValue = ref15("");
@@ -4851,6 +4900,7 @@ var Slider = defineComponent14({
     let wrapperRect = null;
     let scaleVal = 1;
     let hoverTimeout = null;
+    let wheelValue = props.value;
     let snapAnim = null;
     let rubberAnim = null;
     let handleOpacityAnim = null;
@@ -4917,6 +4967,7 @@ var Slider = defineComponent14({
     };
     const handlePointerDown = (event) => {
       if (showInput.value) return;
+      if (event.metaKey) return;
       event.preventDefault();
       event.currentTarget.setPointerCapture(event.pointerId);
       pointerDownPos = { x: event.clientX, y: event.clientY };
@@ -4999,6 +5050,37 @@ var Slider = defineComponent14({
       rubberStretchPx.jump(0);
       pointerDownPos = null;
     };
+    const handleWheel = (event) => {
+      if (showInput.value) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const raw = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+      if (raw === 0) return;
+      const stepMultiplier = event.shiftKey ? 10 : event.altKey ? 0.1 : 1;
+      const delta = (raw > 0 ? -1 : 1) * step.value * stepMultiplier;
+      const next = roundValue(
+        Math.max(min.value, Math.min(max.value, wheelValue + delta)),
+        step.value
+      );
+      wheelValue = next;
+      if (snapAnim) {
+        snapAnim.stop();
+        snapAnim = null;
+      }
+      fillPercent.jump(percentFromValue(next));
+      emit("change", next);
+    };
+    const syncMetaHeld = (event) => {
+      isMetaHeld.value = event.metaKey;
+    };
+    const clearMetaHeld = () => {
+      isMetaHeld.value = false;
+    };
+    const unbindMetaKeys = () => {
+      window.removeEventListener("keydown", syncMetaHeld);
+      window.removeEventListener("keyup", syncMetaHeld);
+      window.removeEventListener("blur", clearMetaHeld);
+    };
     const handleInputSubmit = () => {
       const parsed = parseFloat(inputValue.value);
       if (!Number.isNaN(parsed)) {
@@ -5010,7 +5092,7 @@ var Slider = defineComponent14({
       isValueEditable.value = false;
     };
     const handleValueClick = (event) => {
-      if (!isValueEditable.value) return;
+      if (!isValueEditable.value && !event.metaKey) return;
       event.stopPropagation();
       event.preventDefault();
       showInput.value = true;
@@ -5024,10 +5106,21 @@ var Slider = defineComponent14({
         isValueHovered.value = false;
       }
     };
-    watch10(() => props.value, () => {
+    watch10(() => props.value, (next) => {
+      wheelValue = next;
       if (!isInteracting.value && !snapAnim) {
         fillPercent.jump(percentage.value);
       }
+    });
+    watch10(isHovered, (hovered) => {
+      if (!hovered) {
+        unbindMetaKeys();
+        isMetaHeld.value = false;
+        return;
+      }
+      window.addEventListener("keydown", syncMetaHeld);
+      window.addEventListener("keyup", syncMetaHeld);
+      window.addEventListener("blur", clearMetaHeld);
     });
     watch10(isDragging, (dragging) => {
       handleOpacityAnim?.stop();
@@ -5059,13 +5152,13 @@ var Slider = defineComponent14({
         const count = Math.max(0, Math.floor(discreteSteps.value) - 1);
         for (let i = 0; i < count; i += 1) {
           const pct = (i + 1) * step.value / (max.value - min.value) * 100;
-          marks.push(h14("div", { class: "dialkit-slider-hashmark", style: { left: `${pct}%` } }));
+          marks.push(h15("div", { class: "dialkit-slider-hashmark", style: { left: `${pct}%` } }));
         }
         return marks;
       }
       for (let i = 0; i < 9; i += 1) {
         const pct = (i + 1) * 10;
-        marks.push(h14("div", { class: "dialkit-slider-hashmark", style: { left: `${pct}%` } }));
+        marks.push(h15("div", { class: "dialkit-slider-hashmark", style: { left: `${pct}%` } }));
       }
       return marks;
     });
@@ -5079,12 +5172,15 @@ var Slider = defineComponent14({
       applyFillStyles(fillPercent.get());
       applyRubberStyles(rubberStretchPx.get());
       applyHandleOpacity(handleOpacityMv.get());
+      wrapperRef.value?.addEventListener("wheel", handleWheel, { passive: false });
     });
     onUnmounted6(() => {
       if (hoverTimeout) clearTimeout(hoverTimeout);
       snapAnim?.stop();
       rubberAnim?.stop();
       handleOpacityAnim?.stop();
+      wrapperRef.value?.removeEventListener("wheel", handleWheel);
+      unbindMetaKeys();
       unsubFill?.();
       unsubRubber?.();
       unsubHandleOpacity?.();
@@ -5094,7 +5190,8 @@ var Slider = defineComponent14({
         "dialkit-slider",
         isVertical.value ? "dialkit-slider-vertical" : "",
         isActive.value ? "dialkit-slider-active" : "",
-        isInteracting.value ? "dialkit-slider-engaged" : ""
+        isInteracting.value ? "dialkit-slider-engaged" : "",
+        isMetaHeld.value ? "dialkit-slider-text-mode" : ""
       ].filter(Boolean).join(" ")
     );
     const cardProps = () => ({
@@ -5105,14 +5202,17 @@ var Slider = defineComponent14({
       onPointermove: handlePointerMove,
       onPointerup: handlePointerUp,
       onPointercancel: handlePointerCancel,
-      onMouseenter: () => {
+      // Read ⌘ on entry too: the key listeners only exist while hovered, so a
+      // key already held before the pointer arrived would go unseen.
+      onMouseenter: (e) => {
         isHovered.value = true;
+        isMetaHeld.value = e.metaKey;
       },
       onMouseleave: () => {
         isHovered.value = false;
       }
     });
-    const renderInput = (className) => h14("input", {
+    const renderInput = (className) => h15("input", {
       ref: inputRef,
       type: "text",
       class: className,
@@ -5125,7 +5225,7 @@ var Slider = defineComponent14({
       onClick: (event) => event.stopPropagation(),
       onPointerdown: (event) => event.stopPropagation()
     });
-    const renderValueSpan = (className) => h14("span", {
+    const renderValueSpan = (className) => h15("span", {
       class: `${className} ${isValueEditable.value ? "dialkit-slider-value-editable" : ""}`,
       onMouseenter: () => {
         isValueHovered.value = true;
@@ -5137,23 +5237,23 @@ var Slider = defineComponent14({
       onPointerdown: (event) => {
         if (isValueEditable.value) event.stopPropagation();
       },
-      style: { cursor: isValueEditable.value ? "text" : "default" }
+      style: { cursor: isValueEditable.value || isMetaHeld.value ? "text" : "default" }
     }, [
       displayValue.value,
-      props.unit ? h14("span", { class: "dialkit-slider-unit" }, props.unit) : null
+      props.unit ? h15("span", { class: "dialkit-slider-unit" }, props.unit) : null
     ]);
-    const renderLabel = (className) => h14("span", { class: className }, [
+    const renderLabel = (className) => h15("span", { class: className }, [
       props.label,
-      props.shortcut ? h14("span", {
+      props.shortcut ? h15("span", {
         class: `dialkit-shortcut-pill${props.shortcutActive ? " dialkit-shortcut-pill-active" : ""}`
       }, formatSliderShortcut(props.shortcut)) : null
     ]);
     return () => {
       if (isVertical.value) {
-        return h14("div", { ref: wrapperRef, class: "dialkit-slider-wrapper dialkit-slider-wrapper-vertical" }, [
-          h14("div", cardProps(), [
-            h14("div", { class: "dialkit-slider-fill-area" }, [
-              h14("div", {
+        return h15("div", { ref: wrapperRef, class: "dialkit-slider-wrapper dialkit-slider-wrapper-vertical" }, [
+          h15("div", cardProps(), [
+            h15("div", { class: "dialkit-slider-fill-area" }, [
+              h15("div", {
                 ref: fillRef,
                 class: "dialkit-slider-fill-vertical",
                 style: {
@@ -5167,10 +5267,10 @@ var Slider = defineComponent14({
           ])
         ]);
       }
-      return h14("div", { ref: wrapperRef, class: "dialkit-slider-wrapper" }, [
-        h14("div", cardProps(), [
-          h14("div", { class: "dialkit-slider-track" }, [
-            h14("div", {
+      return h15("div", { ref: wrapperRef, class: "dialkit-slider-wrapper" }, [
+        h15("div", cardProps(), [
+          h15("div", { class: "dialkit-slider-track" }, [
+            h15("div", {
               ref: fillRef,
               class: "dialkit-slider-fill",
               style: {
@@ -5178,7 +5278,7 @@ var Slider = defineComponent14({
                 width: fillExtent(fillPercent.get())
               }
             }),
-            h14("div", {
+            h15("div", {
               ref: handleRef,
               class: "dialkit-slider-handle",
               style: {
@@ -5187,7 +5287,7 @@ var Slider = defineComponent14({
               }
             })
           ]),
-          h14("div", { class: "dialkit-slider-hashmarks" }, hashMarks.value),
+          h15("div", { class: "dialkit-slider-hashmarks" }, hashMarks.value),
           renderLabel("dialkit-slider-label"),
           showInput.value ? renderInput("dialkit-slider-input") : renderValueSpan("dialkit-slider-value")
         ])
@@ -5197,10 +5297,10 @@ var Slider = defineComponent14({
 });
 
 // src/vue/components/SpringControl.ts
-import { defineComponent as defineComponent16, h as h16, onMounted as onMounted13, onUnmounted as onUnmounted7, ref as ref16 } from "vue";
+import { defineComponent as defineComponent17, h as h17, onMounted as onMounted13, onUnmounted as onUnmounted7, ref as ref16 } from "vue";
 
 // src/vue/components/SpringVisualization.ts
-import { defineComponent as defineComponent15, h as h15, computed as computed8 } from "vue";
+import { defineComponent as defineComponent16, h as h16, computed as computed8 } from "vue";
 function generateSpringCurve(stiffness, damping, mass, duration) {
   const points = [];
   const steps = 100;
@@ -5219,7 +5319,7 @@ function generateSpringCurve(stiffness, damping, mass, duration) {
   }
   return points;
 }
-var SpringVisualization = defineComponent15({
+var SpringVisualization = defineComponent16({
   name: "DialKitSpringVisualization",
   props: {
     spring: {
@@ -5263,17 +5363,17 @@ var SpringVisualization = defineComponent15({
         return `${index === 0 ? "M" : "L"} ${x} ${y}`;
       }).join(" ");
     });
-    return () => h15("svg", { viewBox: `0 0 ${width} ${height}`, class: "dialkit-spring-viz" }, [
+    return () => h16("svg", { viewBox: `0 0 ${width} ${height}`, class: "dialkit-spring-viz" }, [
       ...Array.from({ length: 3 }).flatMap((_, index) => {
         const lineIndex = index + 1;
         const x = width / 4 * lineIndex;
         const y = height / 4 * lineIndex;
         return [
-          h15("line", { x1: x, y1: 0, x2: x, y2: height, stroke: "rgba(255, 255, 255, 0.08)", "stroke-width": 1 }),
-          h15("line", { x1: 0, y1: y, x2: width, y2: y, stroke: "rgba(255, 255, 255, 0.08)", "stroke-width": 1 })
+          h16("line", { x1: x, y1: 0, x2: x, y2: height, stroke: "rgba(255, 255, 255, 0.08)", "stroke-width": 1 }),
+          h16("line", { x1: 0, y1: y, x2: width, y2: y, stroke: "rgba(255, 255, 255, 0.08)", "stroke-width": 1 })
         ];
       }),
-      h15("line", {
+      h16("line", {
         x1: 0,
         y1: height / 2,
         x2: width,
@@ -5282,7 +5382,7 @@ var SpringVisualization = defineComponent15({
         "stroke-width": 1,
         "stroke-dasharray": "4,4"
       }),
-      h15("path", {
+      h16("path", {
         d: pathData.value,
         fill: "none",
         stroke: "rgba(255, 255, 255, 0.6)",
@@ -5295,7 +5395,7 @@ var SpringVisualization = defineComponent15({
 });
 
 // src/vue/components/SpringControl.ts
-var SpringControl = defineComponent16({
+var SpringControl = defineComponent17({
   name: "DialKitSpringControl",
   props: {
     panelId: { type: String, required: true },
@@ -5345,13 +5445,13 @@ var SpringControl = defineComponent16({
         emit("change", { ...rest, [key]: value });
       }
     };
-    return () => h16(Folder, { title: props.label, defaultOpen: true }, {
+    return () => h17(Folder, { title: props.label, defaultOpen: true }, {
       default: () => [
-        h16("div", { style: { display: "flex", flexDirection: "column", gap: "6px" } }, [
-          h16(SpringVisualization, { spring: props.spring, isSimpleMode: isSimpleMode() }),
-          h16("div", { class: "dialkit-labeled-control" }, [
-            h16("span", { class: "dialkit-labeled-control-label" }, "Type"),
-            h16(SegmentedControl, {
+        h17("div", { style: { display: "flex", flexDirection: "column", gap: "6px" } }, [
+          h17(SpringVisualization, { spring: props.spring, isSimpleMode: isSimpleMode() }),
+          h17("div", { class: "dialkit-labeled-control" }, [
+            h17("span", { class: "dialkit-labeled-control-label" }, "Type"),
+            h17(SegmentedControl, {
               options: [
                 { value: "simple", label: "Time" },
                 { value: "advanced", label: "Physics" }
@@ -5361,7 +5461,7 @@ var SpringControl = defineComponent16({
             })
           ]),
           ...isSimpleMode() ? [
-            h16(Slider, {
+            h17(Slider, {
               label: "Duration",
               value: props.spring.visualDuration ?? 0.3,
               min: 0.1,
@@ -5370,7 +5470,7 @@ var SpringControl = defineComponent16({
               unit: "s",
               onChange: (next) => handleUpdate("visualDuration", next)
             }),
-            h16(Slider, {
+            h17(Slider, {
               label: "Bounce",
               value: props.spring.bounce ?? 0.2,
               min: 0,
@@ -5379,7 +5479,7 @@ var SpringControl = defineComponent16({
               onChange: (next) => handleUpdate("bounce", next)
             })
           ] : [
-            h16(Slider, {
+            h17(Slider, {
               label: "Stiffness",
               value: props.spring.stiffness ?? 400,
               min: 1,
@@ -5387,7 +5487,7 @@ var SpringControl = defineComponent16({
               step: 10,
               onChange: (next) => handleUpdate("stiffness", next)
             }),
-            h16(Slider, {
+            h17(Slider, {
               label: "Damping",
               value: props.spring.damping ?? 17,
               min: 1,
@@ -5395,7 +5495,7 @@ var SpringControl = defineComponent16({
               step: 1,
               onChange: (next) => handleUpdate("damping", next)
             }),
-            h16(Slider, {
+            h17(Slider, {
               label: "Mass",
               value: props.spring.mass ?? 1,
               min: 0.1,
@@ -5411,9 +5511,9 @@ var SpringControl = defineComponent16({
 });
 
 // src/vue/components/TextControl.ts
-import { defineComponent as defineComponent17, h as h17, ref as ref17 } from "vue";
+import { defineComponent as defineComponent18, h as h18, ref as ref17 } from "vue";
 var textControlInstance = 0;
-var TextControl = defineComponent17({
+var TextControl = defineComponent18({
   name: "DialKitTextControl",
   props: {
     label: { type: String, required: true },
@@ -5423,9 +5523,9 @@ var TextControl = defineComponent17({
   emits: ["change"],
   setup(props, { emit }) {
     const inputId = ref17(`dialkit-text-${++textControlInstance}`);
-    return () => h17("div", { class: "dialkit-text-control" }, [
-      h17("label", { class: "dialkit-text-label", for: inputId.value }, props.label),
-      h17("input", {
+    return () => h18("div", { class: "dialkit-text-control" }, [
+      h18("label", { class: "dialkit-text-label", for: inputId.value }, props.label),
+      h18("input", {
         id: inputId.value,
         type: "text",
         class: "dialkit-text-input",
@@ -5438,8 +5538,8 @@ var TextControl = defineComponent17({
 });
 
 // src/vue/components/Toggle.ts
-import { defineComponent as defineComponent18, h as h18 } from "vue";
-var Toggle = defineComponent18({
+import { defineComponent as defineComponent19, h as h19 } from "vue";
+var Toggle = defineComponent19({
   name: "DialKitToggle",
   props: {
     label: { type: String, required: true },
@@ -5449,31 +5549,28 @@ var Toggle = defineComponent18({
   },
   emits: ["change"],
   setup(props, { emit }) {
-    return () => h18("div", { class: "dialkit-labeled-control" }, [
-      h18("span", { class: "dialkit-labeled-control-label" }, [
+    return () => h19("div", { class: "dialkit-labeled-control dialkit-labeled-control-check" }, [
+      h19(Checkbox, {
+        checked: props.checked,
+        label: props.label,
+        onChange: (next) => emit("change", next)
+      }),
+      h19("span", { class: "dialkit-labeled-control-label" }, [
         props.label,
-        props.shortcut ? h18("span", {
+        props.shortcut ? h19("span", {
           class: `dialkit-shortcut-pill${props.shortcutActive ? " dialkit-shortcut-pill-active" : ""}`
         }, formatToggleShortcut(props.shortcut)) : null
-      ]),
-      h18(SegmentedControl, {
-        options: [
-          { value: "off", label: "Off" },
-          { value: "on", label: "On" }
-        ],
-        value: props.checked ? "on" : "off",
-        onChange: (value) => emit("change", value === "on")
-      })
+      ])
     ]);
   }
 });
 
 // src/vue/components/TransitionControl.ts
-import { defineComponent as defineComponent20, h as h20, onMounted as onMounted14, onUnmounted as onUnmounted8, ref as ref18 } from "vue";
+import { defineComponent as defineComponent21, h as h21, onMounted as onMounted14, onUnmounted as onUnmounted8, ref as ref18 } from "vue";
 
 // src/vue/components/EasingVisualization.ts
-import { defineComponent as defineComponent19, h as h19, computed as computed9 } from "vue";
-var EasingVisualization = defineComponent19({
+import { defineComponent as defineComponent20, h as h20, computed as computed9 } from "vue";
+var EasingVisualization = defineComponent20({
   name: "DialKitEasingVisualization",
   props: {
     easing: {
@@ -5498,12 +5595,12 @@ var EasingVisualization = defineComponent19({
       const p2 = toSvg(x2, y2);
       return `M ${start.x} ${start.y} C ${p1.x} ${p1.y}, ${p2.x} ${p2.y}, ${end.x} ${end.y}`;
     });
-    return () => h19("svg", {
+    return () => h20("svg", {
       viewBox: `0 0 ${size} ${size}`,
       preserveAspectRatio: "xMidYMid slice",
       class: "dialkit-spring-viz dialkit-easing-viz"
     }, [
-      h19("line", {
+      h20("line", {
         x1: pad + (0 + 0.5) * unit,
         y1: pad + (1.5 - 0) * unit,
         x2: pad + (1 + 0.5) * unit,
@@ -5512,7 +5609,7 @@ var EasingVisualization = defineComponent19({
         "stroke-width": 1,
         "stroke-dasharray": "4,4"
       }),
-      h19("path", {
+      h20("path", {
         d: curve.value,
         fill: "none",
         stroke: "rgba(255, 255, 255, 0.6)",
@@ -5534,7 +5631,7 @@ function parseEase(value) {
   }
   return null;
 }
-var EaseTextInput = defineComponent20({
+var EaseTextInput = defineComponent21({
   name: "DialKitEaseTextInput",
   props: {
     ease: {
@@ -5563,9 +5660,9 @@ var EaseTextInput = defineComponent20({
         event.target.blur();
       }
     };
-    return () => h20("div", { class: "dialkit-labeled-control" }, [
-      h20("span", { class: "dialkit-labeled-control-label" }, "Ease"),
-      h20("input", {
+    return () => h21("div", { class: "dialkit-labeled-control" }, [
+      h21("span", { class: "dialkit-labeled-control-label" }, "Ease"),
+      h21("input", {
         type: "text",
         class: "dialkit-text-input",
         value: editing.value ? draft.value : formatEase(props.ease),
@@ -5580,7 +5677,7 @@ var EaseTextInput = defineComponent20({
     ]);
   }
 });
-var TransitionControl = defineComponent20({
+var TransitionControl = defineComponent21({
   name: "DialKitTransitionControl",
   props: {
     panelId: { type: String, required: true },
@@ -5654,7 +5751,7 @@ var TransitionControl = defineComponent20({
       const isSimpleSpring = mode.value === "simple";
       const currentSpring = spring();
       const currentEasing = easing();
-      const durationSlider = !props.hideDuration && (isEasing || isSimpleSpring) ? h20(Slider, {
+      const durationSlider = !props.hideDuration && (isEasing || isSimpleSpring) ? h21(Slider, {
         label: "Duration",
         value: props.durationControl?.value ?? (isEasing ? currentEasing.duration : currentSpring.visualDuration ?? 0.3),
         min: props.durationControl?.min ?? 0.1,
@@ -5666,13 +5763,13 @@ var TransitionControl = defineComponent20({
           else handleSpringUpdate("visualDuration", next);
         })
       }) : null;
-      return h20(Folder, { title: props.label, defaultOpen: true }, {
+      return h21(Folder, { title: props.label, defaultOpen: true }, {
         default: () => [
-          h20("div", { style: { display: "flex", flexDirection: "column", gap: "6px" } }, [
-            isEasing ? h20(EasingVisualization, { easing: currentEasing }) : h20(SpringVisualization, { spring: currentSpring, isSimpleMode: isSimpleSpring }),
-            h20("div", { class: "dialkit-labeled-control" }, [
-              h20("span", { class: "dialkit-labeled-control-label" }, "Type"),
-              h20(SegmentedControl, {
+          h21("div", { style: { display: "flex", flexDirection: "column", gap: "6px" } }, [
+            isEasing ? h21(EasingVisualization, { easing: currentEasing }) : h21(SpringVisualization, { spring: currentSpring, isSimpleMode: isSimpleSpring }),
+            h21("div", { class: "dialkit-labeled-control" }, [
+              h21("span", { class: "dialkit-labeled-control-label" }, "Type"),
+              h21(SegmentedControl, {
                 options: [
                   { value: "easing", label: "Easing" },
                   { value: "simple", label: "Time" },
@@ -5683,16 +5780,16 @@ var TransitionControl = defineComponent20({
               })
             ]),
             ...isEasing ? [
-              h20(Slider, { label: "x1", value: currentEasing.ease[0], min: 0, max: 1, step: 0.01, onChange: (next) => updateEase(0, next) }),
-              h20(Slider, { label: "y1", value: currentEasing.ease[1], min: -1, max: 2, step: 0.01, onChange: (next) => updateEase(1, next) }),
-              h20(Slider, { label: "x2", value: currentEasing.ease[2], min: 0, max: 1, step: 0.01, onChange: (next) => updateEase(2, next) }),
-              h20(Slider, { label: "y2", value: currentEasing.ease[3], min: -1, max: 2, step: 0.01, onChange: (next) => updateEase(3, next) }),
-              h20(EaseTextInput, {
+              h21(Slider, { label: "x1", value: currentEasing.ease[0], min: 0, max: 1, step: 0.01, onChange: (next) => updateEase(0, next) }),
+              h21(Slider, { label: "y1", value: currentEasing.ease[1], min: -1, max: 2, step: 0.01, onChange: (next) => updateEase(1, next) }),
+              h21(Slider, { label: "x2", value: currentEasing.ease[2], min: 0, max: 1, step: 0.01, onChange: (next) => updateEase(2, next) }),
+              h21(Slider, { label: "y2", value: currentEasing.ease[3], min: -1, max: 2, step: 0.01, onChange: (next) => updateEase(3, next) }),
+              h21(EaseTextInput, {
                 ease: currentEasing.ease,
                 onChange: (next) => emit("change", { ...currentEasing, ease: next })
               })
             ] : isSimpleSpring ? [
-              h20(Slider, {
+              h21(Slider, {
                 label: "Bounce",
                 value: currentSpring.bounce ?? 0.2,
                 min: 0,
@@ -5701,7 +5798,7 @@ var TransitionControl = defineComponent20({
                 onChange: (next) => handleSpringUpdate("bounce", next)
               })
             ] : [
-              h20(Slider, {
+              h21(Slider, {
                 label: "Stiffness",
                 value: currentSpring.stiffness ?? 400,
                 min: 1,
@@ -5709,7 +5806,7 @@ var TransitionControl = defineComponent20({
                 step: 10,
                 onChange: (next) => handleSpringUpdate("stiffness", next)
               }),
-              h20(Slider, {
+              h21(Slider, {
                 label: "Damping",
                 value: currentSpring.damping ?? 17,
                 min: 1,
@@ -5717,7 +5814,7 @@ var TransitionControl = defineComponent20({
                 step: 1,
                 onChange: (next) => handleSpringUpdate("damping", next)
               }),
-              h20(Slider, {
+              h21(Slider, {
                 label: "Mass",
                 value: currentSpring.mass ?? 1,
                 min: 0.1,
@@ -5735,10 +5832,10 @@ var TransitionControl = defineComponent20({
 });
 
 // src/vue/components/XYControl.ts
-import { defineComponent as defineComponent22, h as h22 } from "vue";
+import { defineComponent as defineComponent23, h as h23 } from "vue";
 
 // src/vue/components/XYPad.ts
-import { computed as computed10, defineComponent as defineComponent21, h as h21, ref as ref19 } from "vue";
+import { computed as computed10, defineComponent as defineComponent22, h as h22, ref as ref19 } from "vue";
 var DEFAULT_GRID_X = 5;
 var DEFAULT_GRID_Y = 5;
 var FINE_DRAG = 0.15;
@@ -5750,7 +5847,7 @@ function decimalsForStep3(step) {
 function formatComponent(v, axis) {
   return (v + 0).toFixed(decimalsForStep3(axis.step));
 }
-var XYPad = defineComponent21({
+var XYPad = defineComponent22({
   name: "DialKitXYPad",
   props: {
     label: { type: String, required: true },
@@ -5926,20 +6023,20 @@ var XYPad = defineComponent21({
       const point = pointFromValue(value, xa, ya);
       const leftPct = `${point.x * 100}%`;
       const topPct = `${point.y * 100}%`;
-      return h21("div", {
+      return h22("div", {
         class: "dialkit-xy",
         "data-active": String(active.value),
         "data-disabled": String(props.disabled)
       }, [
-        h21("div", { class: "dialkit-xy-header" }, [
-          h21("span", { class: "dialkit-xy-label" }, [
+        h22("div", { class: "dialkit-xy-header" }, [
+          h22("span", { class: "dialkit-xy-label" }, [
             props.label,
-            props.shortcut ? h21("span", {
+            props.shortcut ? h22("span", {
               class: `dialkit-shortcut-pill${props.shortcutActive ? " dialkit-shortcut-pill-active" : ""}`
             }, formatSliderShortcut(props.shortcut)) : null
           ])
         ]),
-        h21("div", {
+        h22("div", {
           ref: areaRef,
           class: "dialkit-xy-area",
           // Only the height is fixed (from `size`); width is fluid (CSS width:100%),
@@ -5979,7 +6076,7 @@ var XYPad = defineComponent21({
             if (!dragging) active.value = false;
           }
         }, [
-          showGrid ? h21("div", {
+          showGrid ? h22("div", {
             class: "dialkit-xy-grid",
             "aria-hidden": "true",
             style: {
@@ -5989,12 +6086,12 @@ var XYPad = defineComponent21({
           }) : null,
           // Live axis labels, decorative (aria-valuetext owns the accessible string):
           // X along the bottom edge, Y up the left edge.
-          h21("div", { class: "dialkit-xy-axis dialkit-xy-axis-x", "aria-hidden": "true" }, xVisual),
-          h21("div", { class: "dialkit-xy-axis dialkit-xy-axis-y", "aria-hidden": "true" }, yVisual),
+          h22("div", { class: "dialkit-xy-axis dialkit-xy-axis-x", "aria-hidden": "true" }, xVisual),
+          h22("div", { class: "dialkit-xy-axis dialkit-xy-axis-y", "aria-hidden": "true" }, yVisual),
           // Crosshair guides tracking the thumb, revealed on data-active.
-          h21("div", { class: "dialkit-xy-guide dialkit-xy-guide-v", "aria-hidden": "true", style: { left: leftPct } }),
-          h21("div", { class: "dialkit-xy-guide dialkit-xy-guide-h", "aria-hidden": "true", style: { top: topPct } }),
-          h21("div", { class: "dialkit-xy-thumb", "aria-hidden": "true", style: { left: leftPct, top: topPct } })
+          h22("div", { class: "dialkit-xy-guide dialkit-xy-guide-v", "aria-hidden": "true", style: { left: leftPct } }),
+          h22("div", { class: "dialkit-xy-guide dialkit-xy-guide-h", "aria-hidden": "true", style: { top: topPct } }),
+          h22("div", { class: "dialkit-xy-thumb", "aria-hidden": "true", style: { left: leftPct, top: topPct } })
         ])
       ]);
     };
@@ -6002,7 +6099,7 @@ var XYPad = defineComponent21({
 });
 
 // src/vue/components/XYControl.ts
-var XYControl = defineComponent22({
+var XYControl = defineComponent23({
   name: "DialKitXYControl",
   props: {
     label: { type: String, required: true },
@@ -6019,7 +6116,7 @@ var XYControl = defineComponent22({
   },
   emits: ["change"],
   setup(props, { emit }) {
-    return () => h22(XYPad, {
+    return () => h23(XYPad, {
       label: props.label,
       value: props.value,
       x: props.x,
@@ -6037,7 +6134,7 @@ var XYControl = defineComponent22({
 });
 
 // src/vue/components/ControlRenderer.ts
-var ControlRenderer = defineComponent23({
+var ControlRenderer = defineComponent24({
   name: "DialKitControlRenderer",
   props: {
     panelId: { type: String, required: true },
@@ -6053,7 +6150,7 @@ var ControlRenderer = defineComponent23({
       const value = props.values[control.path];
       switch (control.type) {
         case "slider":
-          return h23(Slider, {
+          return h24(Slider, {
             key: control.path,
             label: control.label,
             value,
@@ -6066,7 +6163,7 @@ var ControlRenderer = defineComponent23({
             onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
           });
         case "number":
-          return h23(NumberControl, {
+          return h24(NumberControl, {
             key: control.path,
             label: control.label,
             value,
@@ -6079,7 +6176,7 @@ var ControlRenderer = defineComponent23({
             onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
           });
         case "range":
-          return h23(RangeSlider, {
+          return h24(RangeSlider, {
             key: control.path,
             label: control.label,
             value,
@@ -6090,7 +6187,7 @@ var ControlRenderer = defineComponent23({
             onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
           });
         case "toggle":
-          return h23(Toggle, {
+          return h24(Toggle, {
             key: control.path,
             label: control.label,
             checked: value,
@@ -6099,7 +6196,7 @@ var ControlRenderer = defineComponent23({
             onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
           });
         case "spring":
-          return h23(SpringControl, {
+          return h24(SpringControl, {
             key: control.path,
             panelId: props.panelId,
             path: control.path,
@@ -6108,7 +6205,7 @@ var ControlRenderer = defineComponent23({
             onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
           });
         case "transition":
-          return h23(TransitionControl, {
+          return h24(TransitionControl, {
             key: control.path,
             panelId: props.panelId,
             path: control.path,
@@ -6120,7 +6217,7 @@ var ControlRenderer = defineComponent23({
         case "folder":
           if (control.module) {
             const enabledPath = `${control.path}._enabled`;
-            return h23(ModuleFolder, {
+            return h24(ModuleFolder, {
               key: control.path,
               title: control.label,
               enabled: props.values[enabledPath],
@@ -6130,7 +6227,7 @@ var ControlRenderer = defineComponent23({
               hintId: hintId(control)
             }, { default: () => (control.children ?? []).map(renderControl) });
           }
-          return h23(Folder, {
+          return h24(Folder, {
             key: control.path,
             title: control.label,
             defaultOpen: control.defaultOpen ?? true,
@@ -6139,7 +6236,7 @@ var ControlRenderer = defineComponent23({
             hintId: hintId(control)
           }, { default: () => (control.children ?? []).map(renderControl) });
         case "text":
-          return h23(TextControl, {
+          return h24(TextControl, {
             key: control.path,
             label: control.label,
             value,
@@ -6147,7 +6244,7 @@ var ControlRenderer = defineComponent23({
             onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
           });
         case "select":
-          return h23(SelectControl, {
+          return h24(SelectControl, {
             key: control.path,
             label: control.label,
             value,
@@ -6155,7 +6252,7 @@ var ControlRenderer = defineComponent23({
             onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
           });
         case "color":
-          return h23(ColorControl, {
+          return h24(ColorControl, {
             key: control.path,
             label: control.label,
             value,
@@ -6164,14 +6261,14 @@ var ControlRenderer = defineComponent23({
             onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
           });
         case "gradient":
-          return h23(GradientControl, {
+          return h24(GradientControl, {
             key: control.path,
             label: control.label,
             value,
             onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
           });
         case "xy":
-          return h23(XYControl, {
+          return h24(XYControl, {
             key: control.path,
             label: control.label,
             value,
@@ -6187,7 +6284,7 @@ var ControlRenderer = defineComponent23({
             onChange: (next) => DialStore.updateValue(props.panelId, control.path, next)
           });
         case "action":
-          return h23("button", {
+          return h24("button", {
             key: control.path,
             class: "dialkit-button",
             // The wrapper greys every control out, but only a real `disabled`
@@ -6202,7 +6299,7 @@ var ControlRenderer = defineComponent23({
     const renderControl = (control) => {
       const node = renderControlNode(control);
       if (control.type === "folder") return node;
-      return h23(ControlShell, {
+      return h24(ControlShell, {
         key: control.path,
         hint: control.hint,
         title: control.path,
@@ -6212,14 +6309,14 @@ var ControlRenderer = defineComponent23({
         path: control.path
       }, { default: () => node });
     };
-    return () => h23(Fragment, null, props.controls.map(renderControl));
+    return () => h24(Fragment, null, props.controls.map(renderControl));
   }
 });
 
 // src/vue/components/PresetManager.ts
-import { Teleport as Teleport5, defineComponent as defineComponent24, h as h24, ref as ref20, watch as watch11 } from "vue";
+import { Teleport as Teleport5, defineComponent as defineComponent25, h as h25, ref as ref20, watch as watch11 } from "vue";
 import { AnimatePresence as AnimatePresence5, motion as motion5 } from "motion-v";
-var PresetManager = defineComponent24({
+var PresetManager = defineComponent25({
   name: "DialKitPresetManager",
   props: {
     panelId: { type: String, required: true },
@@ -6289,8 +6386,8 @@ var PresetManager = defineComponent24({
       event.stopPropagation();
       DialStore.removePreset(props.panelId, presetId);
     };
-    return () => h24("div", { class: "dialkit-preset-manager" }, [
-      h24("button", {
+    return () => h25("div", { class: "dialkit-preset-manager" }, [
+      h25("button", {
         ref: triggerRef,
         class: "dialkit-preset-trigger",
         onClick: toggle,
@@ -6298,8 +6395,8 @@ var PresetManager = defineComponent24({
         "data-has-preset": String(!!activePreset()),
         "data-disabled": String(!hasPresets())
       }, [
-        h24("span", { class: "dialkit-preset-label" }, activePreset()?.name ?? (props.providerMode ? "Presets" : "Version 1")),
-        h24(motion5.svg, {
+        h25("span", { class: "dialkit-preset-label" }, activePreset()?.name ?? (props.providerMode ? "Presets" : "Version 1")),
+        h25(motion5.svg, {
           class: "dialkit-select-chevron",
           viewBox: "0 0 24 24",
           fill: "none",
@@ -6309,11 +6406,11 @@ var PresetManager = defineComponent24({
           "stroke-linejoin": "round",
           animate: { rotate: isOpen.value ? 180 : 0, opacity: hasPresets() ? 0.6 : 0.25 },
           transition: { type: "spring", visualDuration: 0.2, bounce: 0.15 }
-        }, [h24("path", { d: ICON_CHEVRON })])
+        }, [h25("path", { d: ICON_CHEVRON })])
       ]),
-      h24(Teleport5, { to: "body" }, [
-        h24(AnimatePresence5, null, {
-          default: () => isOpen.value ? [h24(motion5.div, {
+      h25(Teleport5, { to: "body" }, [
+        h25(AnimatePresence5, null, {
+          default: () => isOpen.value ? [h25(motion5.div, {
             key: "dialkit-preset-dropdown",
             ref: setDropdownRef,
             class: "dialkit-root dialkit-preset-dropdown",
@@ -6328,31 +6425,31 @@ var PresetManager = defineComponent24({
             exit: { opacity: 0, y: 4, scale: 0.97, pointerEvents: "none" },
             transition: { type: "spring", visualDuration: 0.15, bounce: 0 }
           }, [
-            ...props.providerMode ? [] : [h24("div", {
+            ...props.providerMode ? [] : [h25("div", {
               class: "dialkit-preset-item",
               "data-active": String(!props.activePresetId),
               onClick: () => handleSelect(null)
-            }, [h24("span", { class: "dialkit-preset-name" }, "Version 1")])],
-            ...props.presets.map((preset) => h24("div", {
+            }, [h25("span", { class: "dialkit-preset-name" }, "Version 1")])],
+            ...props.presets.map((preset) => h25("div", {
               key: preset.id,
               class: "dialkit-preset-item",
               "data-active": String(preset.id === props.activePresetId),
               onClick: () => handleSelect(preset.id)
             }, [
-              h24("span", { class: "dialkit-preset-name" }, preset.name),
-              ...preset.deletable ?? true ? [h24("button", {
+              h25("span", { class: "dialkit-preset-name" }, preset.name),
+              ...preset.deletable ?? true ? [h25("button", {
                 class: "dialkit-preset-delete",
                 onClick: (event) => handleDelete(event, preset.id),
                 title: "Delete preset"
               }, [
-                h24("svg", {
+                h25("svg", {
                   viewBox: "0 0 24 24",
                   fill: "none",
                   stroke: "currentColor",
                   "stroke-width": "2",
                   "stroke-linecap": "round",
                   "stroke-linejoin": "round"
-                }, ICON_TRASH.map((d) => h24("path", { d })))
+                }, ICON_TRASH.map((d) => h25("path", { d })))
               ])] : []
             ]))
           ])] : []
@@ -6363,7 +6460,7 @@ var PresetManager = defineComponent24({
 });
 
 // src/vue/components/Panel.ts
-var Panel = defineComponent25({
+var Panel = defineComponent26({
   name: "DialKitPanel",
   props: {
     panel: {
@@ -6429,58 +6526,58 @@ Apply these values as the new defaults in the useDialKit call.`;
       }, 1500);
     };
     return () => {
-      const toolbarNode = h25(Fragment2, null, [
-        h25(motion6.button, {
+      const toolbarNode = h26(Fragment2, null, [
+        h26(motion6.button, {
           class: "dialkit-toolbar-add",
           onClick: handleAddPreset,
           title: "Add preset",
           whilePress: { scale: 0.9 },
           transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 }
         }, [
-          h25("svg", {
+          h26("svg", {
             viewBox: "0 0 24 24",
             fill: "none",
             stroke: "currentColor",
             "stroke-width": "2.5",
             "stroke-linecap": "round",
             "stroke-linejoin": "round"
-          }, ICON_ADD_PRESET.map((d) => h25("path", { d })))
+          }, ICON_ADD_PRESET.map((d) => h26("path", { d })))
         ]),
-        h25(PresetManager, {
+        h26(PresetManager, {
           panelId: props.panel.id,
           presets: presets.value,
           activePresetId: activePresetId.value,
           providerMode: providerMode.value
         }),
-        h25(motion6.button, {
+        h26(motion6.button, {
           class: "dialkit-toolbar-copy",
           onClick: handleCopy,
           title: "Copy parameters",
           whilePress: { scale: 0.95 },
           transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 }
         }, [
-          h25("span", { class: "dialkit-toolbar-copy-icon-wrap" }, [
-            h25("span", {
+          h26("span", { class: "dialkit-toolbar-copy-icon-wrap" }, [
+            h26("span", {
               class: "dialkit-toolbar-copy-icon",
               style: { opacity: copied.value ? 0 : 1, transition: "opacity 120ms ease" }
             }, [
-              h25("svg", {
+              h26("svg", {
                 viewBox: "0 0 24 24",
                 fill: "none",
                 width: 16,
                 height: 16
               }, [
-                h25("path", {
+                h26("path", {
                   d: ICON_CLIPBOARD.board,
                   stroke: "currentColor",
                   "stroke-width": 2,
                   "stroke-linejoin": "round"
                 }),
-                h25("path", {
+                h26("path", {
                   d: ICON_CLIPBOARD.sparkle,
                   fill: "currentColor"
                 }),
-                h25("path", {
+                h26("path", {
                   d: ICON_CLIPBOARD.body,
                   stroke: "currentColor",
                   "stroke-width": 2,
@@ -6489,8 +6586,8 @@ Apply these values as the new defaults in the useDialKit call.`;
                 })
               ])
             ]),
-            h25(AnimatePresence6, { initial: false, mode: "popLayout" }, {
-              default: () => copied.value ? [h25(motion6.span, {
+            h26(AnimatePresence6, { initial: false, mode: "popLayout" }, {
+              default: () => copied.value ? [h26(motion6.span, {
                 key: "check",
                 class: "dialkit-toolbar-copy-icon",
                 initial: { scale: 0.5, opacity: 0 },
@@ -6498,7 +6595,7 @@ Apply these values as the new defaults in the useDialKit call.`;
                 exit: { scale: 0.5, opacity: 0 },
                 transition: { type: "spring", visualDuration: 0.3, bounce: 0.2 }
               }, [
-                h25("svg", {
+                h26("svg", {
                   viewBox: "0 0 24 24",
                   fill: "none",
                   stroke: "currentColor",
@@ -6507,7 +6604,7 @@ Apply these values as the new defaults in the useDialKit call.`;
                   "stroke-linejoin": "round",
                   width: 16,
                   height: 16
-                }, [h25("path", { d: ICON_CHECK })])
+                }, [h26("path", { d: ICON_CHECK })])
               ])] : []
             })
           ]),
@@ -6515,8 +6612,8 @@ Apply these values as the new defaults in the useDialKit call.`;
         ]),
         props.toolbarExtra?.()
       ]);
-      return h25("div", { class: "dialkit-panel-wrapper" }, [
-        h25(Folder, {
+      return h26("div", { class: "dialkit-panel-wrapper" }, [
+        h26(Folder, {
           title: props.panel.name,
           defaultOpen: props.defaultOpen,
           isRoot: true,
@@ -6524,7 +6621,7 @@ Apply these values as the new defaults in the useDialKit call.`;
           toolbar: () => toolbarNode
         }, {
           default: () => [
-            h25(ControlRenderer, {
+            h26(ControlRenderer, {
               panelId: props.panel.id,
               controls: props.panel.controls,
               values: values.value
@@ -6537,7 +6634,7 @@ Apply these values as the new defaults in the useDialKit call.`;
 });
 
 // src/vue/components/Timeline/TimelineToggleButton.ts
-import { defineComponent as defineComponent26, h as h26, onMounted as onMounted16, onUnmounted as onUnmounted10, ref as ref22 } from "vue";
+import { defineComponent as defineComponent27, h as h27, onMounted as onMounted16, onUnmounted as onUnmounted10, ref as ref22 } from "vue";
 
 // src/store/TimelineUiStore.ts
 var TimelineUiStoreClass = class {
@@ -6602,7 +6699,7 @@ var TimelineUiStoreClass = class {
 var TimelineUiStore = /* @__PURE__ */ new TimelineUiStoreClass();
 
 // src/vue/components/Timeline/TimelineToggleButton.ts
-var TimelineToggleButton = defineComponent26({
+var TimelineToggleButton = defineComponent27({
   name: "DialKitTimelineToggleButton",
   setup() {
     const visible = ref22(TimelineUiStore.getVisible());
@@ -6615,7 +6712,7 @@ var TimelineToggleButton = defineComponent26({
     onUnmounted10(() => unsubscribe?.());
     return () => {
       const label = visible.value ? "Hide timeline" : "Show timeline";
-      return h26("button", {
+      return h27("button", {
         class: "dialkit-toolbar-add dialkit-timeline-toolbar-toggle",
         "data-active": visible.value || void 0,
         "aria-pressed": visible.value,
@@ -6623,10 +6720,10 @@ var TimelineToggleButton = defineComponent26({
         title: label,
         onClick: () => TimelineUiStore.toggle()
       }, [
-        h26(
+        h27(
           "svg",
           { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true" },
-          ICON_TIMELINE.map((path) => h26("path", { d: path, fill: "currentColor" }))
+          ICON_TIMELINE.map((path) => h27("path", { d: path, fill: "currentColor" }))
         )
       ]);
     };
@@ -6635,7 +6732,7 @@ var TimelineToggleButton = defineComponent26({
 
 // src/vue/components/DialRoot.ts
 var isDevDefault = typeof process !== "undefined" && process?.env?.NODE_ENV ? process.env.NODE_ENV !== "production" : typeof import.meta !== "undefined" && import.meta.env?.MODE ? import.meta.env.MODE !== "production" : true;
-var DialRoot = defineComponent27({
+var DialRoot = defineComponent28({
   name: "DialKitDialRoot",
   props: {
     position: {
@@ -6680,20 +6777,20 @@ var DialRoot = defineComponent27({
       unsubscribePanels?.();
       unsubscribeTimelines?.();
     });
-    const timelineToggle = () => timelines.value.length > 0 ? h27(TimelineToggleButton) : null;
+    const timelineToggle = () => timelines.value.length > 0 ? h28(TimelineToggleButton) : null;
     const renderPanels = () => {
       if (panels.value.length === 0) {
-        return [h27("div", { class: "dialkit-panel-wrapper" }, [
-          h27(Folder, {
+        return [h28("div", { class: "dialkit-panel-wrapper" }, [
+          h28(Folder, {
             title: "DialKit",
             defaultOpen: props.mode === "inline" || props.defaultOpen,
             isRoot: true,
             inline: props.mode === "inline",
-            toolbar: () => h27(TimelineToggleButton)
-          }, { default: () => [h27("div", { class: "dialkit-timeline-toolkit-only" }, "Timeline")] })
+            toolbar: () => h28(TimelineToggleButton)
+          }, { default: () => [h28("div", { class: "dialkit-timeline-toolkit-only" }, "Timeline")] })
         ])];
       }
-      return panels.value.map((panel) => h27(Panel, {
+      return panels.value.map((panel) => h28(Panel, {
         key: panel.id,
         panel,
         defaultOpen: props.mode === "inline" || props.defaultOpen,
@@ -6701,9 +6798,9 @@ var DialRoot = defineComponent27({
         toolbarExtra: timelineToggle
       }));
     };
-    const renderContent = () => h27(ShortcutListener, null, {
-      default: () => h27("div", { class: "dialkit-root", "data-mode": props.mode, "data-theme": props.theme }, [
-        h27("div", {
+    const renderContent = () => h28(ShortcutListener, null, {
+      default: () => h28("div", { class: "dialkit-root", "data-mode": props.mode, "data-theme": props.theme }, [
+        h28("div", {
           class: "dialkit-panel",
           "data-position": props.mode === "inline" ? void 0 : props.position,
           "data-mode": props.mode
@@ -6717,7 +6814,7 @@ var DialRoot = defineComponent27({
       if (props.mode === "inline") {
         return renderContent();
       }
-      return h27(Teleport6, { to: "body" }, renderContent());
+      return h28(Teleport6, { to: "body" }, renderContent());
     };
   }
 });
@@ -6736,10 +6833,10 @@ function mountDialRoot(el, value) {
   const host = document.createElement("div");
   el.appendChild(host);
   const props = shallowRef2(normalizeDirectiveValue(value));
-  const RootHost = defineComponent28({
+  const RootHost = defineComponent29({
     name: "DialKitDirectiveHost",
     setup() {
-      return () => h28(DialRoot, props.value);
+      return () => h29(DialRoot, props.value);
     }
   });
   const app = createApp(RootHost);
@@ -7496,13 +7593,13 @@ function interpolateResolved(from, to, p) {
 }
 function parseHex2(hex) {
   if (!isHexColor(hex)) return null;
-  let h36 = hex.slice(1);
-  if (h36.length === 3) h36 = h36.split("").map((c) => c + c).join("");
+  let h37 = hex.slice(1);
+  if (h37.length === 3) h37 = h37.split("").map((c) => c + c).join("");
   return [
-    parseInt(h36.slice(0, 2), 16),
-    parseInt(h36.slice(2, 4), 16),
-    parseInt(h36.slice(4, 6), 16),
-    h36.length === 8 ? parseInt(h36.slice(6, 8), 16) : 255
+    parseInt(h37.slice(0, 2), 16),
+    parseInt(h37.slice(2, 4), 16),
+    parseInt(h37.slice(4, 6), 16),
+    h37.length === 8 ? parseInt(h37.slice(6, 8), 16) : 255
   ];
 }
 function mixHexColors(a, b, p) {
@@ -7810,8 +7907,8 @@ function useDialTimeline(name, config, options) {
 import {
   Teleport as Teleport7,
   computed as computed12,
-  defineComponent as defineComponent29,
-  h as h29,
+  defineComponent as defineComponent30,
+  h as h30,
   nextTick as nextTick6,
   onMounted as onMounted19,
   onUnmounted as onUnmounted13,
@@ -7850,7 +7947,7 @@ var POPOVER_WIDTH = 280;
 var ZOOM_DRAG_DISTANCE = 180;
 var DEFAULT_DOCK_MAX_HEIGHT = 400;
 var MIN_DOCK_MAX_HEIGHT = 120;
-var DialTimeline = defineComponent29({
+var DialTimeline = defineComponent30({
   name: "DialKitTimeline",
   props: {
     theme: { type: String, default: "system" },
@@ -7927,13 +8024,13 @@ var DialTimeline = defineComponent29({
     });
     return () => {
       if (!props.productionEnabled || !mounted.value || timelines.value.length === 0) return null;
-      return h29(Teleport7, { to: "body" }, [
-        h29("div", {
+      return h30(Teleport7, { to: "body" }, [
+        h30("div", {
           class: "dialkit-root dialkit-timeline",
           "data-theme": props.theme,
           hidden: !dockVisible.value
         }, [
-          h29("div", {
+          h30("div", {
             class: "dialkit-timeline-resize-handle",
             role: "separator",
             "aria-label": "Resize timeline height",
@@ -7941,11 +8038,11 @@ var DialTimeline = defineComponent29({
             title: "Drag to resize timeline",
             onPointerdown: handleResizePointerDown
           }),
-          h29("div", {
+          h30("div", {
             ref: dockRef,
             class: "dialkit-timeline-dock",
             style: { maxHeight: `min(${dockMaxHeight.value}px, calc(100vh - 24px))` }
-          }, timelines.value.map((meta) => h29(TimelineSection, {
+          }, timelines.value.map((meta) => h30(TimelineSection, {
             key: meta.id,
             meta,
             defaultOpen: props.defaultOpen,
@@ -7957,7 +8054,7 @@ var DialTimeline = defineComponent29({
     };
   }
 });
-var PlayPauseButton = defineComponent29({
+var PlayPauseButton = defineComponent30({
   props: { id: { type: String, required: true } },
   setup(props) {
     const playing = ref24(TimelineStore.getTransport(props.id).playing);
@@ -7970,35 +8067,35 @@ var PlayPauseButton = defineComponent29({
     onUnmounted13(() => unsubscribe?.());
     return () => {
       const label = playing.value ? "Pause" : "Play";
-      const icon = playing.value ? h29(
+      const icon = playing.value ? h30(
         "svg",
         { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", style: iconStyle },
-        ICON_PAUSE.map((path) => h29("path", { d: path, fill: "currentColor" }))
-      ) : h29("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", style: iconStyle }, [
-        h29("path", { d: ICON_PLAY, fill: "currentColor" })
+        ICON_PAUSE.map((path) => h30("path", { d: path, fill: "currentColor" }))
+      ) : h30("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", style: iconStyle }, [
+        h30("path", { d: ICON_PLAY, fill: "currentColor" })
       ]);
-      return h29("button", {
+      return h30("button", {
         class: "dialkit-toolbar-add",
         title: label,
         "aria-label": label,
         onClick: () => playing.value ? TimelineStore.pause(props.id) : TimelineStore.play(props.id)
-      }, [h29("span", { style: { position: "relative", width: "16px", height: "16px" } }, [icon])]);
+      }, [h30("span", { style: { position: "relative", width: "16px", height: "16px" } }, [icon])]);
     };
   }
 });
-var ReplayButton = defineComponent29({
+var ReplayButton = defineComponent30({
   props: { onReplay: { type: Function, required: true } },
   setup(props) {
-    return () => h29("button", {
+    return () => h30("button", {
       class: "dialkit-toolbar-add",
       title: "Replay",
       "aria-label": "Replay",
       onClick: props.onReplay
     }, [
-      h29(
+      h30(
         "svg",
         { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true" },
-        ICON_REPLAY.map((path) => h29("path", { d: path, fill: "currentColor" }))
+        ICON_REPLAY.map((path) => h30("path", { d: path, fill: "currentColor" }))
       )
     ]);
   }
@@ -8010,7 +8107,7 @@ var iconStyle = {
   height: "16px",
   color: "var(--dial-text-label)"
 };
-var TimelineOverview = defineComponent29({
+var TimelineOverview = defineComponent30({
   props: {
     id: { type: String, required: true },
     duration: { type: Number, required: true },
@@ -8041,7 +8138,7 @@ var TimelineOverview = defineComponent29({
     return () => {
       const viewportWidth = props.duration > 0 ? (props.viewEnd - props.viewStart) / props.duration * 100 : 100;
       const playhead = props.duration > 0 ? time.value / props.duration * 100 : 0;
-      return h29("div", {
+      return h30("div", {
         class: "dialkit-timeline-overview",
         title: "Drag to scrub the full timeline",
         onPointerdown: (event) => {
@@ -8059,18 +8156,18 @@ var TimelineOverview = defineComponent29({
         onPointercancel: finish,
         onLostpointercapture: finish
       }, [
-        h29("div", {
+        h30("div", {
           class: "dialkit-timeline-overview-viewport",
           "data-zoomed": viewportWidth < 99.999 || void 0,
           style: { left: `${props.duration > 0 ? props.viewStart / props.duration * 100 : 0}%`, width: `${viewportWidth}%` }
         }),
-        h29("div", { class: "dialkit-timeline-overview-progress", style: { width: `${playhead}%` } }),
-        h29("div", { class: "dialkit-timeline-overview-playhead", style: { left: `${playhead}%` } })
+        h30("div", { class: "dialkit-timeline-overview-progress", style: { width: `${playhead}%` } }),
+        h30("div", { class: "dialkit-timeline-overview-playhead", style: { left: `${playhead}%` } })
       ]);
     };
   }
 });
-var TimelinePlayheadFlag = defineComponent29({
+var TimelinePlayheadFlag = defineComponent30({
   props: {
     id: { type: String, required: true },
     duration: { type: Number, required: true },
@@ -8113,7 +8210,7 @@ var TimelinePlayheadFlag = defineComponent29({
       );
       const flagOffset = flagCenter - x;
       const edge = flagOffset > 0.5 ? "start" : flagOffset < -0.5 ? "end" : "center";
-      return h29("div", {
+      return h30("div", {
         class: "dialkit-timeline-playhead-control",
         "data-edge": edge,
         style: {
@@ -8160,9 +8257,9 @@ var TimelinePlayheadFlag = defineComponent29({
           cleanup = finish;
         }
       }, [
-        h29("div", { class: "dialkit-timeline-playhead-stem" }),
-        h29("div", { class: "dialkit-timeline-playhead-anchor" }, [
-          h29("div", { class: "dialkit-timeline-playhead-flag" }, time.value.toFixed(2))
+        h30("div", { class: "dialkit-timeline-playhead-stem" }),
+        h30("div", { class: "dialkit-timeline-playhead-anchor" }, [
+          h30("div", { class: "dialkit-timeline-playhead-flag" }, time.value.toFixed(2))
         ])
       ]);
     };
@@ -8176,7 +8273,7 @@ function formatRulerSeconds(time, step) {
   const decimals = Math.min(3, Math.max(1, Math.ceil(-Math.log10(step))));
   return `${time.toFixed(decimals)}s`;
 }
-var TimelineSection = defineComponent29({
+var TimelineSection = defineComponent30({
   props: {
     meta: { type: Object, required: true },
     defaultOpen: { type: Boolean, required: true },
@@ -8387,17 +8484,17 @@ var TimelineSection = defineComponent29({
           if (clip.group) {
             const group = clip.group;
             const collapsed = collapsedGroups.value.has(group);
-            rows.push(h29("div", { key: `group:${group}`, class: "dialkit-timeline-row dialkit-timeline-group-row" }, [
-              h29("div", { class: "dialkit-timeline-label" }, [
-                h29("button", {
+            rows.push(h30("div", { key: `group:${group}`, class: "dialkit-timeline-row dialkit-timeline-group-row" }, [
+              h30("div", { class: "dialkit-timeline-label" }, [
+                h30("button", {
                   class: "dialkit-timeline-group-toggle",
                   "data-open": !collapsed,
                   title: collapsed ? "Expand layer" : "Collapse layer",
                   onClick: () => toggleGroup(group)
                 }, [chevronIcon()]),
-                h29("span", formatLabel(group))
+                h30("span", formatLabel(group))
               ]),
-              h29("div", { class: "dialkit-timeline-lane" })
+              h30("div", { class: "dialkit-timeline-lane" })
             ]));
           }
         }
@@ -8406,9 +8503,9 @@ var TimelineSection = defineComponent29({
         const tracksOpen = isProps && expandedTracks.value.has(clip.key);
         const stat = computeClipStaticFromValues(values.value, clip, props.meta.duration);
         const selected = popover.value?.clip.key === clip.key;
-        rows.push(h29("div", { key: clip.key, class: "dialkit-timeline-row", "data-grouped": clip.group ? "" : void 0 }, [
-          h29("div", { class: "dialkit-timeline-label" }, [
-            isProps ? h29("button", {
+        rows.push(h30("div", { key: clip.key, class: "dialkit-timeline-row", "data-grouped": clip.group ? "" : void 0 }, [
+          h30("div", { class: "dialkit-timeline-label" }, [
+            isProps ? h30("button", {
               class: "dialkit-timeline-group-toggle",
               "data-open": tracksOpen,
               title: tracksOpen ? "Collapse properties" : "Expand properties",
@@ -8419,7 +8516,7 @@ var TimelineSection = defineComponent29({
             }, [chevronIcon()]) : null,
             clip.label
           ]),
-          h29("div", { class: "dialkit-timeline-lane" }, [h29(TimelineClip, {
+          h30("div", { class: "dialkit-timeline-lane" }, [h30(TimelineClip, {
             timelineId: props.meta.id,
             clip,
             at: stat.at,
@@ -8451,9 +8548,9 @@ var TimelineSection = defineComponent29({
             stepKeys: trackRef.stepKeys
           };
           const trackSelected = popover.value?.clip.key === trackKey;
-          rows.push(h29("div", { key: trackKey, class: "dialkit-timeline-row dialkit-timeline-track-row", "data-grouped": clip.group ? "" : void 0 }, [
-            h29("div", { class: "dialkit-timeline-label" }, formatLabel(trackRef.prop)),
-            h29("div", { class: "dialkit-timeline-lane" }, [h29(TimelineClip, {
+          rows.push(h30("div", { key: trackKey, class: "dialkit-timeline-row dialkit-timeline-track-row", "data-grouped": clip.group ? "" : void 0 }, [
+            h30("div", { class: "dialkit-timeline-label" }, formatLabel(trackRef.prop)),
+            h30("div", { class: "dialkit-timeline-lane" }, [h30(TimelineClip, {
               timelineId: props.meta.id,
               clip: trackMeta,
               at: stat.at + track.delay,
@@ -8476,20 +8573,20 @@ var TimelineSection = defineComponent29({
       }
       return rows;
     };
-    return () => h29("div", { class: "dialkit-timeline-section" }, [
-      h29("div", { class: "dialkit-timeline-header", "data-open": open.value || void 0 }, [
-        h29("div", { class: "dialkit-timeline-identity" }, [
-          h29("span", { class: "dialkit-timeline-title" }, props.meta.name)
+    return () => h30("div", { class: "dialkit-timeline-section" }, [
+      h30("div", { class: "dialkit-timeline-header", "data-open": open.value || void 0 }, [
+        h30("div", { class: "dialkit-timeline-identity" }, [
+          h30("span", { class: "dialkit-timeline-title" }, props.meta.name)
         ]),
-        !open.value ? h29(TimelineOverview, {
+        !open.value ? h30(TimelineOverview, {
           id: props.meta.id,
           duration: props.meta.duration,
           viewStart: safeViewStart.value,
           viewEnd: viewEnd.value,
           onNavigate: centerViewAt
         }) : null,
-        h29("div", { class: "dialkit-timeline-actions" }, [
-          h29("button", {
+        h30("div", { class: "dialkit-timeline-actions" }, [
+          h30("button", {
             class: "dialkit-timeline-loop-toggle",
             "data-active": loopRegion.value ? "true" : void 0,
             disabled: !loopRegion.value,
@@ -8498,35 +8595,35 @@ var TimelineSection = defineComponent29({
             "aria-pressed": loopRegion.value ? "true" : "false",
             onClick: handleClearLoopRegion
           }, [
-            h29(
+            h30(
               "svg",
               { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true" },
-              ICON_LOOP.map((d) => h29("path", { d }))
+              ICON_LOOP.map((d) => h30("path", { d }))
             )
           ]),
-          h29(PlayPauseButton, { id: props.meta.id }),
-          h29(ReplayButton, { onReplay: handleReplay }),
-          h29("button", { class: "dialkit-toolbar-add", title: "Add timeline version", "aria-label": "Add timeline version", onClick: handleAddPreset }, [
-            h29(
+          h30(PlayPauseButton, { id: props.meta.id }),
+          h30(ReplayButton, { onReplay: handleReplay }),
+          h30("button", { class: "dialkit-toolbar-add", title: "Add timeline version", "aria-label": "Add timeline version", onClick: handleAddPreset }, [
+            h30(
               "svg",
               { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2.5", "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true" },
-              ICON_ADD_PRESET.map((path) => h29("path", { d: path }))
+              ICON_ADD_PRESET.map((path) => h30("path", { d: path }))
             )
           ]),
-          h29(PresetManager, { panelId: props.meta.id, presets: presets.value, activePresetId: activePresetId.value }),
-          h29("button", {
+          h30(PresetManager, { panelId: props.meta.id, presets: presets.value, activePresetId: activePresetId.value }),
+          h30("button", {
             class: "dialkit-toolbar-add",
             title: "Copy parameters",
             "aria-label": copied.value ? "Copied parameters" : "Copy parameters",
             onClick: handleCopy
-          }, [h29("span", { style: { position: "relative", width: "16px", height: "16px" } }, [
-            copied.value ? h29("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", style: iconStyle }, [h29("path", { d: ICON_CHECK })]) : h29("svg", { viewBox: "0 0 24 24", fill: "none", style: iconStyle }, [
-              h29("path", { d: ICON_CLIPBOARD.board, stroke: "currentColor", "stroke-width": "2", "stroke-linejoin": "round" }),
-              h29("path", { d: ICON_CLIPBOARD.sparkle, fill: "currentColor" }),
-              h29("path", { d: ICON_CLIPBOARD.body, stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round" })
+          }, [h30("span", { style: { position: "relative", width: "16px", height: "16px" } }, [
+            copied.value ? h30("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", style: iconStyle }, [h30("path", { d: ICON_CHECK })]) : h30("svg", { viewBox: "0 0 24 24", fill: "none", style: iconStyle }, [
+              h30("path", { d: ICON_CLIPBOARD.board, stroke: "currentColor", "stroke-width": "2", "stroke-linejoin": "round" }),
+              h30("path", { d: ICON_CLIPBOARD.sparkle, fill: "currentColor" }),
+              h30("path", { d: ICON_CLIPBOARD.body, stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round" })
             ])
           ])]),
-          h29("button", {
+          h30("button", {
             class: "dialkit-timeline-chevron",
             "data-open": open.value,
             "aria-expanded": open.value,
@@ -8537,7 +8634,7 @@ var TimelineSection = defineComponent29({
           }, [chevronIcon()])
         ])
       ]),
-      open.value ? h29("div", {
+      open.value ? h30("div", {
         class: "dialkit-timeline-body",
         onWheel: handleTimelineWheel,
         onPointerdown: (event) => {
@@ -8564,10 +8661,10 @@ var TimelineSection = defineComponent29({
         onPointerup: finishTrack,
         onPointercancel: finishTrack,
         onLostpointercapture: finishTrack
-      }, [h29("div", { class: "dialkit-timeline-grid" }, [
-        h29("div", { class: "dialkit-timeline-row dialkit-timeline-ruler-row" }, [
-          h29("div", { class: "dialkit-timeline-label" }),
-          h29("div", {
+      }, [h30("div", { class: "dialkit-timeline-grid" }, [
+        h30("div", { class: "dialkit-timeline-row dialkit-timeline-ruler-row" }, [
+          h30("div", { class: "dialkit-timeline-label" }),
+          h30("div", {
             ref: laneAreaRef,
             class: "dialkit-timeline-ruler",
             title: "Click to seek \xB7 drag to set a loop region \xB7 Option-drag to zoom \xB7 Shift-drag to reset zoom",
@@ -8633,20 +8730,20 @@ var TimelineSection = defineComponent29({
               const left = (activeLoop.start - safeViewStart.value) * pxPerSecond.value;
               const width = Math.max(0, (activeLoop.end - activeLoop.start) * pxPerSecond.value);
               return [
-                h29("div", { key: "loop-dim-before", class: "dialkit-timeline-loop-dim", style: { left: "0px", width: `${Math.max(0, left)}px` } }),
-                h29("div", { key: "loop-dim-after", class: "dialkit-timeline-loop-dim", style: { left: `${left + width}px`, right: "0px" } }),
-                h29("div", { key: "loop-band", class: "dialkit-timeline-loop-band", "data-live": loopDrag.value ? "true" : void 0, style: { left: `${left}px`, width: `${width}px` } })
+                h30("div", { key: "loop-dim-before", class: "dialkit-timeline-loop-dim", style: { left: "0px", width: `${Math.max(0, left)}px` } }),
+                h30("div", { key: "loop-dim-after", class: "dialkit-timeline-loop-dim", style: { left: `${left + width}px`, right: "0px" } }),
+                h30("div", { key: "loop-band", class: "dialkit-timeline-loop-band", "data-live": loopDrag.value ? "true" : void 0, style: { left: `${left}px`, width: `${width}px` } })
               ];
             })(),
-            ...ticks.value.fine.map((time) => h29("div", { key: `fine:${time}`, class: "dialkit-timeline-tick dialkit-timeline-tick-fine", style: { left: `${(time - safeViewStart.value) * pxPerSecond.value}px` } })),
-            ...ticks.value.medium.map((time) => h29("div", { key: `medium:${time}`, class: "dialkit-timeline-tick dialkit-timeline-tick-medium", style: { left: `${(time - safeViewStart.value) * pxPerSecond.value}px` } })),
-            ...ticks.value.major.map((time) => h29("div", { key: time, class: "dialkit-timeline-tick", style: { left: `${(time - safeViewStart.value) * pxPerSecond.value}px` } }, [
-              h29("span", { class: "dialkit-timeline-tick-label" }, formatRulerSeconds(time, ticks.value.majorStep))
+            ...ticks.value.fine.map((time) => h30("div", { key: `fine:${time}`, class: "dialkit-timeline-tick dialkit-timeline-tick-fine", style: { left: `${(time - safeViewStart.value) * pxPerSecond.value}px` } })),
+            ...ticks.value.medium.map((time) => h30("div", { key: `medium:${time}`, class: "dialkit-timeline-tick dialkit-timeline-tick-medium", style: { left: `${(time - safeViewStart.value) * pxPerSecond.value}px` } })),
+            ...ticks.value.major.map((time) => h30("div", { key: time, class: "dialkit-timeline-tick", style: { left: `${(time - safeViewStart.value) * pxPerSecond.value}px` } }, [
+              h30("span", { class: "dialkit-timeline-tick-label" }, formatRulerSeconds(time, ticks.value.majorStep))
             ]))
           ])
         ]),
         ...renderRows(),
-        pxPerSecond.value > 0 ? h29(TimelinePlayheadFlag, {
+        pxPerSecond.value > 0 ? h30(TimelinePlayheadFlag, {
           id: props.meta.id,
           duration: props.meta.duration,
           pxPerSecond: pxPerSecond.value,
@@ -8656,16 +8753,16 @@ var TimelineSection = defineComponent29({
           ruler: laneAreaRef.value ?? void 0,
           onResetView: resetView
         }) : null
-      ]), zoom.value > 1 ? h29("div", { class: "dialkit-timeline-scroll-row" }, [
-        h29("div", { class: "dialkit-timeline-label" }),
-        h29("div", {
+      ]), zoom.value > 1 ? h30("div", { class: "dialkit-timeline-scroll-row" }, [
+        h30("div", { class: "dialkit-timeline-label" }),
+        h30("div", {
           ref: horizontalScrollRef,
           class: "dialkit-timeline-horizontal-scroll",
           "aria-label": "Timeline horizontal scroll",
           onScroll: handleHorizontalScroll
-        }, [h29("div", { style: { width: `${laneWidth.value * zoom.value}px` } })])
+        }, [h30("div", { style: { width: `${laneWidth.value * zoom.value}px` } })])
       ]) : null]) : null,
-      popover.value ? h29(ClipPopover, {
+      popover.value ? h30(ClipPopover, {
         panelId: props.meta.id,
         popover: popover.value,
         values: values.value,
@@ -8676,11 +8773,11 @@ var TimelineSection = defineComponent29({
   }
 });
 function chevronIcon() {
-  return h29("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2.5", "stroke-linecap": "round", "stroke-linejoin": "round" }, [
-    h29("path", { d: ICON_CHEVRON })
+  return h30("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2.5", "stroke-linecap": "round", "stroke-linejoin": "round" }, [
+    h30("path", { d: ICON_CHEVRON })
   ]);
 }
-var ClipPopover = defineComponent29({
+var ClipPopover = defineComponent30({
   props: {
     panelId: { type: String, required: true },
     popover: { type: Object, required: true },
@@ -8766,8 +8863,8 @@ var ClipPopover = defineComponent29({
       const renderedHeight = Math.min(naturalHeight.value || availableHeight, availableHeight);
       const rawTop = placeAbove ? props.popover.anchor.top - 10 - renderedHeight : props.popover.anchor.bottom + 10;
       const top = clamp5(rawTop, current.offsetTop + 12, Math.max(current.offsetTop + 12, bottom - renderedHeight - 12));
-      return h29(Teleport7, { to: "body" }, [h29("div", { class: "dialkit-root", "data-theme": props.theme }, [
-        h29("div", {
+      return h30(Teleport7, { to: "body" }, [h30("div", { class: "dialkit-root", "data-theme": props.theme }, [
+        h30("div", {
           ref: element,
           class: "dialkit-timeline-popover",
           "data-placement": placeAbove ? "above" : "below",
@@ -8775,13 +8872,13 @@ var ClipPopover = defineComponent29({
           role: "dialog",
           "aria-label": `Edit ${title}`
         }, [
-          h29("div", { class: "dialkit-timeline-popover-header" }, [
-            h29("span", { class: "dialkit-timeline-popover-title" }, title),
-            h29("button", { class: "dialkit-timeline-popover-close", title: "Close editor", "aria-label": "Close editor", onClick: props.onClose }, [
-              h29("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round" }, [h29("path", { d: "M6 6L18 18M18 6L6 18" })])
+          h30("div", { class: "dialkit-timeline-popover-header" }, [
+            h30("span", { class: "dialkit-timeline-popover-title" }, title),
+            h30("button", { class: "dialkit-timeline-popover-close", title: "Close editor", "aria-label": "Close editor", onClick: props.onClose }, [
+              h30("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round" }, [h30("path", { d: "M6 6L18 18M18 6L6 18" })])
             ])
           ]),
-          h29("div", { class: "dialkit-timeline-popover-body" }, [h29(ControlRenderer, {
+          h30("div", { class: "dialkit-timeline-popover-body" }, [h30(ControlRenderer, {
             panelId: props.panelId,
             controls,
             values: timelinePopoverDisplayValues(props.values, clip.key, clip.stepKeys, stepKey),
@@ -8816,7 +8913,7 @@ function getControlAt(panelId, path) {
   const panel = DialStore.getPanel(panelId);
   return panel ? findControl(panel.controls, path) : null;
 }
-var TimelineClip = defineComponent29({
+var TimelineClip = defineComponent30({
   props: {
     timelineId: { type: String, required: true },
     clip: { type: Object, required: true },
@@ -8862,42 +8959,42 @@ var TimelineClip = defineComponent29({
           const start = props.at + props.duration * index;
           if (start >= props.timelineDuration - 1e-6) break;
           const duration = Math.min(props.duration, props.timelineDuration - start);
-          ghosts.push(h29("div", {
+          ghosts.push(h30("div", {
             key: `ghost:${index}`,
             class: "dialkit-timeline-clip-ghost",
             "data-steps": isSteps || void 0,
             "aria-hidden": "true",
             style: { left: `${(start - props.viewStart) * props.pxPerSecond + 1}px`, width: `${Math.max(1, duration * props.pxPerSecond - 2)}px`, background: props.clip.color }
-          }, props.steps?.map((step) => h29("span", { class: "dialkit-timeline-clip-ghost-segment", style: { width: `${step.duration * props.pxPerSecond}px` } }))));
+          }, props.steps?.map((step) => h30("span", { class: "dialkit-timeline-clip-ghost-segment", style: { width: `${step.duration * props.pxPerSecond}px` } }))));
         }
       }
       let cumulative = 0;
       const boundaries2 = props.steps?.map((step) => cumulative += step.duration) ?? [];
       const children = [];
       if (props.composite) {
-        if (width > 56) children.push(h29("span", { class: "dialkit-timeline-clip-duration" }, durationText));
+        if (width > 56) children.push(h30("span", { class: "dialkit-timeline-clip-duration" }, durationText));
       } else if (isSteps) {
         for (const step of props.steps ?? []) {
           const segmentWidth = step.duration * props.pxPerSecond;
-          children.push(h29("div", {
+          children.push(h30("div", {
             key: step.key ?? "step",
             class: "dialkit-timeline-clip-segment",
             "data-step": step.key,
             "data-selected": props.selectedStepKey === step.key || void 0,
             style: { width: `${segmentWidth}px` }
-          }, segmentWidth > 52 ? [h29("span", { class: "dialkit-timeline-clip-duration" }, formatSeconds(step.duration))] : []));
+          }, segmentWidth > 52 ? [h30("span", { class: "dialkit-timeline-clip-duration" }, formatSeconds(step.duration))] : []));
         }
         (props.steps ?? []).forEach((step, index) => {
-          if (!step.isPhysics) children.push(h29("div", { key: `boundary:${step.key}`, class: "dialkit-timeline-clip-handle", "data-boundary": index, style: { left: `${boundaries2[index] * props.pxPerSecond - 4}px` } }));
+          if (!step.isPhysics) children.push(h30("div", { key: `boundary:${step.key}`, class: "dialkit-timeline-clip-handle", "data-boundary": index, style: { left: `${boundaries2[index] * props.pxPerSecond - 4}px` } }));
         });
-        if (!props.steps?.[0]?.isPhysics) children.push(h29("div", { class: "dialkit-timeline-clip-handle", "data-edge": "start" }));
+        if (!props.steps?.[0]?.isPhysics) children.push(h30("div", { class: "dialkit-timeline-clip-handle", "data-edge": "start" }));
       } else {
-        if (resizable) children.push(h29("div", { class: "dialkit-timeline-clip-handle", "data-edge": "start" }));
-        if (width > 56) children.push(h29("span", { class: "dialkit-timeline-clip-duration" }, durationText));
-        if (resizable) children.push(h29("div", { class: "dialkit-timeline-clip-handle", "data-edge": "end" }));
+        if (resizable) children.push(h30("div", { class: "dialkit-timeline-clip-handle", "data-edge": "start" }));
+        if (width > 56) children.push(h30("span", { class: "dialkit-timeline-clip-duration" }, durationText));
+        if (resizable) children.push(h30("div", { class: "dialkit-timeline-clip-handle", "data-edge": "end" }));
       }
       const title = props.composite ? `${props.clip.label} \u2014 composite of its property tracks${looping ? " \xB7 repeats through timeline" : ""} \xB7 click to expand` : `${props.clip.label} \u2014 ${formatSeconds(props.at)} for ${durationText}${props.fixedDuration ? " (duration set by spring physics)" : ""}${looping ? " \xB7 repeats through timeline" : ""}${props.delayMode ? " \xB7 drag to phase-shift" : ""}`;
-      return [...ghosts, h29("div", {
+      return [...ghosts, h30("div", {
         class: "dialkit-timeline-clip",
         "data-steps": isSteps || void 0,
         "data-composite": props.composite || void 0,
@@ -8966,13 +9063,13 @@ var TimelineClip = defineComponent29({
         onPointerup: finish,
         onPointercancel: () => finish(),
         onLostpointercapture: () => finish()
-      }, children), looping ? h29("span", { class: "dialkit-timeline-loop-infinity", "aria-hidden": "true", title: "Repeats indefinitely" }, "\u221E") : null];
+      }, children), looping ? h30("span", { class: "dialkit-timeline-loop-infinity", "aria-hidden": "true", title: "Repeats indefinitely" }, "\u221E") : null];
     };
   }
 });
 
 // src/vue/components/ShortcutsMenu.ts
-import { defineComponent as defineComponent30, h as h30, onUnmounted as onUnmounted14, ref as ref25, Teleport as Teleport8 } from "vue";
+import { defineComponent as defineComponent31, h as h31, onUnmounted as onUnmounted14, ref as ref25, Teleport as Teleport8 } from "vue";
 function formatShortcutKey(sc) {
   if (!sc.key) return "\u2014";
   const mod = sc.modifier === "alt" ? "\u2325" : sc.modifier === "shift" ? "\u21E7" : sc.modifier === "meta" ? "\u2318" : "";
@@ -8991,7 +9088,7 @@ function formatInteraction(sc) {
       return "scroll";
   }
 }
-var ShortcutsMenu = defineComponent30({
+var ShortcutsMenu = defineComponent31({
   name: "DialKitShortcutsMenu",
   props: {
     panelId: {
@@ -9062,13 +9159,13 @@ var ShortcutsMenu = defineComponent30({
         removeOutsideClickListener();
       }
       return [
-        h30("button", {
+        h31("button", {
           ref: triggerRef,
           class: "dialkit-shortcuts-trigger",
           onClick: toggle,
           title: "Keyboard shortcuts"
         }, [
-          h30("svg", {
+          h31("svg", {
             viewBox: "0 0 24 24",
             fill: "none",
             stroke: "currentColor",
@@ -9076,16 +9173,16 @@ var ShortcutsMenu = defineComponent30({
             "stroke-linecap": "round",
             "stroke-linejoin": "round"
           }, [
-            h30("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
-            h30("path", { d: "M6 10H6.01" }),
-            h30("path", { d: "M10 10H10.01" }),
-            h30("path", { d: "M14 10H14.01" }),
-            h30("path", { d: "M18 10H18.01" }),
-            h30("path", { d: "M8 14H16" })
+            h31("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
+            h31("path", { d: "M6 10H6.01" }),
+            h31("path", { d: "M10 10H10.01" }),
+            h31("path", { d: "M14 10H14.01" }),
+            h31("path", { d: "M18 10H18.01" }),
+            h31("path", { d: "M8 14H16" })
           ])
         ]),
-        isOpen.value ? h30(Teleport8, { to: "body" }, [
-          h30("div", {
+        isOpen.value ? h31(Teleport8, { to: "body" }, [
+          h31("div", {
             ref: dropdownRef,
             class: "dialkit-root dialkit-shortcuts-dropdown",
             style: {
@@ -9094,19 +9191,19 @@ var ShortcutsMenu = defineComponent30({
               right: `${pos.value.right}px`
             }
           }, [
-            h30("div", { class: "dialkit-shortcuts-title" }, "Keyboard Shortcuts"),
-            h30(
+            h31("div", { class: "dialkit-shortcuts-title" }, "Keyboard Shortcuts"),
+            h31(
               "div",
               { class: "dialkit-shortcuts-list" },
               rows.map(
-                (row) => h30("div", { key: row.path, class: "dialkit-shortcuts-row" }, [
-                  h30("span", { class: "dialkit-shortcuts-row-key" }, formatShortcutKey(row.shortcut)),
-                  h30("span", { class: "dialkit-shortcuts-row-label" }, row.label),
-                  h30("span", { class: "dialkit-shortcuts-row-mode" }, formatInteraction(row.shortcut))
+                (row) => h31("div", { key: row.path, class: "dialkit-shortcuts-row" }, [
+                  h31("span", { class: "dialkit-shortcuts-row-key" }, formatShortcutKey(row.shortcut)),
+                  h31("span", { class: "dialkit-shortcuts-row-label" }, row.label),
+                  h31("span", { class: "dialkit-shortcuts-row-mode" }, formatInteraction(row.shortcut))
                 ])
               )
             ),
-            h30("div", { class: "dialkit-shortcuts-hint" }, "See pill badges on controls for keys")
+            h31("div", { class: "dialkit-shortcuts-hint" }, "See pill badges on controls for keys")
           ])
         ]) : null
       ];
@@ -9115,8 +9212,8 @@ var ShortcutsMenu = defineComponent30({
 });
 
 // src/vue/components/Module.ts
-import { defineComponent as defineComponent31, h as h31 } from "vue";
-var Module = defineComponent31({
+import { defineComponent as defineComponent32, h as h32 } from "vue";
+var Module = defineComponent32({
   name: "DialKitModule",
   props: {
     title: { type: String, required: true },
@@ -9129,23 +9226,18 @@ var Module = defineComponent31({
       props.onEnabledChange?.(enabled);
       emit("enabledChange", enabled);
     };
-    return () => h31("div", { class: "dialkit-module" }, [
-      h31("div", { class: "dialkit-module-header" }, [
-        h31("span", { class: "dialkit-module-title" }, props.title),
-        h31("div", { class: "dialkit-module-switch" }, [
-          h31(SegmentedControl, {
-            options: [
-              { value: "off", label: "Off" },
-              { value: "on", label: "On" }
-            ],
-            value: props.enabled ? "on" : "off",
-            onChange: (value) => setEnabled(value === "on")
-          })
-        ])
+    return () => h32("div", { class: "dialkit-module" }, [
+      h32("div", { class: "dialkit-module-header" }, [
+        h32(Checkbox, {
+          checked: props.enabled,
+          label: props.title,
+          onChange: (next) => setEnabled(next)
+        }),
+        h32("span", { class: "dialkit-module-title" }, props.title)
       ]),
-      h31("div", { class: "dialkit-module-collapse", "data-open": props.enabled }, [
-        h31("div", { class: "dialkit-module-collapse-clip" }, [
-          h31("div", { class: "dialkit-module-inner" }, slots.default ? slots.default() : [])
+      h32("div", { class: "dialkit-module-collapse", "data-open": props.enabled }, [
+        h32("div", { class: "dialkit-module-collapse-clip" }, [
+          h32("div", { class: "dialkit-module-inner" }, slots.default ? slots.default() : [])
         ])
       ])
     ]);
@@ -9153,8 +9245,8 @@ var Module = defineComponent31({
 });
 
 // src/vue/components/ButtonGroup.ts
-import { defineComponent as defineComponent32, h as h32 } from "vue";
-var ButtonGroup = defineComponent32({
+import { defineComponent as defineComponent33, h as h33 } from "vue";
+var ButtonGroup = defineComponent33({
   name: "DialKitButtonGroup",
   props: {
     buttons: {
@@ -9163,18 +9255,18 @@ var ButtonGroup = defineComponent32({
     }
   },
   setup(props) {
-    return () => h32(
+    return () => h33(
       "div",
       { class: "dialkit-button-group" },
       props.buttons.map(
-        (button) => h32("button", { class: "dialkit-button", onClick: button.onClick }, button.label)
+        (button) => h33("button", { class: "dialkit-button", onClick: button.onClick }, button.label)
       )
     );
   }
 });
 
 // src/vue/components/WaveformVisualization.ts
-import { defineComponent as defineComponent33, h as h33, ref as ref26, onMounted as onMounted21, onBeforeUnmount as onBeforeUnmount5 } from "vue";
+import { defineComponent as defineComponent34, h as h34, ref as ref26, onMounted as onMounted21, onBeforeUnmount as onBeforeUnmount5 } from "vue";
 
 // src/waveform-dsp.ts
 function mixToMono(buffer) {
@@ -9567,7 +9659,7 @@ function createWaveformEngine(canvas, get) {
 }
 
 // src/vue/components/WaveformVisualization.ts
-var WaveformVisualization = defineComponent33({
+var WaveformVisualization = defineComponent34({
   name: "DialKitWaveformVisualization",
   props: {
     buffer: { type: Object, default: null },
@@ -9619,16 +9711,16 @@ var WaveformVisualization = defineComponent33({
       );
     });
     onBeforeUnmount5(() => engine?.destroy());
-    const minusIcon = () => h33("svg", { viewBox: "0 0 16 16", fill: "none" }, [
-      h33("path", { d: "M3.5 8h9", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" })
+    const minusIcon = () => h34("svg", { viewBox: "0 0 16 16", fill: "none" }, [
+      h34("path", { d: "M3.5 8h9", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" })
     ]);
-    const plusIcon = () => h33("svg", { viewBox: "0 0 16 16", fill: "none" }, [
-      h33("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" })
+    const plusIcon = () => h34("svg", { viewBox: "0 0 16 16", fill: "none" }, [
+      h34("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" })
     ]);
     return () => {
       const framingLoop = props.autoZoomOnLoop && !!props.loop;
       const children = [
-        h33("canvas", {
+        h34("canvas", {
           ref: canvasRef,
           class: "dialkit-waveform-viz",
           style: { width: `${props.width}px`, height: `${props.height}px` }
@@ -9638,7 +9730,7 @@ var WaveformVisualization = defineComponent33({
         const buttons = [];
         if (zoom.value > 1) {
           buttons.push(
-            h33(
+            h34(
               "button",
               {
                 type: "button",
@@ -9652,7 +9744,7 @@ var WaveformVisualization = defineComponent33({
           );
         }
         buttons.push(
-          h33(
+          h34(
             "button",
             {
               type: "button",
@@ -9665,15 +9757,15 @@ var WaveformVisualization = defineComponent33({
             [plusIcon()]
           )
         );
-        children.push(h33("div", { class: "dialkit-waveform-zoom" }, buttons));
+        children.push(h34("div", { class: "dialkit-waveform-zoom" }, buttons));
       }
-      return h33("div", { class: "dialkit-waveform-viz-wrap", style: { width: `${props.width}px` } }, children);
+      return h34("div", { class: "dialkit-waveform-viz-wrap", style: { width: `${props.width}px` } }, children);
     };
   }
 });
 
 // src/vue/components/AnalyserVisualization.ts
-import { defineComponent as defineComponent34, h as h34, ref as ref27, onMounted as onMounted22, onBeforeUnmount as onBeforeUnmount6 } from "vue";
+import { defineComponent as defineComponent35, h as h35, ref as ref27, onMounted as onMounted22, onBeforeUnmount as onBeforeUnmount6 } from "vue";
 
 // src/analyser-core.ts
 function byteFreqToUnit(v) {
@@ -9761,12 +9853,12 @@ var SPRING_MAX_STEP = 1 / 240;
 function stepSprings(pos, vel, targets, stiffness, damping, dt) {
   let remaining = dt;
   while (remaining > 0) {
-    const h36 = Math.min(remaining, SPRING_MAX_STEP);
-    remaining -= h36;
+    const h37 = Math.min(remaining, SPRING_MAX_STEP);
+    remaining -= h37;
     for (let i = 0; i < pos.length; i++) {
       const accel = -stiffness * (pos[i] - targets[i]) - damping * vel[i];
-      vel[i] += accel * h36;
-      pos[i] += vel[i] * h36;
+      vel[i] += accel * h37;
+      pos[i] += vel[i] * h37;
     }
   }
 }
@@ -10126,7 +10218,7 @@ function createAnalyserEngine(canvas, get) {
 }
 
 // src/vue/components/AnalyserVisualization.ts
-var AnalyserVisualization = defineComponent34({
+var AnalyserVisualization = defineComponent35({
   name: "DialKitAnalyserVisualization",
   props: {
     analyser: { type: Object, default: null },
@@ -10175,7 +10267,7 @@ var AnalyserVisualization = defineComponent34({
     onBeforeUnmount6(() => engine?.destroy());
     return () => {
       const children = [
-        h34("canvas", {
+        h35("canvas", {
           ref: canvasRef,
           class: "dialkit-analyser-viz",
           style: { width: `${props.width}px`, height: `${props.height}px` }
@@ -10185,7 +10277,7 @@ var AnalyserVisualization = defineComponent34({
         const buttons = [];
         if (props.onMuteChange) {
           buttons.push(
-            h34(
+            h35(
               "button",
               {
                 type: "button",
@@ -10199,7 +10291,7 @@ var AnalyserVisualization = defineComponent34({
         }
         if (props.onSoloChange) {
           buttons.push(
-            h34(
+            h35(
               "button",
               {
                 type: "button",
@@ -10211,17 +10303,17 @@ var AnalyserVisualization = defineComponent34({
             )
           );
         }
-        children.push(h34("div", { class: "dialkit-analyser-actions" }, buttons));
+        children.push(h35("div", { class: "dialkit-analyser-actions" }, buttons));
       }
-      return h34("div", { class: "dialkit-analyser-viz-wrap", style: { width: `${props.width}px` } }, children);
+      return h35("div", { class: "dialkit-analyser-viz-wrap", style: { width: `${props.width}px` } }, children);
     };
   }
 });
 
 // src/vue/components/CurveComposer.ts
 import {
-  defineComponent as defineComponent35,
-  h as h35,
+  defineComponent as defineComponent36,
+  h as h36,
   ref as ref28,
   computed as computed13,
   onMounted as onMounted23,
@@ -10631,7 +10723,7 @@ function triggersCrossed(prevValue, curValue, steps) {
 }
 
 // src/vue/components/CurveComposer.ts
-var CurveComposer = defineComponent35({
+var CurveComposer = defineComponent36({
   name: "DialKitCurveComposer",
   props: {
     /** The curve series (controlled). */
@@ -10857,15 +10949,15 @@ var CurveComposer = defineComponent35({
       for (let i = 1; i < n; i++) {
         const gx = i / n * W.value;
         lines.push(
-          h35("line", { key: `g-${rect.y}-${i}`, class: "dialkit-cc-grid", x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h })
+          h36("line", { key: `g-${rect.y}-${i}`, class: "dialkit-cc-grid", x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h })
         );
       }
       return lines;
     };
-    const renderLaneBg = (rect, key) => h35("rect", { key, class: "dialkit-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 });
+    const renderLaneBg = (rect, key) => h36("rect", { key, class: "dialkit-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 });
     const diagonal = (rect, span, key) => {
       const d = diagonalLine(rect, span, W.value);
-      return h35("line", { key, class: "dialkit-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 });
+      return h36("line", { key, class: "dialkit-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 });
     };
     return () => {
       const main = mainRect.value;
@@ -10879,7 +10971,7 @@ var CurveComposer = defineComponent35({
       if (props.selectedIndex != null && props.selectedIndex >= 0 && props.selectedIndex < props.segments.length) {
         const span = segmentSpan(props.segments, props.selectedIndex, props.gap);
         children.push(
-          h35("rect", {
+          h36("rect", {
             class: "dialkit-cc-seg-selected",
             x: span[0] * W.value,
             y: main.y,
@@ -10892,7 +10984,7 @@ var CurveComposer = defineComponent35({
       if (hover.value?.kind === "segment" && !drag.value) {
         const span = segmentSpan(props.segments, hover.value.index, props.gap);
         children.push(
-          h35("rect", {
+          h36("rect", {
             class: "dialkit-cc-seg-hover",
             x: span[0] * W.value,
             y: main.y,
@@ -10905,10 +10997,10 @@ var CurveComposer = defineComponent35({
       children.push(
         props.segments.map((seg, i) => {
           const span = segmentSpan(props.segments, i, props.gap);
-          return h35("g", { key: `seg-${i}` }, [
+          return h36("g", { key: `seg-${i}` }, [
             diagonal(main, span, `diag-${i}`),
-            h35("path", { class: "dialkit-cc-curve", d: curvePath(seg, main, span, W.value) }),
-            h35(
+            h36("path", { class: "dialkit-cc-curve", d: curvePath(seg, main, span, W.value) }),
+            h36(
               "text",
               { class: "dialkit-cc-label", x: (span[0] + span[1]) * 0.5 * W.value, y: main.y + 13 },
               seg.type
@@ -10919,7 +11011,7 @@ var CurveComposer = defineComponent35({
       if (props.gap > 0) {
         children.push(
           timelineSlots(props.segments, props.gap).filter((slot) => slot.kind === "gap" && slot.b > slot.a).map(
-            (slot) => h35("path", {
+            (slot) => h36("path", {
               key: `conn-${slot.index}`,
               class: "dialkit-cc-connector",
               d: connectorPath(slot, samplers.value, props.segments.length, main, W.value)
@@ -10929,7 +11021,7 @@ var CurveComposer = defineComponent35({
       }
       children.push(
         interior.map(
-          (bx, i) => h35("line", {
+          (bx, i) => h36("line", {
             key: `b-${i}`,
             class: "dialkit-cc-boundary",
             "data-active": String(
@@ -10943,7 +11035,7 @@ var CurveComposer = defineComponent35({
         )
       );
       children.push(
-        h35("line", {
+        h36("line", {
           ref: seriesPlayheadRef,
           class: "dialkit-cc-playhead",
           x1: 0,
@@ -10954,7 +11046,7 @@ var CurveComposer = defineComponent35({
         })
       );
       children.push(
-        h35("circle", {
+        h36("circle", {
           ref: seriesDotRef,
           class: "dialkit-cc-dot",
           cx: 0,
@@ -10968,18 +11060,18 @@ var CurveComposer = defineComponent35({
         children.push(renderLaneGrid(dr));
         if (hover.value?.kind === "driver" && !drag.value) {
           children.push(
-            h35("rect", { class: "dialkit-cc-seg-hover", x: 0, y: dr.y, width: W.value, height: dr.h, rx: 8 })
+            h36("rect", { class: "dialkit-cc-seg-hover", x: 0, y: dr.y, width: W.value, height: dr.h, rx: 8 })
           );
         }
         children.push(diagonal(dr, [0, 1], "driver-diag"));
         children.push(
-          h35("path", { class: "dialkit-cc-curve dialkit-cc-curve-driver", d: curvePath(props.driver, dr, [0, 1], W.value) })
+          h36("path", { class: "dialkit-cc-curve dialkit-cc-curve-driver", d: curvePath(props.driver, dr, [0, 1], W.value) })
         );
         children.push(
-          h35("text", { class: "dialkit-cc-label", x: W.value * 0.5, y: dr.y + 13 }, `driver \xB7 ${props.driver.type}`)
+          h36("text", { class: "dialkit-cc-label", x: W.value * 0.5, y: dr.y + 13 }, `driver \xB7 ${props.driver.type}`)
         );
         children.push(
-          h35("line", {
+          h36("line", {
             ref: driverPlayheadRef,
             class: "dialkit-cc-playhead",
             x1: 0,
@@ -10990,8 +11082,8 @@ var CurveComposer = defineComponent35({
           })
         );
       }
-      return h35("div", { class: "dialkit-cc-wrap", style: { width: `${W.value}px` } }, [
-        h35(
+      return h36("div", { class: "dialkit-cc-wrap", style: { width: `${W.value}px` } }, [
+        h36(
           "svg",
           {
             ref: svgRef,
@@ -11016,6 +11108,7 @@ var CurveComposer = defineComponent35({
 export {
   AnalyserVisualization,
   ButtonGroup,
+  Checkbox,
   ColorControl,
   ColorPickerPanel,
   ControlRenderer,

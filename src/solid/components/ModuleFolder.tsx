@@ -1,5 +1,5 @@
 import { createSignal, JSX, Show } from 'solid-js';
-import { SegmentedControl } from './SegmentedControl';
+import { Checkbox } from './Checkbox';
 
 interface ModuleFolderProps {
   title: string;
@@ -13,11 +13,6 @@ interface ModuleFolderProps {
   hintId?: string;
   children?: JSX.Element;
 }
-
-const ENABLE_OPTIONS = [
-  { value: 'off' as const, label: 'Off' },
-  { value: 'on' as const, label: 'On' },
-];
 
 /**
  * A config-level module: a folder that declared `_enabled`. Same idiom as the
@@ -44,14 +39,8 @@ export function ModuleFolder(props: ModuleFolderProps) {
         data-hint={props.hint ? 'true' : undefined}
         aria-describedby={props.hint ? props.hintId : undefined}
       >
+        <Checkbox checked={props.enabled} onChange={handleEnabledChange} label={props.title} />
         <span class="dialkit-module-title">{props.title}</span>
-        <div class="dialkit-module-switch" onClick={(e) => e.stopPropagation()}>
-          <SegmentedControl
-            options={ENABLE_OPTIONS}
-            value={props.enabled ? 'on' : 'off'}
-            onChange={(v) => handleEnabledChange(v === 'on')}
-          />
-        </div>
         <Show when={props.hint}>
           <span class="dialkit-hint" id={props.hintId} role="tooltip">
             {props.hint}

@@ -78,6 +78,7 @@ export function Slider({
   const [isDragging, setIsDragging] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [isValueHovered, setIsValueHovered] = useState(false);
+  const [isMetaHeld, setIsMetaHeld] = useState(false);
   const [isValueEditable, setIsValueEditable] = useState(false);
   const [showInput, setShowInput] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -89,6 +90,9 @@ export function Slider({
   const animRef = useRef<ReturnType<typeof animate> | null>(null);
   const wrapperRectRef = useRef<DOMRect | null>(null);
   const scaleRef = useRef(1);
+  /** Running value for wheel notches, which arrive faster than React renders. */
+  const wheelValueRef = useRef(value);
+  wheelValueRef.current = value;
 
   const percentage = ((value - min) / (max - min)) * 100;
   const isActive = isInteracting || isHovered;
@@ -188,6 +192,9 @@ export function Slider({
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (showInput) return;
+      // ⌘ hands the card over to the text: no drag, no preventDefault, so the
+      // browser's own selection starts and a click reaches the value span.
+      if (e.metaKey) return;
       e.preventDefault();
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
       pointerDownPos.current = { x: e.clientX, y: e.clientY };
@@ -314,6 +321,63 @@ export function Slider({
     ]
   );
 
+  // Wheel over the card adjusts the value — the pointer is already on the
+  // control, so the scroll belongs to it, not to the page behind it. Bound
+  // natively because React's wheel listener is passive and cannot preventDefault;
+  // stopPropagation keeps the window-level scroll shortcuts from firing twice.
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+
+    const onWheel = (e: WheelEvent) => {
+      if (showInput) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const raw = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (raw === 0) return;
+
+      const stepMultiplier = e.shiftKey ? 10 : e.altKey ? 0.1 : 1;
+      const delta = (raw > 0 ? -1 : 1) * step * stepMultiplier;
+      // A trackpad fires several wheel events per frame, all before React can
+      // re-render — so each notch reads the running value, not the stale prop.
+      const next = roundValue(
+        Math.max(min, Math.min(max, wheelValueRef.current + delta)),
+        step
+      );
+      wheelValueRef.current = next;
+
+      if (animRef.current) {
+        animRef.current.stop();
+        animRef.current = null;
+      }
+      fillPercent.jump(percentFromValue(next));
+      onChange(next);
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [showInput, min, max, step, onChange, fillPercent, percentFromValue]);
+
+  // ⌘ turns the card into text for as long as it is held. Only listened for
+  // while hovered, so an idle panel adds no key handlers.
+  useEffect(() => {
+    if (!isHovered) {
+      setIsMetaHeld(false);
+      return;
+    }
+    const sync = (e: KeyboardEvent) => setIsMetaHeld(e.metaKey);
+    const clear = () => setIsMetaHeld(false);
+    window.addEventListener('keydown', sync);
+    window.addEventListener('keyup', sync);
+    window.addEventListener('blur', clear);
+    return () => {
+      window.removeEventListener('keydown', sync);
+      window.removeEventListener('keyup', sync);
+      window.removeEventListener('blur', clear);
+    };
+  }, [isHovered]);
+
   // Handle value hover delay for editable state
   useEffect(() => {
     if (isValueHovered && !showInput && !isValueEditable) {
@@ -358,7 +422,7 @@ export function Slider({
   };
 
   const handleValueClick = (e: React.MouseEvent) => {
-    if (isValueEditable) {
+    if (isValueEditable || e.metaKey) {
       e.stopPropagation();
       e.preventDefault();
       setShowInput(true);
@@ -413,6 +477,7 @@ export function Slider({
     isVertical ? 'dialkit-slider-vertical' : '',
     isActive ? 'dialkit-slider-active' : '',
     isInteracting ? 'dialkit-slider-engaged' : '',
+    isMetaHeld ? 'dialkit-slider-text-mode' : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -421,7 +486,12 @@ export function Slider({
     onPointerDown: handlePointerDown,
     onPointerMove: handlePointerMove,
     onPointerUp: handlePointerUp,
-    onMouseEnter: () => setIsHovered(true),
+    // Read ⌘ on entry too: the key listeners only exist while hovered, so a
+    // key already held before the pointer arrived would otherwise go unseen.
+    onMouseEnter: (e: React.MouseEvent) => {
+      setIsHovered(true);
+      setIsMetaHeld(e.metaKey);
+    },
     onMouseLeave: () => setIsHovered(false),
   };
 
@@ -463,7 +533,7 @@ export function Slider({
               onMouseLeave={() => setIsValueHovered(false)}
               onClick={handleValueClick}
               onPointerDown={(e) => isValueEditable && e.stopPropagation()}
-              style={{ cursor: isValueEditable ? 'text' : 'default' }}
+              style={{ cursor: isValueEditable || isMetaHeld ? 'text' : 'default' }}
             >
               {displayValue}
               {unit && <span className="dialkit-slider-unit">{unit}</span>}
@@ -541,7 +611,7 @@ export function Slider({
             onMouseLeave={() => setIsValueHovered(false)}
             onClick={handleValueClick}
             onPointerDown={(e) => isValueEditable && e.stopPropagation()}
-            style={{ cursor: isValueEditable ? 'text' : 'default' }}
+            style={{ cursor: isValueEditable || isMetaHeld ? 'text' : 'default' }}
           >
             {displayValue}
             {unit && <span className="dialkit-slider-unit">{unit}</span>}

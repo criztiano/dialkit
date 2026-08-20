@@ -46,6 +46,9 @@ export const NumberControl = defineComponent({
 
     const handlePointerDown = (event: PointerEvent) => {
       if (showInput.value) return;
+      // ⌘ hands the card over to the text: skipping preventDefault lets the
+      // browser select the label or value instead of scrubbing.
+      if (event.metaKey) return;
       event.preventDefault();
       (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
       pointerDownPos = { x: event.clientX, y: event.clientY };

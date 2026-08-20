@@ -1,5 +1,5 @@
 <script lang="ts">
-  import SegmentedControl from './SegmentedControl.svelte';
+  import Checkbox from './Checkbox.svelte';
   import type { ShortcutConfig } from 'dialkit/store';
   import { formatToggleShortcut } from '../../shortcut-utils';
 
@@ -12,7 +12,8 @@
   }>();
 </script>
 
-<div class="dialkit-labeled-control">
+<div class="dialkit-labeled-control dialkit-labeled-control-check">
+  <Checkbox {checked} {onChange} {label} />
   <span class="dialkit-labeled-control-label">
     {label}
     {#if shortcut}
@@ -21,12 +22,4 @@
       </span>
     {/if}
   </span>
-  <SegmentedControl
-    options={[
-      { value: 'off', label: 'Off' },
-      { value: 'on', label: 'On' },
-    ]}
-    value={checked ? 'on' : 'off'}
-    onChange={(val) => onChange(val === 'on')}
-  />
 </div>

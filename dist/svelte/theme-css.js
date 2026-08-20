@@ -83,8 +83,64 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 
   /* Fonts */
   font-family: var(--dial-font-value);
+  /* System85 reports a line box shorter than its glyphs. Without an explicit
+     line-height every clipping container (ellipsized rows, folder titles)
+     shears the caps off. */
+  line-height: 1.35;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Type ──────────────────────────────────────────────────────────────
+   One voice for the whole set: labels are uppercase mono at full strength,
+   values are the reading face at --dial-value-opacity. Listed together (and
+   scoped to the root for specificity) so the rule is the design decision,
+   not forty copies of it drifting apart. */
+.dialkit-root .dialkit-slider-label,
+.dialkit-root .dialkit-slider-label-vertical,
+.dialkit-root .dialkit-range-slider-label,
+.dialkit-root .dialkit-number-label,
+.dialkit-root .dialkit-toggle-label,
+.dialkit-root .dialkit-labeled-control-label,
+.dialkit-root .dialkit-curve-label,
+.dialkit-root .dialkit-text-label,
+.dialkit-root .dialkit-select-label,
+.dialkit-root .dialkit-file-label,
+.dialkit-root .dialkit-chips-label,
+.dialkit-root .dialkit-multiselect-label,
+.dialkit-root .dialkit-gallery-label,
+.dialkit-root .dialkit-color-label,
+.dialkit-root .dialkit-gradient-label,
+.dialkit-root .dialkit-xy-label,
+.dialkit-root .dialkit-timeline-label,
+.dialkit-root .dialkit-shortcuts-row-label {
+  font-family: var(--dial-font-label);
+  font-size: var(--dial-font-size);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0;
+  line-height: 1.35;
+  color: var(--dial-text-root);
+}
+
+/* Field labels inside the colour picker keep their own small size. */
+.dialkit-root .dialkit-color-field-label {
+  font-family: var(--dial-font-label);
+  font-weight: 400;
+  text-transform: uppercase;
+}
+
+/* Section titles — the label voice, one step quieter in colour. */
+.dialkit-root .dialkit-folder-title,
+.dialkit-root .dialkit-module-title {
+  font-family: var(--dial-font-label);
+  font-size: var(--dial-font-size);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0;
+  line-height: 1.35;
+  color: var(--dial-text-section);
+  transform: none;
 }
 
 /* Audio level meter */
@@ -272,7 +328,6 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 .dialkit-folder {
   padding-bottom: 8px;
   margin-bottom: 8px;
-  border-bottom: 1px solid var(--dial-surface-subtle);
 }
 
 .dialkit-folder:last-child:not(.dialkit-folder-root) {
@@ -289,7 +344,6 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 .dialkit-panel-header {
   padding-bottom: 6px;
   margin-bottom: 12px;
-  border-bottom: 1px solid var(--dial-surface-subtle);
 }
 
 .dialkit-folder-header {
@@ -568,30 +622,26 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   padding-bottom: var(--dial-panel-padding);
 }
 
-/* Non-root folders - top & bottom HR dividers */
+/* Non-root folders — separated by space alone, never by a rule. */
 .dialkit-folder:not(.dialkit-folder-root) {
-  border-top: 1px solid var(--dial-surface-subtle);
-  border-bottom: 1px solid var(--dial-surface-subtle);
   margin-top: 4px;
   margin-bottom: 4px;
   padding-bottom: 0;
 }
 
-/* Adjacent non-root folders collapse gap and share a single divider */
 .dialkit-folder:not(.dialkit-folder-root) + .dialkit-folder:not(.dialkit-folder-root) {
-  margin-top: -10px;
-  border-top: none;
+  margin-top: 0;
 }
 
-/* Non-root folder header - match row height */
+/* Non-root folder header — a section title breathes above its rows. */
 .dialkit-folder:not(.dialkit-folder-root) > .dialkit-folder-header {
-  height: var(--dial-row-height);
-  padding: 0;
+  height: auto;
+  padding: 8px 0 2px;
 }
 
 .dialkit-folder:not(.dialkit-folder-root) > .dialkit-folder-header > .dialkit-folder-header-top {
   padding: 0;
-  height: 100%;
+  height: auto;
 }
 
 /* Root folder inner needs no extra bottom padding */
@@ -603,14 +653,11 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 
 /* Module — group with a header enable switch; body collapses when off */
 .dialkit-module {
-  border-top: 1px solid var(--dial-surface-subtle);
-  border-bottom: 1px solid var(--dial-surface-subtle);
   margin: 4px 0;
 }
 
 .dialkit-module + .dialkit-module {
   margin-top: 0;
-  border-top: none;
 }
 
 .dialkit-module-header {
@@ -677,35 +724,25 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 /* In-panel module folder (a config folder that declared \`_enabled\`) — reuses
    the module idiom but sits inside the inset panel body, so it aligns to the
    control-row grid instead of running full bleed like the standalone Module:
-   - the header matches --dial-row-height and takes the rows' 10px right inset,
-     so the Off/On switch pill right-aligns with the row edge;
-   - closed it is a single compact header row with a hairline under it, padded
-     so the hairline sits optically centered between its text and the next
-     row's text; the last module in a run draws no trailing hairline;
-   - open it drops the divider and gets its breathing room back. */
+   the header takes the rows' 10px right inset so the switch right-aligns with
+   the row edge, and open or closed it is spaced, never ruled off. */
 .dialkit-module-folder {
   margin: 0;
-  border-top: none;
-  border-bottom: 1px solid var(--dial-border);
-  /* The panel stacks children with a 6px gap below the hairline; mirror it
-     above so the divider sits equidistant from both texts. */
   padding-bottom: 6px;
 }
 
 .dialkit-module-folder > .dialkit-module-header {
   box-sizing: border-box;
-  height: var(--dial-row-height);
-  padding: 0 10px 0 0;
+  min-height: var(--dial-row-height);
+  padding: 8px 10px 2px 0;
 }
 
 .dialkit-module-folder[data-open='true'] {
   margin: 4px 0;
-  border-bottom: none;
   padding-bottom: 0;
 }
 
 .dialkit-module-folder:last-child {
-  border-bottom: none;
   padding-bottom: 0;
 }
 
@@ -805,7 +842,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 .dialkit-slider-label {
   position: absolute;
   left: 4px;
-  top: 4px;
+  top: 2px;
   font-size: var(--dial-font-size);
   font-weight: 400;
   font-family: var(--dial-font-label);
@@ -820,7 +857,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 .dialkit-slider-value {
   position: absolute;
   right: 4px;
-  top: 4px;
+  top: 2px;
   font-size: var(--dial-font-size);
   font-weight: 400;
   font-family: var(--dial-font-value);
@@ -840,6 +877,32 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   margin-left: 2px;
 }
 
+/* Hold ⌘ and the card stops being a slider: its text becomes selectable, and
+   a click on the value goes straight to inline editing instead of waiting out
+   the hover dwell. */
+.dialkit-slider-text-mode {
+  cursor: text;
+  user-select: text;
+}
+
+.dialkit-slider-text-mode .dialkit-slider-label,
+.dialkit-slider-text-mode .dialkit-slider-label-vertical {
+  pointer-events: auto;
+  cursor: text;
+  user-select: text;
+}
+
+.dialkit-slider-text-mode .dialkit-slider-value,
+.dialkit-slider-text-mode .dialkit-slider-value-vertical {
+  cursor: text;
+  user-select: text;
+}
+
+.dialkit-slider-text-mode .dialkit-slider-value-vertical {
+  opacity: var(--dial-value-opacity);
+  pointer-events: auto;
+}
+
 .dialkit-slider-value-icon {
   display: inline-flex;
   align-items: center;
@@ -856,7 +919,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 .dialkit-slider-input {
   position: absolute;
   right: 4px;
-  top: 4px;
+  top: 2px;
   width: 4ch;
   min-width: 3ch;
   max-width: 6ch;
@@ -1031,7 +1094,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   position: absolute;
   top: auto;
   bottom: -2px;
-  width: 1px;
+  width: 2px;
   height: 8px;
   border-radius: 999px;
   background: var(--dial-text-primary);
@@ -1041,7 +1104,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 .dialkit-range-slider-label {
   position: absolute;
   left: 4px;
-  top: 4px;
+  top: 2px;
   font-size: var(--dial-font-size);
   font-weight: 400;
   font-family: var(--dial-font-label);
@@ -1056,7 +1119,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 .dialkit-range-slider-value {
   position: absolute;
   right: 4px;
-  top: 4px;
+  top: 2px;
   font-size: var(--dial-font-size);
   font-weight: 400;
   font-family: var(--dial-font-value);
@@ -1089,7 +1152,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 .dialkit-range-slider-input {
   position: absolute;
   right: 4px;
-  top: 4px;
+  top: 2px;
   width: 4ch;
   min-width: 3ch;
   max-width: 6ch;
@@ -1138,13 +1201,15 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   min-width: 0;
 }
 
+/* Label and value stay selectable: a normal drag suppresses selection with
+   preventDefault, so text only picks up under ⌘ (see NumberControl). */
 .dialkit-number-label {
   font-size: var(--dial-font-size);
   font-weight: 400;
   font-family: var(--dial-font-label);
   text-transform: uppercase;
   color: var(--dial-text-root);
-  pointer-events: none;
+  user-select: text;
   white-space: nowrap;
 }
 
@@ -1158,6 +1223,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   color: var(--dial-text-root);
   opacity: var(--dial-value-opacity);
   transition: opacity 0.15s;
+  user-select: text;
   white-space: nowrap;
 }
 
@@ -3243,7 +3309,6 @@ input.dialkit-list-item-title:focus {
   gap: 2px;
   margin-bottom: 4px;
   padding-bottom: 4px;
-  border-bottom: 1px solid var(--dial-border);
 }
 
 .dialkit-preset-item {
@@ -3551,7 +3616,6 @@ input.dialkit-list-item-title:focus {
   font-size: 11px;
   color: var(--dial-text-tertiary);
   padding: 6px 8px 2px;
-  border-top: 1px solid var(--dial-border);
   margin-top: 4px;
 }
 
@@ -4036,7 +4100,6 @@ input.dialkit-list-item-title:focus {
 }
 
 .dialkit-timeline-section + .dialkit-timeline-section {
-  border-top: 1px solid var(--dial-border);
   padding-top: 10px;
 }
 
@@ -4645,7 +4708,6 @@ input.dialkit-list-item-title:focus {
   gap: 8px;
   padding: 2px 2px 8px;
   margin-bottom: 6px;
-  border-bottom: 1px solid var(--dial-border);
 }
 
 .dialkit-timeline-popover-title {
@@ -4815,52 +4877,80 @@ input.dialkit-list-item-title:focus {
    off (empty), on (accent + tick), unavailable (a dash — never a blank
    box, so "cannot act now" never reads as "off"). */
 
+/* Toggle box — a 22px socket carrying the state as a mark, not a colour: a
+   slash while off, a filled chip while on, a dash while unavailable. State
+   swaps ride CSS transitions off the data attributes, so every framework
+   animates identically with no per-framework motion code. */
 .dialkit-checkbox {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
   padding: 0;
-  color: transparent;
-  background: transparent;
-  border: 1px solid var(--dial-border-hover);
-  border-radius: 4px;
+  color: var(--dial-text-primary);
+  background: var(--dial-surface-active);
+  border: none;
+  border-radius: var(--dial-radius);
   cursor: pointer;
-  transition:
-    background 0.14s ease,
-    border-color 0.14s ease,
-    color 0.14s ease;
+  transition: background 0.14s ease;
 }
 
 .dialkit-checkbox:hover:not([data-disabled]) {
-  border-color: var(--dial-text-secondary);
-  background: var(--dial-surface-hover);
-}
-
-.dialkit-checkbox[data-checked] {
-  color: #fff;
-  background: var(--dial-affordance-armed);
-  border-color: var(--dial-affordance-armed);
-}
-
-.dialkit-checkbox[data-checked]:hover {
-  background: var(--dial-affordance-active);
-  border-color: var(--dial-affordance-active);
+  background: var(--dial-border-hover);
 }
 
 .dialkit-checkbox[data-disabled] {
-  color: var(--dial-text-tertiary);
-  border-color: var(--dial-border);
   cursor: default;
+}
+
+.dialkit-checkbox-slash {
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0.3;
+  transition: opacity 0.14s ease;
+}
+
+.dialkit-checkbox-chip {
+  fill: currentColor;
+  opacity: 0;
+  transform: scale(0.5);
+  transform-origin: 11px 11px;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.dialkit-checkbox[data-checked] .dialkit-checkbox-slash {
+  opacity: 0;
+}
+
+.dialkit-checkbox[data-checked] .dialkit-checkbox-chip {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.dialkit-checkbox-dash {
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0;
+}
+
+.dialkit-checkbox[data-disabled] .dialkit-checkbox-slash {
+  opacity: 0;
+}
+
+.dialkit-checkbox[data-disabled] .dialkit-checkbox-dash {
+  opacity: 0.3;
 }
 
 /* A checkbox row leads with the box, so the label no longer needs to be
    pushed to the far edge by space-between. */
 .dialkit-labeled-control-check {
   justify-content: flex-start;
-  gap: 9px;
+  gap: 8px;
+  padding-left: 3px;
 }
 
 /* Module headers lead with the box too. */
@@ -4871,21 +4961,6 @@ input.dialkit-list-item-title:focus {
 .dialkit-module-title {
   flex: 1;
   min-width: 0;
-}
-
-/* ── Section dividers ───────────────────────────────────────────────────
-   A collapsible section is separated from the next by a single hairline
-   under it. The last section has nothing following it, so it carries no
-   rule — a trailing divider draws a line to nowhere. */
-
-.dialkit-panel-inner > .dialkit-folder,
-.dialkit-panel-inner > .dialkit-module {
-  border-bottom: 1px solid var(--dial-border);
-}
-
-.dialkit-panel-inner > .dialkit-folder:last-child,
-.dialkit-panel-inner > .dialkit-module:last-child {
-  border-bottom: none;
 }
 
 /* ── Hints near the bottom edge ─────────────────────────────────────────

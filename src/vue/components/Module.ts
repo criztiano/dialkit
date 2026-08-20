@@ -1,5 +1,5 @@
 import { defineComponent, h, type PropType } from 'vue';
-import { SegmentedControl } from './SegmentedControl';
+import { Checkbox } from './Checkbox';
 
 /**
  * A titled module whose header carries an enable switch — for parameter
@@ -23,17 +23,12 @@ export const Module = defineComponent({
     return () =>
       h('div', { class: 'dialkit-module' }, [
         h('div', { class: 'dialkit-module-header' }, [
+          h(Checkbox, {
+            checked: props.enabled,
+            label: props.title,
+            onChange: (next: boolean) => setEnabled(next),
+          }),
           h('span', { class: 'dialkit-module-title' }, props.title),
-          h('div', { class: 'dialkit-module-switch' }, [
-            h(SegmentedControl, {
-              options: [
-                { value: 'off', label: 'Off' },
-                { value: 'on', label: 'On' },
-              ],
-              value: props.enabled ? 'on' : 'off',
-              onChange: (value: string) => setEnabled(value === 'on'),
-            }),
-          ]),
         ]),
         h('div', { class: 'dialkit-module-collapse', 'data-open': props.enabled }, [
           h('div', { class: 'dialkit-module-collapse-clip' }, [
