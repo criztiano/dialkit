@@ -6,11 +6,13 @@
 // never mutates it (fftSize, smoothing, and the dB window stay the host's).
 
 import {
+  byteTimeToUnit,
   fillFrequencyTargets,
   fillWaveformMinMax,
   hzWindowToBins,
   markerT,
   resampleWaveform,
+  risingZeroCross,
   peakLevel,
   advanceSweep,
   stepSprings,
@@ -23,9 +25,11 @@ import {
 
 export type { AnalyserScale, AnalyserSpring } from './analyser-core';
 
-export type AnalyserSource = 'frequency' | 'waveform' | 'ekg';
+export type AnalyserSource = 'frequency' | 'waveform' | 'ekg' | 'transfer' | 'overlay';
 export type AnalyserVariant = 'line' | 'area';
 export type AnalyserMode = 'smooth' | 'pixelated';
+/** Transfer view: connect the samples ('segments') or plot isolated dots ('scatter'). */
+export type AnalyserTransferDraw = 'segments' | 'scatter';
 
 /** Everything the engine reads each frame. Wrappers supply a getter for the live values. */
 export interface AnalyserRuntime {
@@ -54,6 +58,20 @@ export interface AnalyserRuntime {
    * tracking focus). Null (or out of the window) draws nothing.
    */
   marker?: (() => number | null) | null;
+  /**
+   * Transfer / overlay only: the second signal tap (the processed output the
+   * first signal is compared against). Same read-only contract as `analyser`.
+   */
+  analyserB?: AnalyserNode | null;
+  /** Second trace / Y-axis color for transfer and overlay. Defaults to `waveColor`. */
+  waveColorB?: string;
+  /** Transfer only: 'segments' (default) connects samples, 'scatter' plots dots. */
+  transferDraw?: AnalyserTransferDraw;
+  /**
+   * Overlay only: how many time-domain samples the window shows after the
+   * zero-cross sync point. Null / absent shows the whole buffer.
+   */
+  windowSize?: number | null;
   width: number;
   height: number;
 }
@@ -79,6 +97,14 @@ const MAX_DT = 0.05;
 const EKG_SCROLL_SECONDS = 2.5;
 // EKG trace amplitude as a fraction of height (rectified level, drawn upward).
 const EKG_AMP = 0.85;
+// Transfer (XY) plot amplitude as a fraction of the plot square's half-extent.
+const TRANSFER_AMP = 0.85;
+// Scatter dots accumulate visually; each one is drawn faint so density reads as tone.
+const SCATTER_ALPHA = 0.35;
+// Overlay view: opacity of the back (input) trace relative to the front (output).
+const OVERLAY_BACK_ALPHA = 0.45;
+// Overlay window clamp: never fewer samples than this after the sync point.
+const OVERLAY_MIN_WINDOW = 32;
 
 type Pt = { x: number; y: number };
 
@@ -426,6 +452,155 @@ export function createAnalyserEngine(canvas: HTMLCanvasElement, get: () => Analy
     ctx.globalAlpha = 1;
   };
 
+  // Second-signal buffer for the transfer and overlay views, same reallocation
+  // discipline as `bytes`.
+  let bytesB = new Uint8Array(0);
+
+  const readB = (anB: AnalyserNode) => {
+    if (bytesB.length !== anB.fftSize) bytesB = new Uint8Array(anB.fftSize);
+    anB.getByteTimeDomainData(bytesB);
+  };
+
+  // Transfer view: an XY oscilloscope — every sample lands at (input, output),
+  // input on the horizontal axis, output on the vertical. A memoryless shaper
+  // draws its transfer curve; latency or hysteresis opens the curve into loops.
+  // The plot lives in a centered square so both axes share one scale. Without a
+  // second analyser the input is plotted against itself: the identity diagonal,
+  // a truthful "no processing" reading.
+  const drawTransfer = (rt: AnalyserRuntime, base: string, alpha: number) => {
+    const anB = rt.analyserB;
+    if (anB) readB(anB);
+    const yBytes = anB ? bytesB : bytes;
+    const m = Math.min(bytes.length, yBytes.length);
+    if (m < 2) return;
+
+    const half = Math.min(W, H) / 2;
+    const cx = W / 2;
+    const toX = (v: number) => cx + v * half * TRANSFER_AMP;
+    const toY = (v: number) => cy - v * half * TRANSFER_AMP;
+
+    // Crosshair: the zero axes of the plot square (the baseline drew the horizontal).
+    ctx.strokeStyle = base;
+    ctx.globalAlpha = 0.15 * alpha;
+    ctx.lineWidth = dpr;
+    ctx.beginPath();
+    ctx.moveTo(Math.round(cx) + 0.5, Math.round(cy - half));
+    ctx.lineTo(Math.round(cx) + 0.5, Math.round(cy + half));
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    const wave = rt.waveColor || base;
+    const pixelated = rt.mode === 'pixelated';
+    const scatter = rt.transferDraw === 'scatter';
+
+    if (scatter || pixelated) {
+      // Isolated points — the manual's answer to noisy signals, where connecting
+      // segments would scribble. Pixelated mode always scatters, in the house
+      // block language; smooth mode uses faint round dots whose overlap builds density.
+      ctx.fillStyle = wave;
+      ctx.globalAlpha = (pixelated ? 0.8 : SCATTER_ALPHA) * alpha;
+      const colW = columnWidth(rt.pixelSize);
+      for (let i = 0; i < m; i++) {
+        const x = toX(byteTimeToUnit(bytes[i]));
+        const y = toY(byteTimeToUnit(yBytes[i]));
+        if (pixelated) {
+          ctx.fillRect(quantizeToGrid(x - colW / 2, colW), quantizeToGrid(y - colW / 2, colW), colW, colW);
+        } else {
+          ctx.beginPath();
+          ctx.arc(x, y, 1.4 * dpr, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+      return;
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(toX(byteTimeToUnit(bytes[0])), toY(byteTimeToUnit(yBytes[0])));
+    for (let i = 1; i < m; i++) {
+      ctx.lineTo(toX(byteTimeToUnit(bytes[i])), toY(byteTimeToUnit(yBytes[i])));
+    }
+    ctx.globalAlpha = 0.9 * alpha;
+    ctx.strokeStyle = wave;
+    ctx.lineWidth = 1.6 * dpr;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
+
+  // One overlay trace as pixelated block steps: a single block per column riding
+  // the trace's level (the line-variant column language, one series).
+  const drawBlockTrace = (values: Float32Array, pixelSize: number, color: string, alpha: number) => {
+    const colW = columnWidth(pixelSize);
+    ctx.fillStyle = color;
+    ctx.globalAlpha = alpha;
+    for (let k = 0; k < values.length; k++) {
+      const x = k * colW;
+      if (x >= W) break;
+      const y = Math.max(0, Math.min(H - colW, quantizeToGrid(cy - values[k] * (H * WAVE_AMP) - colW / 2, colW)));
+      ctx.fillRect(x, y, colW, colW);
+    }
+    ctx.globalAlpha = 1;
+  };
+
+  // Overlay view: both signals as waveforms on one axis — the input behind at
+  // reduced opacity, the output in front. The window starts at a rising zero
+  // crossing of the front signal so a periodic test tone holds still, and
+  // `windowSize` trims how many samples it spans (a horizontal zoom).
+  const drawOverlay = (rt: AnalyserRuntime, dt: number, base: string, alpha: number) => {
+    const anB = rt.analyserB;
+    if (anB) readB(anB);
+    const syncSrc = anB ? bytesB : bytes;
+
+    const winLen = Math.max(
+      OVERLAY_MIN_WINDOW,
+      Math.min(bytes.length, Math.round(rt.windowSize ?? bytes.length))
+    );
+    let off = risingZeroCross(syncSrc);
+    if (off + winLen > syncSrc.length) off = Math.max(0, syncSrc.length - winLen);
+
+    const pixelated = rt.mode === 'pixelated';
+    const n = pixelated ? Math.max(2, Math.ceil(W / columnWidth(rt.pixelSize))) : SMOOTH_POINTS;
+    syncPoints(n);
+    const sliceAt = (src: Uint8Array) => {
+      const start = Math.min(off, Math.max(0, src.length - winLen));
+      return src.subarray(start, Math.min(src.length, start + winLen));
+    };
+    resampleWaveform(sliceAt(bytes), targetsA);
+    if (anB) resampleWaveform(sliceAt(bytesB), targetsB);
+    else targetsB.set(targetsA);
+
+    const spring = normalizeSpring(rt.spring);
+    springActive = !!spring;
+    if (spring) {
+      if (!springSeeded) {
+        posA.set(targetsA);
+        posB.set(targetsB);
+        velA.fill(0);
+        velB.fill(0);
+        springSeeded = true;
+      }
+      stepSprings(posA, velA, targetsA, spring.stiffness, spring.damping, dt);
+      stepSprings(posB, velB, targetsB, spring.stiffness, spring.damping, dt);
+    } else {
+      springSeeded = false;
+    }
+
+    const wave = rt.waveColor || base;
+    const front = rt.waveColorB || wave;
+    const backA = springActive ? posA : targetsA;
+    const frontB = springActive ? posB : targetsB;
+    const toY = (v: number) => cy - v * (H * WAVE_AMP);
+    if (pixelated) {
+      drawBlockTrace(backA, rt.pixelSize, wave, OVERLAY_BACK_ALPHA * alpha);
+      if (anB) drawBlockTrace(frontB, rt.pixelSize, front, alpha);
+    } else {
+      drawSmooth(backA, toY, cy, false, wave, wave, (anB ? OVERLAY_BACK_ALPHA : 1) * alpha);
+      if (anB) drawSmooth(frontB, toY, cy, false, front, front, alpha);
+    }
+  };
+
   let springActive = false;
   let prevNow: number | null = null;
 
@@ -459,6 +634,17 @@ export function createAnalyserEngine(canvas: HTMLCanvasElement, get: () => Analy
     // The EKG is its own pipeline: a sweeping level history, not per-point targets.
     if (rt.source === 'ekg') {
       drawEkg(rt, dt, base, alpha);
+      return;
+    }
+
+    // Transfer and overlay are their own pipelines: two live signals, not the
+    // single-trace reduce/spring path below.
+    if (rt.source === 'transfer') {
+      drawTransfer(rt, base, alpha);
+      return;
+    }
+    if (rt.source === 'overlay') {
+      drawOverlay(rt, dt, base, alpha);
       return;
     }
 

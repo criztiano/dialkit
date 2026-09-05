@@ -2,8 +2,22 @@ import { useRef, useEffect } from 'react';
 import { createAnalyserEngine } from '../analyser-engine';
 import type { AnalyserRuntime } from '../analyser-engine';
 
-export type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, AnalyserSpring } from '../analyser-engine';
-import type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, AnalyserSpring } from '../analyser-engine';
+export type {
+  AnalyserSource,
+  AnalyserVariant,
+  AnalyserMode,
+  AnalyserScale,
+  AnalyserSpring,
+  AnalyserTransferDraw,
+} from '../analyser-engine';
+import type {
+  AnalyserSource,
+  AnalyserVariant,
+  AnalyserMode,
+  AnalyserScale,
+  AnalyserSpring,
+  AnalyserTransferDraw,
+} from '../analyser-engine';
 
 interface AnalyserVisualizationProps {
   /**
@@ -16,8 +30,31 @@ interface AnalyserVisualizationProps {
    * 'frequency' — live spectrum (EQ-style). 'waveform' — time-domain oscilloscope.
    * 'ekg' — a medical-monitor trace: a pen dot fixed at the right edge rides the
    * signal's level while the history it draws streams away to the left.
+   * 'transfer' — an XY plot of `analyser` (horizontal) against `analyserB`
+   * (vertical): a memoryless shaper draws its transfer curve, time-dependent
+   * processing opens it into loops. 'overlay' — both signals as waveforms on one
+   * axis (input behind, output in front), synced to a rising zero crossing so
+   * periodic tones hold still.
    */
   source?: AnalyserSource;
+  /**
+   * Transfer / overlay only: the second signal tap — the processed output that
+   * `analyser` (the input) is compared against. Same passive, never-mutated
+   * contract as `analyser`.
+   */
+  analyserB?: AnalyserNode | null;
+  /** Output-trace / Y-axis color for transfer and overlay. Defaults to `waveColor`. */
+  waveColorB?: string;
+  /**
+   * Transfer only: 'segments' (default) connects successive samples into a
+   * curve; 'scatter' plots isolated dots — steadier reading on noisy signals.
+   */
+  transferDraw?: AnalyserTransferDraw;
+  /**
+   * Overlay only: samples shown after the sync point — a horizontal zoom.
+   * Null / absent shows the analyser's whole buffer.
+   */
+  windowSize?: number | null;
   /** 'area' — translucent fill under the trace plus a crisp outline. 'line' — outline only. */
   variant?: AnalyserVariant;
   /**
@@ -67,6 +104,7 @@ interface AnalyserVisualizationProps {
 
 export function AnalyserVisualization({
   analyser = null,
+  analyserB = null,
   source = 'frequency',
   variant = 'area',
   mode = 'smooth',
@@ -77,6 +115,9 @@ export function AnalyserVisualization({
   gridSubdivisions = 8,
   waveColor,
   fillColor,
+  waveColorB,
+  transferDraw = 'segments',
+  windowSize = null,
   muted = false,
   onMuteChange,
   soloed = false,
@@ -92,6 +133,7 @@ export function AnalyserVisualization({
   const runtimeRef = useRef<AnalyserRuntime>(null as unknown as AnalyserRuntime);
   runtimeRef.current = {
     analyser,
+    analyserB,
     source,
     variant,
     mode,
@@ -102,6 +144,9 @@ export function AnalyserVisualization({
     gridSubdivisions,
     waveColor,
     fillColor,
+    waveColorB,
+    transferDraw,
+    windowSize,
     muted,
     rangeHz,
     marker,

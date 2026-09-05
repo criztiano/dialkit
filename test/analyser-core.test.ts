@@ -8,6 +8,7 @@ import {
   fillFrequencyTargets,
   fillWaveformMinMax,
   resampleWaveform,
+  risingZeroCross,
   stepSprings,
   normalizeSpring,
   SPRING_DEFAULT_STIFFNESS,
@@ -339,5 +340,22 @@ describe('markerT', () => {
     expect(markerT(2, 'log', 4, 64)).toBeNull();
     expect(markerT(100, 'log', 4, 64)).toBeNull();
     expect(markerT(Number.NaN, 'log', 4, 64)).toBeNull();
+  });
+});
+
+describe('risingZeroCross', () => {
+  it('finds the first upward crossing through silence (128)', () => {
+    // 130,120,110,127,128 — falls, then crosses back up at index 4.
+    expect(risingZeroCross(new Uint8Array([130, 120, 110, 127, 128, 140]))).toBe(4);
+  });
+
+  it('ignores samples that sit at or above silence from the start', () => {
+    // Never dips below 128, so there is no *rising* crossing.
+    expect(risingZeroCross(new Uint8Array([128, 200, 255, 128]))).toBe(0);
+  });
+
+  it('returns 0 on silence and empty buffers', () => {
+    expect(risingZeroCross(new Uint8Array([128, 128, 128]))).toBe(0);
+    expect(risingZeroCross(new Uint8Array(0))).toBe(0);
   });
 });
