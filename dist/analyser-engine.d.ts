@@ -5,9 +5,11 @@ type AnalyserSpring = boolean | {
     damping?: number;
 };
 
-type AnalyserSource = 'frequency' | 'waveform' | 'ekg';
+type AnalyserSource = 'frequency' | 'waveform' | 'ekg' | 'transfer' | 'overlay';
 type AnalyserVariant = 'line' | 'area';
 type AnalyserMode = 'smooth' | 'pixelated';
+/** Transfer view: connect the samples ('segments') or plot isolated dots ('scatter'). */
+type AnalyserTransferDraw = 'segments' | 'scatter';
 /** Everything the engine reads each frame. Wrappers supply a getter for the live values. */
 interface AnalyserRuntime {
     analyser: AnalyserNode | null;
@@ -35,6 +37,20 @@ interface AnalyserRuntime {
      * tracking focus). Null (or out of the window) draws nothing.
      */
     marker?: (() => number | null) | null;
+    /**
+     * Transfer / overlay only: the second signal tap (the processed output the
+     * first signal is compared against). Same read-only contract as `analyser`.
+     */
+    analyserB?: AnalyserNode | null;
+    /** Second trace / Y-axis color for transfer and overlay. Defaults to `waveColor`. */
+    waveColorB?: string;
+    /** Transfer only: 'segments' (default) connects samples, 'scatter' plots dots. */
+    transferDraw?: AnalyserTransferDraw;
+    /**
+     * Overlay only: how many time-domain samples the window shows after the
+     * zero-cross sync point. Null / absent shows the whole buffer.
+     */
+    windowSize?: number | null;
     width: number;
     height: number;
 }
@@ -52,4 +68,4 @@ interface AnalyserEngine {
  */
 declare function createAnalyserEngine(canvas: HTMLCanvasElement, get: () => AnalyserRuntime): AnalyserEngine;
 
-export { type AnalyserEngine, type AnalyserMode, type AnalyserRuntime, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, createAnalyserEngine };
+export { type AnalyserEngine, type AnalyserMode, type AnalyserRuntime, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserTransferDraw, type AnalyserVariant, createAnalyserEngine };

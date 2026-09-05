@@ -138,6 +138,17 @@ export function resampleWaveform(data: Uint8Array, out: Float32Array) {
   }
 }
 
+// Index of the first rising zero crossing in time-domain bytes (a sample at or
+// above silence whose predecessor was below it). The overlay view starts drawing
+// here so a periodic test tone holds still frame to frame. 0 when the buffer
+// never crosses (silence, DC): the window just starts at the buffer's head.
+export function risingZeroCross(data: Uint8Array): number {
+  for (let i = 1; i < data.length; i++) {
+    if (data[i - 1] < 128 && data[i] >= 128) return i;
+  }
+  return 0;
+}
+
 /** Rectified peak of a time-domain byte window → 0..1 (the EKG pen's level). */
 export function peakLevel(data: Uint8Array): number {
   let mx = 0;

@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { AnalyserVisualization, Slider, ColorControl } from 'tweakers';
-import type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale } from 'tweakers';
+import type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, AnalyserTransferDraw } from 'tweakers';
 
 const PIXEL_SIZES = [1, 2, 4, 6]; // pixelated block-size multipliers
 const CHANNEL_NAMES = ['drone', 'blips'] as const;
 const CHANNEL_GAINS = [0.3, 0.55]; // per-channel base levels
 
 type Channel = { gain: GainNode; analyser: AnalyserNode };
-type Rig = { ctx: AudioContext; channels: Channel[]; stop: () => void };
+type Probe = { input: AnalyserNode; output: AnalyserNode };
+type Rig = { ctx: AudioContext; channels: Channel[]; probe: Probe; stop: () => void };
 
 /**
  * Two live channels so mute/solo are meaningful: a filter-swept drone and a loop
@@ -75,9 +76,28 @@ function buildRig(): Rig {
     step++;
   }, 420);
 
+  // probe: the mix tapped before and after a tanh saturator — the transfer view
+  // draws the shaper's curve, the overlay view compares the two waveforms. The
+  // shaped path is analysis-only and never reaches the destination.
+  const probeIn = ctx.createAnalyser();
+  probeIn.fftSize = 2048;
+  master.connect(probeIn);
+  const shaper = ctx.createWaveShaper();
+  const curve = new Float32Array(1024);
+  for (let i = 0; i < curve.length; i++) {
+    const x = (i / (curve.length - 1)) * 2 - 1;
+    curve[i] = Math.tanh(3 * x);
+  }
+  shaper.curve = curve;
+  const probeOut = ctx.createAnalyser();
+  probeOut.fftSize = 2048;
+  master.connect(shaper);
+  shaper.connect(probeOut);
+
   return {
     ctx,
     channels: [drone, blips],
+    probe: { input: probeIn, output: probeOut },
     stop: () => {
       window.clearInterval(interval);
       saws.forEach((o) => o.stop());
@@ -100,6 +120,8 @@ export function AnalyserShowcase() {
   const [mode, setMode] = useState<AnalyserMode>('smooth');
   const [scale, setScale] = useState<AnalyserScale>('log');
   const [grid, setGrid] = useState(false);
+  const [transferDraw, setTransferDraw] = useState<AnalyserTransferDraw>('segments');
+  const [windowSize, setWindowSize] = useState(2048);
   const [pixelIdx, setPixelIdx] = useState(0);
   const [springOn, setSpringOn] = useState(false);
   const [stiffness, setStiffness] = useState(120);
@@ -149,7 +171,30 @@ export function AnalyserShowcase() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        {CHANNEL_NAMES.map((name, i) => (
+        {source === 'transfer' || source === 'overlay' ? (
+          // Two-signal views: the mix against its saturated copy (input vs output).
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <AnalyserVisualization
+              analyser={rig?.probe.input ?? null}
+              analyserB={rig?.probe.output ?? null}
+              source={source}
+              variant={variant}
+              mode={mode}
+              pixelSize={PIXEL_SIZES[pixelIdx]}
+              spring={springOn ? { stiffness, damping } : false}
+              grid={grid}
+              gridSubdivisions={16}
+              waveColor={waveColor}
+              waveColorB={fillColor}
+              transferDraw={transferDraw}
+              windowSize={source === 'overlay' ? windowSize : null}
+              width={source === 'transfer' ? 200 : 256}
+              height={source === 'transfer' ? 200 : 140}
+            />
+            <div style={{ fontSize: 12, color: 'var(--tweak-text-secondary)' }}>mix → tanh saturator</div>
+          </div>
+        ) : (
+        CHANNEL_NAMES.map((name, i) => (
           <div key={name} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <AnalyserVisualization
               analyser={rig?.channels[i].analyser ?? null}
@@ -170,14 +215,15 @@ export function AnalyserShowcase() {
             />
             <div style={{ fontSize: 12, color: 'var(--tweak-text-secondary)' }}>{name}</div>
           </div>
-        ))}
+        ))
+        )}
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <button type="button" className="lib-tab" data-active={String(!!rig)} onClick={togglePlay}>
           {rig ? '■ Stop' : '▶ Play'}
         </button>
         <div className="lib-tabs">
-          {(['frequency', 'waveform', 'ekg'] as const).map((s) => (
+          {(['frequency', 'waveform', 'ekg', 'transfer', 'overlay'] as const).map((s) => (
             <button key={s} type="button" className="lib-tab" data-active={String(source === s)} onClick={() => setSource(s)}>
               {s}
             </button>
@@ -206,6 +252,16 @@ export function AnalyserShowcase() {
         >
           scale: {scale}
         </button>
+        {source === 'transfer' && (
+          <button
+            type="button"
+            className="lib-tab"
+            data-active={String(transferDraw === 'scatter')}
+            onClick={() => setTransferDraw((d) => (d === 'segments' ? 'scatter' : 'segments'))}
+          >
+            draw: {transferDraw}
+          </button>
+        )}
         <button type="button" className="lib-tab" data-active={String(grid)} onClick={() => setGrid((g) => !g)}>
           grid: {grid ? 'on' : 'off'}
         </button>
@@ -227,6 +283,9 @@ export function AnalyserShowcase() {
           <Slider label="stiffness" value={stiffness} min={20} max={600} step={5} onChange={setStiffness} />
           <Slider label="damping" value={damping} min={2} max={60} step={1} onChange={setDamping} />
         </>
+      )}
+      {source === 'overlay' && (
+        <Slider label="window (samples)" value={windowSize} min={128} max={2048} step={64} onChange={setWindowSize} />
       )}
       <Slider
         label="analyser smoothing"

@@ -2383,7 +2383,7 @@ type AnalyserSpring = boolean | {
     damping?: number;
 };
 
-type AnalyserSource = 'frequency' | 'waveform' | 'ekg';
+type AnalyserSource = 'frequency' | 'waveform' | 'ekg' | 'transfer' | 'overlay';
 type AnalyserVariant = 'line' | 'area';
 type AnalyserMode = 'smooth' | 'pixelated';
 
