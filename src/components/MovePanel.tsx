@@ -2,14 +2,14 @@ import { useEffect, useRef, useState, useSyncExternalStore, useCallback } from '
 import { createPortal } from 'react-dom';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { ModulationStore } from '../store/ModulationStore';
-import { modColor, curveComposition, MOD_SETTINGS_PANEL, type ModulationSlot } from '../modulation-core';
+import { modColor, curveComposition, envStagePoints, MOD_SETTINGS_PANEL, type ModulationSlot, type ModulationParams } from '../modulation-core';
 import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from './TweakRoot';
 import { buildMovePages, buildModMovePage, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, isEnumDial, isSpanContinuation, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_DIALS, MOVE_PADS } from '../move-layout';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody } from './move-slots';
+import { MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotEnvBody } from './move-slots';
 import { MoveSurfaceStore, type MovePadCell } from '../move-surface-store';
 import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValue, applyDetentAxis, type XYValue } from '../xy-pad-core';
 import { nearestHandle, type RangeValue } from '../range-slider-core';
@@ -817,6 +817,51 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                         activeIdx={activeIdx}
                         shape={shape}
                         glyph={glyph}
+                      />
+                    </div>
+                  );
+                }
+                // An ADSR stage dial draws its segment of the envelope: the
+                // four side-by-side slots read as one shape across the row,
+                // and the drag still edits this column's own stage.
+                const envStage = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.stage : undefined;
+                if (envStage) {
+                  const envParams: ModulationParams = {
+                    attack: Number(values.attack) || 0,
+                    decay: Number(values.decay) || 0,
+                    sustain: Number(values.sustain) || 0,
+                    release: Number(values.release) || 0,
+                  };
+                  return (
+                    <div
+                      key={meta.path}
+                      className="tweakers-move-dial"
+                      data-kind="env"
+                      data-active={active || undefined}
+                      onPointerDown={(e) => {
+                        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                        fineRef.current = null;
+                        setDragPath(meta.path);
+                        armMod(meta.path);
+                        dialFromPointer(e, meta);
+                      }}
+                      onPointerMove={(e) => {
+                        if (dragPath === meta.path) dialFromPointer(e, meta);
+                      }}
+                      onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
+                      onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                    >
+                      <ModDot path={meta.path} />
+                      <MoveSlotEnvBody
+                        label={meta.label}
+                        value={(() => {
+                          // Stage times read as their real numbers — 300 ms,
+                          // not a percent of the dial.
+                          const v = chipValue(meta);
+                          return `${v.num}${v.unit ? ` ${v.unit}` : ''}`;
+                        })()}
+                        stage={envStage}
+                        points={envStagePoints(envStage, envParams, 33)}
                       />
                     </div>
                   );

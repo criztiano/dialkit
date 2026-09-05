@@ -70,6 +70,9 @@ export const modColor = (index: number) =>
 
 export type ModulationType = 'lfo' | 'adsr' | 'envelope' | 'curve' | 'sh' | 'sequencer';
 
+/** The envelope's four stages — the four columns of its picture. */
+export type EnvStage = 'attack' | 'decay' | 'sustain' | 'release';
+
 /**
  * A settings value: the scalars a dial or a pad edits, plus the structures a
  * richer modulator carries (the curve's clip list). JSON-safe throughout, so
@@ -118,6 +121,13 @@ export type ModControlMeta = ControlMeta & {
   when?: (params: ModulationParams) => boolean;
   /** This dial draws the modulator's own shape (the type's `preview`). */
   drawsPreview?: boolean;
+  /**
+   * This dial is one stage of the envelope picture: its slot draws that
+   * stage's segment, and the four segments read as one shape across the
+   * columns — attack up to the slot's edge, decay down onto sustain,
+   * sustain flat, release down to rest.
+   */
+  envStage?: EnvStage;
   /** A knob tap on this dial runs this, returning the params it changes. */
   cycle?: (params: ModulationParams) => ModulationParams;
 };
@@ -171,6 +181,8 @@ export interface ModPageSlot {
   path: string;
   /** The dial draws the modulator's preview instead of a bar. */
   preview?: boolean;
+  /** The dial draws this stage's segment of the envelope picture. */
+  stage?: EnvStage;
   /** A knob tap on this dial cycles it. */
   cycle?: boolean;
 }
@@ -196,6 +208,7 @@ const isModDial = (c: ModControlMeta) =>
 const slotOf = (c: ModControlMeta): ModPageSlot => ({
   path: c.path,
   ...(c.drawsPreview ? { preview: true } : {}),
+  ...(c.envStage ? { stage: c.envStage } : {}),
   ...(c.cycle ? { cycle: true } : {}),
 });
 
@@ -328,6 +341,27 @@ interface LfoState {
   out: number | null;
 }
 
+/* ── preview helpers — the wave the settings page draws ───────────────── */
+
+/** A preview's own noise — deterministic, so the picture holds still. */
+const previewNoise = (i: number, salt = 0) => {
+  const x = Math.sin((i + 1) * 12.9898 + salt * 78.233) * 43758.5453;
+  return (x - Math.floor(x)) * 2 - 1;
+};
+
+/**
+ * The engine's one-pole slew, run over a preview's samples as if the whole
+ * picture lasted one second — so the Smooth axis rounds the drawing the way
+ * it rounds the signal.
+ */
+function previewSlew(values: number[], smooth: number): number[] {
+  const s = clamp01(smooth);
+  if (s <= 0 || values.length < 2) return values;
+  const k = 1 - Math.exp(-(1 / values.length) / (s * s * 0.4 + 1e-6));
+  let out = values[0];
+  return values.map((v, i) => (i === 0 ? out : (out = out + (v - out) * k)));
+}
+
 /**
  * The LFO: a width-skewed triangle (0.5 symmetric, toward 0/1 a saw either
  * way), phase-offset, with jitter (a random offset renewed each cycle) and
@@ -350,6 +384,7 @@ export const LFO_DEF: ModTypeDef = {
       yParam: 'smooth',
       xAxis: { min: 0, max: 1, step: 0.01, label: 'Jitter' },
       yAxis: { min: 0, max: 1, step: 0.01, label: 'Smooth' },
+      drawsPreview: true,
     },
   ],
   createState: (): LfoState => ({ phase: 0, drift: 0, driftTarget: 0, out: null }),
@@ -380,6 +415,28 @@ export const LFO_DEF: ModTypeDef = {
     }
     s.out = v;
     return v;
+  },
+  /**
+   * Two cycles of the wave the params describe: the width skew, the jitter
+   * as a slow deterministic wobble, and the slew rounding it all — so the
+   * Texture pad shows the signal it is shaping, not a crosshair.
+   */
+  preview(params, count) {
+    const n = Math.max(2, count);
+    const w = clamp(Number(params.width) || 0, 0.01, 0.99);
+    const jitter = clamp01(params.jitter);
+    const wobble = Math.max(2, Math.round(n / 8));
+    const raw = Array.from({ length: n }, (_, i) => {
+      const ph = ((i / (n - 1)) * 2 + clamp01(params.phase)) % 1;
+      const tri = ph < w ? ph / w : 1 - (ph - w) / (1 - w);
+      const drift = previewNoise(Math.floor(i / wobble)) * jitter * 0.5;
+      return clamp(tri * 2 - 1 + drift, -1, 1);
+    });
+    const shape = clamp01(params.smooth) > 0.55 ? 'Sine' : w <= 0.25 ? 'Saw' : w >= 0.75 ? 'Ramp' : 'Tri';
+    return {
+      points: previewSlew(raw, clamp01(params.smooth)).map((v) => (v + 1) / 2),
+      label: jitter > 0.4 ? `${shape} · Jitter` : shape,
+    };
   },
 };
 
@@ -418,6 +475,7 @@ export const SH_DEF: ModTypeDef = {
       yParam: 'smooth',
       xAxis: { min: 0, max: 1, step: 0.01, label: 'Jitter' },
       yAxis: { min: 0, max: 1, step: 0.01, label: 'Smooth' },
+      drawsPreview: true,
     },
   ],
   createState: (): ShState => ({ wait: 0, held: 0, out: null }),
@@ -444,6 +502,33 @@ export const SH_DEF: ModTypeDef = {
     s.out = v;
     return v;
   },
+  /**
+   * A run of held values, deterministic so the picture holds still while
+   * you shape it: depth scales the throw, offset lifts the whole run,
+   * jitter stretches and shrinks the holds (the drunken clock), and the
+   * slew turns the steps into a drift.
+   */
+  preview(params, count) {
+    const n = Math.max(2, count);
+    const depth = clamp01(params.depth);
+    const offset = clamp(Number(params.offset) || 0, -1, 1);
+    const jitter = clamp01(params.jitter);
+    const steps = 8;
+    const lens = Array.from({ length: steps }, (_, i) => 1 + previewNoise(i, 1) * jitter * 0.9);
+    const total = lens.reduce((a, b) => a + b, 0);
+    const edges: number[] = [];
+    let acc = 0;
+    for (const len of lens) edges.push((acc += len / total));
+    const raw = Array.from({ length: n }, (_, i) => {
+      const t = i / (n - 1);
+      const step = edges.findIndex((e) => t <= e);
+      return clamp(previewNoise(step < 0 ? steps - 1 : step) * depth + offset, -1, 1);
+    });
+    return {
+      points: previewSlew(raw, clamp01(params.smooth)).map((v) => (v + 1) / 2),
+      label: clamp01(params.smooth) > 0.55 ? 'Drift' : 'Steps',
+    };
+  },
 };
 
 registerModType(SH_DEF);
@@ -465,6 +550,38 @@ interface AdsrState {
 }
 
 const secs = (ms: unknown) => Math.max(0, Number(ms) || 0) / 1000;
+
+/** Each timed stage's dial span in ms — the picture normalises against it. */
+export const ADSR_STAGE_MAX = { attack: 2000, decay: 2000, release: 4000 } as const;
+
+/**
+ * One stage's segment of the envelope picture: `count` samples, each 0..1.
+ * The four segments meet at the slot edges by construction — attack ends at
+ * full, decay lands on the sustain level, sustain runs flat there, release
+ * falls from it to rest — so four side-by-side slots read as one envelope.
+ * A stage's time sets how much of its slot the ramp takes, floored so an
+ * instant stage still shows its edge.
+ */
+export function envStagePoints(stage: EnvStage, params: ModulationParams, count: number): number[] {
+  const n = Math.max(2, count);
+  const sustain = clamp01(params.sustain);
+  const extent = (key: keyof typeof ADSR_STAGE_MAX) =>
+    Math.max(0.08, Math.min(1, (secs(params[key]) * 1000) / ADSR_STAGE_MAX[key]));
+  const at = (t: number): number => {
+    if (stage === 'sustain') return sustain;
+    if (stage === 'attack') {
+      const w = extent('attack');
+      return t < w ? adsrEase(t / w) : 1;
+    }
+    if (stage === 'decay') {
+      const w = extent('decay');
+      return t < w ? 1 - (1 - sustain) * adsrEase(t / w) : sustain;
+    }
+    const w = extent('release');
+    return t < w ? sustain * (1 - adsrEase(t / w)) : 0;
+  };
+  return Array.from({ length: n }, (_, i) => at(i / (n - 1)));
+}
 
 /** An analog ramp's ease: quick off the mark, tapering into the target. */
 const adsrEase = (p: number) => 1 - (1 - p) * (1 - p);
@@ -498,10 +615,10 @@ export const ADSR_DEF: ModTypeDef = {
   label: 'ADSR',
   defaults: { attack: 10, decay: 300, sustain: 0.6, release: 600, loop: false },
   controls: [
-    { type: 'slider', path: 'attack', label: 'Attack', min: 0, max: 2000, step: 1, unit: 'ms' },
-    { type: 'slider', path: 'decay', label: 'Decay', min: 0, max: 2000, step: 1, unit: 'ms' },
-    { type: 'slider', path: 'sustain', label: 'Sustain', min: 0, max: 1, step: 0.01 },
-    { type: 'slider', path: 'release', label: 'Release', min: 0, max: 4000, step: 1, unit: 'ms' },
+    { type: 'slider', path: 'attack', label: 'Attack', min: 0, max: ADSR_STAGE_MAX.attack, step: 1, unit: 'ms', envStage: 'attack' },
+    { type: 'slider', path: 'decay', label: 'Decay', min: 0, max: ADSR_STAGE_MAX.decay, step: 1, unit: 'ms', envStage: 'decay' },
+    { type: 'slider', path: 'sustain', label: 'Sustain', min: 0, max: 1, step: 0.01, envStage: 'sustain' },
+    { type: 'slider', path: 'release', label: 'Release', min: 0, max: ADSR_STAGE_MAX.release, step: 1, unit: 'ms', envStage: 'release' },
     { type: 'toggle', path: 'loop', label: 'Loop' },
   ],
   createState: (): AdsrState => ({ stage: 'idle', t: 0, from: 0, env: 0, gate: false }),

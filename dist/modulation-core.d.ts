@@ -36,6 +36,8 @@ declare const MOD_COLORS: string[];
 /** A slot's palette colour — the one constant identity it keeps. */
 declare const modColor: (index: number) => string;
 type ModulationType = 'lfo' | 'adsr' | 'envelope' | 'curve' | 'sh' | 'sequencer';
+/** The envelope's four stages — the four columns of its picture. */
+type EnvStage = 'attack' | 'decay' | 'sustain' | 'release';
 /**
  * A settings value: the scalars a dial or a pad edits, plus the structures a
  * richer modulator carries (the curve's clip list). JSON-safe throughout, so
@@ -77,6 +79,13 @@ type ModControlMeta = ControlMeta & {
     when?: (params: ModulationParams) => boolean;
     /** This dial draws the modulator's own shape (the type's `preview`). */
     drawsPreview?: boolean;
+    /**
+     * This dial is one stage of the envelope picture: its slot draws that
+     * stage's segment, and the four segments read as one shape across the
+     * columns — attack up to the slot's edge, decay down onto sustain,
+     * sustain flat, release down to rest.
+     */
+    envStage?: EnvStage;
     /** A knob tap on this dial runs this, returning the params it changes. */
     cycle?: (params: ModulationParams) => ModulationParams;
 };
@@ -129,6 +138,8 @@ interface ModPageSlot {
     path: string;
     /** The dial draws the modulator's preview instead of a bar. */
     preview?: boolean;
+    /** The dial draws this stage's segment of the envelope picture. */
+    stage?: EnvStage;
     /** A knob tap on this dial cycles it. */
     cycle?: boolean;
 }
@@ -209,6 +220,21 @@ declare const LFO_DEF: ModTypeDef;
  * slew as the LFO's — at 0 hard steps, up high a wandering drift.
  */
 declare const SH_DEF: ModTypeDef;
+/** Each timed stage's dial span in ms — the picture normalises against it. */
+declare const ADSR_STAGE_MAX: {
+    readonly attack: 2000;
+    readonly decay: 2000;
+    readonly release: 4000;
+};
+/**
+ * One stage's segment of the envelope picture: `count` samples, each 0..1.
+ * The four segments meet at the slot edges by construction — attack ends at
+ * full, decay lands on the sustain level, sustain runs flat there, release
+ * falls from it to rest — so four side-by-side slots read as one envelope.
+ * A stage's time sets how much of its slot the ramp takes, floored so an
+ * instant stage still shows its edge.
+ */
+declare function envStagePoints(stage: EnvStage, params: ModulationParams, count: number): number[];
 /**
  * The ADSR: attack up to full, decay down to the sustain level, sustain
  * held while the gate is on, release back to rest. The signal is unipolar
@@ -253,4 +279,4 @@ declare function curveComposition(params: ModulationParams): CurveComposition;
 declare function curveDuration(params: ModulationParams, bpm: number): number;
 declare const CURVE_DEF: ModTypeDef;
 
-export { ADSR_DEF, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, curveComposition, curveDuration, getModType, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modRingArc, registerModType, visibleModControls };
+export { ADSR_DEF, ADSR_STAGE_MAX, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, type EnvStage, LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, curveComposition, curveDuration, envStagePoints, getModType, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modRingArc, registerModType, visibleModControls };

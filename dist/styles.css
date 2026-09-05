@@ -5844,6 +5844,59 @@ input.tweakers-list-item-title:focus {
   white-space: nowrap;
 }
 
+/* Envelope stage slot — one column of the ADSR's four-part picture. Each
+   slot draws its own stage on a display like the filter's, and because the
+   segments meet at the slot edges (attack ends at full, decay lands on the
+   sustain level, sustain runs flat, release falls to rest) the row reads as
+   one envelope cut into four windows. */
+.tweakers-move-env-display {
+  position: absolute;
+  top: 26px;
+  left: 8px;
+  right: 9px;
+  bottom: 30px;
+  background: var(--move-display, #1e1e1e);
+  border-radius: var(--move-radius-small, 8px);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* The drawing runs edge to edge so neighbouring segments line up, with a
+   little vertical air so the peak and the floor keep their full stroke. */
+.tweakers-move-env-shape {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  width: 100%;
+  height: calc(100% - 12px);
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* The same ink weight as the filter and the curve-selection slot — every
+   picture on the page from one hand. */
+.tweakers-move-env-shape path {
+  fill: none;
+  stroke: var(--move-text);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.5;
+  transition: opacity 0.12s;
+}
+
+.tweakers-move-dial[data-kind="env"]:hover .tweakers-move-env-shape path,
+.tweakers-move-dial[data-kind="env"][data-active] .tweakers-move-env-shape path {
+  opacity: 1;
+}
+
+/* No pagination cells under an envelope slot, so its caption sits lower
+   than an enum's, clear of nothing but the slot's edge. */
+.tweakers-move-dial[data-kind="env"] .tweakers-move-dial-option {
+  bottom: 8px;
+}
+
 /* Range slot — the bar fills BETWEEN two handle ticks (the span), and the
    ticks poke past the bar so a collapsed range still reads as two hands. */
 .tweakers-move-dial-range {

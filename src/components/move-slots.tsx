@@ -33,6 +33,8 @@ import { resolveFilterAxis, type FilterValue } from '../filter-core';
  * - `filter`  — the 2-slot control: cutoff and resonance as one picture,
  *   the magnitude response maximised across both columns, each hand's
  *   small label sitting where its own slot's label would have been.
+ * - `env`     — one stage of the ADSR: the slot draws its stage's segment,
+ *   and the four side-by-side slots read as one envelope across the row.
  */
 export type MoveSlotKind =
   | 'default'
@@ -42,14 +44,16 @@ export type MoveSlotKind =
   | 'enum'
   | 'xy'
   | 'range'
-  | 'filter';
+  | 'filter'
+  | 'env';
 
 /** Which face a control wears in its slot, from its meta and moment. */
 export function moveSlotKind(
   meta: ControlMeta,
-  opts: { enum?: boolean; shape?: string | null; glyph?: string | null; valueFirst?: boolean } = {}
+  opts: { enum?: boolean; shape?: string | null; glyph?: string | null; valueFirst?: boolean; stage?: string | null } = {}
 ): MoveSlotKind {
   if (meta.type === 'filter') return 'filter';
+  if (opts.stage) return 'env';
   if (meta.type === 'xy') return 'xy';
   if (meta.type === 'range') return 'range';
   if (opts.enum) {
@@ -238,6 +242,36 @@ export function MoveSlotFilterBody({
 }
 
 /**
+ * One stage of the ADSR's four-column picture: the name on its tag, the
+ * stage's segment drawn on a display, the stage's value underneath. The
+ * segments meet at the slot edges by construction — attack ends at full,
+ * decay lands on the sustain level, sustain runs flat there, release falls
+ * to rest — so the four slots read as one envelope across the row.
+ */
+export function MoveSlotEnvBody({
+  label, value, stage, points,
+}: {
+  label: string;
+  value: ReactNode;
+  stage: string;
+  /** The segment's samples, each 0..1, left to right. */
+  points: number[];
+}) {
+  const d = points
+    .map((v, i) => `${i === 0 ? 'M' : 'L'} ${(i / (points.length - 1)) * 100} ${100 - v * 100}`)
+    .join(' ');
+  return (
+    <>
+      <span className="tweakers-move-dial-tag">{label}</span>
+      <div className="tweakers-move-env-display" data-stage={stage}>
+        <MoveSlotShape d={d} className="tweakers-move-env-shape" />
+      </div>
+      <span className="tweakers-move-dial-option">{value}</span>
+    </>
+  );
+}
+
+/**
  * The dictionary itself — every big-slot case the kit knows, named, with
  * the component that draws it. `value`, `icon`, `curve` and `enum` are
  * faces of shared bodies (the same markup, chosen by `moveSlotKind`);
@@ -252,4 +286,5 @@ export const MOVE_SLOT_LIBRARY = {
   enum: { description: 'stepped option picker, one pagination cell per option', component: MoveSlotEnumBody },
   range: { description: 'two handles on one bar; volume knob is the second hand', component: MoveSlotRangeBody },
   filter: { description: '2 slots: cutoff + resonance as one response picture', component: MoveSlotFilterBody },
+  env: { description: 'one ADSR stage; four side-by-side slots read as one envelope', component: MoveSlotEnvBody },
 } as const;

@@ -275,6 +275,7 @@ var isModDial = (c) => !c.chip && (c.type === "select" || c.type === "slider" ||
 var slotOf = (c) => ({
   path: c.path,
   ...c.drawsPreview ? { preview: true } : {},
+  ...c.envStage ? { stage: c.envStage } : {},
   ...c.cycle ? { cycle: true } : {}
 });
 function modPageLayout(controls, params = {}) {
@@ -336,6 +337,17 @@ function lfoSyncedHz(division, bpm) {
   const i = clamp(Math.round(Number(division) || 0), 0, LFO_SYNC_DIVISIONS.length - 1);
   return (Number(bpm) || 120) / 60 / LFO_SYNC_DIVISIONS[i].beats;
 }
+var previewNoise = (i, salt = 0) => {
+  const x = Math.sin((i + 1) * 12.9898 + salt * 78.233) * 43758.5453;
+  return (x - Math.floor(x)) * 2 - 1;
+};
+function previewSlew(values, smooth) {
+  const s = clamp012(smooth);
+  if (s <= 0 || values.length < 2) return values;
+  const k = 1 - Math.exp(-(1 / values.length) / (s * s * 0.4 + 1e-6));
+  let out = values[0];
+  return values.map((v, i) => i === 0 ? out : out = out + (v - out) * k);
+}
 var LFO_DEF = {
   type: "lfo",
   label: "LFO",
@@ -352,7 +364,8 @@ var LFO_DEF = {
       xParam: "jitter",
       yParam: "smooth",
       xAxis: { min: 0, max: 1, step: 0.01, label: "Jitter" },
-      yAxis: { min: 0, max: 1, step: 0.01, label: "Smooth" }
+      yAxis: { min: 0, max: 1, step: 0.01, label: "Smooth" },
+      drawsPreview: true
     }
   ],
   createState: () => ({ phase: 0, drift: 0, driftTarget: 0, out: null }),
@@ -377,6 +390,28 @@ var LFO_DEF = {
     }
     s.out = v;
     return v;
+  },
+  /**
+   * Two cycles of the wave the params describe: the width skew, the jitter
+   * as a slow deterministic wobble, and the slew rounding it all — so the
+   * Texture pad shows the signal it is shaping, not a crosshair.
+   */
+  preview(params, count) {
+    const n = Math.max(2, count);
+    const w = clamp(Number(params.width) || 0, 0.01, 0.99);
+    const jitter = clamp012(params.jitter);
+    const wobble = Math.max(2, Math.round(n / 8));
+    const raw = Array.from({ length: n }, (_, i) => {
+      const ph = (i / (n - 1) * 2 + clamp012(params.phase)) % 1;
+      const tri = ph < w ? ph / w : 1 - (ph - w) / (1 - w);
+      const drift = previewNoise(Math.floor(i / wobble)) * jitter * 0.5;
+      return clamp(tri * 2 - 1 + drift, -1, 1);
+    });
+    const shape = clamp012(params.smooth) > 0.55 ? "Sine" : w <= 0.25 ? "Saw" : w >= 0.75 ? "Ramp" : "Tri";
+    return {
+      points: previewSlew(raw, clamp012(params.smooth)).map((v) => (v + 1) / 2),
+      label: jitter > 0.4 ? `${shape} \xB7 Jitter` : shape
+    };
   }
 };
 registerModType(LFO_DEF);
@@ -395,7 +430,8 @@ var SH_DEF = {
       xParam: "jitter",
       yParam: "smooth",
       xAxis: { min: 0, max: 1, step: 0.01, label: "Jitter" },
-      yAxis: { min: 0, max: 1, step: 0.01, label: "Smooth" }
+      yAxis: { min: 0, max: 1, step: 0.01, label: "Smooth" },
+      drawsPreview: true
     }
   ],
   createState: () => ({ wait: 0, held: 0, out: null }),
@@ -417,10 +453,57 @@ var SH_DEF = {
     }
     s.out = v;
     return v;
+  },
+  /**
+   * A run of held values, deterministic so the picture holds still while
+   * you shape it: depth scales the throw, offset lifts the whole run,
+   * jitter stretches and shrinks the holds (the drunken clock), and the
+   * slew turns the steps into a drift.
+   */
+  preview(params, count) {
+    const n = Math.max(2, count);
+    const depth = clamp012(params.depth);
+    const offset = clamp(Number(params.offset) || 0, -1, 1);
+    const jitter = clamp012(params.jitter);
+    const steps = 8;
+    const lens = Array.from({ length: steps }, (_, i) => 1 + previewNoise(i, 1) * jitter * 0.9);
+    const total = lens.reduce((a, b) => a + b, 0);
+    const edges = [];
+    let acc = 0;
+    for (const len of lens) edges.push(acc += len / total);
+    const raw = Array.from({ length: n }, (_, i) => {
+      const t = i / (n - 1);
+      const step = edges.findIndex((e) => t <= e);
+      return clamp(previewNoise(step < 0 ? steps - 1 : step) * depth + offset, -1, 1);
+    });
+    return {
+      points: previewSlew(raw, clamp012(params.smooth)).map((v) => (v + 1) / 2),
+      label: clamp012(params.smooth) > 0.55 ? "Drift" : "Steps"
+    };
   }
 };
 registerModType(SH_DEF);
 var secs = (ms) => Math.max(0, Number(ms) || 0) / 1e3;
+var ADSR_STAGE_MAX = { attack: 2e3, decay: 2e3, release: 4e3 };
+function envStagePoints(stage, params, count) {
+  const n = Math.max(2, count);
+  const sustain = clamp012(params.sustain);
+  const extent = (key) => Math.max(0.08, Math.min(1, secs(params[key]) * 1e3 / ADSR_STAGE_MAX[key]));
+  const at = (t) => {
+    if (stage === "sustain") return sustain;
+    if (stage === "attack") {
+      const w2 = extent("attack");
+      return t < w2 ? adsrEase(t / w2) : 1;
+    }
+    if (stage === "decay") {
+      const w2 = extent("decay");
+      return t < w2 ? 1 - (1 - sustain) * adsrEase(t / w2) : sustain;
+    }
+    const w = extent("release");
+    return t < w ? sustain * (1 - adsrEase(t / w)) : 0;
+  };
+  return Array.from({ length: n }, (_, i) => at(i / (n - 1)));
+}
 var adsrEase = (p) => 1 - (1 - p) * (1 - p);
 function adsrStageLength(stage, params) {
   if (stage === "attack") return secs(params.attack);
@@ -433,10 +516,10 @@ var ADSR_DEF = {
   label: "ADSR",
   defaults: { attack: 10, decay: 300, sustain: 0.6, release: 600, loop: false },
   controls: [
-    { type: "slider", path: "attack", label: "Attack", min: 0, max: 2e3, step: 1, unit: "ms" },
-    { type: "slider", path: "decay", label: "Decay", min: 0, max: 2e3, step: 1, unit: "ms" },
-    { type: "slider", path: "sustain", label: "Sustain", min: 0, max: 1, step: 0.01 },
-    { type: "slider", path: "release", label: "Release", min: 0, max: 4e3, step: 1, unit: "ms" },
+    { type: "slider", path: "attack", label: "Attack", min: 0, max: ADSR_STAGE_MAX.attack, step: 1, unit: "ms", envStage: "attack" },
+    { type: "slider", path: "decay", label: "Decay", min: 0, max: ADSR_STAGE_MAX.decay, step: 1, unit: "ms", envStage: "decay" },
+    { type: "slider", path: "sustain", label: "Sustain", min: 0, max: 1, step: 0.01, envStage: "sustain" },
+    { type: "slider", path: "release", label: "Release", min: 0, max: ADSR_STAGE_MAX.release, step: 1, unit: "ms", envStage: "release" },
     { type: "toggle", path: "loop", label: "Loop" }
   ],
   createState: () => ({ stage: "idle", t: 0, from: 0, env: 0, gate: false }),
@@ -709,6 +792,7 @@ var CURVE_DEF = {
 registerModType(CURVE_DEF);
 export {
   ADSR_DEF,
+  ADSR_STAGE_MAX,
   CURVE_DEF,
   CURVE_LABELS,
   CURVE_MAX_CLIPS,
@@ -726,6 +810,7 @@ export {
   applyModulation,
   curveComposition,
   curveDuration,
+  envStagePoints,
   getModType,
   lfoSyncedHz,
   listModTypes,
