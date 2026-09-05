@@ -998,7 +998,7 @@ Bipolar sliders (`bipolar: true` or an `origin`) keep their character on the dia
 
 ### The big-slot library, and multi-slot controls
 
-Every face a dial slot can wear lives in one dictionary, `MOVE_SLOT_LIBRARY` (`src/components/move-slots.tsx`): `default`, `value`, `icon`, `curve`, `enum`, `xy`, `range`, `filter`, `env`. Each entry is a pure body — a drawing of computed props with no gestures of its own — so a new face is added by writing a body and dispatching to it from the MovePanel, and the gestures (pointer capture, fine drag, modulation arming) stay in one place.
+Every face a dial slot can wear lives in one dictionary, `MOVE_SLOT_LIBRARY` (`src/components/move-slots.tsx`): `default`, `value`, `icon`, `curve`, `enum`, `xy`, `range`, `filter`, `env`, `scope`. Each entry is a pure body — a drawing of computed props with no gestures of its own — so a new face is added by writing a body and dispatching to it from the MovePanel, and the gestures (pointer capture, fine drag, modulation arming) stay in one place.
 
 Some controls are bigger than one column. A **multi-slot control** follows one pattern, whatever its width:
 

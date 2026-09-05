@@ -9,7 +9,7 @@ import { isDevDefault } from '../env';
 import type { TweakTheme } from './TweakRoot';
 import { buildMovePages, buildModMovePage, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, isEnumDial, isSpanContinuation, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_DIALS, MOVE_PADS } from '../move-layout';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotEnvBody } from './move-slots';
+import { MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotEnvBody, MoveSlotScopeBody } from './move-slots';
 import { MoveSurfaceStore, type MovePadCell } from '../move-surface-store';
 import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValue, applyDetentAxis, type XYValue } from '../xy-pad-core';
 import { nearestHandle, type RangeValue } from '../range-slider-core';
@@ -709,15 +709,6 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       <ModDot path={meta.path} />
                       <div className="tweakers-move-xy">
                         {preview ? (
-                          // A free-running modulator's preview is an
-                          // oscilloscope: the signal actually coming out of
-                          // the engine, rolling by — turn any dial and the
-                          // wave you see is the wave the control gets. The
-                          // curve keeps its static clip drawing, which is
-                          // the thing its dials edit.
-                          modSlot && modSettings && (modSlot.type === 'lfo' || modSlot.type === 'sh') ? (
-                            <MoveScope index={modSettings.index} />
-                          ) : (
                           <svg
                             className="tweakers-move-xy-curve"
                             viewBox="0 0 100 100"
@@ -726,7 +717,6 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           >
                             <path d={previewPathData(preview.points)} />
                           </svg>
-                          )
                         ) : (
                           <>
                             {gridN > 0 && (
@@ -833,6 +823,23 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                         shape={shape}
                         glyph={glyph}
                       />
+                    </div>
+                  );
+                }
+                // The scope slot: a display, not a control — the modulator's
+                // live signal off the engine, rolling on the dark screen,
+                // with the wave's name (the type's own `preview` label) as
+                // its caption. No gestures; you watch it, you don't turn it.
+                const scopeSlot = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.scope : undefined;
+                if (scopeSlot && modSettings) {
+                  return (
+                    <div key={meta.path} className="tweakers-move-dial" data-kind="scope">
+                      <MoveSlotScopeBody
+                        label={meta.label}
+                        caption={ModulationStore.getSettingsPreview()?.label ?? ''}
+                      >
+                        <MoveScope index={modSettings.index} />
+                      </MoveSlotScopeBody>
                     </div>
                   );
                 }
@@ -1136,7 +1143,7 @@ function MoveScope({ index }: { index: number }) {
   }, [index]);
   return (
     <svg
-      className="tweakers-move-xy-curve"
+      className="tweakers-move-scope-wave"
       data-scope="true"
       viewBox="0 0 100 100"
       preserveAspectRatio="none"

@@ -186,10 +186,9 @@ describe('the S&H', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it('lays out rate, depth, offset dials and the jitter/smooth texture pad', () => {
-    expect(SH_DEF.controls.map((c) => c.path)).toEqual(['rate', 'depth', 'offset', 'texture']);
-    const xy = SH_DEF.controls.find((c) => c.type === 'xy')!;
-    expect([xy.xParam, xy.yParam]).toEqual(['jitter', 'smooth']);
+  it('lays out rate, depth, offset, jitter and smooth dials, and the scope', () => {
+    expect(SH_DEF.controls.map((c) => c.path)).toEqual(['rate', 'depth', 'offset', 'jitter', 'smooth', 'scope']);
+    expect(SH_DEF.controls.find((c) => c.path === 'scope')?.scope).toBe(true);
   });
 
   it('holds a value between samples and redraws at the rate', () => {

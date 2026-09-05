@@ -36,6 +36,8 @@ import { resolveFilterAxis, type FilterValue } from '../filter-core';
  * - `env`     — the 4-slot control: the whole ADSR drawn as one shape on a
  *   single display spanning the four stage columns, one caption and drag
  *   zone per stage.
+ * - `scope`   — a display, not a control: the modulator's live signal on
+ *   the dark screen, no value of its own.
  *
  * Multi-slot controls (`filter` spans 2 columns, `env` spans 4) follow one
  * pattern: the container takes `grid-column: span N`, the display and its
@@ -52,7 +54,8 @@ export type MoveSlotKind =
   | 'xy'
   | 'range'
   | 'filter'
-  | 'env';
+  | 'env'
+  | 'scope';
 
 /** Which face a control wears in its slot, from its meta and moment. */
 export function moveSlotKind(
@@ -282,6 +285,29 @@ export function MoveSlotEnvBody({
 }
 
 /**
+ * The oscilloscope slot: a display and nothing else — the modulator's live
+ * signal (passed in as the drawing, so the body stays pure) on the same
+ * dark screen as the filter's, the wave's name captioning it below. It is
+ * the one slot with no value of its own: you watch it, you don't turn it.
+ */
+export function MoveSlotScopeBody({
+  label, caption, children,
+}: {
+  label: string;
+  caption: ReactNode;
+  /** The live wave — an svg the host keeps ticking. */
+  children: ReactNode;
+}) {
+  return (
+    <>
+      <span className="tweakers-move-dial-tag">{label}</span>
+      <div className="tweakers-move-scope-display">{children}</div>
+      <span className="tweakers-move-dial-option">{caption}</span>
+    </>
+  );
+}
+
+/**
  * The dictionary itself — every big-slot case the kit knows, named, with
  * the component that draws it. `value`, `icon`, `curve` and `enum` are
  * faces of shared bodies (the same markup, chosen by `moveSlotKind`);
@@ -297,4 +323,5 @@ export const MOVE_SLOT_LIBRARY = {
   range: { description: 'two handles on one bar; volume knob is the second hand', component: MoveSlotRangeBody },
   filter: { description: '2 slots: cutoff + resonance as one response picture', component: MoveSlotFilterBody },
   env: { description: '4 slots: the whole ADSR as one shape, a caption per stage', component: MoveSlotEnvBody },
+  scope: { description: 'a display, not a control: the modulator’s live signal', component: MoveSlotScopeBody },
 } as const;

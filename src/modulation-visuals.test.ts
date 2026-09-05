@@ -43,9 +43,13 @@ describe('LFO preview', () => {
     assert.ok(swing(soft) < swing(sharp));
   });
 
-  it('the texture pad claims the preview', () => {
-    const layout = modPageLayout(LFO_DEF.controls, LFO_DEF.defaults);
-    assert.equal(layout.dials.find((d) => d.path === 'texture')?.preview, true);
+  it('jitter and smooth are their own dials, and the scope takes a slot', () => {
+    for (const def of [LFO_DEF, SH_DEF]) {
+      const layout = modPageLayout(def.controls, def.defaults);
+      assert.ok(layout.dials.some((d) => d.path === 'jitter'));
+      assert.ok(layout.dials.some((d) => d.path === 'smooth'));
+      assert.equal(layout.dials.find((d) => d.path === 'scope')?.scope, true);
+    }
   });
 });
 

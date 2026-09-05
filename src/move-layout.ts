@@ -82,8 +82,13 @@ export const isSpanContinuation = (page: MovePage, i: number): boolean =>
 export function buildModMovePage(panel: PanelConfig, layout?: ModPageLayout | null): MovePage {
   const controls = flat(panel.controls);
   if (layout) {
-    const at = (slot: { path: string } | null) =>
-      slot ? controls.find((c) => c.path === slot.path) : undefined;
+    // A scope slot is a display, not a control — it registers no TweakStore
+    // value, so its meta is synthesized here to hold the column.
+    const at = (slot: { path: string; scope?: boolean } | null) =>
+      slot
+        ? controls.find((c) => c.path === slot.path) ??
+          (slot.scope ? ({ type: 'analyser', path: slot.path, label: 'Scope' } as ControlMeta) : undefined)
+        : undefined;
     return {
       panel,
       dials: layout.dials.slice(0, MOVE_DIALS).map(at).filter((c): c is ControlMeta => !!c),

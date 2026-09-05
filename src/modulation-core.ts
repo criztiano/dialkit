@@ -122,6 +122,13 @@ export type ModControlMeta = ControlMeta & {
   /** This dial draws the modulator's own shape (the type's `preview`). */
   drawsPreview?: boolean;
   /**
+   * A display slot, not a control: the slot holds the modulator's
+   * oscilloscope — the live signal off the engine — with no value of its
+   * own. Declare it as `type: 'analyser'`; it never registers a TweakStore
+   * value, it just takes its column.
+   */
+  scope?: boolean;
+  /**
    * This dial is one stage of the envelope: the four stage dials render as
    * one 4-column control — a single display drawing the whole shape, with
    * each stage's readout and drag zone in its own column.
@@ -182,6 +189,8 @@ export interface ModPageSlot {
   preview?: boolean;
   /** The dial draws this stage's segment of the envelope picture. */
   stage?: EnvStage;
+  /** The slot is the modulator's oscilloscope — a display, not a control. */
+  scope?: boolean;
   /** A knob tap on this dial cycles it. */
   cycle?: boolean;
 }
@@ -201,13 +210,14 @@ export const MOD_PAGE_DIALS = 8;
 
 const isModDial = (c: ModControlMeta) =>
   !c.chip &&
-  (c.type === 'select' || c.type === 'slider' || c.type === 'xy' || c.type === 'range' ||
+  (c.scope || c.type === 'select' || c.type === 'slider' || c.type === 'xy' || c.type === 'range' ||
     (c.type === 'number' && c.min != null && c.max != null));
 
 const slotOf = (c: ModControlMeta): ModPageSlot => ({
   path: c.path,
   ...(c.drawsPreview ? { preview: true } : {}),
   ...(c.envStage ? { stage: c.envStage } : {}),
+  ...(c.scope ? { scope: true } : {}),
   ...(c.cycle ? { cycle: true } : {}),
 });
 
@@ -389,16 +399,9 @@ export const LFO_DEF: ModTypeDef = {
     { type: 'toggle', path: 'sync', label: 'Sync' },
     { type: 'slider', path: 'phase', label: 'Phase', min: 0, max: 1, step: 0.01 },
     { type: 'slider', path: 'width', label: 'Width', min: 0, max: 1, step: 0.01 },
-    {
-      type: 'xy',
-      path: 'texture',
-      label: 'Texture',
-      xParam: 'jitter',
-      yParam: 'smooth',
-      xAxis: { min: 0, max: 1, step: 0.01, label: 'Jitter' },
-      yAxis: { min: 0, max: 1, step: 0.01, label: 'Smooth' },
-      drawsPreview: true,
-    },
+    { type: 'slider', path: 'jitter', label: 'Jitter', min: 0, max: 1, step: 0.01 },
+    { type: 'slider', path: 'smooth', label: 'Smooth', min: 0, max: 1, step: 0.01 },
+    { type: 'analyser', path: 'scope', label: 'Scope', scope: true },
   ],
   createState: (): LfoState => ({ phase: 0, drift: 0, driftTarget: 0, out: null }),
   tick(state, params, dt, bpm) {
@@ -431,8 +434,9 @@ export const LFO_DEF: ModTypeDef = {
   },
   /**
    * Two cycles of the wave the params describe: the width skew, the jitter
-   * as a slow deterministic wobble, and the slew rounding it all — so the
-   * Texture pad shows the signal it is shaping, not a crosshair.
+   * as a slow deterministic wobble, and the slew rounding it all. The
+   * on-screen scope draws the live engine signal instead; this is the
+   * scope's caption (the wave's name) and the small screens' drawing.
    */
   preview(params, count) {
     const n = Math.max(2, count);
@@ -480,16 +484,9 @@ export const SH_DEF: ModTypeDef = {
     { type: 'slider', path: 'rate', label: 'Rate', min: 0.1, max: 30, step: 0.01, unit: 'Hz' },
     { type: 'slider', path: 'depth', label: 'Depth', min: 0, max: 1, step: 0.01 },
     { type: 'slider', path: 'offset', label: 'Offset', min: -1, max: 1, step: 0.01 },
-    {
-      type: 'xy',
-      path: 'texture',
-      label: 'Texture',
-      xParam: 'jitter',
-      yParam: 'smooth',
-      xAxis: { min: 0, max: 1, step: 0.01, label: 'Jitter' },
-      yAxis: { min: 0, max: 1, step: 0.01, label: 'Smooth' },
-      drawsPreview: true,
-    },
+    { type: 'slider', path: 'jitter', label: 'Jitter', min: 0, max: 1, step: 0.01 },
+    { type: 'slider', path: 'smooth', label: 'Smooth', min: 0, max: 1, step: 0.01 },
+    { type: 'analyser', path: 'scope', label: 'Scope', scope: true },
   ],
   createState: (): ShState => ({ wait: 0, held: 0, out: null }),
   tick(state, params, dt) {

@@ -271,11 +271,12 @@ var MOD_COLORS = [
 ];
 var modColor = (index) => MOD_COLORS[(index % MOD_SLOTS + MOD_SLOTS) % MOD_SLOTS];
 var MOD_PAGE_DIALS = 8;
-var isModDial = (c) => !c.chip && (c.type === "select" || c.type === "slider" || c.type === "xy" || c.type === "range" || c.type === "number" && c.min != null && c.max != null);
+var isModDial = (c) => !c.chip && (c.scope || c.type === "select" || c.type === "slider" || c.type === "xy" || c.type === "range" || c.type === "number" && c.min != null && c.max != null);
 var slotOf = (c) => ({
   path: c.path,
   ...c.drawsPreview ? { preview: true } : {},
   ...c.envStage ? { stage: c.envStage } : {},
+  ...c.scope ? { scope: true } : {},
   ...c.cycle ? { cycle: true } : {}
 });
 function modPageLayout(controls, params = {}) {
@@ -364,16 +365,9 @@ var LFO_DEF = {
     { type: "toggle", path: "sync", label: "Sync" },
     { type: "slider", path: "phase", label: "Phase", min: 0, max: 1, step: 0.01 },
     { type: "slider", path: "width", label: "Width", min: 0, max: 1, step: 0.01 },
-    {
-      type: "xy",
-      path: "texture",
-      label: "Texture",
-      xParam: "jitter",
-      yParam: "smooth",
-      xAxis: { min: 0, max: 1, step: 0.01, label: "Jitter" },
-      yAxis: { min: 0, max: 1, step: 0.01, label: "Smooth" },
-      drawsPreview: true
-    }
+    { type: "slider", path: "jitter", label: "Jitter", min: 0, max: 1, step: 0.01 },
+    { type: "slider", path: "smooth", label: "Smooth", min: 0, max: 1, step: 0.01 },
+    { type: "analyser", path: "scope", label: "Scope", scope: true }
   ],
   createState: () => ({ phase: 0, drift: 0, driftTarget: 0, out: null }),
   tick(state, params, dt, bpm) {
@@ -400,8 +394,9 @@ var LFO_DEF = {
   },
   /**
    * Two cycles of the wave the params describe: the width skew, the jitter
-   * as a slow deterministic wobble, and the slew rounding it all — so the
-   * Texture pad shows the signal it is shaping, not a crosshair.
+   * as a slow deterministic wobble, and the slew rounding it all. The
+   * on-screen scope draws the live engine signal instead; this is the
+   * scope's caption (the wave's name) and the small screens' drawing.
    */
   preview(params, count) {
     const n = Math.max(2, count);
@@ -430,16 +425,9 @@ var SH_DEF = {
     { type: "slider", path: "rate", label: "Rate", min: 0.1, max: 30, step: 0.01, unit: "Hz" },
     { type: "slider", path: "depth", label: "Depth", min: 0, max: 1, step: 0.01 },
     { type: "slider", path: "offset", label: "Offset", min: -1, max: 1, step: 0.01 },
-    {
-      type: "xy",
-      path: "texture",
-      label: "Texture",
-      xParam: "jitter",
-      yParam: "smooth",
-      xAxis: { min: 0, max: 1, step: 0.01, label: "Jitter" },
-      yAxis: { min: 0, max: 1, step: 0.01, label: "Smooth" },
-      drawsPreview: true
-    }
+    { type: "slider", path: "jitter", label: "Jitter", min: 0, max: 1, step: 0.01 },
+    { type: "slider", path: "smooth", label: "Smooth", min: 0, max: 1, step: 0.01 },
+    { type: "analyser", path: "scope", label: "Scope", scope: true }
   ],
   createState: () => ({ wait: 0, held: 0, out: null }),
   tick(state, params, dt) {

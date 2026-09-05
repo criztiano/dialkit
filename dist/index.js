@@ -3685,11 +3685,12 @@ var MOD_COLORS = [
 ];
 var modColor = (index) => MOD_COLORS[(index % MOD_SLOTS + MOD_SLOTS) % MOD_SLOTS];
 var MOD_PAGE_DIALS = 8;
-var isModDial = (c) => !c.chip && (c.type === "select" || c.type === "slider" || c.type === "xy" || c.type === "range" || c.type === "number" && c.min != null && c.max != null);
+var isModDial = (c) => !c.chip && (c.scope || c.type === "select" || c.type === "slider" || c.type === "xy" || c.type === "range" || c.type === "number" && c.min != null && c.max != null);
 var slotOf = (c) => ({
   path: c.path,
   ...c.drawsPreview ? { preview: true } : {},
   ...c.envStage ? { stage: c.envStage } : {},
+  ...c.scope ? { scope: true } : {},
   ...c.cycle ? { cycle: true } : {}
 });
 function modPageLayout(controls, params = {}) {
@@ -3778,16 +3779,9 @@ var LFO_DEF = {
     { type: "toggle", path: "sync", label: "Sync" },
     { type: "slider", path: "phase", label: "Phase", min: 0, max: 1, step: 0.01 },
     { type: "slider", path: "width", label: "Width", min: 0, max: 1, step: 0.01 },
-    {
-      type: "xy",
-      path: "texture",
-      label: "Texture",
-      xParam: "jitter",
-      yParam: "smooth",
-      xAxis: { min: 0, max: 1, step: 0.01, label: "Jitter" },
-      yAxis: { min: 0, max: 1, step: 0.01, label: "Smooth" },
-      drawsPreview: true
-    }
+    { type: "slider", path: "jitter", label: "Jitter", min: 0, max: 1, step: 0.01 },
+    { type: "slider", path: "smooth", label: "Smooth", min: 0, max: 1, step: 0.01 },
+    { type: "analyser", path: "scope", label: "Scope", scope: true }
   ],
   createState: () => ({ phase: 0, drift: 0, driftTarget: 0, out: null }),
   tick(state2, params, dt, bpm) {
@@ -3814,8 +3808,9 @@ var LFO_DEF = {
   },
   /**
    * Two cycles of the wave the params describe: the width skew, the jitter
-   * as a slow deterministic wobble, and the slew rounding it all — so the
-   * Texture pad shows the signal it is shaping, not a crosshair.
+   * as a slow deterministic wobble, and the slew rounding it all. The
+   * on-screen scope draws the live engine signal instead; this is the
+   * scope's caption (the wave's name) and the small screens' drawing.
    */
   preview(params, count) {
     const n = Math.max(2, count);
@@ -3844,16 +3839,9 @@ var SH_DEF = {
     { type: "slider", path: "rate", label: "Rate", min: 0.1, max: 30, step: 0.01, unit: "Hz" },
     { type: "slider", path: "depth", label: "Depth", min: 0, max: 1, step: 0.01 },
     { type: "slider", path: "offset", label: "Offset", min: -1, max: 1, step: 0.01 },
-    {
-      type: "xy",
-      path: "texture",
-      label: "Texture",
-      xParam: "jitter",
-      yParam: "smooth",
-      xAxis: { min: 0, max: 1, step: 0.01, label: "Jitter" },
-      yAxis: { min: 0, max: 1, step: 0.01, label: "Smooth" },
-      drawsPreview: true
-    }
+    { type: "slider", path: "jitter", label: "Jitter", min: 0, max: 1, step: 0.01 },
+    { type: "slider", path: "smooth", label: "Smooth", min: 0, max: 1, step: 0.01 },
+    { type: "analyser", path: "scope", label: "Scope", scope: true }
   ],
   createState: () => ({ wait: 0, held: 0, out: null }),
   tick(state2, params, dt) {
@@ -8742,7 +8730,7 @@ var isSpanContinuation = (page, i) => i > 0 && page.dials[i] !== void 0 && page.
 function buildModMovePage(panel, layout) {
   const controls = flat(panel.controls);
   if (layout) {
-    const at = (slot) => slot ? controls.find((c) => c.path === slot.path) : void 0;
+    const at = (slot) => slot ? controls.find((c) => c.path === slot.path) ?? (slot.scope ? { type: "analyser", path: slot.path, label: "Scope" } : void 0) : void 0;
     return {
       panel,
       dials: layout.dials.slice(0, MOVE_DIALS).map(at).filter((c) => !!c),
@@ -10894,6 +10882,17 @@ function MoveSlotEnvBody({
     ] }, s.stage))
   ] });
 }
+function MoveSlotScopeBody({
+  label,
+  caption,
+  children
+}) {
+  return /* @__PURE__ */ jsxs36(Fragment10, { children: [
+    /* @__PURE__ */ jsx41("span", { className: "tweakers-move-dial-tag", children: label }),
+    /* @__PURE__ */ jsx41("div", { className: "tweakers-move-scope-display", children }),
+    /* @__PURE__ */ jsx41("span", { className: "tweakers-move-dial-option", children: caption })
+  ] });
+}
 var MOVE_SLOT_LIBRARY = {
   default: { description: "name centred, value on touch, fill bar", component: MoveSlotDefaultBody },
   value: { description: "value-first: the value is the headline, the name a tag on top", component: MoveSlotDefaultBody },
@@ -10902,7 +10901,8 @@ var MOVE_SLOT_LIBRARY = {
   enum: { description: "stepped option picker, one pagination cell per option", component: MoveSlotEnumBody },
   range: { description: "two handles on one bar; volume knob is the second hand", component: MoveSlotRangeBody },
   filter: { description: "2 slots: cutoff + resonance as one response picture", component: MoveSlotFilterBody },
-  env: { description: "4 slots: the whole ADSR as one shape, a caption per stage", component: MoveSlotEnvBody }
+  env: { description: "4 slots: the whole ADSR as one shape, a caption per stage", component: MoveSlotEnvBody },
+  scope: { description: "a display, not a control: the modulator\u2019s live signal", component: MoveSlotScopeBody }
 };
 
 // src/move-surface-store.ts
@@ -11426,23 +11426,15 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 children: [
                   valueFirst && /* @__PURE__ */ jsx42("span", { className: "tweakers-move-dial-sub", children: meta.label }),
                   /* @__PURE__ */ jsx42(ModDot, { path: meta.path }),
-                  /* @__PURE__ */ jsx42("div", { className: "tweakers-move-xy", children: preview ? (
-                    // A free-running modulator's preview is an
-                    // oscilloscope: the signal actually coming out of
-                    // the engine, rolling by — turn any dial and the
-                    // wave you see is the wave the control gets. The
-                    // curve keeps its static clip drawing, which is
-                    // the thing its dials edit.
-                    modSlot && modSettings && (modSlot.type === "lfo" || modSlot.type === "sh") ? /* @__PURE__ */ jsx42(MoveScope, { index: modSettings.index }) : /* @__PURE__ */ jsx42(
-                      "svg",
-                      {
-                        className: "tweakers-move-xy-curve",
-                        viewBox: "0 0 100 100",
-                        preserveAspectRatio: "none",
-                        "aria-hidden": "true",
-                        children: /* @__PURE__ */ jsx42("path", { d: previewPathData(preview.points) })
-                      }
-                    )
+                  /* @__PURE__ */ jsx42("div", { className: "tweakers-move-xy", children: preview ? /* @__PURE__ */ jsx42(
+                    "svg",
+                    {
+                      className: "tweakers-move-xy-curve",
+                      viewBox: "0 0 100 100",
+                      preserveAspectRatio: "none",
+                      "aria-hidden": "true",
+                      children: /* @__PURE__ */ jsx42("path", { d: previewPathData(preview.points) })
+                    }
                   ) : /* @__PURE__ */ jsxs37(Fragment11, { children: [
                     gridN > 0 && /* @__PURE__ */ jsx42(
                       "span",
@@ -11556,6 +11548,17 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
               },
               meta.path
             );
+          }
+          const scopeSlot = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.scope : void 0;
+          if (scopeSlot && modSettings) {
+            return /* @__PURE__ */ jsx42("div", { className: "tweakers-move-dial", "data-kind": "scope", children: /* @__PURE__ */ jsx42(
+              MoveSlotScopeBody,
+              {
+                label: meta.label,
+                caption: ModulationStore.getSettingsPreview()?.label ?? "",
+                children: /* @__PURE__ */ jsx42(MoveScope, { index: modSettings.index })
+              }
+            ) }, meta.path);
           }
           const envStage = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.stage : void 0;
           if (envStage) {
@@ -11810,7 +11813,7 @@ function MoveScope({ index }) {
   return /* @__PURE__ */ jsx42(
     "svg",
     {
-      className: "tweakers-move-xy-curve",
+      className: "tweakers-move-scope-wave",
       "data-scope": "true",
       viewBox: "0 0 100 100",
       preserveAspectRatio: "none",
@@ -15674,6 +15677,7 @@ export {
   MoveSlotGlyph,
   MoveSlotRangeBody,
   MoveSlotReadout,
+  MoveSlotScopeBody,
   MoveSlotShape,
   MoveSurfaceStore,
   MoveVolumeDisplay,

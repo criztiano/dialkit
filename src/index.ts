@@ -14,7 +14,7 @@ export { buildMovePages, buildModMovePage, movePadRows, moveAppPadRow, visibleCo
 export type { MovePage } from './move-layout';
 
 // The big-slot library — the dictionary of what a Move dial slot can be
-export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotEnvBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
+export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
 export type { MoveSlotKind } from './components/move-slots';
 
 // The filter control — the kit's first 2-slot control (cutoff + resonance)
