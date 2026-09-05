@@ -10073,6 +10073,12 @@ function resampleWaveform(data, out) {
     out[i] = a + (b - a) * (x - j);
   }
 }
+function risingZeroCross(data) {
+  for (let i = 1; i < data.length; i++) {
+    if (data[i - 1] < 128 && data[i] >= 128) return i;
+  }
+  return 0;
+}
 function peakLevel(data) {
   let mx = 0;
   for (let i = 0; i < data.length; i++) {
@@ -10131,6 +10137,10 @@ var WAVE_AMP = 0.42;
 var MAX_DT = 0.05;
 var EKG_SCROLL_SECONDS = 2.5;
 var EKG_AMP = 0.85;
+var TRANSFER_AMP = 0.85;
+var SCATTER_ALPHA = 0.35;
+var OVERLAY_BACK_ALPHA = 0.45;
+var OVERLAY_MIN_WINDOW = 32;
 function smoothThrough2(ctx, pts) {
   for (let i = 0; i < pts.length - 1; i++) {
     const p0 = pts[i - 1] || pts[i];
@@ -10385,6 +10395,123 @@ function createAnalyserEngine(canvas, get) {
     ctx.fill();
     ctx.globalAlpha = 1;
   };
+  let bytesB = new Uint8Array(0);
+  const readB = (anB) => {
+    if (bytesB.length !== anB.fftSize) bytesB = new Uint8Array(anB.fftSize);
+    anB.getByteTimeDomainData(bytesB);
+  };
+  const drawTransfer = (rt, base, alpha) => {
+    const anB = rt.analyserB;
+    if (anB) readB(anB);
+    const yBytes = anB ? bytesB : bytes;
+    const m = Math.min(bytes.length, yBytes.length);
+    if (m < 2) return;
+    const half = Math.min(W, H) / 2;
+    const cx = W / 2;
+    const toX = (v) => cx + v * half * TRANSFER_AMP;
+    const toY = (v) => cy - v * half * TRANSFER_AMP;
+    ctx.strokeStyle = base;
+    ctx.globalAlpha = 0.15 * alpha;
+    ctx.lineWidth = dpr;
+    ctx.beginPath();
+    ctx.moveTo(Math.round(cx) + 0.5, Math.round(cy - half));
+    ctx.lineTo(Math.round(cx) + 0.5, Math.round(cy + half));
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    const wave = rt.waveColor || base;
+    const pixelated = rt.mode === "pixelated";
+    const scatter = rt.transferDraw === "scatter";
+    if (scatter || pixelated) {
+      ctx.fillStyle = wave;
+      ctx.globalAlpha = (pixelated ? 0.8 : SCATTER_ALPHA) * alpha;
+      const colW = columnWidth2(rt.pixelSize);
+      for (let i = 0; i < m; i++) {
+        const x = toX(byteTimeToUnit(bytes[i]));
+        const y = toY(byteTimeToUnit(yBytes[i]));
+        if (pixelated) {
+          ctx.fillRect(quantizeToGrid(x - colW / 2, colW), quantizeToGrid(y - colW / 2, colW), colW, colW);
+        } else {
+          ctx.beginPath();
+          ctx.arc(x, y, 1.4 * dpr, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+      return;
+    }
+    ctx.beginPath();
+    ctx.moveTo(toX(byteTimeToUnit(bytes[0])), toY(byteTimeToUnit(yBytes[0])));
+    for (let i = 1; i < m; i++) {
+      ctx.lineTo(toX(byteTimeToUnit(bytes[i])), toY(byteTimeToUnit(yBytes[i])));
+    }
+    ctx.globalAlpha = 0.9 * alpha;
+    ctx.strokeStyle = wave;
+    ctx.lineWidth = 1.6 * dpr;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
+  const drawBlockTrace = (values, pixelSize, color, alpha) => {
+    const colW = columnWidth2(pixelSize);
+    ctx.fillStyle = color;
+    ctx.globalAlpha = alpha;
+    for (let k = 0; k < values.length; k++) {
+      const x = k * colW;
+      if (x >= W) break;
+      const y = Math.max(0, Math.min(H - colW, quantizeToGrid(cy - values[k] * (H * WAVE_AMP) - colW / 2, colW)));
+      ctx.fillRect(x, y, colW, colW);
+    }
+    ctx.globalAlpha = 1;
+  };
+  const drawOverlay = (rt, dt, base, alpha) => {
+    const anB = rt.analyserB;
+    if (anB) readB(anB);
+    const syncSrc = anB ? bytesB : bytes;
+    const winLen = Math.max(
+      OVERLAY_MIN_WINDOW,
+      Math.min(bytes.length, Math.round(rt.windowSize ?? bytes.length))
+    );
+    let off = risingZeroCross(syncSrc);
+    if (off + winLen > syncSrc.length) off = Math.max(0, syncSrc.length - winLen);
+    const pixelated = rt.mode === "pixelated";
+    const n = pixelated ? Math.max(2, Math.ceil(W / columnWidth2(rt.pixelSize))) : SMOOTH_POINTS;
+    syncPoints(n);
+    const sliceAt = (src) => {
+      const start = Math.min(off, Math.max(0, src.length - winLen));
+      return src.subarray(start, Math.min(src.length, start + winLen));
+    };
+    resampleWaveform(sliceAt(bytes), targetsA);
+    if (anB) resampleWaveform(sliceAt(bytesB), targetsB);
+    else targetsB.set(targetsA);
+    const spring = normalizeSpring(rt.spring);
+    springActive = !!spring;
+    if (spring) {
+      if (!springSeeded) {
+        posA.set(targetsA);
+        posB.set(targetsB);
+        velA.fill(0);
+        velB.fill(0);
+        springSeeded = true;
+      }
+      stepSprings(posA, velA, targetsA, spring.stiffness, spring.damping, dt);
+      stepSprings(posB, velB, targetsB, spring.stiffness, spring.damping, dt);
+    } else {
+      springSeeded = false;
+    }
+    const wave = rt.waveColor || base;
+    const front = rt.waveColorB || wave;
+    const backA = springActive ? posA : targetsA;
+    const frontB = springActive ? posB : targetsB;
+    const toY = (v) => cy - v * (H * WAVE_AMP);
+    if (pixelated) {
+      drawBlockTrace(backA, rt.pixelSize, wave, OVERLAY_BACK_ALPHA * alpha);
+      if (anB) drawBlockTrace(frontB, rt.pixelSize, front, alpha);
+    } else {
+      drawSmooth(backA, toY, cy, false, wave, wave, (anB ? OVERLAY_BACK_ALPHA : 1) * alpha);
+      if (anB) drawSmooth(frontB, toY, cy, false, front, front, alpha);
+    }
+  };
   let springActive = false;
   let prevNow = null;
   let raf = 0;
@@ -10409,6 +10536,14 @@ function createAnalyserEngine(canvas, get) {
     else an.getByteTimeDomainData(bytes);
     if (rt.source === "ekg") {
       drawEkg(rt, dt, base, alpha);
+      return;
+    }
+    if (rt.source === "transfer") {
+      drawTransfer(rt, base, alpha);
+      return;
+    }
+    if (rt.source === "overlay") {
+      drawOverlay(rt, dt, base, alpha);
       return;
     }
     const pixelated = rt.mode === "pixelated";
