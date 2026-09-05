@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, useCallback } from '
 import { createPortal } from 'react-dom';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { ModulationStore } from '../store/ModulationStore';
-import { modColor, curveComposition, envStagePoints, MOD_SETTINGS_PANEL, type ModulationSlot, type ModulationParams } from '../modulation-core';
+import { modColor, curveComposition, envelopePoints, modPageWidth, MOD_SETTINGS_PANEL, type ModulationSlot, type ModulationParams } from '../modulation-core';
 import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
@@ -528,9 +528,14 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // empty page shows the header alone.
   // With app rows claimed the app owns whole hardware rows, so all 8 columns
   // stay on screen — its pads sit at real hardware coordinates.
-  const visibleCols = appRows > 0
-    ? Array.from({ length: MOVE_PADS }, (_, i) => i)
-    : visibleColumns(page);
+  // Every settings page renders at the widest type's width: switching the
+  // type must never reflow the page — the Type dial under your finger, and
+  // everything else, stays exactly where it was.
+  const visibleCols = settingsPanel
+    ? Array.from({ length: modPageWidth() }, (_, i) => i)
+    : appRows > 0
+      ? Array.from({ length: MOVE_PADS }, (_, i) => i)
+      : visibleColumns(page);
 
   // The header cluster: the volume-dial readout, right-aligned. (Action
   // buttons live in the views now — see MoveActionButton.) Nothing
@@ -704,6 +709,15 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       <ModDot path={meta.path} />
                       <div className="tweakers-move-xy">
                         {preview ? (
+                          // A free-running modulator's preview is an
+                          // oscilloscope: the signal actually coming out of
+                          // the engine, rolling by — turn any dial and the
+                          // wave you see is the wave the control gets. The
+                          // curve keeps its static clip drawing, which is
+                          // the thing its dials edit.
+                          modSlot && modSettings && (modSlot.type === 'lfo' || modSlot.type === 'sh') ? (
+                            <MoveScope index={modSettings.index} />
+                          ) : (
                           <svg
                             className="tweakers-move-xy-curve"
                             viewBox="0 0 100 100"
@@ -712,6 +726,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           >
                             <path d={previewPathData(preview.points)} />
                           </svg>
+                          )
                         ) : (
                           <>
                             {gridN > 0 && (
@@ -821,48 +836,75 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     </div>
                   );
                 }
-                // An ADSR stage dial draws its segment of the envelope: the
-                // four side-by-side slots read as one shape across the row,
-                // and the drag still edits this column's own stage.
+                // The ADSR's four stage dials render as ONE 4-slot control,
+                // the filter's big sibling: a single display drawing the
+                // whole envelope, with each stage's caption and drag zone in
+                // its own column — so every hardware knob still owns its
+                // stage while the picture reads as one shape. The first
+                // stage column carries the whole control; the rest yield to
+                // its span, like the filter's second column does.
                 const envStage = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.stage : undefined;
                 if (envStage) {
+                  const stageDials = (modLayout?.dials ?? [])
+                    .filter((d) => d.stage)
+                    .flatMap((d) => {
+                      const m = page.dials.find((x) => x?.path === d.path);
+                      return m ? [{ stage: d.stage as string, meta: m }] : [];
+                    });
+                  if (stageDials[0]?.meta.path !== meta.path) return null;
                   const envParams: ModulationParams = {
                     attack: Number(values.attack) || 0,
                     decay: Number(values.decay) || 0,
                     sustain: Number(values.sustain) || 0,
                     release: Number(values.release) || 0,
                   };
+                  const envActive = stageDials.some(
+                    (s) => dragPath === s.meta.path || !!handTouch[s.meta.path] || !!hwHeld[s.meta.path]
+                  );
+                  // Stage times read as their real numbers — 300 ms, not a
+                  // percent of the dial.
+                  const reading = (m: ControlMeta) => {
+                    const v = chipValue(m);
+                    return `${v.num}${v.unit ? ` ${v.unit}` : ''}`;
+                  };
                   return (
                     <div
                       key={meta.path}
                       className="tweakers-move-dial"
                       data-kind="env"
-                      data-active={active || undefined}
-                      onPointerDown={(e) => {
-                        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
-                        fineRef.current = null;
-                        setDragPath(meta.path);
-                        armMod(meta.path);
-                        dialFromPointer(e, meta);
-                      }}
-                      onPointerMove={(e) => {
-                        if (dragPath === meta.path) dialFromPointer(e, meta);
-                      }}
-                      onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
-                      onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                      data-active={envActive || undefined}
+                      style={{ gridColumn: `span ${stageDials.length}` }}
                     >
-                      <ModDot path={meta.path} />
                       <MoveSlotEnvBody
-                        label={meta.label}
-                        value={(() => {
-                          // Stage times read as their real numbers — 300 ms,
-                          // not a percent of the dial.
-                          const v = chipValue(meta);
-                          return `${v.num}${v.unit ? ` ${v.unit}` : ''}`;
-                        })()}
-                        stage={envStage}
-                        points={envStagePoints(envStage, envParams, 33)}
+                        points={envelopePoints(envParams, 129)}
+                        stages={stageDials.map((s) => ({ stage: s.stage, label: s.meta.label, value: reading(s.meta) }))}
                       />
+                      {/* One drag zone per stage column, over the display:
+                          the pointer edits the stage whose column it is in,
+                          the same one-knob-per-column rule the hardware
+                          keeps. */}
+                      <div className="tweakers-move-env-zones">
+                        {stageDials.map(({ meta: m }) => (
+                          <div
+                            key={m.path}
+                            className="tweakers-move-env-zone"
+                            onPointerDown={(e) => {
+                              try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                              fineRef.current = null;
+                              setDragPath(m.path);
+                              armMod(m.path);
+                              dialFromPointer(e, m);
+                            }}
+                            onPointerMove={(e) => {
+                              if (dragPath === m.path) dialFromPointer(e, m);
+                            }}
+                            onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
+                            onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                          >
+                            <ModDot path={m.path} />
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   );
                 }
@@ -1067,6 +1109,41 @@ function MoveCurveComposer({
         height={MOVE_CURVE_HEIGHT}
       />
     </div>
+  );
+}
+
+/** The scope's rolling window, in samples — a couple of seconds at 60fps. */
+const SCOPE_SAMPLES = 120;
+
+/**
+ * The preview pad's oscilloscope: the slot's real signal, sampled off the
+ * engine every frame into a rolling window and written straight to the
+ * path attribute — the panel never re-renders for it, the same discipline
+ * as the modulation circles' breathing dots.
+ */
+function MoveScope({ index }: { index: number }) {
+  const ref = useRef<SVGPathElement>(null);
+  useEffect(() => {
+    const now = (ModulationStore.getSignal(index) + 1) / 2;
+    const pts: number[] = Array(SCOPE_SAMPLES).fill(now);
+    let raf = requestAnimationFrame(function tick() {
+      pts.push((ModulationStore.getSignal(index) + 1) / 2);
+      pts.shift();
+      ref.current?.setAttribute('d', previewPathData(pts));
+      raf = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [index]);
+  return (
+    <svg
+      className="tweakers-move-xy-curve"
+      data-scope="true"
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <path ref={ref} />
+    </svg>
   );
 }
 

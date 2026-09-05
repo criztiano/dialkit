@@ -2531,6 +2531,7 @@ var ICON_PANEL = {
 var LUCIDE_ICONS = {
   /* directions and traversal */
   "arrow-right": ["M5 12h14", "m12 5 7 7-7 7"],
+  "arrow-left": ["M19 12H5", "m12 19-7-7 7-7"],
   "arrow-left-right": ["M8 3 4 7l4 4", "M4 7h16", "m16 21 4-4-4-4", "M20 17H4"],
   "fold-horizontal": [
     "M2 12h6",
@@ -3715,6 +3716,13 @@ function registerModType(def) {
 }
 var getModType = (type) => registry.get(type);
 var listModTypes = () => [...registry.values()];
+var modPageWidth = () => Math.min(
+  MOD_PAGE_DIALS,
+  1 + listModTypes().reduce(
+    (w, def) => Math.max(w, modPageLayout(def.controls, def.defaults).dials.length),
+    0
+  )
+);
 var MOD_SETTINGS_PANEL = "mod-settings";
 var modKey = (panelId, path) => `${panelId}\0${path}`;
 var clamp5 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -3898,22 +3906,18 @@ var SH_DEF = {
 registerModType(SH_DEF);
 var secs = (ms) => Math.max(0, Number(ms) || 0) / 1e3;
 var ADSR_STAGE_MAX = { attack: 2e3, decay: 2e3, release: 4e3 };
-function envStagePoints(stage, params, count) {
+function envelopePoints(params, count) {
   const n = Math.max(2, count);
   const sustain = clamp014(params.sustain);
-  const extent = (key) => Math.max(0.08, Math.min(1, secs(params[key]) * 1e3 / ADSR_STAGE_MAX[key]));
+  const share = (key) => 0.04 + 0.24 * Math.min(1, secs(params[key]) * 1e3 / ADSR_STAGE_MAX[key]);
+  const wA = share("attack");
+  const wD = share("decay");
+  const wR = share("release");
   const at = (t) => {
-    if (stage === "sustain") return sustain;
-    if (stage === "attack") {
-      const w2 = extent("attack");
-      return t < w2 ? adsrEase(t / w2) : 1;
-    }
-    if (stage === "decay") {
-      const w2 = extent("decay");
-      return t < w2 ? 1 - (1 - sustain) * adsrEase(t / w2) : sustain;
-    }
-    const w = extent("release");
-    return t < w ? sustain * (1 - adsrEase(t / w)) : 0;
+    if (t < wA) return adsrEase(t / wA);
+    if (t < wA + wD) return 1 - (1 - sustain) * adsrEase((t - wA) / wD);
+    if (t < 1 - wR) return sustain;
+    return sustain * (1 - adsrEase((t - (1 - wR)) / wR));
   };
   return Array.from({ length: n }, (_, i) => at(i / (n - 1)));
 }
@@ -4083,14 +4087,16 @@ var CURVE_DEF = {
       chip: true,
       options: [{ value: "continuous", label: "Cont" }, { value: "trigger", label: "Trig" }]
     },
+    /* The direction reads as a picture — an arrow says which way the pass
+       runs faster than a word does. */
     {
       type: "select",
       path: "direction",
       label: "Direction",
       options: [
-        { value: "forward", label: "Forward" },
-        { value: "mirror", label: "Mirror" },
-        { value: "reverse", label: "Reverse" }
+        { value: "forward", label: "Forward", icon: "arrow-right" },
+        { value: "mirror", label: "Mirror", icon: "arrow-left-right" },
+        { value: "reverse", label: "Reverse", icon: "arrow-left" }
       ]
     },
     { type: "toggle", path: "flip", label: "Flip" },
@@ -10876,16 +10882,16 @@ function MoveSlotFilterBody({
   ] });
 }
 function MoveSlotEnvBody({
-  label,
-  value,
-  stage,
-  points
+  points,
+  stages
 }) {
   const d = points.map((v, i) => `${i === 0 ? "M" : "L"} ${i / (points.length - 1) * 100} ${100 - v * 100}`).join(" ");
   return /* @__PURE__ */ jsxs36(Fragment10, { children: [
-    /* @__PURE__ */ jsx41("span", { className: "tweakers-move-dial-tag", children: label }),
-    /* @__PURE__ */ jsx41("div", { className: "tweakers-move-env-display", "data-stage": stage, children: /* @__PURE__ */ jsx41(MoveSlotShape, { d, className: "tweakers-move-env-shape" }) }),
-    /* @__PURE__ */ jsx41("span", { className: "tweakers-move-dial-option", children: value })
+    /* @__PURE__ */ jsx41("div", { className: "tweakers-move-env-display", children: /* @__PURE__ */ jsx41(MoveSlotShape, { d, className: "tweakers-move-env-shape" }) }),
+    stages.map((s) => /* @__PURE__ */ jsxs36("div", { className: "tweakers-move-env-readout", "data-stage": s.stage, children: [
+      /* @__PURE__ */ jsx41("span", { className: "tweakers-move-dial-label", children: s.label }),
+      /* @__PURE__ */ jsx41("span", { className: "tweakers-move-dial-value", children: s.value })
+    ] }, s.stage))
   ] });
 }
 var MOVE_SLOT_LIBRARY = {
@@ -10896,7 +10902,7 @@ var MOVE_SLOT_LIBRARY = {
   enum: { description: "stepped option picker, one pagination cell per option", component: MoveSlotEnumBody },
   range: { description: "two handles on one bar; volume knob is the second hand", component: MoveSlotRangeBody },
   filter: { description: "2 slots: cutoff + resonance as one response picture", component: MoveSlotFilterBody },
-  env: { description: "one ADSR stage; four side-by-side slots read as one envelope", component: MoveSlotEnvBody }
+  env: { description: "4 slots: the whole ADSR as one shape, a caption per stage", component: MoveSlotEnvBody }
 };
 
 // src/move-surface-store.ts
@@ -11287,7 +11293,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const padRows = movePadRows(page, appRows);
   const appRowAt = (row) => moveAppPadRow(row, appRows);
   const padAt = (x, y) => surface.pads.find((p) => p.x === x && p.y === y);
-  const visibleCols = appRows > 0 ? Array.from({ length: MOVE_PADS }, (_, i) => i) : visibleColumns(page);
+  const visibleCols = settingsPanel ? Array.from({ length: modPageWidth() }, (_, i) => i) : appRows > 0 ? Array.from({ length: MOVE_PADS }, (_, i) => i) : visibleColumns(page);
   const volumeReading = liveValue ?? volume?.value;
   const headerCluster = volume && /* @__PURE__ */ jsx42("div", { className: "tweakers-move-actions", children: /* @__PURE__ */ jsxs37("div", { className: "tweakers-move-volume", children: [
     /* @__PURE__ */ jsx42("span", { className: "tweakers-move-volume-tick", style: { background: MOVE_TRACK_COLORS[0] } }),
@@ -11420,15 +11426,23 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 children: [
                   valueFirst && /* @__PURE__ */ jsx42("span", { className: "tweakers-move-dial-sub", children: meta.label }),
                   /* @__PURE__ */ jsx42(ModDot, { path: meta.path }),
-                  /* @__PURE__ */ jsx42("div", { className: "tweakers-move-xy", children: preview ? /* @__PURE__ */ jsx42(
-                    "svg",
-                    {
-                      className: "tweakers-move-xy-curve",
-                      viewBox: "0 0 100 100",
-                      preserveAspectRatio: "none",
-                      "aria-hidden": "true",
-                      children: /* @__PURE__ */ jsx42("path", { d: previewPathData(preview.points) })
-                    }
+                  /* @__PURE__ */ jsx42("div", { className: "tweakers-move-xy", children: preview ? (
+                    // A free-running modulator's preview is an
+                    // oscilloscope: the signal actually coming out of
+                    // the engine, rolling by — turn any dial and the
+                    // wave you see is the wave the control gets. The
+                    // curve keeps its static clip drawing, which is
+                    // the thing its dials edit.
+                    modSlot && modSettings && (modSlot.type === "lfo" || modSlot.type === "sh") ? /* @__PURE__ */ jsx42(MoveScope, { index: modSettings.index }) : /* @__PURE__ */ jsx42(
+                      "svg",
+                      {
+                        className: "tweakers-move-xy-curve",
+                        viewBox: "0 0 100 100",
+                        preserveAspectRatio: "none",
+                        "aria-hidden": "true",
+                        children: /* @__PURE__ */ jsx42("path", { d: previewPathData(preview.points) })
+                      }
+                    )
                   ) : /* @__PURE__ */ jsxs37(Fragment11, { children: [
                     gridN > 0 && /* @__PURE__ */ jsx42(
                       "span",
@@ -11545,53 +11559,68 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
           }
           const envStage = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.stage : void 0;
           if (envStage) {
+            const stageDials = (modLayout?.dials ?? []).filter((d) => d.stage).flatMap((d) => {
+              const m = page.dials.find((x) => x?.path === d.path);
+              return m ? [{ stage: d.stage, meta: m }] : [];
+            });
+            if (stageDials[0]?.meta.path !== meta.path) return null;
             const envParams = {
               attack: Number(values.attack) || 0,
               decay: Number(values.decay) || 0,
               sustain: Number(values.sustain) || 0,
               release: Number(values.release) || 0
             };
+            const envActive = stageDials.some(
+              (s) => dragPath === s.meta.path || !!handTouch[s.meta.path] || !!hwHeld[s.meta.path]
+            );
+            const reading = (m) => {
+              const v = chipValue(m);
+              return `${v.num}${v.unit ? ` ${v.unit}` : ""}`;
+            };
             return /* @__PURE__ */ jsxs37(
               "div",
               {
                 className: "tweakers-move-dial",
                 "data-kind": "env",
-                "data-active": active || void 0,
-                onPointerDown: (e) => {
-                  try {
-                    e.currentTarget.setPointerCapture(e.pointerId);
-                  } catch {
-                  }
-                  fineRef.current = null;
-                  setDragPath(meta.path);
-                  armMod(meta.path);
-                  dialFromPointer(e, meta);
-                },
-                onPointerMove: (e) => {
-                  if (dragPath === meta.path) dialFromPointer(e, meta);
-                },
-                onPointerUp: () => {
-                  setDragPath(null);
-                  fineRef.current = null;
-                },
-                onPointerCancel: () => {
-                  setDragPath(null);
-                  fineRef.current = null;
-                },
+                "data-active": envActive || void 0,
+                style: { gridColumn: `span ${stageDials.length}` },
                 children: [
-                  /* @__PURE__ */ jsx42(ModDot, { path: meta.path }),
                   /* @__PURE__ */ jsx42(
                     MoveSlotEnvBody,
                     {
-                      label: meta.label,
-                      value: (() => {
-                        const v = chipValue(meta);
-                        return `${v.num}${v.unit ? ` ${v.unit}` : ""}`;
-                      })(),
-                      stage: envStage,
-                      points: envStagePoints(envStage, envParams, 33)
+                      points: envelopePoints(envParams, 129),
+                      stages: stageDials.map((s) => ({ stage: s.stage, label: s.meta.label, value: reading(s.meta) }))
                     }
-                  )
+                  ),
+                  /* @__PURE__ */ jsx42("div", { className: "tweakers-move-env-zones", children: stageDials.map(({ meta: m }) => /* @__PURE__ */ jsx42(
+                    "div",
+                    {
+                      className: "tweakers-move-env-zone",
+                      onPointerDown: (e) => {
+                        try {
+                          e.currentTarget.setPointerCapture(e.pointerId);
+                        } catch {
+                        }
+                        fineRef.current = null;
+                        setDragPath(m.path);
+                        armMod(m.path);
+                        dialFromPointer(e, m);
+                      },
+                      onPointerMove: (e) => {
+                        if (dragPath === m.path) dialFromPointer(e, m);
+                      },
+                      onPointerUp: () => {
+                        setDragPath(null);
+                        fineRef.current = null;
+                      },
+                      onPointerCancel: () => {
+                        setDragPath(null);
+                        fineRef.current = null;
+                      },
+                      children: /* @__PURE__ */ jsx42(ModDot, { path: m.path })
+                    },
+                    m.path
+                  )) })
                 ]
               },
               meta.path
@@ -11763,6 +11792,32 @@ function MoveCurveComposer({
       height: MOVE_CURVE_HEIGHT
     }
   ) });
+}
+var SCOPE_SAMPLES = 120;
+function MoveScope({ index }) {
+  const ref = useRef28(null);
+  useEffect21(() => {
+    const now = (ModulationStore.getSignal(index) + 1) / 2;
+    const pts = Array(SCOPE_SAMPLES).fill(now);
+    let raf = requestAnimationFrame(function tick() {
+      pts.push((ModulationStore.getSignal(index) + 1) / 2);
+      pts.shift();
+      ref.current?.setAttribute("d", previewPathData(pts));
+      raf = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [index]);
+  return /* @__PURE__ */ jsx42(
+    "svg",
+    {
+      className: "tweakers-move-xy-curve",
+      "data-scope": "true",
+      viewBox: "0 0 100 100",
+      preserveAspectRatio: "none",
+      "aria-hidden": "true",
+      children: /* @__PURE__ */ jsx42("path", { ref })
+    }
+  );
 }
 function MoveModCircle({ slot }) {
   const dotRef = useRef28(null);
@@ -15678,7 +15733,7 @@ export {
   dialSpan,
   displayHex,
   enumOptionIcon,
-  envStagePoints,
+  envelopePoints,
   filterHand01,
   filterHandValue,
   filterResponsePath,
@@ -15711,6 +15766,7 @@ export {
   modColor,
   modKey,
   modPageLayout,
+  modPageWidth,
   modRingArc,
   moveAppPadRow,
   movePadRows,

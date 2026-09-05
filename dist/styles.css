@@ -5844,25 +5844,26 @@ input.tweakers-list-item-title:focus {
   white-space: nowrap;
 }
 
-/* Envelope stage slot — one column of the ADSR's four-part picture. Each
-   slot draws its own stage on a display like the filter's, and because the
-   segments meet at the slot edges (attack ends at full, decay lands on the
-   sustain level, sustain runs flat, release falls to rest) the row reads as
-   one envelope cut into four windows. */
+/* The 4-slot envelope — the filter's big sibling. One display spans the
+   four stage columns and draws the whole ADSR as one shape; each stage
+   keeps a small caption where its own slot's label would have been, over
+   its own drag zone, so the hardware's one-knob-per-column rule holds
+   under the shared picture. (The span itself is set inline — the control
+   spans however many stage columns the layout gives it.) */
 .tweakers-move-env-display {
   position: absolute;
-  top: 26px;
+  top: 8px;
   left: 8px;
   right: 9px;
-  bottom: 30px;
+  bottom: 28px;
   background: var(--move-display, #1e1e1e);
   border-radius: var(--move-radius-small, 8px);
   overflow: hidden;
   pointer-events: none;
 }
 
-/* The drawing runs edge to edge so neighbouring segments line up, with a
-   little vertical air so the peak and the floor keep their full stroke. */
+/* The drawing runs the display's full width, with a little vertical air so
+   the peak and the floor keep their full stroke. */
 .tweakers-move-env-shape {
   position: absolute;
   top: 6px;
@@ -5891,10 +5892,44 @@ input.tweakers-list-item-title:focus {
   opacity: 1;
 }
 
-/* No pagination cells under an envelope slot, so its caption sits lower
-   than an enum's, clear of nothing but the slot's edge. */
-.tweakers-move-dial[data-kind="env"] .tweakers-move-dial-option {
-  bottom: 8px;
+/* A stage caption per column, the filter readout's rule at a quarter of
+   the width — the label sits where its own slot's label would have been,
+   and gives way to its stage's value on touch. */
+.tweakers-move-env-readout {
+  position: absolute;
+  bottom: 6px;
+  width: 25%;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.tweakers-move-env-readout[data-stage="attack"] { left: 0; }
+.tweakers-move-env-readout[data-stage="decay"] { left: 25%; }
+.tweakers-move-env-readout[data-stage="sustain"] { left: 50%; }
+.tweakers-move-env-readout[data-stage="release"] { left: 75%; }
+
+.tweakers-move-env-readout .tweakers-move-dial-label,
+.tweakers-move-env-readout .tweakers-move-dial-value {
+  font-size: 13px;
+  line-height: 16px;
+  white-space: nowrap;
+  -webkit-line-clamp: 1;
+}
+
+/* The drag zones: one per stage column, over the whole slot — the pointer
+   edits the stage whose column it is in. */
+.tweakers-move-env-zones {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+.tweakers-move-env-zone {
+  position: relative;
+  flex: 1;
 }
 
 /* Range slot — the bar fills BETWEEN two handle ticks (the span), and the

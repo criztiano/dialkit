@@ -4,9 +4,12 @@ import {
   LFO_DEF,
   SH_DEF,
   ADSR_DEF,
-  envStagePoints,
+  CURVE_DEF,
+  envelopePoints,
   modPageLayout,
+  modPageWidth,
 } from './modulation-core';
+import { LUCIDE_ICONS } from './icons';
 
 // The modulator pages draw themselves: the LFO and S&H texture pads show
 // the wave their axes are shaping, and the ADSR's four dials each draw one
@@ -73,30 +76,26 @@ describe('S&H preview', () => {
 describe('ADSR envelope picture', () => {
   const params = { attack: 200, decay: 500, sustain: 0.4, release: 1000 };
 
-  it('the four segments meet at the slot edges', () => {
-    const a = envStagePoints('attack', params, 33);
-    const d = envStagePoints('decay', params, 33);
-    const s = envStagePoints('sustain', params, 33);
-    const r = envStagePoints('release', params, 33);
-    assert.ok(Math.abs(a[a.length - 1] - 1) < 1e-9);          // attack ends at full
-    assert.ok(Math.abs(d[0] - 1) < 1e-9);                     // decay starts there
-    assert.ok(Math.abs(d[d.length - 1] - 0.4) < 1e-9);        // and lands on sustain
-    assert.ok(s.every((p) => Math.abs(p - 0.4) < 1e-9));      // sustain runs flat
-    assert.ok(Math.abs(r[0] - 0.4) < 1e-9);                   // release falls from it
-    assert.ok(Math.abs(r[r.length - 1]) < 1e-9);              // to rest
+  it('draws the whole shape: rest, full, the sustain plateau, rest', () => {
+    const pts = envelopePoints(params, 257);
+    assert.ok(pts[0] < 0.05);                                  // starts at rest
+    assert.ok(Math.max(...pts) > 0.99);                        // reaches full (to sampling)
+    assert.ok(Math.abs(pts[pts.length - 1]) < 1e-9);           // ends at rest
+    const plateau = pts.filter((p) => Math.abs(p - 0.4) < 1e-9);
+    assert.ok(plateau.length > 20);                            // sustain holds flat
   });
 
-  it('an instant stage still draws its edge', () => {
-    const a = envStagePoints('attack', { ...params, attack: 0 }, 33);
-    assert.ok(a[0] < 0.5);
-    assert.ok(a.slice(4).every((p) => Math.abs(p - 1) < 1e-9));
+  it('a longer stage takes a wider share of the picture', () => {
+    const rise = (pts: number[]) => pts.findIndex((p) => p > 0.98);
+    const quick = envelopePoints({ ...params, attack: 50 }, 257);
+    const slow = envelopePoints({ ...params, attack: 1900 }, 257);
+    assert.ok(rise(slow) > rise(quick));
   });
 
-  it('a longer stage takes more of its slot', () => {
-    const ramp = (pts: number[]) => pts.filter((p) => p < 1 - 1e-9).length;
-    const quick = envStagePoints('attack', { ...params, attack: 100 }, 65);
-    const slow = envStagePoints('attack', { ...params, attack: 1800 }, 65);
-    assert.ok(ramp(slow) > ramp(quick));
+  it('even instant stages keep an edge, and the plateau never vanishes', () => {
+    const pts = envelopePoints({ attack: 2000, decay: 2000, sustain: 0.5, release: 4000 }, 257);
+    const plateau = pts.filter((p) => Math.abs(p - 0.5) < 1e-9);
+    assert.ok(plateau.length > 10);
   });
 
   it('the page layout tags each dial with its stage', () => {
@@ -106,5 +105,22 @@ describe('ADSR envelope picture', () => {
     assert.equal(stageOf('decay'), 'decay');
     assert.equal(stageOf('sustain'), 'sustain');
     assert.equal(stageOf('release'), 'release');
+  });
+});
+
+describe('settings-page furniture', () => {
+  it('every page is as wide as the widest type, so switching never reflows', () => {
+    const width = modPageWidth();
+    const curve = 1 + modPageLayout(CURVE_DEF.controls, CURVE_DEF.defaults).dials.length;
+    assert.equal(width, Math.min(8, curve));                   // curve is the widest today
+    const lfo = 1 + modPageLayout(LFO_DEF.controls, LFO_DEF.defaults).dials.length;
+    assert.ok(width >= lfo);
+  });
+
+  it('the direction select shows as icons, and the glyphs exist', () => {
+    const direction = CURVE_DEF.controls.find((c) => c.path === 'direction');
+    const icons = (direction?.options ?? []).map((o) => (typeof o === 'string' ? null : o.icon));
+    assert.deepEqual(icons, ['arrow-right', 'arrow-left-right', 'arrow-left']);
+    for (const name of icons) assert.ok(LUCIDE_ICONS[name!], `missing glyph ${name}`);
   });
 });

@@ -122,10 +122,9 @@ export type ModControlMeta = ControlMeta & {
   /** This dial draws the modulator's own shape (the type's `preview`). */
   drawsPreview?: boolean;
   /**
-   * This dial is one stage of the envelope picture: its slot draws that
-   * stage's segment, and the four segments read as one shape across the
-   * columns — attack up to the slot's edge, decay down onto sustain,
-   * sustain flat, release down to rest.
+   * This dial is one stage of the envelope: the four stage dials render as
+   * one 4-column control — a single display drawing the whole shape, with
+   * each stage's readout and drag zone in its own column.
    */
   envStage?: EnvStage;
   /** A knob tap on this dial runs this, returning the params it changes. */
@@ -256,6 +255,20 @@ export const getModType = (type: ModulationType): ModTypeDef | undefined => regi
 
 /** The registered types, registration order — the settings page's type enum. */
 export const listModTypes = (): ModTypeDef[] => [...registry.values()];
+
+/**
+ * Every settings page's width in dial slots: the type picker plus the
+ * widest registered page. One number for all types, so switching the type
+ * never reflows the page — the control under your finger stays where it is.
+ */
+export const modPageWidth = (): number =>
+  Math.min(
+    MOD_PAGE_DIALS,
+    1 + listModTypes().reduce(
+      (w, def) => Math.max(w, modPageLayout(def.controls, def.defaults).dials.length),
+      0
+    )
+  );
 
 /** The one modulator-settings panel, registered by `ModulationStore.openSettings`. */
 export const MOD_SETTINGS_PANEL = 'mod-settings';
@@ -555,30 +568,26 @@ const secs = (ms: unknown) => Math.max(0, Number(ms) || 0) / 1000;
 export const ADSR_STAGE_MAX = { attack: 2000, decay: 2000, release: 4000 } as const;
 
 /**
- * One stage's segment of the envelope picture: `count` samples, each 0..1.
- * The four segments meet at the slot edges by construction — attack ends at
- * full, decay lands on the sustain level, sustain runs flat there, release
- * falls from it to rest — so four side-by-side slots read as one envelope.
- * A stage's time sets how much of its slot the ramp takes, floored so an
- * instant stage still shows its edge.
+ * The whole envelope as one drawing: `count` samples, each 0..1, across a
+ * single display that spans the four stage columns. Each timed stage takes
+ * a share of the width proportional to its own dial (floored so an instant
+ * stage still shows its edge, capped so the sustain hold never vanishes),
+ * and the sustain level runs flat through whatever width remains — turn any
+ * dial and its part of the picture stretches or falls in place.
  */
-export function envStagePoints(stage: EnvStage, params: ModulationParams, count: number): number[] {
+export function envelopePoints(params: ModulationParams, count: number): number[] {
   const n = Math.max(2, count);
   const sustain = clamp01(params.sustain);
-  const extent = (key: keyof typeof ADSR_STAGE_MAX) =>
-    Math.max(0.08, Math.min(1, (secs(params[key]) * 1000) / ADSR_STAGE_MAX[key]));
+  const share = (key: keyof typeof ADSR_STAGE_MAX) =>
+    0.04 + 0.24 * Math.min(1, (secs(params[key]) * 1000) / ADSR_STAGE_MAX[key]);
+  const wA = share('attack');
+  const wD = share('decay');
+  const wR = share('release');
   const at = (t: number): number => {
-    if (stage === 'sustain') return sustain;
-    if (stage === 'attack') {
-      const w = extent('attack');
-      return t < w ? adsrEase(t / w) : 1;
-    }
-    if (stage === 'decay') {
-      const w = extent('decay');
-      return t < w ? 1 - (1 - sustain) * adsrEase(t / w) : sustain;
-    }
-    const w = extent('release');
-    return t < w ? sustain * (1 - adsrEase(t / w)) : 0;
+    if (t < wA) return adsrEase(t / wA);
+    if (t < wA + wD) return 1 - (1 - sustain) * adsrEase((t - wA) / wD);
+    if (t < 1 - wR) return sustain;
+    return sustain * (1 - adsrEase((t - (1 - wR)) / wR));
   };
   return Array.from({ length: n }, (_, i) => at(i / (n - 1)));
 }
@@ -805,12 +814,14 @@ export const CURVE_DEF: ModTypeDef = {
       type: 'select', path: 'signal', label: 'Signal', chip: true,
       options: [{ value: 'continuous', label: 'Cont' }, { value: 'trigger', label: 'Trig' }],
     },
+    /* The direction reads as a picture — an arrow says which way the pass
+       runs faster than a word does. */
     {
       type: 'select', path: 'direction', label: 'Direction',
       options: [
-        { value: 'forward', label: 'Forward' },
-        { value: 'mirror', label: 'Mirror' },
-        { value: 'reverse', label: 'Reverse' },
+        { value: 'forward', label: 'Forward', icon: 'arrow-right' },
+        { value: 'mirror', label: 'Mirror', icon: 'arrow-left-right' },
+        { value: 'reverse', label: 'Reverse', icon: 'arrow-left' },
       ],
     },
     { type: 'toggle', path: 'flip', label: 'Flip' },

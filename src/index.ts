@@ -79,7 +79,8 @@ export {
   MOD_RING_CIRCUMFERENCE,
   LFO_SYNC_DIVISIONS,
   lfoSyncedHz,
-  envStagePoints,
+  envelopePoints,
+  modPageWidth,
   ADSR_STAGE_MAX,
 } from './modulation-core';
 export type {

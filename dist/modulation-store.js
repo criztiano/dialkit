@@ -662,14 +662,16 @@ var CURVE_DEF = {
       chip: true,
       options: [{ value: "continuous", label: "Cont" }, { value: "trigger", label: "Trig" }]
     },
+    /* The direction reads as a picture — an arrow says which way the pass
+       runs faster than a word does. */
     {
       type: "select",
       path: "direction",
       label: "Direction",
       options: [
-        { value: "forward", label: "Forward" },
-        { value: "mirror", label: "Mirror" },
-        { value: "reverse", label: "Reverse" }
+        { value: "forward", label: "Forward", icon: "arrow-right" },
+        { value: "mirror", label: "Mirror", icon: "arrow-left-right" },
+        { value: "reverse", label: "Reverse", icon: "arrow-left" }
       ]
     },
     { type: "toggle", path: "flip", label: "Flip" },

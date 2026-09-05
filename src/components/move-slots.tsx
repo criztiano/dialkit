@@ -33,8 +33,15 @@ import { resolveFilterAxis, type FilterValue } from '../filter-core';
  * - `filter`  — the 2-slot control: cutoff and resonance as one picture,
  *   the magnitude response maximised across both columns, each hand's
  *   small label sitting where its own slot's label would have been.
- * - `env`     — one stage of the ADSR: the slot draws its stage's segment,
- *   and the four side-by-side slots read as one envelope across the row.
+ * - `env`     — the 4-slot control: the whole ADSR drawn as one shape on a
+ *   single display spanning the four stage columns, one caption and drag
+ *   zone per stage.
+ *
+ * Multi-slot controls (`filter` spans 2 columns, `env` spans 4) follow one
+ * pattern: the container takes `grid-column: span N`, the display and its
+ * drawing stretch across the whole span, and each hand or stage keeps a
+ * small caption where its own single slot's label would have been — so the
+ * hardware's one-knob-per-column rule still holds under the shared picture.
  */
 export type MoveSlotKind =
   | 'default'
@@ -242,31 +249,34 @@ export function MoveSlotFilterBody({
 }
 
 /**
- * One stage of the ADSR's four-column picture: the name on its tag, the
- * stage's segment drawn on a display, the stage's value underneath. The
- * segments meet at the slot edges by construction — attack ends at full,
- * decay lands on the sustain level, sustain runs flat there, release falls
- * to rest — so the four slots read as one envelope across the row.
+ * The 4-slot envelope's face, the filter's big sibling: the whole ADSR
+ * drawn as one shape on a single display spanning all four stage columns,
+ * with each stage's small label sitting where its own slot's label would
+ * have been — attack, decay, sustain, release, left to right, each caption
+ * over its own drag zone and hardware knob.
  */
 export function MoveSlotEnvBody({
-  label, value, stage, points,
+  points, stages,
 }: {
-  label: string;
-  value: ReactNode;
-  stage: string;
-  /** The segment's samples, each 0..1, left to right. */
+  /** The whole envelope's samples, each 0..1, left to right. */
   points: number[];
+  /** One caption per stage column, in column order. */
+  stages: { stage: string; label: string; value: ReactNode }[];
 }) {
   const d = points
     .map((v, i) => `${i === 0 ? 'M' : 'L'} ${(i / (points.length - 1)) * 100} ${100 - v * 100}`)
     .join(' ');
   return (
     <>
-      <span className="tweakers-move-dial-tag">{label}</span>
-      <div className="tweakers-move-env-display" data-stage={stage}>
+      <div className="tweakers-move-env-display">
         <MoveSlotShape d={d} className="tweakers-move-env-shape" />
       </div>
-      <span className="tweakers-move-dial-option">{value}</span>
+      {stages.map((s) => (
+        <div key={s.stage} className="tweakers-move-env-readout" data-stage={s.stage}>
+          <span className="tweakers-move-dial-label">{s.label}</span>
+          <span className="tweakers-move-dial-value">{s.value}</span>
+        </div>
+      ))}
     </>
   );
 }
@@ -286,5 +296,5 @@ export const MOVE_SLOT_LIBRARY = {
   enum: { description: 'stepped option picker, one pagination cell per option', component: MoveSlotEnumBody },
   range: { description: 'two handles on one bar; volume knob is the second hand', component: MoveSlotRangeBody },
   filter: { description: '2 slots: cutoff + resonance as one response picture', component: MoveSlotFilterBody },
-  env: { description: 'one ADSR stage; four side-by-side slots read as one envelope', component: MoveSlotEnvBody },
+  env: { description: '4 slots: the whole ADSR as one shape, a caption per stage', component: MoveSlotEnvBody },
 } as const;

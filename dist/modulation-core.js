@@ -302,6 +302,13 @@ function registerModType(def) {
 }
 var getModType = (type) => registry.get(type);
 var listModTypes = () => [...registry.values()];
+var modPageWidth = () => Math.min(
+  MOD_PAGE_DIALS,
+  1 + listModTypes().reduce(
+    (w, def) => Math.max(w, modPageLayout(def.controls, def.defaults).dials.length),
+    0
+  )
+);
 var MOD_SETTINGS_PANEL = "mod-settings";
 var modKey = (panelId, path) => `${panelId}\0${path}`;
 var clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -485,22 +492,18 @@ var SH_DEF = {
 registerModType(SH_DEF);
 var secs = (ms) => Math.max(0, Number(ms) || 0) / 1e3;
 var ADSR_STAGE_MAX = { attack: 2e3, decay: 2e3, release: 4e3 };
-function envStagePoints(stage, params, count) {
+function envelopePoints(params, count) {
   const n = Math.max(2, count);
   const sustain = clamp012(params.sustain);
-  const extent = (key) => Math.max(0.08, Math.min(1, secs(params[key]) * 1e3 / ADSR_STAGE_MAX[key]));
+  const share = (key) => 0.04 + 0.24 * Math.min(1, secs(params[key]) * 1e3 / ADSR_STAGE_MAX[key]);
+  const wA = share("attack");
+  const wD = share("decay");
+  const wR = share("release");
   const at = (t) => {
-    if (stage === "sustain") return sustain;
-    if (stage === "attack") {
-      const w2 = extent("attack");
-      return t < w2 ? adsrEase(t / w2) : 1;
-    }
-    if (stage === "decay") {
-      const w2 = extent("decay");
-      return t < w2 ? 1 - (1 - sustain) * adsrEase(t / w2) : sustain;
-    }
-    const w = extent("release");
-    return t < w ? sustain * (1 - adsrEase(t / w)) : 0;
+    if (t < wA) return adsrEase(t / wA);
+    if (t < wA + wD) return 1 - (1 - sustain) * adsrEase((t - wA) / wD);
+    if (t < 1 - wR) return sustain;
+    return sustain * (1 - adsrEase((t - (1 - wR)) / wR));
   };
   return Array.from({ length: n }, (_, i) => at(i / (n - 1)));
 }
@@ -670,14 +673,16 @@ var CURVE_DEF = {
       chip: true,
       options: [{ value: "continuous", label: "Cont" }, { value: "trigger", label: "Trig" }]
     },
+    /* The direction reads as a picture — an arrow says which way the pass
+       runs faster than a word does. */
     {
       type: "select",
       path: "direction",
       label: "Direction",
       options: [
-        { value: "forward", label: "Forward" },
-        { value: "mirror", label: "Mirror" },
-        { value: "reverse", label: "Reverse" }
+        { value: "forward", label: "Forward", icon: "arrow-right" },
+        { value: "mirror", label: "Mirror", icon: "arrow-left-right" },
+        { value: "reverse", label: "Reverse", icon: "arrow-left" }
       ]
     },
     { type: "toggle", path: "flip", label: "Flip" },
@@ -810,13 +815,14 @@ export {
   applyModulation,
   curveComposition,
   curveDuration,
-  envStagePoints,
+  envelopePoints,
   getModType,
   lfoSyncedHz,
   listModTypes,
   modColor,
   modKey,
   modPageLayout,
+  modPageWidth,
   modRingArc,
   registerModType,
   visibleModControls
