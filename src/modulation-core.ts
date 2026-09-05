@@ -122,10 +122,9 @@ export type ModControlMeta = ControlMeta & {
   /** This dial draws the modulator's own shape (the type's `preview`). */
   drawsPreview?: boolean;
   /**
-   * A display slot, not a control: the slot holds the modulator's
-   * oscilloscope — the live signal off the engine — with no value of its
-   * own. Declare it as `type: 'analyser'`; it never registers a TweakStore
-   * value, it just takes its column.
+   * This dial hosts the modulator's oscilloscope: the live signal off the
+   * engine fills the slot behind the dial's own readout and bar — the
+   * control keeps its drag and its knob, it just shows the wave it makes.
    */
   scope?: boolean;
   /**
@@ -189,7 +188,7 @@ export interface ModPageSlot {
   preview?: boolean;
   /** The dial draws this stage's segment of the envelope picture. */
   stage?: EnvStage;
-  /** The slot is the modulator's oscilloscope — a display, not a control. */
+  /** The dial hosts the modulator's oscilloscope behind its readout. */
   scope?: boolean;
   /** A knob tap on this dial cycles it. */
   cycle?: boolean;
@@ -395,13 +394,12 @@ export const LFO_DEF: ModTypeDef = {
   label: 'LFO',
   defaults: { rate: 1, division: 4, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false },
   controls: [
-    { type: 'slider', path: 'rate', label: 'Rate', min: 0.02, max: 20, step: 0.01, unit: 'Hz' },
+    { type: 'slider', path: 'rate', label: 'Rate', min: 0.02, max: 20, step: 0.01, unit: 'Hz', scope: true },
     { type: 'toggle', path: 'sync', label: 'Sync' },
     { type: 'slider', path: 'phase', label: 'Phase', min: 0, max: 1, step: 0.01 },
     { type: 'slider', path: 'width', label: 'Width', min: 0, max: 1, step: 0.01 },
     { type: 'slider', path: 'jitter', label: 'Jitter', min: 0, max: 1, step: 0.01 },
     { type: 'slider', path: 'smooth', label: 'Smooth', min: 0, max: 1, step: 0.01 },
-    { type: 'analyser', path: 'scope', label: 'Scope', scope: true },
   ],
   createState: (): LfoState => ({ phase: 0, drift: 0, driftTarget: 0, out: null }),
   tick(state, params, dt, bpm) {
@@ -481,12 +479,11 @@ export const SH_DEF: ModTypeDef = {
   label: 'S&H',
   defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0 },
   controls: [
-    { type: 'slider', path: 'rate', label: 'Rate', min: 0.1, max: 30, step: 0.01, unit: 'Hz' },
+    { type: 'slider', path: 'rate', label: 'Rate', min: 0.1, max: 30, step: 0.01, unit: 'Hz', scope: true },
     { type: 'slider', path: 'depth', label: 'Depth', min: 0, max: 1, step: 0.01 },
     { type: 'slider', path: 'offset', label: 'Offset', min: -1, max: 1, step: 0.01 },
     { type: 'slider', path: 'jitter', label: 'Jitter', min: 0, max: 1, step: 0.01 },
     { type: 'slider', path: 'smooth', label: 'Smooth', min: 0, max: 1, step: 0.01 },
-    { type: 'analyser', path: 'scope', label: 'Scope', scope: true },
   ],
   createState: (): ShState => ({ wait: 0, held: 0, out: null }),
   tick(state, params, dt) {

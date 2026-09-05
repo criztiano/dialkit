@@ -5932,15 +5932,15 @@ input.tweakers-list-item-title:focus {
   flex: 1;
 }
 
-/* The scope slot — a display, not a control. The modulator's live signal
-   rolls on the same dark screen as the filter's and the envelope's, the
-   name on the tag, the wave's own name captioning it below. */
+/* The scope lives IN the rate dial: the live signal fills everything above
+   the bar, edge to edge with no title in its way, and the dial's own
+   readout floats over the wave. You turn the wave you're watching. */
 .tweakers-move-scope-display {
   position: absolute;
-  top: 28px;
-  left: 8px;
-  right: 9px;
-  bottom: 30px;
+  top: 6px;
+  left: 6px;
+  right: 7px;
+  bottom: 21px;
   background: var(--move-display, #1e1e1e);
   border-radius: var(--move-radius-small, 8px);
   overflow: hidden;
@@ -5968,10 +5968,56 @@ input.tweakers-list-item-title:focus {
   opacity: 0.8;
 }
 
-/* No pagination cells under the scope, so its caption sits low like the
-   envelope's. */
-.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-option {
+/* The readout reads over the rolling wave the way a shape slot's label
+   reads over its drawing — lifted, with the display's own dark behind it. */
+.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-readout {
+  z-index: 1;
+}
+
+.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-label,
+.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-value {
+  text-shadow: 0 0 6px var(--move-display, #1e1e1e), 0 0 6px var(--move-display, #1e1e1e);
+}
+
+/* The plain enum face — the list screen at slot size: the options on the
+   display, dim, the current one bright on its highlight. No pagination
+   cells to count; you see where you are and where a turn takes you. */
+.tweakers-move-enum-list {
+  position: absolute;
+  top: 26px;
+  left: 6px;
+  right: 7px;
   bottom: 8px;
+  padding: 4px;
+  background: var(--move-display, #1e1e1e);
+  border-radius: var(--move-radius-small, 8px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.tweakers-move-enum-row {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-family: var(--move-font-label);
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--move-text);
+  opacity: 0.22;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity 0.12s, background 0.12s;
+}
+
+.tweakers-move-enum-row[data-selected] {
+  background: rgba(222, 227, 201, 0.1);
+  opacity: 1;
 }
 
 /* Range slot — the bar fills BETWEEN two handle ticks (the span), and the

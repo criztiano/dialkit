@@ -361,13 +361,12 @@ var LFO_DEF = {
   label: "LFO",
   defaults: { rate: 1, division: 4, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false },
   controls: [
-    { type: "slider", path: "rate", label: "Rate", min: 0.02, max: 20, step: 0.01, unit: "Hz" },
+    { type: "slider", path: "rate", label: "Rate", min: 0.02, max: 20, step: 0.01, unit: "Hz", scope: true },
     { type: "toggle", path: "sync", label: "Sync" },
     { type: "slider", path: "phase", label: "Phase", min: 0, max: 1, step: 0.01 },
     { type: "slider", path: "width", label: "Width", min: 0, max: 1, step: 0.01 },
     { type: "slider", path: "jitter", label: "Jitter", min: 0, max: 1, step: 0.01 },
-    { type: "slider", path: "smooth", label: "Smooth", min: 0, max: 1, step: 0.01 },
-    { type: "analyser", path: "scope", label: "Scope", scope: true }
+    { type: "slider", path: "smooth", label: "Smooth", min: 0, max: 1, step: 0.01 }
   ],
   createState: () => ({ phase: 0, drift: 0, driftTarget: 0, out: null }),
   tick(state, params, dt, bpm) {
@@ -422,12 +421,11 @@ var SH_DEF = {
   label: "S&H",
   defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0 },
   controls: [
-    { type: "slider", path: "rate", label: "Rate", min: 0.1, max: 30, step: 0.01, unit: "Hz" },
+    { type: "slider", path: "rate", label: "Rate", min: 0.1, max: 30, step: 0.01, unit: "Hz", scope: true },
     { type: "slider", path: "depth", label: "Depth", min: 0, max: 1, step: 0.01 },
     { type: "slider", path: "offset", label: "Offset", min: -1, max: 1, step: 0.01 },
     { type: "slider", path: "jitter", label: "Jitter", min: 0, max: 1, step: 0.01 },
-    { type: "slider", path: "smooth", label: "Smooth", min: 0, max: 1, step: 0.01 },
-    { type: "analyser", path: "scope", label: "Scope", scope: true }
+    { type: "slider", path: "smooth", label: "Smooth", min: 0, max: 1, step: 0.01 }
   ],
   createState: () => ({ wait: 0, held: 0, out: null }),
   tick(state, params, dt) {

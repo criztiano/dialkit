@@ -1702,10 +1702,9 @@ type ModControlMeta = ControlMeta & {
     /** This dial draws the modulator's own shape (the type's `preview`). */
     drawsPreview?: boolean;
     /**
-     * A display slot, not a control: the slot holds the modulator's
-     * oscilloscope — the live signal off the engine — with no value of its
-     * own. Declare it as `type: 'analyser'`; it never registers a TweakStore
-     * value, it just takes its column.
+     * This dial hosts the modulator's oscilloscope: the live signal off the
+     * engine fills the slot behind the dial's own readout and bar — the
+     * control keeps its drag and its knob, it just shows the wave it makes.
      */
     scope?: boolean;
     /**
@@ -1768,7 +1767,7 @@ interface ModPageSlot {
     preview?: boolean;
     /** The dial draws this stage's segment of the envelope picture. */
     stage?: EnvStage;
-    /** The slot is the modulator's oscilloscope — a display, not a control. */
+    /** The dial hosts the modulator's oscilloscope behind its readout. */
     scope?: boolean;
     /** A knob tap on this dial cycles it. */
     cycle?: boolean;
@@ -2059,8 +2058,8 @@ declare function dialOrigin(meta: ControlMeta): number;
  *   at arm's length you read a picture, not a word.
  * - `curve`   — an option picker whose current option draws its shape (the
  *   select's `preview` sampler) — the curve-selection slot.
- * - `enum`    — a plain stepped option picker: option name centred, one
- *   pagination cell per option.
+ * - `enum`    — a plain option picker as a list screen at slot size: every
+ *   option on the display, dim, the current one bright on its highlight.
  * - `xy`      — a 2D pad filling the slot; on the hardware the column's
  *   knob turns X and the volume knob turns Y while touched.
  * - `range`   — two handles on one bar; column knob = low end, volume
@@ -2071,8 +2070,8 @@ declare function dialOrigin(meta: ControlMeta): number;
  * - `env`     — the 4-slot control: the whole ADSR drawn as one shape on a
  *   single display spanning the four stage columns, one caption and drag
  *   zone per stage.
- * - `scope`   — a display, not a control: the modulator's live signal on
- *   the dark screen, no value of its own.
+ * - `scope`   — a dial with the oscilloscope in it: the modulator's live
+ *   signal fills the slot behind the dial's own readout and bar.
  *
  * Multi-slot controls (`filter` spans 2 columns, `env` spans 4) follow one
  * pattern: the container takes `grid-column: span N`, the display and its
@@ -2117,9 +2116,12 @@ declare function MoveSlotDefaultBody({ label, value, pct, originPct, atOrigin, }
     /** Parked on the origin exactly — the dial's zero. */
     atOrigin?: boolean;
 }): react_jsx_runtime.JSX.Element;
-/** The option picker's three faces — name, glyph, or drawn shape — plus the
- *  pagination cells. A slot with a picture reads top down: what the knob is
- *  on the tag, the picture between, what it is set to underneath. */
+/** The option picker's three faces — a list of the options themselves, a
+ *  glyph, or a drawn shape. A slot with a picture reads top down: what the
+ *  knob is on the tag, the picture between, what it is set to underneath.
+ *  The plain face is the list screen at slot size: every option on the
+ *  display, dim, the current one bright on its highlight — you see where
+ *  you are and where a turn takes you, no pagination cells to count. */
 declare function MoveSlotEnumBody({ label, optionLabel, options, activeIdx, shape, glyph, }: {
     label: string;
     optionLabel: string;
@@ -2165,14 +2167,17 @@ declare function MoveSlotEnvBody({ points, stages, }: {
     }[];
 }): react_jsx_runtime.JSX.Element;
 /**
- * The oscilloscope slot: a display and nothing else — the modulator's live
- * signal (passed in as the drawing, so the body stays pure) on the same
- * dark screen as the filter's, the wave's name captioning it below. It is
- * the one slot with no value of its own: you watch it, you don't turn it.
+ * A dial with the oscilloscope living in it — the Rate slot's face. The
+ * live wave (passed in as the drawing, so the body stays pure) fills the
+ * whole slot above the bar, edge to edge with no title in its way; the
+ * dial's own readout floats over it and the fill bar keeps the bottom.
+ * The control stays a control — you turn the wave you're watching.
  */
-declare function MoveSlotScopeBody({ label, caption, children, }: {
+declare function MoveSlotScopeBody({ label, value, pct, children, }: {
     label: string;
-    caption: ReactNode;
+    value: ReactNode;
+    /** Fill extent, 0–100. */
+    pct: number;
     /** The live wave — an svg the host keeps ticking. */
     children: ReactNode;
 }): react_jsx_runtime.JSX.Element;
@@ -2201,7 +2206,7 @@ declare const MOVE_SLOT_LIBRARY: {
         readonly component: typeof MoveSlotEnumBody;
     };
     readonly enum: {
-        readonly description: "stepped option picker, one pagination cell per option";
+        readonly description: "option picker as a list screen at slot size, selection bright";
         readonly component: typeof MoveSlotEnumBody;
     };
     readonly range: {
@@ -2217,7 +2222,7 @@ declare const MOVE_SLOT_LIBRARY: {
         readonly component: typeof MoveSlotEnvBody;
     };
     readonly scope: {
-        readonly description: "a display, not a control: the modulator’s live signal";
+        readonly description: "a dial with the live signal filling it behind the readout";
         readonly component: typeof MoveSlotScopeBody;
     };
 };

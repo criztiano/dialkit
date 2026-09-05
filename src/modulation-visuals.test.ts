@@ -43,12 +43,13 @@ describe('LFO preview', () => {
     assert.ok(swing(soft) < swing(sharp));
   });
 
-  it('jitter and smooth are their own dials, and the scope takes a slot', () => {
+  it('jitter and smooth are their own dials, and the rate dial hosts the scope', () => {
     for (const def of [LFO_DEF, SH_DEF]) {
       const layout = modPageLayout(def.controls, def.defaults);
       assert.ok(layout.dials.some((d) => d.path === 'jitter'));
       assert.ok(layout.dials.some((d) => d.path === 'smooth'));
-      assert.equal(layout.dials.find((d) => d.path === 'scope')?.scope, true);
+      assert.equal(layout.dials.find((d) => d.path === 'rate')?.scope, true);
+      assert.ok(!layout.dials.some((d) => d.path === 'scope'));
     }
   });
 });

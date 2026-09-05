@@ -80,10 +80,9 @@ type ModControlMeta = ControlMeta & {
     /** This dial draws the modulator's own shape (the type's `preview`). */
     drawsPreview?: boolean;
     /**
-     * A display slot, not a control: the slot holds the modulator's
-     * oscilloscope — the live signal off the engine — with no value of its
-     * own. Declare it as `type: 'analyser'`; it never registers a TweakStore
-     * value, it just takes its column.
+     * This dial hosts the modulator's oscilloscope: the live signal off the
+     * engine fills the slot behind the dial's own readout and bar — the
+     * control keeps its drag and its knob, it just shows the wave it makes.
      */
     scope?: boolean;
     /**
@@ -146,7 +145,7 @@ interface ModPageSlot {
     preview?: boolean;
     /** The dial draws this stage's segment of the envelope picture. */
     stage?: EnvStage;
-    /** The slot is the modulator's oscilloscope — a display, not a control. */
+    /** The dial hosts the modulator's oscilloscope behind its readout. */
     scope?: boolean;
     /** A knob tap on this dial cycles it. */
     cycle?: boolean;

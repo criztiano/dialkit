@@ -4038,13 +4038,12 @@ var LFO_DEF = {
   label: "LFO",
   defaults: { rate: 1, division: 4, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false },
   controls: [
-    { type: "slider", path: "rate", label: "Rate", min: 0.02, max: 20, step: 0.01, unit: "Hz" },
+    { type: "slider", path: "rate", label: "Rate", min: 0.02, max: 20, step: 0.01, unit: "Hz", scope: true },
     { type: "toggle", path: "sync", label: "Sync" },
     { type: "slider", path: "phase", label: "Phase", min: 0, max: 1, step: 0.01 },
     { type: "slider", path: "width", label: "Width", min: 0, max: 1, step: 0.01 },
     { type: "slider", path: "jitter", label: "Jitter", min: 0, max: 1, step: 0.01 },
-    { type: "slider", path: "smooth", label: "Smooth", min: 0, max: 1, step: 0.01 },
-    { type: "analyser", path: "scope", label: "Scope", scope: true }
+    { type: "slider", path: "smooth", label: "Smooth", min: 0, max: 1, step: 0.01 }
   ],
   createState: () => ({ phase: 0, drift: 0, driftTarget: 0, out: null }),
   tick(state2, params, dt, bpm) {
@@ -4099,12 +4098,11 @@ var SH_DEF = {
   label: "S&H",
   defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0 },
   controls: [
-    { type: "slider", path: "rate", label: "Rate", min: 0.1, max: 30, step: 0.01, unit: "Hz" },
+    { type: "slider", path: "rate", label: "Rate", min: 0.1, max: 30, step: 0.01, unit: "Hz", scope: true },
     { type: "slider", path: "depth", label: "Depth", min: 0, max: 1, step: 0.01 },
     { type: "slider", path: "offset", label: "Offset", min: -1, max: 1, step: 0.01 },
     { type: "slider", path: "jitter", label: "Jitter", min: 0, max: 1, step: 0.01 },
-    { type: "slider", path: "smooth", label: "Smooth", min: 0, max: 1, step: 0.01 },
-    { type: "analyser", path: "scope", label: "Scope", scope: true }
+    { type: "slider", path: "smooth", label: "Smooth", min: 0, max: 1, step: 0.01 }
   ],
   createState: () => ({ wait: 0, held: 0, out: null }),
   tick(state2, params, dt) {
@@ -8993,7 +8991,7 @@ var isSpanContinuation = (page, i) => i > 0 && page.dials[i] !== void 0 && page.
 function buildModMovePage(panel, layout) {
   const controls = flat(panel.controls);
   if (layout) {
-    const at = (slot) => slot ? controls.find((c) => c.path === slot.path) ?? (slot.scope ? { type: "analyser", path: slot.path, label: "Scope" } : void 0) : void 0;
+    const at = (slot) => slot ? controls.find((c) => c.path === slot.path) : void 0;
     return {
       panel,
       dials: layout.dials.slice(0, MOVE_DIALS).map(at).filter((c) => !!c),
@@ -11068,6 +11066,7 @@ function MoveSlotDefaultBody({
     ] })
   ] });
 }
+var MOVE_ENUM_LIST_ROWS = 4;
 function MoveSlotEnumBody({
   label,
   optionLabel,
@@ -11076,19 +11075,42 @@ function MoveSlotEnumBody({
   shape,
   glyph
 }) {
+  if (shape || glyph) {
+    return /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)(import_jsx_runtime41.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-tag", children: label }),
+      shape && /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(MoveSlotShape, { d: shape }),
+      glyph && /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(MoveSlotGlyph, { name: glyph, className: "tweakers-move-dial-icon" }),
+      /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-option", children: optionLabel }),
+      /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("div", { className: "tweakers-move-dial-enum", children: options.map((opt, j) => /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(
+        "span",
+        {
+          className: "tweakers-move-dial-enum-cell",
+          "data-on": j === activeIdx || void 0
+        },
+        enumOptionValue(opt)
+      )) }) })
+    ] });
+  }
+  const start = Math.max(
+    0,
+    Math.min(activeIdx - (MOVE_ENUM_LIST_ROWS >> 1), options.length - MOVE_ENUM_LIST_ROWS)
+  );
+  const windowed = options.slice(start, start + MOVE_ENUM_LIST_ROWS);
   return /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)(import_jsx_runtime41.Fragment, { children: [
-    (shape || glyph) && /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-tag", children: label }),
-    shape && /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(MoveSlotShape, { d: shape }),
-    glyph && /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(MoveSlotGlyph, { name: glyph, className: "tweakers-move-dial-icon" }),
-    shape || glyph ? /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-option", children: optionLabel }) : /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(MoveSlotReadout, { label, value: optionLabel }),
-    /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("div", { className: "tweakers-move-dial-enum", children: options.map((opt, j) => /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(
-      "span",
-      {
-        className: "tweakers-move-dial-enum-cell",
-        "data-on": j === activeIdx || void 0
-      },
-      enumOptionValue(opt)
-    )) }) })
+    /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-tag", children: label }),
+    /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("div", { className: "tweakers-move-enum-list", children: windowed.map((opt, j) => {
+      const value = enumOptionValue(opt);
+      const optLabel = typeof opt === "string" ? opt : opt.label;
+      return /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(
+        "span",
+        {
+          className: "tweakers-move-enum-row",
+          "data-selected": start + j === activeIdx || void 0,
+          children: optLabel
+        },
+        value
+      );
+    }) })
   ] });
 }
 function MoveSlotRangeBody({
@@ -11147,13 +11169,14 @@ function MoveSlotEnvBody({
 }
 function MoveSlotScopeBody({
   label,
-  caption,
+  value,
+  pct,
   children
 }) {
   return /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)(import_jsx_runtime41.Fragment, { children: [
-    /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-tag", children: label }),
     /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("div", { className: "tweakers-move-scope-display", children }),
-    /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-option", children: caption })
+    /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(MoveSlotReadout, { label, value }),
+    /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("div", { className: "tweakers-move-dial-fill", style: { width: `${pct}%` } }) })
   ] });
 }
 var MOVE_SLOT_LIBRARY = {
@@ -11161,11 +11184,11 @@ var MOVE_SLOT_LIBRARY = {
   value: { description: "value-first: the value is the headline, the name a tag on top", component: MoveSlotDefaultBody },
   icon: { description: "option picker showing the current option as a glyph", component: MoveSlotEnumBody },
   curve: { description: "option picker drawing the current option\u2019s shape \u2014 curve selection", component: MoveSlotEnumBody },
-  enum: { description: "stepped option picker, one pagination cell per option", component: MoveSlotEnumBody },
+  enum: { description: "option picker as a list screen at slot size, selection bright", component: MoveSlotEnumBody },
   range: { description: "two handles on one bar; volume knob is the second hand", component: MoveSlotRangeBody },
   filter: { description: "2 slots: cutoff + resonance as one response picture", component: MoveSlotFilterBody },
   env: { description: "4 slots: the whole ADSR as one shape, a caption per stage", component: MoveSlotEnvBody },
-  scope: { description: "a display, not a control: the modulator\u2019s live signal", component: MoveSlotScopeBody }
+  scope: { description: "a dial with the live signal filling it behind the readout", component: MoveSlotScopeBody }
 };
 
 // src/move-surface-store.ts
@@ -11252,6 +11275,8 @@ var import_jsx_runtime42 = require("react/jsx-runtime");
 var MOVE_TRACK_COLORS = ["#4274f4", "#d83dff", "#ff4d07", "#52bd06"];
 var PAD_ROWS = 4;
 var DIAL_TRACK_INSET = 10;
+var ENUM_LIST_TOP = 26;
+var ENUM_LIST_BOTTOM = 8;
 var XY_INSET = { left: 8, top: 8, right: 9, bottom: 8 };
 var XY_GRID_DEFAULT = 5;
 var TAP_MS = 300;
@@ -11496,6 +11521,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     const rect = e.currentTarget.getBoundingClientRect();
     const span = rect.width - DIAL_TRACK_INSET * 2;
     const v01 = Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
+    TweakStore.updateValue(page.panel.id, meta.path, denormalizeEnumDial(meta, v01));
+  };
+  const enumListFromPointer = (e, meta) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const top = rect.top + ENUM_LIST_TOP;
+    const span = rect.height - ENUM_LIST_TOP - ENUM_LIST_BOTTOM;
+    const v01 = Math.min(1, Math.max(0, (e.clientY - top) / (span || 1)));
     TweakStore.updateValue(page.panel.id, meta.path, denormalizeEnumDial(meta, v01));
   };
   const dialReading = (meta) => {
@@ -11766,12 +11798,14 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
             const optionLabel = enumOptionLabel(option);
             const shape = enumShapePath(meta, values[meta.path]);
             const glyph = enumOptionIcon(option);
+            const pickFromPointer = shape || glyph ? enumFromPointer : enumListFromPointer;
             return /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)(
               "div",
               {
                 className: "tweakers-move-dial",
                 "data-kind": "enum",
                 "data-shape": shape ? true : void 0,
+                "data-list": !shape && !glyph ? true : void 0,
                 "data-active": active || void 0,
                 onPointerDown: (e) => {
                   try {
@@ -11781,10 +11815,10 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                   fineRef.current = null;
                   setDragPath(meta.path);
                   armMod(meta.path);
-                  enumFromPointer(e, meta);
+                  pickFromPointer(e, meta);
                 },
                 onPointerMove: (e) => {
-                  if (dragPath === meta.path) enumFromPointer(e, meta);
+                  if (dragPath === meta.path) pickFromPointer(e, meta);
                 },
                 onPointerUp: () => {
                   setDragPath(null);
@@ -11814,14 +11848,48 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
           }
           const scopeSlot = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.scope : void 0;
           if (scopeSlot && modSettings) {
-            return /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("div", { className: "tweakers-move-dial", "data-kind": "scope", children: /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
-              MoveSlotScopeBody,
+            return /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)(
+              "div",
               {
-                label: meta.label,
-                caption: ModulationStore.getSettingsPreview()?.label ?? "",
-                children: /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(MoveScope, { index: modSettings.index })
-              }
-            ) }, meta.path);
+                className: "tweakers-move-dial",
+                "data-kind": "scope",
+                "data-active": active || void 0,
+                onPointerDown: (e) => {
+                  try {
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                  } catch {
+                  }
+                  fineRef.current = null;
+                  setDragPath(meta.path);
+                  armMod(meta.path);
+                  dialFromPointer(e, meta);
+                },
+                onPointerMove: (e) => {
+                  if (dragPath === meta.path) dialFromPointer(e, meta);
+                },
+                onPointerUp: () => {
+                  setDragPath(null);
+                  fineRef.current = null;
+                },
+                onPointerCancel: () => {
+                  setDragPath(null);
+                  fineRef.current = null;
+                },
+                children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(ModDot, { path: meta.path }),
+                  /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
+                    MoveSlotScopeBody,
+                    {
+                      label: meta.label,
+                      value: chipValue(meta).num + (meta.unit ? ` ${meta.unit}` : ""),
+                      pct: dialPercent(meta),
+                      children: /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(MoveScope, { index: modSettings.index })
+                    }
+                  )
+                ]
+              },
+              meta.path
+            );
           }
           const envStage = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.stage : void 0;
           if (envStage) {

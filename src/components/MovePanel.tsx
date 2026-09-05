@@ -40,6 +40,10 @@ const PAD_ROWS = 4;
 
 /** The slider track's inset from the dial slot's edges (Figma 802:767). */
 const DIAL_TRACK_INSET = 10;
+/* The enum list's band inside its slot — under the tag, down to the edge.
+   The pointer maps over this band, so a tap lands on the row it touches. */
+const ENUM_LIST_TOP = 26;
+const ENUM_LIST_BOTTOM = 8;
 
 /** The xy field's inset within its slot — must match .tweakers-move-xy. */
 const XY_INSET = { left: 8, top: 8, right: 9, bottom: 8 };
@@ -443,6 +447,16 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     TweakStore.updateValue(page.panel.id, meta.path, denormalizeEnumDial(meta, v01));
   };
 
+  // The plain enum face is a list, so its pointer reads top-to-bottom over
+  // the list's own band — a tap lands on the row it touches.
+  const enumListFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const top = rect.top + ENUM_LIST_TOP;
+    const span = rect.height - ENUM_LIST_TOP - ENUM_LIST_BOTTOM;
+    const v01 = Math.min(1, Math.max(0, (e.clientY - top) / (span || 1)));
+    TweakStore.updateValue(page.panel.id, meta.path, denormalizeEnumDial(meta, v01));
+  };
+
   // A bipolar (origin-anchored) dial reads out its real signed value; plain
   // dials keep the 0–100 position the Move itself works in.
   const dialReading = (meta: ControlMeta): string => {
@@ -790,22 +804,27 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   // the value, so its name steps back to a tag at the top.
                   const shape = enumShapePath(meta, values[meta.path]);
                   const glyph = enumOptionIcon(option as never);
+                  // The plain face is a list, read top to bottom — its
+                  // pointer maps down the rows; picture faces keep the
+                  // left-to-right sweep.
+                  const pickFromPointer = shape || glyph ? enumFromPointer : enumListFromPointer;
                   return (
                     <div
                       key={meta.path}
                       className="tweakers-move-dial"
                       data-kind="enum"
                       data-shape={shape ? true : undefined}
+                      data-list={!shape && !glyph ? true : undefined}
                       data-active={active || undefined}
                       onPointerDown={(e) => {
                         try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
                         fineRef.current = null;
                         setDragPath(meta.path);
                         armMod(meta.path);
-                        enumFromPointer(e, meta);
+                        pickFromPointer(e, meta);
                       }}
                       onPointerMove={(e) => {
-                        if (dragPath === meta.path) enumFromPointer(e, meta);
+                        if (dragPath === meta.path) pickFromPointer(e, meta);
                       }}
                       onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
                       onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
@@ -826,17 +845,36 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     </div>
                   );
                 }
-                // The scope slot: a display, not a control — the modulator's
-                // live signal off the engine, rolling on the dark screen,
-                // with the wave's name (the type's own `preview` label) as
-                // its caption. No gestures; you watch it, you don't turn it.
+                // A dial with the oscilloscope in it — the Rate slot: the
+                // modulator's live signal fills the slot behind the dial's
+                // own readout and bar, and the drag still turns the rate.
+                // You turn the wave you're watching.
                 const scopeSlot = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.scope : undefined;
                 if (scopeSlot && modSettings) {
                   return (
-                    <div key={meta.path} className="tweakers-move-dial" data-kind="scope">
+                    <div
+                      key={meta.path}
+                      className="tweakers-move-dial"
+                      data-kind="scope"
+                      data-active={active || undefined}
+                      onPointerDown={(e) => {
+                        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                        fineRef.current = null;
+                        setDragPath(meta.path);
+                        armMod(meta.path);
+                        dialFromPointer(e, meta);
+                      }}
+                      onPointerMove={(e) => {
+                        if (dragPath === meta.path) dialFromPointer(e, meta);
+                      }}
+                      onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
+                      onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                    >
+                      <ModDot path={meta.path} />
                       <MoveSlotScopeBody
                         label={meta.label}
-                        caption={ModulationStore.getSettingsPreview()?.label ?? ''}
+                        value={chipValue(meta).num + (meta.unit ? ` ${meta.unit}` : '')}
+                        pct={dialPercent(meta)}
                       >
                         <MoveScope index={modSettings.index} />
                       </MoveSlotScopeBody>
