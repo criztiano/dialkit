@@ -97,8 +97,9 @@ export function buildModMovePage(panel: PanelConfig, layout?: ModPageLayout | nu
   for (const c of controls) {
     // The kind picker keeps its slot even while only one modulator type is
     // registered (a 1-option select is not an enum dial by the kit's rule).
-    if (c.type === 'toggle') toggles[Math.max(0, dials.length - 1)] = c;
-    else if (c.type === 'select' || isDial(c)) dials.push(c);
+    // A `big` toggle takes a dial slot of its own instead of a pad.
+    if (c.type === 'toggle' && !(c as { big?: boolean }).big) toggles[Math.max(0, dials.length - 1)] = c;
+    else if (c.type === 'toggle' || c.type === 'select' || isDial(c)) dials.push(c);
   }
   return { panel, dials: dials.slice(0, MOVE_DIALS), toggles: toggles.slice(0, MOVE_PADS), values: [], actions: [] };
 }

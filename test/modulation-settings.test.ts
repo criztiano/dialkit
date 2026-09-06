@@ -29,7 +29,8 @@ describe('the modulator settings page', () => {
     const panel = TweakStore.getPanel(MOD_SETTINGS_PANEL)!;
     expect(panel.kind).toBe('modulation');
     expect(panel.name).toBe('LFO 4');
-    expect(panel.controls.map((c) => c.path)).toEqual(['type', 'rate', 'sync', 'phase', 'width', 'texture']);
+    // The scope is a display, not a control — it registers no panel value.
+    expect(panel.controls.map((c) => c.path)).toEqual(['type', 'rate', 'sync', 'phase', 'width', 'jitter', 'smooth']);
 
     // Hidden: not a dock panel, not a Move track page.
     expect(TweakStore.getPanels('panel').some((p) => p.id === MOD_SETTINGS_PANEL)).toBe(false);
@@ -39,18 +40,19 @@ describe('the modulator settings page', () => {
     ModulationStore.createSlot(0);
     ModulationStore.openSettings(0);
     const page = buildModMovePage(TweakStore.getPanel(MOD_SETTINGS_PANEL)!);
-    expect(page.dials.map((c) => c.path)).toEqual(['type', 'rate', 'phase', 'width', 'texture']);
+    expect(page.dials.map((c) => c.path)).toEqual(['type', 'rate', 'phase', 'width', 'jitter', 'smooth']);
     // Rate sits in dial column 1, so the sync pad sits in pad column 1.
     expect(page.toggles[0]).toBeUndefined();
     expect(page.toggles[1]?.path).toBe('sync');
   });
 
-  it('flows panel edits into the slot params, texture xy onto jitter/smooth', () => {
+  it('flows panel edits into the slot params, jitter and smooth as their own dials', () => {
     ModulationStore.createSlot(0);
     ModulationStore.openSettings(0);
     TweakStore.updateValue(MOD_SETTINGS_PANEL, 'rate', 4);
     TweakStore.updateValue(MOD_SETTINGS_PANEL, 'sync', true);
-    TweakStore.updateValue(MOD_SETTINGS_PANEL, 'texture', { x: 0.3, y: 0.7 });
+    TweakStore.updateValue(MOD_SETTINGS_PANEL, 'jitter', 0.3);
+    TweakStore.updateValue(MOD_SETTINGS_PANEL, 'smooth', 0.7);
     const params = ModulationStore.getSlot(0)!.params;
     expect(params.rate).toBe(4);
     expect(params.sync).toBe(true);

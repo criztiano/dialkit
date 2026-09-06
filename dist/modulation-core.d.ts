@@ -36,6 +36,8 @@ declare const MOD_COLORS: string[];
 /** A slot's palette colour — the one constant identity it keeps. */
 declare const modColor: (index: number) => string;
 type ModulationType = 'lfo' | 'adsr' | 'envelope' | 'curve' | 'sh' | 'sequencer';
+/** The envelope's four stages — the four columns of its picture. */
+type EnvStage = 'attack' | 'decay' | 'sustain' | 'release';
 /**
  * A settings value: the scalars a dial or a pad edits, plus the structures a
  * richer modulator carries (the curve's clip list). JSON-safe throughout, so
@@ -73,10 +75,24 @@ type ModControlMeta = ControlMeta & {
     yParam?: string;
     /** Sits in a small slot under its dial's column instead of taking a big one. */
     chip?: boolean;
+    /** A toggle that takes a big dial slot of its own instead of a pad. */
+    big?: boolean;
     /** Shown only when this says so — a control that belongs to one mode. */
     when?: (params: ModulationParams) => boolean;
     /** This dial draws the modulator's own shape (the type's `preview`). */
     drawsPreview?: boolean;
+    /**
+     * This dial hosts the modulator's oscilloscope: the live signal off the
+     * engine fills the slot behind the dial's own readout and bar — the
+     * control keeps its drag and its knob, it just shows the wave it makes.
+     */
+    scope?: boolean;
+    /**
+     * This dial is one stage of the envelope: the four stage dials render as
+     * one 4-column control — a single display drawing the whole shape, with
+     * each stage's readout and drag zone in its own column.
+     */
+    envStage?: EnvStage;
     /** A knob tap on this dial runs this, returning the params it changes. */
     cycle?: (params: ModulationParams) => ModulationParams;
 };
@@ -129,6 +145,10 @@ interface ModPageSlot {
     path: string;
     /** The dial draws the modulator's preview instead of a bar. */
     preview?: boolean;
+    /** The dial draws this stage's segment of the envelope picture. */
+    stage?: EnvStage;
+    /** The dial hosts the modulator's oscilloscope behind its readout. */
+    scope?: boolean;
     /** A knob tap on this dial cycles it. */
     cycle?: boolean;
 }
@@ -161,6 +181,12 @@ declare function registerModType(def: ModTypeDef): void;
 declare const getModType: (type: ModulationType) => ModTypeDef | undefined;
 /** The registered types, registration order — the settings page's type enum. */
 declare const listModTypes: () => ModTypeDef[];
+/**
+ * Every settings page's width in dial slots: the type picker plus the
+ * widest registered page. One number for all types, so switching the type
+ * never reflows the page — the control under your finger stays where it is.
+ */
+declare const modPageWidth: () => number;
 /** The one modulator-settings panel, registered by `ModulationStore.openSettings`. */
 declare const MOD_SETTINGS_PANEL = "mod-settings";
 /** Assignment map key — panel and path, joined on a character paths can't hold. */
@@ -209,6 +235,35 @@ declare const LFO_DEF: ModTypeDef;
  * slew as the LFO's — at 0 hard steps, up high a wandering drift.
  */
 declare const SH_DEF: ModTypeDef;
+/** Each timed stage's dial span in ms — the picture normalises against it. */
+declare const ADSR_STAGE_MAX: {
+    readonly attack: 2000;
+    readonly decay: 2000;
+    readonly release: 4000;
+};
+/** The stages whose ramps can bend — sustain is a level, not a ramp. */
+declare const ENV_BEND_STAGES: readonly EnvStage[];
+/** A bendable stage's curve param name (`attackCurve`, ...). */
+declare const envCurveParam: (stage: EnvStage) => string;
+/**
+ * The whole envelope as one drawing: `count` samples, each 0..1, across a
+ * single display that spans the four stage columns. Each timed stage takes
+ * a share of the width proportional to its own dial (floored so an instant
+ * stage still shows its edge, capped so the sustain hold never vanishes),
+ * and the sustain level runs flat through whatever width remains — turn any
+ * dial and its part of the picture stretches or falls in place.
+ */
+declare function envelopePoints(params: ModulationParams, count: number): number[];
+/**
+ * Where the envelope's three joints sit in the picture, 0..1 both ways:
+ * the attack's peak, the decay's landing on the sustain level, and the
+ * sustain's edge into the release — the handles the design pins there.
+ */
+declare function envelopeJoints(params: ModulationParams): {
+    stage: EnvStage;
+    x: number;
+    y: number;
+}[];
 /**
  * The ADSR: attack up to full, decay down to the sustain level, sustain
  * held while the gate is on, release back to rest. The signal is unipolar
@@ -253,4 +308,4 @@ declare function curveComposition(params: ModulationParams): CurveComposition;
 declare function curveDuration(params: ModulationParams, bpm: number): number;
 declare const CURVE_DEF: ModTypeDef;
 
-export { ADSR_DEF, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, curveComposition, curveDuration, getModType, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modRingArc, registerModType, visibleModControls };
+export { ADSR_DEF, ADSR_STAGE_MAX, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, ENV_BEND_STAGES, type EnvStage, LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, curveComposition, curveDuration, envCurveParam, envelopeJoints, envelopePoints, getModType, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modPageWidth, modRingArc, registerModType, visibleModControls };

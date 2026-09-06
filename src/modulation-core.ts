@@ -70,6 +70,9 @@ export const modColor = (index: number) =>
 
 export type ModulationType = 'lfo' | 'adsr' | 'envelope' | 'curve' | 'sh' | 'sequencer';
 
+/** The envelope's four stages — the four columns of its picture. */
+export type EnvStage = 'attack' | 'decay' | 'sustain' | 'release';
+
 /**
  * A settings value: the scalars a dial or a pad edits, plus the structures a
  * richer modulator carries (the curve's clip list). JSON-safe throughout, so
@@ -114,10 +117,24 @@ export type ModControlMeta = ControlMeta & {
   yParam?: string;
   /** Sits in a small slot under its dial's column instead of taking a big one. */
   chip?: boolean;
+  /** A toggle that takes a big dial slot of its own instead of a pad. */
+  big?: boolean;
   /** Shown only when this says so — a control that belongs to one mode. */
   when?: (params: ModulationParams) => boolean;
   /** This dial draws the modulator's own shape (the type's `preview`). */
   drawsPreview?: boolean;
+  /**
+   * This dial hosts the modulator's oscilloscope: the live signal off the
+   * engine fills the slot behind the dial's own readout and bar — the
+   * control keeps its drag and its knob, it just shows the wave it makes.
+   */
+  scope?: boolean;
+  /**
+   * This dial is one stage of the envelope: the four stage dials render as
+   * one 4-column control — a single display drawing the whole shape, with
+   * each stage's readout and drag zone in its own column.
+   */
+  envStage?: EnvStage;
   /** A knob tap on this dial runs this, returning the params it changes. */
   cycle?: (params: ModulationParams) => ModulationParams;
 };
@@ -171,6 +188,10 @@ export interface ModPageSlot {
   path: string;
   /** The dial draws the modulator's preview instead of a bar. */
   preview?: boolean;
+  /** The dial draws this stage's segment of the envelope picture. */
+  stage?: EnvStage;
+  /** The dial hosts the modulator's oscilloscope behind its readout. */
+  scope?: boolean;
   /** A knob tap on this dial cycles it. */
   cycle?: boolean;
 }
@@ -190,12 +211,15 @@ export const MOD_PAGE_DIALS = 8;
 
 const isModDial = (c: ModControlMeta) =>
   !c.chip &&
-  (c.type === 'select' || c.type === 'slider' || c.type === 'xy' || c.type === 'range' ||
+  (c.scope || (c.type === 'toggle' && c.big) ||
+    c.type === 'select' || c.type === 'slider' || c.type === 'xy' || c.type === 'range' ||
     (c.type === 'number' && c.min != null && c.max != null));
 
 const slotOf = (c: ModControlMeta): ModPageSlot => ({
   path: c.path,
   ...(c.drawsPreview ? { preview: true } : {}),
+  ...(c.envStage ? { stage: c.envStage } : {}),
+  ...(c.scope ? { scope: true } : {}),
   ...(c.cycle ? { cycle: true } : {}),
 });
 
@@ -243,6 +267,20 @@ export const getModType = (type: ModulationType): ModTypeDef | undefined => regi
 
 /** The registered types, registration order — the settings page's type enum. */
 export const listModTypes = (): ModTypeDef[] => [...registry.values()];
+
+/**
+ * Every settings page's width in dial slots: the type picker plus the
+ * widest registered page. One number for all types, so switching the type
+ * never reflows the page — the control under your finger stays where it is.
+ */
+export const modPageWidth = (): number =>
+  Math.min(
+    MOD_PAGE_DIALS,
+    1 + listModTypes().reduce(
+      (w, def) => Math.max(w, modPageLayout(def.controls, def.defaults).dials.length),
+      0
+    )
+  );
 
 /** The one modulator-settings panel, registered by `ModulationStore.openSettings`. */
 export const MOD_SETTINGS_PANEL = 'mod-settings';
@@ -328,6 +366,27 @@ interface LfoState {
   out: number | null;
 }
 
+/* ── preview helpers — the wave the settings page draws ───────────────── */
+
+/** A preview's own noise — deterministic, so the picture holds still. */
+const previewNoise = (i: number, salt = 0) => {
+  const x = Math.sin((i + 1) * 12.9898 + salt * 78.233) * 43758.5453;
+  return (x - Math.floor(x)) * 2 - 1;
+};
+
+/**
+ * The engine's one-pole slew, run over a preview's samples as if the whole
+ * picture lasted one second — so the Smooth axis rounds the drawing the way
+ * it rounds the signal.
+ */
+function previewSlew(values: number[], smooth: number): number[] {
+  const s = clamp01(smooth);
+  if (s <= 0 || values.length < 2) return values;
+  const k = 1 - Math.exp(-(1 / values.length) / (s * s * 0.4 + 1e-6));
+  let out = values[0];
+  return values.map((v, i) => (i === 0 ? out : (out = out + (v - out) * k)));
+}
+
 /**
  * The LFO: a width-skewed triangle (0.5 symmetric, toward 0/1 a saw either
  * way), phase-offset, with jitter (a random offset renewed each cycle) and
@@ -338,19 +397,12 @@ export const LFO_DEF: ModTypeDef = {
   label: 'LFO',
   defaults: { rate: 1, division: 4, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false },
   controls: [
-    { type: 'slider', path: 'rate', label: 'Rate', min: 0.02, max: 20, step: 0.01, unit: 'Hz' },
+    { type: 'slider', path: 'rate', label: 'Rate', min: 0.02, max: 20, step: 0.01, unit: 'Hz', scope: true },
     { type: 'toggle', path: 'sync', label: 'Sync' },
     { type: 'slider', path: 'phase', label: 'Phase', min: 0, max: 1, step: 0.01 },
     { type: 'slider', path: 'width', label: 'Width', min: 0, max: 1, step: 0.01 },
-    {
-      type: 'xy',
-      path: 'texture',
-      label: 'Texture',
-      xParam: 'jitter',
-      yParam: 'smooth',
-      xAxis: { min: 0, max: 1, step: 0.01, label: 'Jitter' },
-      yAxis: { min: 0, max: 1, step: 0.01, label: 'Smooth' },
-    },
+    { type: 'slider', path: 'jitter', label: 'Jitter', min: 0, max: 1, step: 0.01 },
+    { type: 'slider', path: 'smooth', label: 'Smooth', min: 0, max: 1, step: 0.01 },
   ],
   createState: (): LfoState => ({ phase: 0, drift: 0, driftTarget: 0, out: null }),
   tick(state, params, dt, bpm) {
@@ -381,6 +433,29 @@ export const LFO_DEF: ModTypeDef = {
     s.out = v;
     return v;
   },
+  /**
+   * Two cycles of the wave the params describe: the width skew, the jitter
+   * as a slow deterministic wobble, and the slew rounding it all. The
+   * on-screen scope draws the live engine signal instead; this is the
+   * scope's caption (the wave's name) and the small screens' drawing.
+   */
+  preview(params, count) {
+    const n = Math.max(2, count);
+    const w = clamp(Number(params.width) || 0, 0.01, 0.99);
+    const jitter = clamp01(params.jitter);
+    const wobble = Math.max(2, Math.round(n / 8));
+    const raw = Array.from({ length: n }, (_, i) => {
+      const ph = ((i / (n - 1)) * 2 + clamp01(params.phase)) % 1;
+      const tri = ph < w ? ph / w : 1 - (ph - w) / (1 - w);
+      const drift = previewNoise(Math.floor(i / wobble)) * jitter * 0.5;
+      return clamp(tri * 2 - 1 + drift, -1, 1);
+    });
+    const shape = clamp01(params.smooth) > 0.55 ? 'Sine' : w <= 0.25 ? 'Saw' : w >= 0.75 ? 'Ramp' : 'Tri';
+    return {
+      points: previewSlew(raw, clamp01(params.smooth)).map((v) => (v + 1) / 2),
+      label: jitter > 0.4 ? `${shape} · Jitter` : shape,
+    };
+  },
 };
 
 registerModType(LFO_DEF);
@@ -407,18 +482,11 @@ export const SH_DEF: ModTypeDef = {
   label: 'S&H',
   defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0 },
   controls: [
-    { type: 'slider', path: 'rate', label: 'Rate', min: 0.1, max: 30, step: 0.01, unit: 'Hz' },
+    { type: 'slider', path: 'rate', label: 'Rate', min: 0.1, max: 30, step: 0.01, unit: 'Hz', scope: true },
     { type: 'slider', path: 'depth', label: 'Depth', min: 0, max: 1, step: 0.01 },
     { type: 'slider', path: 'offset', label: 'Offset', min: -1, max: 1, step: 0.01 },
-    {
-      type: 'xy',
-      path: 'texture',
-      label: 'Texture',
-      xParam: 'jitter',
-      yParam: 'smooth',
-      xAxis: { min: 0, max: 1, step: 0.01, label: 'Jitter' },
-      yAxis: { min: 0, max: 1, step: 0.01, label: 'Smooth' },
-    },
+    { type: 'slider', path: 'jitter', label: 'Jitter', min: 0, max: 1, step: 0.01 },
+    { type: 'slider', path: 'smooth', label: 'Smooth', min: 0, max: 1, step: 0.01 },
   ],
   createState: (): ShState => ({ wait: 0, held: 0, out: null }),
   tick(state, params, dt) {
@@ -444,6 +512,33 @@ export const SH_DEF: ModTypeDef = {
     s.out = v;
     return v;
   },
+  /**
+   * A run of held values, deterministic so the picture holds still while
+   * you shape it: depth scales the throw, offset lifts the whole run,
+   * jitter stretches and shrinks the holds (the drunken clock), and the
+   * slew turns the steps into a drift.
+   */
+  preview(params, count) {
+    const n = Math.max(2, count);
+    const depth = clamp01(params.depth);
+    const offset = clamp(Number(params.offset) || 0, -1, 1);
+    const jitter = clamp01(params.jitter);
+    const steps = 8;
+    const lens = Array.from({ length: steps }, (_, i) => 1 + previewNoise(i, 1) * jitter * 0.9);
+    const total = lens.reduce((a, b) => a + b, 0);
+    const edges: number[] = [];
+    let acc = 0;
+    for (const len of lens) edges.push((acc += len / total));
+    const raw = Array.from({ length: n }, (_, i) => {
+      const t = i / (n - 1);
+      const step = edges.findIndex((e) => t <= e);
+      return clamp(previewNoise(step < 0 ? steps - 1 : step) * depth + offset, -1, 1);
+    });
+    return {
+      points: previewSlew(raw, clamp01(params.smooth)).map((v) => (v + 1) / 2),
+      label: clamp01(params.smooth) > 0.55 ? 'Drift' : 'Steps',
+    };
+  },
 };
 
 registerModType(SH_DEF);
@@ -466,8 +561,69 @@ interface AdsrState {
 
 const secs = (ms: unknown) => Math.max(0, Number(ms) || 0) / 1000;
 
-/** An analog ramp's ease: quick off the mark, tapering into the target. */
-const adsrEase = (p: number) => 1 - (1 - p) * (1 - p);
+/** Each timed stage's dial span in ms — the picture normalises against it. */
+export const ADSR_STAGE_MAX = { attack: 2000, decay: 2000, release: 4000 } as const;
+
+/** The stages whose ramps can bend — sustain is a level, not a ramp. */
+export const ENV_BEND_STAGES: readonly EnvStage[] = ['attack', 'decay', 'release'];
+
+/** A bendable stage's curve param name (`attackCurve`, ...). */
+export const envCurveParam = (stage: EnvStage) => `${stage}Curve`;
+
+/**
+ * A stage ramp's shape, bent by its curve: 0 is a straight line, positive
+ * leaps off the mark and tapers into the target (+0.5 is the analog ease
+ * the attack has always had), negative creeps first and arrives in a rush.
+ * One number per stage, -1..1, mapped onto the ramp's exponent.
+ */
+const adsrShape = (p: number, curve: unknown) => {
+  const c = clamp(Number(curve) || 0, -1, 1);
+  return 1 - Math.pow(1 - p, Math.pow(4, c));
+};
+
+/**
+ * The whole envelope as one drawing: `count` samples, each 0..1, across a
+ * single display that spans the four stage columns. Each timed stage takes
+ * a share of the width proportional to its own dial (floored so an instant
+ * stage still shows its edge, capped so the sustain hold never vanishes),
+ * and the sustain level runs flat through whatever width remains — turn any
+ * dial and its part of the picture stretches or falls in place.
+ */
+export function envelopePoints(params: ModulationParams, count: number): number[] {
+  const n = Math.max(2, count);
+  const sustain = clamp01(params.sustain);
+  const share = (key: keyof typeof ADSR_STAGE_MAX) =>
+    0.04 + 0.24 * Math.min(1, (secs(params[key]) * 1000) / ADSR_STAGE_MAX[key]);
+  const wA = share('attack');
+  const wD = share('decay');
+  const wR = share('release');
+  const at = (t: number): number => {
+    if (t < wA) return adsrShape(t / wA, params.attackCurve);
+    if (t < wA + wD) return 1 - (1 - sustain) * adsrShape((t - wA) / wD, params.decayCurve);
+    if (t < 1 - wR) return sustain;
+    return sustain * (1 - adsrShape((t - (1 - wR)) / wR, params.releaseCurve));
+  };
+  return Array.from({ length: n }, (_, i) => at(i / (n - 1)));
+}
+
+/**
+ * Where the envelope's three joints sit in the picture, 0..1 both ways:
+ * the attack's peak, the decay's landing on the sustain level, and the
+ * sustain's edge into the release — the handles the design pins there.
+ */
+export function envelopeJoints(
+  params: ModulationParams
+): { stage: EnvStage; x: number; y: number }[] {
+  const sustain = clamp01(params.sustain);
+  const share = (key: keyof typeof ADSR_STAGE_MAX) =>
+    0.04 + 0.24 * Math.min(1, (secs(params[key]) * 1000) / ADSR_STAGE_MAX[key]);
+  const wA = share('attack');
+  return [
+    { stage: 'attack', x: wA, y: 1 },
+    { stage: 'decay', x: wA + share('decay'), y: sustain },
+    { stage: 'release', x: 1 - share('release'), y: sustain },
+  ];
+}
 
 /** A stage's length in seconds; a held sustain never ends on its own. */
 function adsrStageLength(stage: AdsrStage, params: ModulationParams): number {
@@ -496,13 +652,20 @@ function adsrStageLength(stage: AdsrStage, params: ModulationParams): number {
 export const ADSR_DEF: ModTypeDef = {
   type: 'adsr',
   label: 'ADSR',
-  defaults: { attack: 10, decay: 300, sustain: 0.6, release: 600, loop: false },
+  defaults: {
+    attack: 10, decay: 300, sustain: 0.6, release: 600, loop: false,
+    // The attack keeps its analog leap; decay and release start straight,
+    // as the design draws them — every ramp bendable from its pad.
+    attackCurve: 0.5, decayCurve: 0, releaseCurve: 0,
+  },
   controls: [
-    { type: 'slider', path: 'attack', label: 'Attack', min: 0, max: 2000, step: 1, unit: 'ms' },
-    { type: 'slider', path: 'decay', label: 'Decay', min: 0, max: 2000, step: 1, unit: 'ms' },
-    { type: 'slider', path: 'sustain', label: 'Sustain', min: 0, max: 1, step: 0.01 },
-    { type: 'slider', path: 'release', label: 'Release', min: 0, max: 4000, step: 1, unit: 'ms' },
-    { type: 'toggle', path: 'loop', label: 'Loop' },
+    { type: 'slider', path: 'attack', label: 'Attack', min: 0, max: ADSR_STAGE_MAX.attack, step: 1, unit: 'ms', envStage: 'attack' },
+    { type: 'slider', path: 'decay', label: 'Decay', min: 0, max: ADSR_STAGE_MAX.decay, step: 1, unit: 'ms', envStage: 'decay' },
+    { type: 'slider', path: 'sustain', label: 'Sustain', min: 0, max: 1, step: 0.01, envStage: 'sustain' },
+    { type: 'slider', path: 'release', label: 'Release', min: 0, max: ADSR_STAGE_MAX.release, step: 1, unit: 'ms', envStage: 'release' },
+    /* A big slot of its own, beside the envelope — the pad row under the
+       ramps belongs to the hold-to-bend gesture. */
+    { type: 'toggle', path: 'loop', label: 'Loop', big: true },
   ],
   createState: (): AdsrState => ({ stage: 'idle', t: 0, from: 0, env: 0, gate: false }),
   gate(state, on) {
@@ -551,12 +714,14 @@ export const ADSR_DEF: ModTypeDef = {
       }
     }
 
+    // Each ramp bends by its own curve param, so the signal IS the shape
+    // the display draws — bend the picture and the modulation follows.
     const len = adsrStageLength(s.stage, params);
-    const shaped = adsrEase(len > 0 && Number.isFinite(len) ? Math.min(1, s.t / len) : 1);
-    if (s.stage === 'attack') s.env = s.from + (1 - s.from) * shaped;
-    else if (s.stage === 'decay') s.env = s.from + (sustain - s.from) * shaped;
+    const p = len > 0 && Number.isFinite(len) ? Math.min(1, s.t / len) : 1;
+    if (s.stage === 'attack') s.env = s.from + (1 - s.from) * adsrShape(p, params.attackCurve);
+    else if (s.stage === 'decay') s.env = s.from + (sustain - s.from) * adsrShape(p, params.decayCurve);
     else if (s.stage === 'sustain') s.env = sustain;
-    else if (s.stage === 'release') s.env = s.from * (1 - shaped);
+    else if (s.stage === 'release') s.env = s.from * (1 - adsrShape(p, params.releaseCurve));
     else s.env = 0;
     return clamp01(s.env);
   },
@@ -688,12 +853,14 @@ export const CURVE_DEF: ModTypeDef = {
       type: 'select', path: 'signal', label: 'Signal', chip: true,
       options: [{ value: 'continuous', label: 'Cont' }, { value: 'trigger', label: 'Trig' }],
     },
+    /* The direction reads as a picture — an arrow says which way the pass
+       runs faster than a word does. */
     {
       type: 'select', path: 'direction', label: 'Direction',
       options: [
-        { value: 'forward', label: 'Forward' },
-        { value: 'mirror', label: 'Mirror' },
-        { value: 'reverse', label: 'Reverse' },
+        { value: 'forward', label: 'Forward', icon: 'arrow-right' },
+        { value: 'mirror', label: 'Mirror', icon: 'arrow-left-right' },
+        { value: 'reverse', label: 'Reverse', icon: 'arrow-left' },
       ],
     },
     { type: 'toggle', path: 'flip', label: 'Flip' },
