@@ -1,8 +1,8 @@
-import { StrictMode } from 'react';
+import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { TweakRoot, TweakStore, ModulationStore } from 'dialkit';
-import { MovePanel, MoveFunctions } from 'tweakers';
+import { MovePanel, MoveFunctions, MoveColorStore } from 'tweakers';
 import 'dialkit/styles.css';
 import 'tweakers/styles.css';
 import { PhotoStack } from './PhotoStack';
@@ -14,6 +14,7 @@ import { SpecializedShowcase } from './SpecializedShowcase';
 // pad and the range span (knob = X / low end, volume knob = Y / high end
 // while that knob is touched), plus a bipolar slider anchored at centre.
 TweakStore.registerPanel('move-xy', 'Move Demo', {
+  color: { type: 'color', default: '#eb644dff', alpha: true },
   spot: {
     type: 'xy',
     x: { min: -1, max: 1, bipolar: true },
@@ -67,15 +68,32 @@ MoveFunctions.attach('copy', () => {
   navigator.clipboard?.writeText(JSON.stringify(all, null, 2)).catch(() => {});
 });
 
-// Physical controls: bind the Ableton Move bridge when it's running (no-op otherwise).
-// @ts-ignore — remote module, no types
-import(/* @vite-ignore */ 'http://localhost:7787/kit.js')
-  .then(m => m.bindMove(TweakStore, { functions: MoveFunctions, modulation: ModulationStore }))
-  .catch(() => {});
+// Match the hardware page scope to the visible preview, and release the
+// previous connection when navigation or StrictMode remounts the bridge.
+function MoveBridge() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    let cancelled = false;
+    let unbind: (() => void) | undefined;
+    // @ts-ignore — remote module, no types
+    import(/* @vite-ignore */ 'http://localhost:7787/kit.js?v=color-slot-1')
+      .then(m => {
+        if (cancelled) return;
+        unbind = m.bindMove(TweakStore, {
+          functions: MoveFunctions, modulation: ModulationStore, color: MoveColorStore,
+          panels: pathname === '/specialized' ? ['Specialized'] : null,
+        });
+      })
+      .catch(error => { if (!cancelled) console.warn('Move bridge could not connect', error); });
+    return () => { cancelled = true; unbind?.(); };
+  }, [pathname]);
+  return null;
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
+      <MoveBridge />
       <Routes>
         <Route path="/" element={<><PhotoStack /><TweakRoot position="top-right" /><MovePanel /></>} />
         <Route path="/release-1.2" element={<Release />} />

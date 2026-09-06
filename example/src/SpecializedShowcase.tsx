@@ -5,6 +5,7 @@ import type { TweakConfig } from 'dialkit';
 
 const PANEL = 'Specialized';
 const CONFIG = {
+  color: { type: 'color', default: '#eb644dff', alpha: true },
   opacity: { type: 'slider', default: 0.65, min: 0, max: 1, step: 0.01, moveVisual: { kind: 'opacity' } },
   blur: { type: 'slider', default: 3, min: 0, max: 12, step: 0.1, unit: ' px', moveVisual: { kind: 'blur' } },
   pan: { type: 'slider', default: 0, min: -1, max: 1, step: 0.01, bipolar: true, moveVisual: { kind: 'pan' } },
@@ -41,7 +42,7 @@ export function SpecializedShowcase() {
       <header className="specialized-header">
         <Link className="specialized-back" to="/library">← Component library</Link>
         <h1>Specialized controls</h1>
-        <p>Opacity, blur, pan, width, pitch and playback. Each drawing follows the value, with its label and reading always visible.</p>
+        <p>Color, opacity, blur, pan, width, pitch and playback. Each drawing follows the value, with its label and reading always visible.</p>
       </header>
       <section aria-label="Live controls" className="specialized-live">
         <div className="specialized-presets" role="group" aria-label="Compare reference values">
@@ -63,6 +64,7 @@ export function SpecializedShowcase() {
         <section aria-labelledby="specialized-reading-title">
           <h2 id="specialized-reading-title">Reading the shapes</h2>
           <dl>
+            <dt>Color</dt><dd>Tap the swatch to open the hue grid. The dial changes hue; volume changes luminosity. While open, the sequencer and big wheel set opacity.</dd>
             <dt>Opacity & blur</dt><dd>Overlapping circles reveal transparency. A single filled dot softens at the selected blur radius.</dd>
             <dt>Pan & width</dt><dd>Pan moves between L and R. Width separates two channels from mono, with dashed outlines marking 1×.</dd>
             <dt>Pitch & playback</dt><dd>Pitch moves along a centred ruler; its marker turns amber away from zero. Icons show the selected playback mode.</dd>
