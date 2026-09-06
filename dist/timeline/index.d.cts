@@ -69,6 +69,14 @@ type XYValue = {
     y: number;
 };
 
+type TransferPoint = {
+    x: number;
+    y: number;
+};
+type TransferValue = {
+    points: TransferPoint[];
+};
+
 interface FilterAxisConfig {
     min?: number;
     max?: number;
@@ -166,6 +174,12 @@ type ColorConfig = {
 type GradientConfig = {
     type: 'gradient';
     default?: GradientValue;
+    /**
+     * `ramp` opens the editor without the fill-shape chrome (no linear/radial/
+     * conic switcher, no transform pad) — for gradients read along one axis,
+     * like a colour scale or a shader lookup, where a shape would do nothing.
+     */
+    form?: 'fill' | 'ramp';
 };
 type XYConfig = {
     type: 'xy';
@@ -212,6 +226,27 @@ type FilterConfig = {
      */
     enabled?: boolean;
 };
+/**
+ * An editable transfer curve — input on x, output on y, both 0..1. For the
+ * parameters that are really the shape of a response (a gamma, a depth
+ * falloff, an edge ramp) and that a row of sliders can only approximate.
+ * The value is the control points; read the shape with `sampleTransfer`, or
+ * bake it for a shader with `transferLut`.
+ */
+type TransferConfig = {
+    type: 'transfer';
+    /** Starting shape. Repaired through `normalizeTransfer`; absent = straight through. */
+    default?: TransferValue;
+    /** Surface height in px, clamped 64–200. Default 104. */
+    height?: number;
+    /** Grid divisions behind the curve (default 4). 0 hides it. */
+    grid?: number;
+    /** Names for the two axes, shown small at the edges. */
+    axisLabels?: {
+        x?: string;
+        y?: string;
+    };
+};
 type RangeConfig = {
     type: 'range';
     min: number;
@@ -248,6 +283,18 @@ type SliderConfig = {
     bipolar?: boolean;
     /** `vertical` renders the column card (fill grows bottom-up, label at base). */
     orientation?: 'horizontal' | 'vertical';
+    /**
+     * `dial` draws the value as a rotary needle instead of a track — for the
+     * parameters whose two ends are the same place (a heading, a sun position,
+     * a tilt). It stays a slider everywhere else, so a hardware knob and a
+     * preset see no difference; only the drawing changes.
+     */
+    display?: 'track' | 'dial';
+    /**
+     * Past the end, come back around instead of stopping. Dial only; defaults
+     * to true when the range covers a full turn (360, or -180..180).
+     */
+    wrap?: boolean;
 };
 /**
  * Scrub-anywhere numeric readout. Unlike a slider it has no track — drag the
@@ -431,14 +478,14 @@ type ListConfig = {
     /** Label for the add affordance. Defaults to 'Add'. */
     addLabel?: string;
 };
-type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue | FilterConfig | FilterValue;
+type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue | FilterConfig | FilterValue | TransferConfig | TransferValue;
 type TweakConfig = {
     [key: string]: TweakValue | [number, number, number, number?] | CurveConfig | AnalyserConfig | TweakConfig;
 };
 /** UI-only reserved keys: they shape the panel, never resolve to a value. */
 type ReservedKey = '_collapsed' | '_collapsible' | '_tabs';
 type ResolvedValues<T extends TweakConfig> = {
-    [K in keyof T as T[K] extends CurveConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends NumberConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends FilterConfig ? FilterValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends TweakConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T as T[K] extends CurveConfig ? never : T[K] extends AnalyserConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends NumberConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends FilterConfig ? FilterValue : T[K] extends TransferConfig ? TransferValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends TweakConfig ? ResolvedValues<T[K]> : T[K];
 };
 type TweakersPersistOptions = boolean | {
     key?: string;

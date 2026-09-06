@@ -1,7 +1,10 @@
 import { useEffect, useRef } from 'react';
-import { TweakStore, TweakConfig, TweakValue, TweakEvent, ResolvedValues, SpringConfig, EasingConfig, SelectConfig, SliderConfig, ColorConfig, GradientConfig, TextConfig, GalleryConfig, FileConfig, SwatchConfig, ChipsConfig, MultiSelectConfig, ListConfig, CurveConfig, ActionConfig, ShortcutConfig, AffordanceConfig, PresetProvider, normalizeListItems } from '../store/TweakStore';
+import { TweakStore, TweakConfig, TweakValue, TweakEvent, ResolvedValues, SpringConfig, EasingConfig, SelectConfig, SliderConfig, ColorConfig, GradientConfig, TextConfig, GalleryConfig, FileConfig, SwatchConfig, ChipsConfig, MultiSelectConfig, ListConfig, CurveConfig, AnalyserConfig, XYConfig, RangeConfig, FilterConfig, TransferConfig, ActionConfig, ShortcutConfig, AffordanceConfig, PresetProvider, normalizeListItems } from '../store/TweakStore';
 import { useTweakStorePanel } from './useTweakStorePanel';
 import { normalizeGradient, DEFAULT_GRADIENT } from '../gradient-core';
+import { resolveAxis, normalizeValue as normalizeXYValue } from '../xy-pad-core';
+import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
+import { normalizeTransfer, DEFAULT_TRANSFER } from '../transfer-core';
 
 export interface UseTweakersOptions {
   onAction?: (action: string) => void;
@@ -124,8 +127,22 @@ function buildResolvedValues(
     } else if (isListConfig(configValue)) {
       // List resolves to its array of {type, params} rows.
       result[key] = flatValues[path] ?? normalizeListItems(configValue);
-    } else if (isCurveConfig(configValue)) {
-      // Display-only curve preview: no value, so no key in the resolved shape.
+    } else if (isXYConfig(configValue)) {
+      // XY resolves to its {x,y} point — a leaf, not a folder of axes.
+      const cfg = configValue as XYConfig;
+      result[key] = flatValues[path] ?? normalizeXYValue(
+        cfg.default, resolveAxis(cfg.x), resolveAxis(cfg.y), cfg.snap ?? false);
+    } else if (isRangeConfig(configValue)) {
+      const cfg = configValue as RangeConfig;
+      result[key] = flatValues[path] ?? cfg.default ?? { min: cfg.min, max: cfg.max };
+    } else if (isFilterConfig(configValue)) {
+      const cfg = configValue as FilterConfig;
+      result[key] = flatValues[path] ?? normalizeFilterValue(
+        cfg.default, resolveFilterAxis(cfg.cutoff, 'cutoff'), resolveFilterAxis(cfg.resonance, 'resonance'));
+    } else if (isTransferConfig(configValue)) {
+      result[key] = flatValues[path] ?? normalizeTransfer((configValue as TransferConfig).default ?? DEFAULT_TRANSFER);
+    } else if (isCurveConfig(configValue) || isAnalyserConfig(configValue)) {
+      // Display-only rows: no value, so no key in the resolved shape.
     } else if (typeof configValue === 'object' && configValue !== null) {
       // Nested object
       result[key] = buildResolvedValues(configValue as TweakConfig, flatValues, path);
@@ -193,6 +210,26 @@ function isSliderConfig(value: unknown): value is SliderConfig {
 
 function isListConfig(value: unknown): value is ListConfig {
   return hasType(value, 'list') && 'itemTypes' in (value as object) && typeof (value as ListConfig).itemTypes === 'object';
+}
+
+function isXYConfig(value: unknown): value is XYConfig {
+  return hasType(value, 'xy');
+}
+
+function isRangeConfig(value: unknown): value is RangeConfig {
+  return hasType(value, 'range');
+}
+
+function isFilterConfig(value: unknown): value is FilterConfig {
+  return hasType(value, 'filter');
+}
+
+function isTransferConfig(value: unknown): value is TransferConfig {
+  return hasType(value, 'transfer');
+}
+
+function isAnalyserConfig(value: unknown): value is AnalyserConfig {
+  return hasType(value, 'analyser');
 }
 
 function isCurveConfig(value: unknown): value is CurveConfig {

@@ -127,6 +127,28 @@ function clampRange(v, min, max) {
   return orderRange({ min: clamp3(v.min, min, max), max: clamp3(v.max, min, max) });
 }
 
+// src/transfer-core.ts
+var DEFAULT_TRANSFER = { points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] };
+var TRANSFER_MIN_GAP = 0.02;
+var TRANSFER_MAX_POINTS = 12;
+var clamp013 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
+var finite = (v, fallback) => typeof v === "number" && Number.isFinite(v) ? v : fallback;
+function normalizeTransfer(value) {
+  const raw = value?.points;
+  if (!Array.isArray(raw) || raw.length < 2) return { points: DEFAULT_TRANSFER.points.map((p) => ({ ...p })) };
+  const points = raw.map((p) => ({ x: clamp013(finite(p?.x, 0)), y: clamp013(finite(p?.y, 0)) })).sort((a, b) => a.x - b.x);
+  points[0].x = 0;
+  points[points.length - 1].x = 1;
+  const out = [points[0]];
+  for (let i = 1; i < points.length - 1; i++) {
+    if (points[i].x - out[out.length - 1].x < TRANSFER_MIN_GAP) continue;
+    if (1 - points[i].x < TRANSFER_MIN_GAP) continue;
+    out.push(points[i]);
+  }
+  out.push(points[points.length - 1]);
+  return { points: out.slice(0, TRANSFER_MAX_POINTS) };
+}
+
 // src/filter-core.ts
 var FILTER_AXIS_DEFAULTS = {
   cutoff: { min: 0, max: 1, step: 0, label: "Freq" },
@@ -923,6 +945,8 @@ var TweakStoreClass = class {
           origin: value.origin,
           bipolar: value.bipolar,
           orientation: value.orientation,
+          display: value.display,
+          wrap: value.wrap,
           shortcut
         });
       } else if (this.isNumberConfig(value)) {
@@ -949,13 +973,22 @@ var TweakStoreClass = class {
       } else if (this.isColorConfig(value)) {
         controls.push({ type: "color", path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {
-        controls.push({ type: "gradient", path, label });
+        controls.push({ type: "gradient", path, label, gradientForm: value.form });
       } else if (this.isXYConfig(value)) {
         controls.push({ type: "xy", path, label, xAxis: value.x, yAxis: value.y, grid: value.grid, density: value.density, snap: value.snap, returnToCenter: value.returnToCenter, showValues: value.showValues });
       } else if (this.isFilterConfig(value)) {
         controls.push({ type: "filter", path, label, cutoffAxis: value.cutoff, resonanceAxis: value.resonance, response: value.response, filterEnabled: value.enabled });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: "text", path, label, placeholder: value.placeholder });
+      } else if (this.isTransferConfig(value)) {
+        controls.push({
+          type: "transfer",
+          path,
+          label,
+          curveHeight: value.height,
+          gridDivisions: value.grid,
+          axisLabels: value.axisLabels
+        });
       } else if (this.isRangeConfig(value)) {
         controls.push({
           type: "range",
@@ -1092,6 +1125,8 @@ var TweakStoreClass = class {
         values[path] = normalizeValue(value.default, xAxis, yAxis, value.snap ?? false);
       } else if (this.isTextConfig(value)) {
         values[path] = value.default ?? "";
+      } else if (this.isTransferConfig(value)) {
+        values[path] = normalizeTransfer(value.default ?? DEFAULT_TRANSFER);
       } else if (this.isRangeConfig(value)) {
         values[path] = value.default ?? { min: value.min, max: value.max };
       } else if (this.isFilterConfig(value)) {
@@ -1144,6 +1179,9 @@ var TweakStoreClass = class {
   }
   isFilterConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "filter";
+  }
+  isTransferConfig(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value) && value.type === "transfer";
   }
   isRangeConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "range";
@@ -1310,6 +1348,8 @@ var TweakStoreClass = class {
         return typeof existingValue === "string" ? existingValue : defaultValue;
       case "list":
         return Array.isArray(existingValue) ? existingValue : defaultValue;
+      case "transfer":
+        return typeof existingValue === "object" && existingValue !== null && !Array.isArray(existingValue) ? normalizeTransfer(existingValue) : defaultValue;
       case "range": {
         if (!this.isRangeValue(existingValue)) {
           return defaultValue;

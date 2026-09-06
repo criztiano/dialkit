@@ -340,6 +340,31 @@ slider/select; these presentations belong to the React `MovePanel`.
 Try the example app's `/specialized` page. The remaining candidates and proposed
 multi-column surfaces are recorded in [the control roadmap](docs/specialized-controls-roadmap.md).
 
+#### Dial sliders (`display: 'dial'`)
+
+Some parameters have no ends: a heading, a sun position, a tilt. On a track,
+359° and 1° sit as far apart as they can be, which is the opposite of the
+truth. `display: 'dial'` draws the value as a needle instead:
+
+```tsx
+lightAngle: { type: 'slider', default: 270, min: 0, max: 360, display: 'dial' },
+coneAngle:  { type: 'slider', default: 24, min: 0, max: 90, display: 'dial', wrap: false },
+```
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `display` | `'track' \| 'dial'` | `dial` draws a needle in place of the track. Default `track`. |
+| `wrap` | `boolean` | Past the end, come back around instead of stopping. Defaults to true when the range covers a full turn (360, or −180..180). |
+
+The needle follows the pointer directly — a compass gesture, not a fader one —
+and on a wrapping range a drag past the top carries on turning rather than
+snapping back. Arrows nudge by the step (Shift by ten), Home and a double-click
+return to the origin. The whole range spends one full turn, whatever the range
+is, so a 0–90 cone reads as a quarter per quadrant.
+
+It is a `slider` to the store and to a hardware knob: only the drawing differs,
+so presets, persistence and the Move mapping see no change at all.
+
 ### Toggle
 
 ```tsx
@@ -415,6 +440,15 @@ import { gradientFillBox } from 'tweakers';
 
 // parent: position: relative; overflow: hidden
 <div style={{ position: 'absolute', ...gradientFillBox(p.bg, width, height) }} />
+```
+
+`form: 'ramp'` opens the editor without the fill-shape chrome — no
+linear/radial/conic switcher, no transform pad, just the stops. Use it for
+gradients read along one axis (a colour scale, a shader lookup), where a
+shape would do nothing and offering one only misleads.
+
+```tsx
+scale: { type: 'gradient', form: 'ramp', default: { stops: [/* … */] } },
 ```
 
 **Returns:** `GradientValue` — `{ type, angle, stops: { color, position }[], centerX?, centerY?, scale?, squash?, rotation? }`
@@ -525,6 +559,45 @@ const p = useTweakers('Grain', {
 The row holds no value: it never appears in the returned values, presets, or persistence. Because the host closes `sample` over its own state and rebuilds the config per render, the preview redraws whenever the function identity changes — turn a modifier slider and the curve follows live. Hints and label overrides apply to the row's path like any other control.
 
 **Returns:** nothing — the key is omitted from the resolved values.
+
+*(React only for now; the Solid/Svelte/Vue renderers skip the row.)*
+
+### Transfer curve (editable)
+
+The editable counterpart of the [curve](#curve-read-only-preview) preview: a
+curve you draw instead of a number you guess. For the parameters that are
+really the *shape of a response* — a gamma, a depth falloff, an edge ramp —
+and that a row of sliders can only approximate.
+
+```tsx
+const p = useTweakers('Relief', {
+  depthCurve: {
+    type: 'transfer',
+    default: { points: [{ x: 0, y: 0 }, { x: 0.5, y: 0.35 }, { x: 1, y: 1 }] },
+    height: 104,                        // px, clamped 64–200 (default 104)
+    grid: 4,                            // divisions behind the curve; 0 hides it
+    axisLabels: { x: 'depth', y: 'height' },
+  },
+});
+
+import { sampleTransfer, transferLut } from 'tweakers';
+
+sampleTransfer(p.depthCurve.points, 0.25);   // → y at x = 0.25
+transferLut(p.depthCurve.points, 256);       // → Float32Array, ready for a shader
+```
+
+Drag a point to move it, click empty space to add one, and drag a point out of
+the box to remove it (the two ends anchor the domain and stay). Double-click
+resets the curve to straight through. A dashed diagonal shows the curve that
+would do nothing, so a shaped one reads against it at a glance.
+
+The shape between points is **monotone cubic** (Fritsch–Carlson). A natural or
+Catmull-Rom spline overshoots between points, which on a transfer curve means
+an output above the maximum from inputs that never asked for it — a blown
+highlight nothing in the UI explains. Monotone cubic stays inside the values
+you placed: what you draw is what comes out.
+
+**Returns:** `TransferValue` — `{ points: { x, y }[] }`, both axes 0–1.
 
 *(React only for now; the Solid/Svelte/Vue renderers skip the row.)*
 

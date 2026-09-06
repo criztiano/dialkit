@@ -132,6 +132,11 @@ export type {
 // Individual components (for advanced usage)
 export { ControlRenderer } from './components/ControlRenderer';
 export { Slider } from './components/Slider';
+export { AngleDial } from './components/AngleDial';
+export { TransferCurve } from './components/TransferCurve';
+export { sampleTransfer, transferLut, normalizeTransfer, insertPoint, removePoint, movePoint, nearestPoint, isIdentityTransfer, DEFAULT_TRANSFER, TRANSFER_MIN_GAP, TRANSFER_MAX_POINTS } from './transfer-core';
+export type { TransferPoint, TransferValue } from './transfer-core';
+export { snapAngle, normalizeAngle, valueToBearing, bearingToValue, angleFromPointer, nudgeAngle, arcPath, ANGLE_DEAD_ZONE_PX } from './angle-core';
 export { NumberControl } from './components/NumberControl';
 export { RangeSlider } from './components/RangeSlider';
 export { Checkbox } from './components/Checkbox';
@@ -229,6 +234,7 @@ export { GradientControl } from './components/GradientControl';
 export { GradientPanel } from './components/GradientPanel';
 export {
   gradientToCss,
+  rampCss,
   gradientToTransform,
   gradientFillBox,
   normalizeGradient,

@@ -218,7 +218,7 @@ type AffordanceConfig = {
 };
 type ControlMeta = {
     moveVisual?: MoveVisual;
-    type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser' | 'filter';
+    type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser' | 'filter' | 'transfer';
     path: string;
     label: string;
     /** One line of help, revealed on hover or when focus lands inside the control. */
@@ -230,6 +230,15 @@ type ControlMeta = {
     step?: number;
     /** Range control's configured reset target — its `default`, else the full {min,max} span. */
     rangeDefault?: RangeValue;
+    /** Gradient's editor form — `ramp` drops the fill-shape chrome. */
+    gradientForm?: 'fill' | 'ramp';
+    /** Transfer curve's surface height, grid divisions and axis names. */
+    curveHeight?: number;
+    gridDivisions?: number;
+    axisLabels?: {
+        x?: string;
+        y?: string;
+    };
     children?: ControlMeta[];
     defaultOpen?: boolean;
     /** Folder declared `_enabled` — renders as a module whose header switch drives `<path>._enabled`. */
@@ -249,8 +258,10 @@ type ControlMeta = {
     })[];
     /** Select's per-option shape sampler — swapped in place by syncCurveConfigs. */
     preview?: (value: string) => ((t: number) => number) | null | undefined;
-    /** Select's rendering mode, from the SelectConfig form. */
-    display?: 'dropdown' | 'segmented';
+    /** Select's rendering mode, or a slider's `dial` form. */
+    display?: 'dropdown' | 'segmented' | 'track' | 'dial';
+    /** Dial slider: wrap past the ends instead of stopping. */
+    wrap?: boolean;
     placeholder?: string;
     items?: GalleryItem[];
     columns?: number;

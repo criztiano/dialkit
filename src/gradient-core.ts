@@ -92,6 +92,14 @@ const normColor = (color: string): string => {
 // ── CSS ─────────────────────────────────────────────────────────────
 
 /** Ready CSS gradient string for any of the three types. #rrggbbaa is valid CSS. */
+/**
+ * The stops alone, read left to right — the ramp without the fill's geometry.
+ * What a stops strip shows, and what a Move slot draws.
+ */
+export function rampCss(stops: GradientValue['stops']): string {
+  return gradientToCss({ type: 'linear', angle: 90, stops });
+}
+
 export function gradientToCss(value: GradientValue): string {
   const stopStr = stopString(value.stops);
   const angle = round(wrapAngle(value.angle), 2);

@@ -161,6 +161,11 @@ type GradientTransform = {
 declare const MIN_STOPS = 2;
 declare const DEFAULT_GRADIENT: GradientValue;
 /** Ready CSS gradient string for any of the three types. #rrggbbaa is valid CSS. */
+/**
+ * The stops alone, read left to right — the ramp without the fill's geometry.
+ * What a stops strip shows, and what a Move slot draws.
+ */
+declare function rampCss(stops: GradientValue['stops']): string;
 declare function gradientToCss(value: GradientValue): string;
 /**
  * The CSS transform that rotates a radial gradient's ellipse — CSS radial
@@ -328,6 +333,53 @@ declare function centerValue(xAxis: AxisSpec, yAxis: AxisSpec): XYValue;
  * is never mutated.
  */
 declare function normalizeValue(value: Partial<XYValue> | undefined, xAxis: AxisSpec, yAxis: AxisSpec, snap?: boolean): XYValue;
+
+type TransferPoint = {
+    x: number;
+    y: number;
+};
+type TransferValue = {
+    points: TransferPoint[];
+};
+/** Straight through: the curve that changes nothing. */
+declare const DEFAULT_TRANSFER: TransferValue;
+/** Closest two interior points may sit, so a curve stays editable by hand. */
+declare const TRANSFER_MIN_GAP = 0.02;
+/** Most points a curve carries — past this the shape is a texture, not a curve. */
+declare const TRANSFER_MAX_POINTS = 12;
+/**
+ * Repair anything into a usable curve: clamp to the unit square, sort by x,
+ * pin the ends to x=0 and x=1 (their y stays yours), drop points too close to
+ * their neighbour to grab, and cap the count. Never mutates the input.
+ */
+declare function normalizeTransfer(value: unknown): TransferValue;
+/** The curve's output at `x` in [0,1]. Outside the domain it holds the ends. */
+declare function sampleTransfer(points: TransferPoint[], x: number): number;
+/**
+ * The curve as a lookup table of `size` samples across the domain — what a
+ * shader wants (upload it as a 1-D texture and read it with one tap) and what
+ * a preview strokes.
+ */
+declare function transferLut(points: TransferPoint[], size?: number): Float32Array;
+/** Add a point, keeping the curve sorted and legal. Returns the new value and where it landed. */
+declare function insertPoint(points: TransferPoint[], x: number, y: number): {
+    points: TransferPoint[];
+    index: number;
+};
+/** Drop an interior point. The two ends anchor the domain and never go. */
+declare function removePoint(points: TransferPoint[], index: number): TransferPoint[];
+/**
+ * Move a point. The ends slide only in y; an interior point is held between
+ * its neighbours so the curve can never fold back on itself.
+ */
+declare function movePoint(points: TransferPoint[], index: number, x: number, y: number): TransferPoint[];
+/**
+ * The point under the pointer, or -1. Distances are in the curve's own unit
+ * square, so callers convert pixels with `tolerance = grabPx / boxPx`.
+ */
+declare function nearestPoint(points: TransferPoint[], x: number, y: number, tolerance: number): number;
+/** True when the curve does nothing — used to draw the rest state quietly. */
+declare function isIdentityTransfer(points: TransferPoint[]): boolean;
 
 /**
  * The filter control's core — the kit's first 2-slot control. One control,
@@ -553,6 +605,12 @@ type ColorConfig = {
 type GradientConfig = {
     type: 'gradient';
     default?: GradientValue;
+    /**
+     * `ramp` opens the editor without the fill-shape chrome (no linear/radial/
+     * conic switcher, no transform pad) — for gradients read along one axis,
+     * like a colour scale or a shader lookup, where a shape would do nothing.
+     */
+    form?: 'fill' | 'ramp';
 };
 type XYConfig = {
     type: 'xy';
@@ -599,6 +657,27 @@ type FilterConfig = {
      */
     enabled?: boolean;
 };
+/**
+ * An editable transfer curve — input on x, output on y, both 0..1. For the
+ * parameters that are really the shape of a response (a gamma, a depth
+ * falloff, an edge ramp) and that a row of sliders can only approximate.
+ * The value is the control points; read the shape with `sampleTransfer`, or
+ * bake it for a shader with `transferLut`.
+ */
+type TransferConfig = {
+    type: 'transfer';
+    /** Starting shape. Repaired through `normalizeTransfer`; absent = straight through. */
+    default?: TransferValue;
+    /** Surface height in px, clamped 64–200. Default 104. */
+    height?: number;
+    /** Grid divisions behind the curve (default 4). 0 hides it. */
+    grid?: number;
+    /** Names for the two axes, shown small at the edges. */
+    axisLabels?: {
+        x?: string;
+        y?: string;
+    };
+};
 type RangeConfig = {
     type: 'range';
     min: number;
@@ -635,6 +714,18 @@ type SliderConfig = {
     bipolar?: boolean;
     /** `vertical` renders the column card (fill grows bottom-up, label at base). */
     orientation?: 'horizontal' | 'vertical';
+    /**
+     * `dial` draws the value as a rotary needle instead of a track — for the
+     * parameters whose two ends are the same place (a heading, a sun position,
+     * a tilt). It stays a slider everywhere else, so a hardware knob and a
+     * preset see no difference; only the drawing changes.
+     */
+    display?: 'track' | 'dial';
+    /**
+     * Past the end, come back around instead of stopping. Dial only; defaults
+     * to true when the range covers a full turn (360, or -180..180).
+     */
+    wrap?: boolean;
 };
 /**
  * Scrub-anywhere numeric readout. Unlike a slider it has no track — drag the
@@ -841,14 +932,14 @@ type ListField = {
     placeholder?: string;
     defaultValue: number | boolean | string;
 };
-type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue | FilterConfig | FilterValue;
+type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue | FilterConfig | FilterValue | TransferConfig | TransferValue;
 type TweakConfig = {
     [key: string]: TweakValue | [number, number, number, number?] | CurveConfig | AnalyserConfig | TweakConfig;
 };
 /** UI-only reserved keys: they shape the panel, never resolve to a value. */
 type ReservedKey = '_collapsed' | '_collapsible' | '_tabs';
 type ResolvedValues<T extends TweakConfig> = {
-    [K in keyof T as T[K] extends CurveConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends NumberConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends FilterConfig ? FilterValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends TweakConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T as T[K] extends CurveConfig ? never : T[K] extends AnalyserConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends NumberConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends FilterConfig ? FilterValue : T[K] extends TransferConfig ? TransferValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends TweakConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -890,7 +981,7 @@ type AffordanceConfig = {
 };
 type ControlMeta = {
     moveVisual?: MoveVisual;
-    type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser' | 'filter';
+    type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser' | 'filter' | 'transfer';
     path: string;
     label: string;
     /** One line of help, revealed on hover or when focus lands inside the control. */
@@ -902,6 +993,15 @@ type ControlMeta = {
     step?: number;
     /** Range control's configured reset target — its `default`, else the full {min,max} span. */
     rangeDefault?: RangeValue;
+    /** Gradient's editor form — `ramp` drops the fill-shape chrome. */
+    gradientForm?: 'fill' | 'ramp';
+    /** Transfer curve's surface height, grid divisions and axis names. */
+    curveHeight?: number;
+    gridDivisions?: number;
+    axisLabels?: {
+        x?: string;
+        y?: string;
+    };
     children?: ControlMeta[];
     defaultOpen?: boolean;
     /** Folder declared `_enabled` — renders as a module whose header switch drives `<path>._enabled`. */
@@ -921,8 +1021,10 @@ type ControlMeta = {
     })[];
     /** Select's per-option shape sampler — swapped in place by syncCurveConfigs. */
     preview?: (value: string) => ((t: number) => number) | null | undefined;
-    /** Select's rendering mode, from the SelectConfig form. */
-    display?: 'dropdown' | 'segmented';
+    /** Select's rendering mode, or a slider's `dial` form. */
+    display?: 'dropdown' | 'segmented' | 'track' | 'dial';
+    /** Dial slider: wrap past the ends instead of stopping. */
+    wrap?: boolean;
     placeholder?: string;
     items?: GalleryItem[];
     columns?: number;
@@ -1267,6 +1369,7 @@ declare class TweakStoreClass {
     private isGradientConfig;
     private isXYConfig;
     private isFilterConfig;
+    private isTransferConfig;
     private isRangeConfig;
     private isRangeValue;
     private isTextConfig;
@@ -2168,7 +2271,7 @@ declare function MoveSlotPlaybackDrawing({ mode }: {
  * small caption where its own single slot's label would have been — so the
  * hardware's one-knob-per-column rule still holds under the shared picture.
  */
-type MoveSlotKind = 'default' | 'value' | 'icon' | 'curve' | 'enum' | 'xy' | 'range' | 'filter' | 'opacity' | 'blur' | 'pan' | 'stereo-width' | 'pitch' | 'playback' | 'env' | 'scope' | 'toggle';
+type MoveSlotKind = 'default' | 'value' | 'icon' | 'curve' | 'enum' | 'xy' | 'range' | 'filter' | 'transfer' | 'ramp' | 'dial' | 'opacity' | 'blur' | 'pan' | 'stereo-width' | 'pitch' | 'playback' | 'env' | 'scope' | 'toggle';
 /** Which face a control wears in its slot, from its meta and moment. */
 declare function moveSlotKind(meta: ControlMeta, opts?: {
     enum?: boolean;
@@ -2245,6 +2348,47 @@ declare function MoveSlotXYBody({ label, value, position, gridN, shape }: {
     };
     gridN: number;
     shape?: string | null;
+}): react_jsx_runtime.JSX.Element;
+/**
+ * The transfer-curve slot. The curve fills the display, with a dot on the
+ * point the knob is holding — one knob shapes a whole curve, so the slot has
+ * to say WHICH point it is shaping.
+ */
+declare function MoveSlotTransferBody({ label, value, shape, point }: {
+    label: string;
+    value: ReactNode;
+    /** The whole curve as an SVG path, in the slot's own y-down space. */
+    shape: string;
+    /** The held point's normalized screen position (y down), or null. */
+    point: {
+        x: number;
+        y: number;
+    } | null;
+}): react_jsx_runtime.JSX.Element;
+/**
+ * The colour-ramp slot: the ramp itself fills the display, because a list of
+ * colours has nothing to say as a number. A tick marks the stop the knob is
+ * holding.
+ */
+declare function MoveSlotRampBody({ label, value, css, stop }: {
+    label: string;
+    value: ReactNode;
+    /** The ramp as a CSS `linear-gradient(...)`. */
+    css: string;
+    /** The held stop's position 0..1, or null. */
+    stop: number | null;
+}): react_jsx_runtime.JSX.Element;
+/**
+ * The dial slot — a needle, for the values whose two ends are the same place.
+ * A bar would put 359° and 1° as far apart as a slot can show them.
+ */
+declare function MoveSlotDialBody({ label, value, bearing, origin }: {
+    label: string;
+    value: ReactNode;
+    /** Compass bearing in degrees, 0 = up, clockwise. */
+    bearing: number;
+    /** The bearing the sweep grows out of. */
+    origin: number;
 }): react_jsx_runtime.JSX.Element;
 /** The range slot — readout plus the two-handled span bar. */
 declare function MoveSlotRangeBody({ label, value, lo, hi, }: {
@@ -2388,6 +2532,18 @@ declare const MOVE_SLOT_LIBRARY: {
     readonly toggle: {
         readonly description: "a switch in a big slot — the pad’s language at slot size";
         readonly component: typeof MoveSlotToggleBody;
+    };
+    readonly transfer: {
+        readonly description: "a response curve, one knob holding one of its points";
+        readonly component: typeof MoveSlotTransferBody;
+    };
+    readonly ramp: {
+        readonly description: "a colour ramp, one knob holding one of its stops";
+        readonly component: typeof MoveSlotRampBody;
+    };
+    readonly dial: {
+        readonly description: "a needle, for values whose two ends are the same place";
+        readonly component: typeof MoveSlotDialBody;
     };
 };
 
@@ -3352,6 +3508,88 @@ interface SliderProps {
 }
 declare function Slider({ label, value, onChange, min, max, step, unit, formatValue, valueIcon, origin, bipolar, orientation, shortcut, shortcutActive, }: SliderProps): react_jsx_runtime.JSX.Element;
 
+/** Half the pointer travel, in pixels from the centre, below which a drag is ignored. */
+declare const ANGLE_DEAD_ZONE_PX = 4;
+/**
+ * Snap to the step and round to its implied precision. `min` anchors the
+ * lattice so a -180..180 range steps through 0, not through 0.5.
+ */
+declare function snapAngle(value: number, min: number, step: number): number;
+/**
+ * Bring a value into `min..max`. Wrapping ranges (a heading) come back around;
+ * bounded ones (a cone width) clamp.
+ */
+declare function normalizeAngle(value: number, min: number, max: number, wrap: boolean): number;
+/** Value → compass bearing in degrees (0 = up, clockwise). */
+declare function valueToBearing(value: number, min: number, max: number): number;
+/** Compass bearing in degrees → value, before stepping. */
+declare function bearingToValue(bearing: number, min: number, max: number): number;
+/**
+ * The value a pointer at (dx, dy) from the dial's centre asks for, or null
+ * inside the dead zone — where the bearing is noise, not intent. `dy` is in
+ * screen space (down is positive), which is why the y term is negated.
+ *
+ * On a wrapping range the result is chosen in the turn nearest `current`, so
+ * dragging past the top carries on instead of snapping a full turn back.
+ */
+declare function angleFromPointer(dx: number, dy: number, current: number, min: number, max: number, step: number, wrap: boolean): number | null;
+/** Keyboard nudge: arrows step, shift takes ten. */
+declare function nudgeAngle(value: number, delta: number, min: number, max: number, step: number, wrap: boolean): number;
+/**
+ * The needle's arc as an SVG path — from the origin bearing round to the
+ * value's, the short way is not what we want here: the sweep shows how far
+ * the dial has turned from its rest position, so it always follows the
+ * direction of travel.
+ */
+declare function arcPath(from: number, to: number, radius: number, cx?: number, cy?: number): string;
+
+interface AngleDialProps {
+    label: string;
+    value: number;
+    onChange: (value: number) => void;
+    min?: number;
+    max?: number;
+    step?: number;
+    unit?: string;
+    formatValue?: (value: number) => string;
+    /** The bearing the sweep grows out of. Defaults to `min`. */
+    origin?: number;
+    /** Past the end, come back around instead of stopping. Default for a full turn. */
+    wrap?: boolean;
+}
+/**
+ * A rotary control for the parameters a track gets wrong: headings, tilts,
+ * sun positions — anything where the two ends of the range are the same place.
+ * The needle follows the pointer directly (a compass gesture, not a fader
+ * one), and on a wrapping range a drag past the top carries on turning.
+ *
+ * It is a `slider` to the store, and so to a hardware knob: only the drawing
+ * differs, which is exactly what `display: 'dial'` says.
+ */
+declare function AngleDial({ label, value, onChange, min, max, step, unit, formatValue, origin, wrap, }: AngleDialProps): react_jsx_runtime.JSX.Element;
+
+interface TransferCurveProps {
+    label: string;
+    value: TransferValue;
+    onChange: (value: TransferValue) => void;
+    /** Surface height in px, clamped 64–200. Default 104. */
+    height?: number;
+    /** Grid divisions behind the curve. Default 4 (quarters). Pass 0 to hide. */
+    grid?: number;
+    /** Names for the two axes, shown small at the edges. */
+    axisLabels?: {
+        x?: string;
+        y?: string;
+    };
+}
+/**
+ * A curve you draw instead of a number you guess. Points are dragged, added
+ * with a click on the curve and removed by dragging one out of the box; the
+ * shape between them is monotone cubic, so the output never overshoots the
+ * values you placed.
+ */
+declare function TransferCurve({ label, value, onChange, height, grid, axisLabels }: TransferCurveProps): react_jsx_runtime.JSX.Element;
+
 interface NumberControlProps {
     label: string;
     value: number;
@@ -3805,16 +4043,25 @@ interface GradientControlProps {
     label: string;
     value: GradientValue;
     onChange: (value: GradientValue) => void;
+    /** `ramp` opens the editor without the fill-shape chrome (see GradientPanel). */
+    form?: 'fill' | 'ramp';
 }
-declare function GradientControl({ label, value, onChange }: GradientControlProps): react_jsx_runtime.JSX.Element;
+declare function GradientControl({ label, value, onChange, form }: GradientControlProps): react_jsx_runtime.JSX.Element;
 
 interface GradientPanelProps {
     value: GradientValue;
     onChange: (value: GradientValue) => void;
     /** Incremental pointer delta while the drag grip is held. */
     onDrag?: (dx: number, dy: number) => void;
+    /**
+     * `ramp` drops the fill-shape chrome — the linear/radial/conic switcher and
+     * the transform pad — leaving the stops alone. For gradients read along one
+     * axis (a colour scale, a shader lookup), where a shape would do nothing.
+     */
+    form?: 'fill' | 'ramp';
 }
-declare function GradientPanel({ value, onChange, onDrag }: GradientPanelProps): react_jsx_runtime.JSX.Element;
+/** The editor strip is always the linear ramp (position ↔ x), whatever the type. */
+declare function GradientPanel({ value, onChange, onDrag, form }: GradientPanelProps): react_jsx_runtime.JSX.Element;
 
 interface XYPadProps {
     label: string;
@@ -4058,4 +4305,4 @@ interface SpectrumAudioLevelMeterProps extends AudioLevelMeterBaseProps {
 type AudioLevelMeterProps = MonoAudioLevelMeterProps | StereoAudioLevelMeterProps | SpectrumAudioLevelMeterProps;
 declare function AudioLevelMeter(props: AudioLevelMeterProps): ReactElement;
 
-export { ADSR_DEF, ADSR_STAGE_MAX, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AnalyserMode, AnalyserRow, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserTransferDraw, type AnalyserVariant, AnalyserVisualization, AudioLevelMeter, type AudioLevelMeterColors, type AudioLevelMeterMode, type AudioLevelMeterProps, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, Checkbox, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, CurvePreview, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DriverDirection, ENV_BEND_STAGES, type EasingConfig, EasingVisualization, type EnvStage, FILTER_DB_CEIL, FILTER_DB_FLOOR, type FileConfig, FileControl, type FilterAxis, type FilterAxisConfig, type FilterConfig, FilterControl, type FilterResponse, type FilterShapeType, type FilterValue, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_DIALS, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_PADS, MOVE_SLOT_LIBRARY, MOVE_SPECIAL_BUTTONS, MOVE_TRACKS, MOVE_WAVEFORM_STEPS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, Module, type MonoAudioLevelMeterProps, MoveActionButton, type MoveActionButtonProps, type MoveFunctionButton, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, type MoveNumericDrawing, type MovePadCell, type MovePage, MovePanel, type MovePlaybackMode, type MoveScreenList, type MoveSelectVisual, type MoveSliderVisual, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotEnvBody, MoveSlotFilterBody, MoveSlotGlyph, type MoveSlotKind, MoveSlotNumericBody, MoveSlotPlaybackDrawing, MoveSlotRangeBody, MoveSlotReadout, MoveSlotScopeBody, MoveSlotShape, MoveSlotToggleBody, MoveSlotXYBody, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, type MoveVisual, MoveVolumeDisplay, type MoveVolumeDisplayState, MoveWaveform, type MoveWaveformProps, MoveWaveformStore, type MoveWaveformVariant, type MoveWaveformView, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type NumberConfig, NumberControl, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpectrumAudioLevelMeterProps, type SpringConfig, SpringControl, SpringVisualization, type SpringifyOptions, type StereoAudioLevelMeterProps, type SwatchConfig, SwatchControl, type SwatchOption, TAB_PATH, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type TweakConfig, type TweakEvent, type TweakMode, type TweakPosition, TweakRoot, TweakStore, type TweakTheme, TweakTimeline, type TweakTimelineProps, type TweakTimelineValues, type TweakValue, type UseTweakTimelineOptions, type UseTweakersOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, applyModulation, buildModMovePage, buildMovePages, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultFilterResponse, defaultListItemParams, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, dialOrigin, dialSpan, displayHex, enumOptionIcon, envCurveParam, envelopeJoints, envelopePoints, filterHand01, filterHandValue, filterResponsePath, filterShapePath, filterShapeResponse, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, isSpanContinuation, lfoSyncedHz, listModTypes, loopFromStep, loopSteps, modColor, modKey, modPageLayout, modPageWidth, modRingArc, moveAppPadRow, moveNumericDrawing, movePadRows, movePlaybackMode, moveSlotKind, moveStop, moveVisualReading, defaultView as moveWaveformDefaultView, nearestHandle, normToValue, normalizeCurveMarkers, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeFilterValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeValue, normalizeXYDial, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, readComposition, redistributeWeight, registerModType, removeDriver, removeSegment, removeStop, resolveAxis, resolveFilterAxis, rgbToHsl, rgbToHsv, rgbToOklch, scrubBy, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, springify, stepPosition, triggerLevels, triggersCrossed, useTweakTimeline, useTweakers, valueFromPoint, valueToNorm, valueToPercent, visibleColumns, visibleModControls, zoomBy };
+export { ADSR_DEF, ADSR_STAGE_MAX, ANGLE_DEAD_ZONE_PX, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AnalyserMode, AnalyserRow, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserTransferDraw, type AnalyserVariant, AnalyserVisualization, AngleDial, AudioLevelMeter, type AudioLevelMeterColors, type AudioLevelMeterMode, type AudioLevelMeterProps, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, Checkbox, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, CurvePreview, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRANSFER, DEFAULT_TRIGGER_STEPS, type DriverDirection, ENV_BEND_STAGES, type EasingConfig, EasingVisualization, type EnvStage, FILTER_DB_CEIL, FILTER_DB_FLOOR, type FileConfig, FileControl, type FilterAxis, type FilterAxisConfig, type FilterConfig, FilterControl, type FilterResponse, type FilterShapeType, type FilterValue, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_DIALS, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_PADS, MOVE_SLOT_LIBRARY, MOVE_SPECIAL_BUTTONS, MOVE_TRACKS, MOVE_WAVEFORM_STEPS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, Module, type MonoAudioLevelMeterProps, MoveActionButton, type MoveActionButtonProps, type MoveFunctionButton, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, type MoveNumericDrawing, type MovePadCell, type MovePage, MovePanel, type MovePlaybackMode, type MoveScreenList, type MoveSelectVisual, type MoveSliderVisual, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotEnvBody, MoveSlotFilterBody, MoveSlotGlyph, type MoveSlotKind, MoveSlotNumericBody, MoveSlotPlaybackDrawing, MoveSlotRangeBody, MoveSlotReadout, MoveSlotScopeBody, MoveSlotShape, MoveSlotToggleBody, MoveSlotXYBody, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, type MoveVisual, MoveVolumeDisplay, type MoveVolumeDisplayState, MoveWaveform, type MoveWaveformProps, MoveWaveformStore, type MoveWaveformVariant, type MoveWaveformView, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type NumberConfig, NumberControl, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpectrumAudioLevelMeterProps, type SpringConfig, SpringControl, SpringVisualization, type SpringifyOptions, type StereoAudioLevelMeterProps, type SwatchConfig, SwatchControl, type SwatchOption, TAB_PATH, TRANSFER_MAX_POINTS, TRANSFER_MIN_GAP, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, TransferCurve, type TransferPoint, type TransferValue, type TransitionConfig, TransitionControl, type TweakConfig, type TweakEvent, type TweakMode, type TweakPosition, TweakRoot, TweakStore, type TweakTheme, TweakTimeline, type TweakTimelineProps, type TweakTimelineValues, type TweakValue, type UseTweakTimelineOptions, type UseTweakersOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, angleFromPointer, applyDetentAxis, applyModulation, arcPath, bearingToValue, buildModMovePage, buildMovePages, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultFilterResponse, defaultListItemParams, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, dialOrigin, dialSpan, displayHex, enumOptionIcon, envCurveParam, envelopeJoints, envelopePoints, filterHand01, filterHandValue, filterResponsePath, filterShapePath, filterShapeResponse, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, insertPoint, invertY, isIdentityTransfer, isOutsideSpan, isSpanContinuation, lfoSyncedHz, listModTypes, loopFromStep, loopSteps, modColor, modKey, modPageLayout, modPageWidth, modRingArc, moveAppPadRow, moveNumericDrawing, movePadRows, movePlaybackMode, movePoint, moveSlotKind, moveStop, moveVisualReading, defaultView as moveWaveformDefaultView, nearestHandle, nearestPoint, normToValue, normalizeAngle, normalizeCurveMarkers, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeFilterValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeTransfer, normalizeValue, normalizeXYDial, nudge, nudgeAngle, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, rampCss, readComposition, redistributeWeight, registerModType, removeDriver, removePoint, removeSegment, removeStop, resolveAxis, resolveFilterAxis, rgbToHsl, rgbToHsv, rgbToOklch, sampleTransfer, scrubBy, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapAngle, snapToStep, splitSegment, springify, stepPosition, transferLut, triggerLevels, triggersCrossed, useTweakTimeline, useTweakers, valueFromPoint, valueToBearing, valueToNorm, valueToPercent, visibleColumns, visibleModControls, zoomBy };

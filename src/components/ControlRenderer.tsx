@@ -1,13 +1,15 @@
 import { useContext } from 'react';
 import { TweakStore, hintDomId, ControlMeta, TweakValue, SpringConfig, TransitionConfig, ListItemValue, XYValue } from '../store/TweakStore';
 import type { FilterValue } from '../filter-core';
-import type { RangeValue } from '../store/TweakStore';
+import type { RangeValue, TransferValue } from '../store/TweakStore';
 import type { GradientValue } from '../gradient-core';
 import { ShortcutContext } from './ShortcutListener';
 import { Folder } from './Folder';
 import { ModuleFolder } from './ModuleFolder';
 import { ControlShell } from './ControlShell';
 import { Slider } from './Slider';
+import { AngleDial } from './AngleDial';
+import { TransferCurve } from './TransferCurve';
 import { NumberControl } from './NumberControl';
 import { RangeSlider } from './RangeSlider';
 import { Toggle } from './Toggle';
@@ -63,6 +65,25 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
 
     switch (control.type) {
       case 'slider':
+        // A dial is a slider that draws itself as a needle — same value, same
+        // store type, same hardware knob.
+        if (control.display === 'dial') {
+          return (
+            <AngleDial
+              key={control.path}
+              label={control.label}
+              value={value as number}
+              onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
+              min={control.min}
+              max={control.max}
+              step={control.step}
+              unit={control.unit}
+              formatValue={control.formatValue}
+              origin={control.origin}
+              wrap={control.wrap}
+            />
+          );
+        }
         return (
           <Slider
             key={control.path}
@@ -95,6 +116,19 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             unit={control.unit}
             formatValue={control.formatValue}
             orientation={control.orientation}
+          />
+        );
+
+      case 'transfer':
+        return (
+          <TransferCurve
+            key={control.path}
+            label={control.label}
+            value={value as TransferValue}
+            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
+            height={control.curveHeight}
+            grid={control.gridDivisions}
+            axisLabels={control.axisLabels}
           />
         );
 
@@ -253,6 +287,7 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             label={control.label}
             value={value as GradientValue}
             onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
+            form={control.gradientForm}
           />
         );
 

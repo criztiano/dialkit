@@ -4,7 +4,7 @@ import { ColorPickerPanel } from './ColorPickerPanel';
 import { GradientTransformPad } from './GradientTransformPad';
 import { ICON_GRIP } from '../icons';
 import {
-  gradientToCss,
+  rampCss,
   addStop,
   moveStop,
   removeStop,
@@ -23,6 +23,12 @@ interface GradientPanelProps {
   onChange: (value: GradientValue) => void;
   /** Incremental pointer delta while the drag grip is held. */
   onDrag?: (dx: number, dy: number) => void;
+  /**
+   * `ramp` drops the fill-shape chrome — the linear/radial/conic switcher and
+   * the transform pad — leaving the stops alone. For gradients read along one
+   * axis (a colour scale, a shader lookup), where a shape would do nothing.
+   */
+  form?: 'fill' | 'ramp';
 }
 
 const TYPE_OPTIONS: { value: GradientType; label: string }[] = [
@@ -34,11 +40,7 @@ const TYPE_OPTIONS: { value: GradientType; label: string }[] = [
 type DragMode = 'idle' | 'pending' | 'dragging' | 'detached';
 
 /** The editor strip is always the linear ramp (position ↔ x), whatever the type. */
-function rampCss(stops: GradientValue['stops']): string {
-  return gradientToCss({ type: 'linear', angle: 90, stops });
-}
-
-export function GradientPanel({ value, onChange, onDrag }: GradientPanelProps) {
+export function GradientPanel({ value, onChange, onDrag, form = 'fill' }: GradientPanelProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [holdingIndex, setHoldingIndex] = useState(-1);
   const [detach, setDetach] = useState<{ index: number; y: number } | null>(null);
@@ -237,14 +239,19 @@ export function GradientPanel({ value, onChange, onDrag }: GradientPanelProps) {
           </svg>
         </button>
 
-        <SegmentedControl
-          options={TYPE_OPTIONS}
-          value={value.type}
-          onChange={(t) => onChange(setGradientType(value, t))}
-        />
+        {form === 'fill' ? (
+          <SegmentedControl
+            options={TYPE_OPTIONS}
+            value={value.type}
+            onChange={(t) => onChange(setGradientType(value, t))}
+          />
+        ) : null}
       </div>
 
-      <GradientTransformPad value={value} onChange={onChange} />
+      {/* A ramp is read along one axis — a 1-D lookup, a colour scale — so it
+          has no fill shape to place, and showing a transform pad would offer
+          geometry that does nothing. */}
+      {form === 'fill' ? <GradientTransformPad value={value} onChange={onChange} /> : null}
 
       <div
         ref={stripRef}

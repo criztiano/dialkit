@@ -8,15 +8,19 @@ interface GradientControlProps {
   label: string;
   value: GradientValue;
   onChange: (value: GradientValue) => void;
+  /** `ramp` opens the editor without the fill-shape chrome (see GradientPanel). */
+  form?: 'fill' | 'ramp';
 }
 
 const PANEL_WIDTH = 240;
 // Estimated open heights for the above/below flip. Linear/conic carry an angle
 // row that radial omits; the embedded color picker dominates the rest.
 const PANEL_HEIGHT_ANGLED = 470;
+// Ramp form drops the type switcher and the transform pad.
+const PANEL_HEIGHT_RAMP = 300;
 const PANEL_HEIGHT_RADIAL = 430;
 
-export function GradientControl({ label, value, onChange }: GradientControlProps) {
+export function GradientControl({ label, value, onChange, form = 'fill' }: GradientControlProps) {
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -46,7 +50,9 @@ export function GradientControl({ label, value, onChange }: GradientControlProps
     const el = triggerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const panelHeight = value.type === 'radial' ? PANEL_HEIGHT_RADIAL : PANEL_HEIGHT_ANGLED;
+    const panelHeight = form === 'ramp'
+      ? PANEL_HEIGHT_RAMP
+      : value.type === 'radial' ? PANEL_HEIGHT_RADIAL : PANEL_HEIGHT_ANGLED;
     const spaceBelow = window.innerHeight - rect.bottom - 4;
     const above = spaceBelow < panelHeight && rect.top > spaceBelow;
     const left = Math.max(8, rect.right - PANEL_WIDTH);
@@ -125,7 +131,7 @@ export function GradientControl({ label, value, onChange }: GradientControlProps
                     : { left: pos.left, top: pos.top, transformOrigin: 'top right' }),
               }}
             >
-              <GradientPanel value={value} onChange={onChange} onDrag={onPanelDrag} />
+              <GradientPanel value={value} onChange={onChange} form={form} onDrag={onPanelDrag} />
             </motion.div>
           )}
         </AnimatePresence>,

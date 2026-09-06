@@ -110,6 +110,8 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 .tweakers-root .tweakers-chips-label,
 .tweakers-root .tweakers-multiselect-label,
 .tweakers-root .tweakers-gallery-label,
+.tweakers-root .tweakers-angle-label,
+.tweakers-root .tweakers-transfer-label,
 .tweakers-root .tweakers-color-label,
 .tweakers-root .tweakers-gradient-label,
 .tweakers-root .tweakers-xy-label,
@@ -2936,6 +2938,171 @@ input.tweakers-list-item-title:focus {
   height: 11px;
 }
 
+/* Transfer Curve — an editable response curve. A block row like the XY pad:
+   the shape IS the value, so it gets the room a shape needs. */
+.tweakers-transfer-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px 8px;
+  background: var(--tweak-surface);
+  border-radius: var(--tweak-radius);
+}
+
+.tweakers-transfer-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.tweakers-transfer-label { flex: 1; color: var(--tweak-text-label); }
+
+.tweakers-transfer-axis,
+.tweakers-transfer-axis-x {
+  font-family: var(--tweak-font-value);
+  font-size: 10px;
+  color: var(--tweak-text-tertiary);
+}
+
+.tweakers-transfer-axis-x { align-self: flex-end; }
+
+.tweakers-transfer-box {
+  position: relative;
+  width: 100%;
+  border-radius: var(--tweak-radius-inner);
+  background: var(--tweak-track);
+  cursor: crosshair;
+  touch-action: none;
+  overflow: visible;
+}
+
+/* Dragging a point out of the box drops it — say so before the pointer lifts. */
+.tweakers-transfer-box[data-dropping] { background: var(--tweak-surface-active); }
+.tweakers-transfer-box[data-dropping] .tweakers-transfer-stroke { stroke: var(--tweak-text-tertiary); }
+
+.tweakers-transfer-box svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--tweak-radius-inner);
+}
+
+.tweakers-transfer-grid {
+  stroke: var(--tweak-track-fill);
+  stroke-width: 1;
+  stroke-opacity: 0.25;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The line the curve would be if it did nothing — the reference you read the
+   shape against. */
+.tweakers-transfer-unity {
+  stroke: var(--tweak-track-fill);
+  stroke-width: 1;
+  stroke-opacity: 0.4;
+  stroke-dasharray: 2 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.tweakers-transfer-stroke {
+  fill: none;
+  stroke: var(--tweak-track-fill-strong);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* At rest the curve is the identity — draw it quietly so a shaped one reads
+   as the exception. */
+.tweakers-transfer-control[data-idle] .tweakers-transfer-stroke { stroke: var(--tweak-track-fill); }
+
+.tweakers-transfer-point {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: var(--tweak-track-fill-strong);
+  box-shadow: 0 0 0 2px var(--tweak-surface);
+  pointer-events: none;
+  transition: transform 0.12s;
+}
+
+.tweakers-transfer-point[data-end] { background: var(--tweak-track-fill); }
+.tweakers-transfer-point[data-active] { background: var(--tweak-accent); transform: scale(1.25); }
+
+/* Angle Dial — the rotary form of a slider (\`display: 'dial'\`). One row, the
+   same height as every other, with the needle in place of a track: the two
+   ends of an angle are the same place, which a track can never show. */
+.tweakers-angle-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--tweak-row-height);
+  padding: 0 8px;
+  background: var(--tweak-surface);
+  border-radius: var(--tweak-radius);
+  transition: background 0.15s;
+}
+
+.tweakers-angle-control:hover,
+.tweakers-angle-control[data-dragging] {
+  background: var(--tweak-surface-hover);
+}
+
+.tweakers-angle-dial {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-left: -2px;
+  cursor: grab;
+  touch-action: none;
+  border-radius: 50%;
+  outline-offset: 2px;
+}
+
+.tweakers-angle-control[data-dragging] .tweakers-angle-dial { cursor: grabbing; }
+.tweakers-angle-dial svg { display: block; width: 100%; height: 100%; overflow: visible; }
+
+.tweakers-angle-face {
+  fill: var(--tweak-track);
+  stroke: var(--tweak-track-fill);
+  stroke-width: 1;
+}
+
+.tweakers-angle-sweep {
+  fill: none;
+  stroke: var(--tweak-track-fill);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.tweakers-angle-needle {
+  stroke: var(--tweak-track-fill-strong);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.tweakers-angle-control[data-dragging] .tweakers-angle-sweep { stroke: var(--tweak-track-fill-strong); }
+
+.tweakers-angle-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--tweak-text-label);
+  transform: translateY(-0.5px);
+}
+
+.tweakers-angle-value {
+  flex: none;
+  font-family: var(--tweak-font-value);
+  font-size: var(--tweak-font-size);
+  color: var(--tweak-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Color Control */
 .tweakers-color-control {
   display: flex;
@@ -5760,6 +5927,133 @@ input.tweakers-list-item-title:focus {
 /* The response's display — the waveform's dark hole in the face, cut into
    the chip with the slot's small radius, holding every pixel between the
    slot's top edge and the hand labels. */
+/* Slots that draw: the curve, the ramp and the needle share the filter's
+   dark display hole and its small foot label. A big centred name laid over a
+   faint line reads as neither the name nor the drawing. */
+.tweakers-move-slot-display {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 9px;
+  bottom: 26px;
+  background: var(--move-display, #1e1e1e);
+  border-radius: var(--move-radius-small, 8px);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.tweakers-move-slot-foot {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 6px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.tweakers-move-slot-foot-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--move-text);
+  opacity: 0.75;
+}
+
+.tweakers-move-slot-foot-value {
+  flex: none;
+  font-size: 13px;
+  color: var(--move-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.tweakers-move-slot-shape {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* Thick enough to read at arm's length — the whole point of the slot. */
+.tweakers-move-slot-shape path {
+  fill: none;
+  stroke: var(--move-text);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.85;
+}
+
+.tweakers-move-dial[data-active] .tweakers-move-slot-shape path { opacity: 1; }
+
+/* The point (or stop) this knob is holding — the slot has to say which one. */
+.tweakers-move-slot-dot {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: var(--move-text);
+  box-shadow: 0 0 0 2px var(--move-display, #1e1e1e);
+}
+
+.tweakers-move-slot-ramp {
+  position: absolute;
+  inset: 0;
+}
+
+.tweakers-move-slot-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  /* A stop at either end would lose half its tick off the edge, and the tick
+     is the only thing saying which stop the knob holds. */
+  margin-left: -1px;
+  min-width: 2px;
+
+  background: var(--move-text);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+}
+
+.tweakers-move-slot-needle {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.tweakers-move-needle-face {
+  fill: none;
+  stroke: var(--move-text);
+  stroke-width: 1;
+  stroke-opacity: 0.25;
+  vector-effect: non-scaling-stroke;
+}
+
+.tweakers-move-needle-sweep {
+  fill: none;
+  stroke: var(--move-text);
+  stroke-width: 3;
+  stroke-opacity: 0.45;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.tweakers-move-needle-hand {
+  stroke: var(--move-text);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
 .tweakers-move-filter-display {
   position: absolute;
   top: 8px;

@@ -56,6 +56,9 @@ var normColor = (color) => {
   const rgba = parseHex(color);
   return rgba ? formatHex(rgba, true) : "#000000ff";
 };
+function rampCss(stops) {
+  return gradientToCss({ type: "linear", angle: 90, stops });
+}
 function gradientToCss(value) {
   const stopStr = stopString(value.stops);
   const angle = round(wrapAngle(value.angle), 2);
@@ -231,6 +234,7 @@ export {
   gradientToTransform,
   moveStop,
   normalizeGradient,
+  rampCss,
   removeStop,
   setGradientAngle,
   setGradientCenter,

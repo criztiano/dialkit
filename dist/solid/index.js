@@ -547,6 +547,28 @@ function handleLeftStyles(lowPercent, highPercent) {
   };
 }
 
+// src/transfer-core.ts
+var DEFAULT_TRANSFER = { points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] };
+var TRANSFER_MIN_GAP = 0.02;
+var TRANSFER_MAX_POINTS = 12;
+var clamp013 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
+var finite = (v, fallback) => typeof v === "number" && Number.isFinite(v) ? v : fallback;
+function normalizeTransfer(value) {
+  const raw = value?.points;
+  if (!Array.isArray(raw) || raw.length < 2) return { points: DEFAULT_TRANSFER.points.map((p) => ({ ...p })) };
+  const points = raw.map((p) => ({ x: clamp013(finite(p?.x, 0)), y: clamp013(finite(p?.y, 0)) })).sort((a, b) => a.x - b.x);
+  points[0].x = 0;
+  points[points.length - 1].x = 1;
+  const out = [points[0]];
+  for (let i = 1; i < points.length - 1; i++) {
+    if (points[i].x - out[out.length - 1].x < TRANSFER_MIN_GAP) continue;
+    if (1 - points[i].x < TRANSFER_MIN_GAP) continue;
+    out.push(points[i]);
+  }
+  out.push(points[points.length - 1]);
+  return { points: out.slice(0, TRANSFER_MAX_POINTS) };
+}
+
 // src/filter-core.ts
 var FILTER_AXIS_DEFAULTS = {
   cutoff: { min: 0, max: 1, step: 0, label: "Freq" },
@@ -1352,6 +1374,8 @@ var TweakStoreClass = class {
           origin: value.origin,
           bipolar: value.bipolar,
           orientation: value.orientation,
+          display: value.display,
+          wrap: value.wrap,
           shortcut
         });
       } else if (this.isNumberConfig(value)) {
@@ -1378,13 +1402,22 @@ var TweakStoreClass = class {
       } else if (this.isColorConfig(value)) {
         controls.push({ type: "color", path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {
-        controls.push({ type: "gradient", path, label });
+        controls.push({ type: "gradient", path, label, gradientForm: value.form });
       } else if (this.isXYConfig(value)) {
         controls.push({ type: "xy", path, label, xAxis: value.x, yAxis: value.y, grid: value.grid, density: value.density, snap: value.snap, returnToCenter: value.returnToCenter, showValues: value.showValues });
       } else if (this.isFilterConfig(value)) {
         controls.push({ type: "filter", path, label, cutoffAxis: value.cutoff, resonanceAxis: value.resonance, response: value.response, filterEnabled: value.enabled });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: "text", path, label, placeholder: value.placeholder });
+      } else if (this.isTransferConfig(value)) {
+        controls.push({
+          type: "transfer",
+          path,
+          label,
+          curveHeight: value.height,
+          gridDivisions: value.grid,
+          axisLabels: value.axisLabels
+        });
       } else if (this.isRangeConfig(value)) {
         controls.push({
           type: "range",
@@ -1521,6 +1554,8 @@ var TweakStoreClass = class {
         values[path] = normalizeValue(value.default, xAxis, yAxis, value.snap ?? false);
       } else if (this.isTextConfig(value)) {
         values[path] = value.default ?? "";
+      } else if (this.isTransferConfig(value)) {
+        values[path] = normalizeTransfer(value.default ?? DEFAULT_TRANSFER);
       } else if (this.isRangeConfig(value)) {
         values[path] = value.default ?? { min: value.min, max: value.max };
       } else if (this.isFilterConfig(value)) {
@@ -1573,6 +1608,9 @@ var TweakStoreClass = class {
   }
   isFilterConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "filter";
+  }
+  isTransferConfig(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value) && value.type === "transfer";
   }
   isRangeConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "range";
@@ -1739,6 +1777,8 @@ var TweakStoreClass = class {
         return typeof existingValue === "string" ? existingValue : defaultValue;
       case "list":
         return Array.isArray(existingValue) ? existingValue : defaultValue;
+      case "transfer":
+        return typeof existingValue === "object" && existingValue !== null && !Array.isArray(existingValue) ? normalizeTransfer(existingValue) : defaultValue;
       case "range": {
         if (!this.isRangeValue(existingValue)) {
           return defaultValue;
@@ -12004,7 +12044,7 @@ var DRAG_THRESHOLD2 = 3;
 var EDGE_HIT2 = 6;
 var CURVE_MIN_WEIGHT_FRAC = 0.06;
 var lerp = (a, b, t) => a + (b - a) * t;
-var clamp013 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
+var clamp014 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
 var clampBipolar = (v) => v < -1 ? -1 : v > 1 ? 1 : v;
 var SKEW_MAX = 0.45;
 var BACK_MAX = 0.8;
@@ -12027,10 +12067,10 @@ function deriveEase(type, curvature, steepness = 0, overshoot = 0, anticipate = 
   const pts = s >= 0 ? lerp4(base, easingExtremes[key], s) : lerp4(easingPresets.linear, base, s + 1);
   let [x1, y1, x2, y2] = pts;
   const shift = clampBipolar(curvature) * SKEW_MAX;
-  x1 = clamp013(x1 + shift);
-  x2 = clamp013(x2 + shift);
-  y2 += clamp013(overshoot) * BACK_MAX;
-  y1 -= clamp013(anticipate) * BACK_MAX;
+  x1 = clamp014(x1 + shift);
+  x2 = clamp014(x2 + shift);
+  y2 += clamp014(overshoot) * BACK_MAX;
+  y1 -= clamp014(anticipate) * BACK_MAX;
   return [x1, y1, x2, y2];
 }
 function bezierAxis2(p1, p2, s) {
@@ -12042,14 +12082,14 @@ function bezierAxisDeriv(p1, p2, s) {
   return 3 * u * u * p1 + 6 * u * s * (p2 - p1) + 3 * s * s * (1 - p2);
 }
 function bezierY(ease, x) {
-  const tx = clamp013(x);
+  const tx = clamp014(x);
   let s = tx;
   for (let i = 0; i < 6; i++) {
     const xs = bezierAxis2(ease[0], ease[2], s) - tx;
     if (Math.abs(xs) < 1e-5) break;
     const d = bezierAxisDeriv(ease[0], ease[2], s);
     if (Math.abs(d) < 1e-6) break;
-    s = clamp013(s - xs / d);
+    s = clamp014(s - xs / d);
   }
   return bezierAxis2(ease[1], ease[3], s);
 }
@@ -12082,7 +12122,7 @@ function integrateSpringTrace(targets, stiffness, damping, mass, initial, collec
 }
 function springPoints(curvature, steepness = 0) {
   const visualDuration = 1;
-  const bounce = clamp013((clampBipolar(curvature) + 1) / 2) * 0.6;
+  const bounce = clamp014((clampBipolar(curvature) + 1) / 2) * 0.6;
   const mass = 1;
   let stiffness = 2 * Math.PI / visualDuration;
   stiffness = stiffness * stiffness;
@@ -12095,7 +12135,7 @@ function springPoints(curvature, steepness = 0) {
   }).points;
 }
 function interp(points, t) {
-  const x = clamp013(t) * (points.length - 1);
+  const x = clamp014(t) * (points.length - 1);
   const i = Math.floor(x);
   if (i >= points.length - 1) return points[points.length - 1];
   return lerp(points[i], points[i + 1], x - i);
@@ -12177,7 +12217,7 @@ function totalWeight(segments) {
 }
 function timelineSlots(segments, gap = 0) {
   const n = segments.length;
-  const g = n > 1 ? clamp013(gap) : 0;
+  const g = n > 1 ? clamp014(gap) : 0;
   const total = totalWeight(segments);
   const content = 1 - g;
   const gapW = n > 1 ? g / (n - 1) : 0;
@@ -12217,13 +12257,13 @@ function segmentSpan(segments, index, gap = 0) {
 }
 function segmentIndexAt(xNorm, segments, gap = 0) {
   if (gap > 0) {
-    const x2 = clamp013(xNorm);
+    const x2 = clamp014(xNorm);
     const slots = timelineSlots(segments, gap);
     for (const s of slots) if (x2 < s.b) return s.index;
     return segments.length - 1;
   }
   const total = totalWeight(segments);
-  const x = clamp013(xNorm) * total;
+  const x = clamp014(xNorm) * total;
   let acc = 0;
   for (let i = 0; i < segments.length; i++) {
     acc += segments[i].weight;
@@ -12246,7 +12286,7 @@ function boundaryAt(xNorm, segments, edgeHitNorm, gap = 0) {
   return best;
 }
 function smootherstep(t) {
-  const x = clamp013(t);
+  const x = clamp014(t);
   return x * x * x * (x * (x * 6 - 15) + 10);
 }
 function cloneSegments(comp, segments) {
@@ -12317,7 +12357,7 @@ function headerHit(xN, py, segments, layout) {
   return null;
 }
 function toLocalCoords(clientX, clientY, rect, totalH) {
-  const xN = clamp013((clientX - rect.left) / (rect.width || 1));
+  const xN = clamp014((clientX - rect.left) / (rect.width || 1));
   const py = (clientY - rect.top) / (rect.height || 1) * totalH;
   return { xN, py };
 }
@@ -12343,14 +12383,14 @@ function buildSamplers(comp) {
   };
 }
 function directionPhase(u, dir) {
-  const x = clamp013(u);
+  const x = clamp014(u);
   if (dir === "reverse") return 1 - x;
   if (dir === "mirror") return 1 - Math.abs(1 - 2 * x);
   return x;
 }
 function readComposition(comp, u, s) {
   const inputPhase = directionPhase(u, comp.direction);
-  const warpedPhase = s.driver ? clamp013(s.driver(inputPhase)) : inputPhase;
+  const warpedPhase = s.driver ? clamp014(s.driver(inputPhase)) : inputPhase;
   const gap = comp.gap ?? 0;
   if (gap > 0 && comp.segments.length > 1) {
     const slots = timelineSlots(comp.segments, gap);
@@ -12446,8 +12486,8 @@ var TRIGGER_FLYBACK = 0.5;
 function triggersCrossed(prevValue, curValue, steps) {
   const n = Math.max(2, Math.floor(steps));
   const seg = 1 / (n - 1);
-  const p = clamp013(prevValue);
-  const c = clamp013(curValue);
+  const p = clamp014(prevValue);
+  const c = clamp014(curValue);
   const delta = c - p;
   const fired = [];
   if (Math.abs(delta) > TRIGGER_FLYBACK) {
