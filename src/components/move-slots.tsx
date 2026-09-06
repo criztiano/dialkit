@@ -290,12 +290,14 @@ export function MoveSlotFilterBody({
  * over its own drag zone and hardware knob.
  */
 export function MoveSlotEnvBody({
-  points, stages,
+  points, stages, joints = [],
 }: {
   /** The whole envelope's samples, each 0..1, left to right. */
   points: number[];
   /** One caption per stage column, in column order. */
   stages: { stage: string; label: string; value: ReactNode }[];
+  /** The joint handles — small squares pinned where the ramps meet. */
+  joints?: { stage: string; x: number; y: number; held?: boolean }[];
 }) {
   const d = points
     .map((v, i) => `${i === 0 ? 'M' : 'L'} ${(i / (points.length - 1)) * 100} ${100 - v * 100}`)
@@ -304,6 +306,19 @@ export function MoveSlotEnvBody({
     <>
       <div className="tweakers-move-env-display">
         <MoveSlotShape d={d} className="tweakers-move-env-shape" />
+        {/* The drawing keeps 6px of vertical air (the shape svg's inset), so
+            a joint's y maps through the same band to land on the line. */}
+        {joints.map((j) => (
+          <span
+            key={j.stage}
+            className="tweakers-move-env-handle"
+            data-held={j.held || undefined}
+            style={{
+              left: `${j.x * 100}%`,
+              top: `calc(6px + (100% - 12px) * ${(1 - j.y).toFixed(4)})`,
+            }}
+          />
+        ))}
       </div>
       {stages.map((s) => (
         <div key={s.stage} className="tweakers-move-env-readout" data-stage={s.stage}>

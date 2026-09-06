@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, useCallback } from '
 import { createPortal } from 'react-dom';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { ModulationStore } from '../store/ModulationStore';
-import { modColor, curveComposition, envelopePoints, modPageWidth, MOD_SETTINGS_PANEL, type ModulationSlot, type ModulationParams } from '../modulation-core';
+import { modColor, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, modPageWidth, MOD_SETTINGS_PANEL, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
 import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
@@ -133,6 +133,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const [panels, setPanels] = useState<PanelConfig[]>([]);
   const [track, setTrack] = useState(0);
   const [dragPath, setDragPath] = useState<string | null>(null);
+  // A held bend pad: while down, its vertical drag bends the ramp above it
+  // — the envelope's hold-to-curve gesture. The ref anchors the drag.
+  const [bendHeld, setBendHeld] = useState<EnvStage | null>(null);
+  const bendRef = useRef<{ y: number; curve: number } | null>(null);
   // Hardware presence, by control path — from the bridge kit's window events.
   const [handTouch, setHandTouch] = useState<Record<string, boolean>>({});
   const [hwHeld, setHwHeld] = useState<Record<string, boolean>>({});
@@ -897,11 +901,16 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       return m ? [{ stage: d.stage as string, meta: m }] : [];
                     });
                   if (stageDials[0]?.meta.path !== meta.path) return null;
+                  // Times come off the panel's dials; the ramps' bends live
+                  // only in the slot's params, written by the bend pads.
                   const envParams: ModulationParams = {
                     attack: Number(values.attack) || 0,
                     decay: Number(values.decay) || 0,
                     sustain: Number(values.sustain) || 0,
                     release: Number(values.release) || 0,
+                    attackCurve: Number(modSlot?.params.attackCurve) || 0,
+                    decayCurve: Number(modSlot?.params.decayCurve) || 0,
+                    releaseCurve: Number(modSlot?.params.releaseCurve) || 0,
                   };
                   const envActive = stageDials.some(
                     (s) => dragPath === s.meta.path || !!handTouch[s.meta.path] || !!hwHeld[s.meta.path]
@@ -923,6 +932,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       <MoveSlotEnvBody
                         points={envelopePoints(envParams, 129)}
                         stages={stageDials.map((s) => ({ stage: s.stage, label: s.meta.label, value: reading(s.meta) }))}
+                        joints={envelopeJoints(envParams).map((j) => ({ ...j, held: bendHeld === j.stage }))}
                       />
                       {/* One drag zone per stage column, over the display:
                           the pointer edits the stage whose column it is in,
@@ -1045,6 +1055,43 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       );
                     }
                     const meta = padRows[row][col];
+                    // The envelope's bend pads: the free toggle-row cell
+                    // under each ramp column. Hold the pad and drag up or
+                    // down to bend the ramp above it — the joint handle
+                    // brightens, the shape and the signal follow together.
+                    const bendStage =
+                      !meta && settingsPanel && padRows[row] === page.toggles && modSettings
+                        ? modLayout?.dials[col]?.stage
+                        : undefined;
+                    if (bendStage && ENV_BEND_STAGES.includes(bendStage)) {
+                      return (
+                        <button
+                          key={`bend-${bendStage}`}
+                          className="tweakers-move-pad"
+                          data-kind="bend"
+                          data-on={bendHeld === bendStage || undefined}
+                          onPointerDown={(e) => {
+                            try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                            setBendHeld(bendStage);
+                            bendRef.current = {
+                              y: e.clientY,
+                              curve: Number(modSlot?.params[envCurveParam(bendStage)]) || 0,
+                            };
+                          }}
+                          onPointerMove={(e) => {
+                            if (bendHeld !== bendStage || !bendRef.current) return;
+                            const v = Math.min(1, Math.max(-1,
+                              bendRef.current.curve + (bendRef.current.y - e.clientY) / 60));
+                            ModulationStore.updateSlotParams(modSettings!.index, { [envCurveParam(bendStage)]: v });
+                          }}
+                          onPointerUp={() => { setBendHeld(null); bendRef.current = null; }}
+                          onPointerCancel={() => { setBendHeld(null); bendRef.current = null; }}
+                        >
+                          <span className="tweakers-move-pad-indicator" />
+                          <span className="tweakers-move-pad-title">Curve</span>
+                        </button>
+                      );
+                    }
                     if (!meta) return <div key={`empty-${col}`} className="tweakers-move-pad" data-empty="true" />;
                     if (padRows[row] === page.toggles) {
                       return (

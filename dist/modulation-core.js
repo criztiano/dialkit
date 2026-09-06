@@ -478,6 +478,12 @@ var SH_DEF = {
 registerModType(SH_DEF);
 var secs = (ms) => Math.max(0, Number(ms) || 0) / 1e3;
 var ADSR_STAGE_MAX = { attack: 2e3, decay: 2e3, release: 4e3 };
+var ENV_BEND_STAGES = ["attack", "decay", "release"];
+var envCurveParam = (stage) => `${stage}Curve`;
+var adsrShape = (p, curve) => {
+  const c = clamp(Number(curve) || 0, -1, 1);
+  return 1 - Math.pow(1 - p, Math.pow(4, c));
+};
 function envelopePoints(params, count) {
   const n = Math.max(2, count);
   const sustain = clamp012(params.sustain);
@@ -486,14 +492,23 @@ function envelopePoints(params, count) {
   const wD = share("decay");
   const wR = share("release");
   const at = (t) => {
-    if (t < wA) return adsrEase(t / wA);
-    if (t < wA + wD) return 1 - (1 - sustain) * adsrEase((t - wA) / wD);
+    if (t < wA) return adsrShape(t / wA, params.attackCurve);
+    if (t < wA + wD) return 1 - (1 - sustain) * adsrShape((t - wA) / wD, params.decayCurve);
     if (t < 1 - wR) return sustain;
-    return sustain * (1 - adsrEase((t - (1 - wR)) / wR));
+    return sustain * (1 - adsrShape((t - (1 - wR)) / wR, params.releaseCurve));
   };
   return Array.from({ length: n }, (_, i) => at(i / (n - 1)));
 }
-var adsrEase = (p) => 1 - (1 - p) * (1 - p);
+function envelopeJoints(params) {
+  const sustain = clamp012(params.sustain);
+  const share = (key) => 0.04 + 0.24 * Math.min(1, secs(params[key]) * 1e3 / ADSR_STAGE_MAX[key]);
+  const wA = share("attack");
+  return [
+    { stage: "attack", x: wA, y: 1 },
+    { stage: "decay", x: wA + share("decay"), y: sustain },
+    { stage: "release", x: 1 - share("release"), y: sustain }
+  ];
+}
 function adsrStageLength(stage, params) {
   if (stage === "attack") return secs(params.attack);
   if (stage === "decay") return secs(params.decay);
@@ -503,13 +518,27 @@ function adsrStageLength(stage, params) {
 var ADSR_DEF = {
   type: "adsr",
   label: "ADSR",
-  defaults: { attack: 10, decay: 300, sustain: 0.6, release: 600, loop: false },
+  defaults: {
+    attack: 10,
+    decay: 300,
+    sustain: 0.6,
+    release: 600,
+    loop: false,
+    // The attack keeps its analog leap; decay and release start straight,
+    // as the design draws them — every ramp bendable from its pad.
+    attackCurve: 0.5,
+    decayCurve: 0,
+    releaseCurve: 0
+  },
   controls: [
     { type: "slider", path: "attack", label: "Attack", min: 0, max: ADSR_STAGE_MAX.attack, step: 1, unit: "ms", envStage: "attack" },
     { type: "slider", path: "decay", label: "Decay", min: 0, max: ADSR_STAGE_MAX.decay, step: 1, unit: "ms", envStage: "decay" },
     { type: "slider", path: "sustain", label: "Sustain", min: 0, max: 1, step: 0.01, envStage: "sustain" },
-    { type: "slider", path: "release", label: "Release", min: 0, max: ADSR_STAGE_MAX.release, step: 1, unit: "ms", envStage: "release" },
-    { type: "toggle", path: "loop", label: "Loop" }
+    /* Declared after sustain so its pad sits under the sustain column —
+       the attack, decay and release columns keep their pads for the
+       hold-to-bend gesture. */
+    { type: "toggle", path: "loop", label: "Loop" },
+    { type: "slider", path: "release", label: "Release", min: 0, max: ADSR_STAGE_MAX.release, step: 1, unit: "ms", envStage: "release" }
   ],
   createState: () => ({ stage: "idle", t: 0, from: 0, env: 0, gate: false }),
   gate(state, on) {
@@ -552,11 +581,11 @@ var ADSR_DEF = {
       }
     }
     const len = adsrStageLength(s.stage, params);
-    const shaped = adsrEase(len > 0 && Number.isFinite(len) ? Math.min(1, s.t / len) : 1);
-    if (s.stage === "attack") s.env = s.from + (1 - s.from) * shaped;
-    else if (s.stage === "decay") s.env = s.from + (sustain - s.from) * shaped;
+    const p = len > 0 && Number.isFinite(len) ? Math.min(1, s.t / len) : 1;
+    if (s.stage === "attack") s.env = s.from + (1 - s.from) * adsrShape(p, params.attackCurve);
+    else if (s.stage === "decay") s.env = s.from + (sustain - s.from) * adsrShape(p, params.decayCurve);
     else if (s.stage === "sustain") s.env = sustain;
-    else if (s.stage === "release") s.env = s.from * (1 - shaped);
+    else if (s.stage === "release") s.env = s.from * (1 - adsrShape(p, params.releaseCurve));
     else s.env = 0;
     return clamp012(s.env);
   }
@@ -789,6 +818,7 @@ export {
   CURVE_MAX_CLIPS,
   CURVE_MAX_DURATION,
   CURVE_MIN_DURATION,
+  ENV_BEND_STAGES,
   LFO_DEF,
   LFO_SYNC_DIVISIONS,
   MOD_COLORS,
@@ -801,6 +831,8 @@ export {
   applyModulation,
   curveComposition,
   curveDuration,
+  envCurveParam,
+  envelopeJoints,
   envelopePoints,
   getModType,
   lfoSyncedHz,

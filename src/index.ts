@@ -80,6 +80,9 @@ export {
   LFO_SYNC_DIVISIONS,
   lfoSyncedHz,
   envelopePoints,
+  envelopeJoints,
+  envCurveParam,
+  ENV_BEND_STAGES,
   modPageWidth,
   ADSR_STAGE_MAX,
 } from './modulation-core';

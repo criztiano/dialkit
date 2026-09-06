@@ -5892,6 +5892,29 @@ input.tweakers-list-item-title:focus {
   opacity: 1;
 }
 
+/* The joint handles — small squares pinned where the ramps meet (the
+   attack's peak, the decay's landing, the sustain's edge), the design's
+   own marks. They share the line's ink and dim with it; the one whose
+   bend pad is held comes up to full brightness on its own. */
+.tweakers-move-env-handle {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--move-text);
+  border-radius: 3px;
+  background: var(--move-display, #1e1e1e);
+  opacity: 0.5;
+  transition: opacity 0.12s;
+  pointer-events: none;
+}
+
+.tweakers-move-dial[data-kind="env"]:hover .tweakers-move-env-handle,
+.tweakers-move-dial[data-kind="env"][data-active] .tweakers-move-env-handle,
+.tweakers-move-env-handle[data-held] {
+  opacity: 1;
+}
+
 /* A stage caption per column, the filter readout's rule at a quarter of
    the width — the label sits where its own slot's label would have been,
    and gives way to its stage's value on touch. */

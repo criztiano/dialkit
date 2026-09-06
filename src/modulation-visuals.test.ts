@@ -6,6 +6,7 @@ import {
   ADSR_DEF,
   CURVE_DEF,
   envelopePoints,
+  envelopeJoints,
   modPageLayout,
   modPageWidth,
 } from './modulation-core';
@@ -79,7 +80,7 @@ describe('S&H preview', () => {
 });
 
 describe('ADSR envelope picture', () => {
-  const params = { attack: 200, decay: 500, sustain: 0.4, release: 1000 };
+  const params = { ...ADSR_DEF.defaults, attack: 200, decay: 500, sustain: 0.4, release: 1000 };
 
   it('draws the whole shape: rest, full, the sustain plateau, rest', () => {
     const pts = envelopePoints(params, 257);
@@ -110,6 +111,44 @@ describe('ADSR envelope picture', () => {
     assert.equal(stageOf('decay'), 'decay');
     assert.equal(stageOf('sustain'), 'sustain');
     assert.equal(stageOf('release'), 'release');
+  });
+
+  it('the loop pad sits under sustain, leaving the ramp columns to the bend pads', () => {
+    const layout = modPageLayout(ADSR_DEF.controls, ADSR_DEF.defaults);
+    const sustainCol = layout.dials.findIndex((d) => d.path === 'sustain');
+    assert.equal(layout.toggles[sustainCol]?.path, 'loop');
+  });
+
+  it('the joints sit on the line: peak, landing, and the sustain edge', () => {
+    const joints = envelopeJoints(params);
+    assert.equal(joints.length, 3);
+    assert.equal(joints[0].stage, 'attack');
+    assert.ok(Math.abs(joints[0].y - 1) < 1e-9);
+    assert.ok(Math.abs(joints[1].y - 0.4) < 1e-9);
+    assert.ok(Math.abs(joints[2].y - 0.4) < 1e-9);
+    assert.ok(joints[0].x < joints[1].x && joints[1].x < joints[2].x);
+  });
+
+  it('a curve bends its own ramp, in the picture and in the signal', () => {
+    const mid = (curve: number) => {
+      const pts = envelopePoints({ ...params, decay: 1000, decayCurve: curve }, 257);
+      const joints = envelopeJoints({ ...params, decay: 1000 });
+      const t = (joints[0].x + joints[1].x) / 2;                // decay midpoint
+      return pts[Math.round(t * 256)];
+    };
+    const straight = mid(0);
+    assert.ok(mid(1) < straight);                               // bends toward the floor early
+    assert.ok(mid(-1) > straight);                              // holds up, then drops
+
+    // The engine's ramp bends the same way the drawing does.
+    const run = (curve: number) => {
+      const state = ADSR_DEF.createState();
+      const p = { ...ADSR_DEF.defaults, attack: 100, attackCurve: curve };
+      ADSR_DEF.gate!(state, true);
+      ADSR_DEF.tick(state, p, 0.05, 120);                       // halfway up the attack
+      return ADSR_DEF.tick(state, p, 0, 120);
+    };
+    assert.ok(run(1) > run(0) && run(0) > run(-1));
   });
 });
 

@@ -561,6 +561,23 @@ const secs = (ms: unknown) => Math.max(0, Number(ms) || 0) / 1000;
 /** Each timed stage's dial span in ms — the picture normalises against it. */
 export const ADSR_STAGE_MAX = { attack: 2000, decay: 2000, release: 4000 } as const;
 
+/** The stages whose ramps can bend — sustain is a level, not a ramp. */
+export const ENV_BEND_STAGES: readonly EnvStage[] = ['attack', 'decay', 'release'];
+
+/** A bendable stage's curve param name (`attackCurve`, ...). */
+export const envCurveParam = (stage: EnvStage) => `${stage}Curve`;
+
+/**
+ * A stage ramp's shape, bent by its curve: 0 is a straight line, positive
+ * leaps off the mark and tapers into the target (+0.5 is the analog ease
+ * the attack has always had), negative creeps first and arrives in a rush.
+ * One number per stage, -1..1, mapped onto the ramp's exponent.
+ */
+const adsrShape = (p: number, curve: unknown) => {
+  const c = clamp(Number(curve) || 0, -1, 1);
+  return 1 - Math.pow(1 - p, Math.pow(4, c));
+};
+
 /**
  * The whole envelope as one drawing: `count` samples, each 0..1, across a
  * single display that spans the four stage columns. Each timed stage takes
@@ -578,16 +595,32 @@ export function envelopePoints(params: ModulationParams, count: number): number[
   const wD = share('decay');
   const wR = share('release');
   const at = (t: number): number => {
-    if (t < wA) return adsrEase(t / wA);
-    if (t < wA + wD) return 1 - (1 - sustain) * adsrEase((t - wA) / wD);
+    if (t < wA) return adsrShape(t / wA, params.attackCurve);
+    if (t < wA + wD) return 1 - (1 - sustain) * adsrShape((t - wA) / wD, params.decayCurve);
     if (t < 1 - wR) return sustain;
-    return sustain * (1 - adsrEase((t - (1 - wR)) / wR));
+    return sustain * (1 - adsrShape((t - (1 - wR)) / wR, params.releaseCurve));
   };
   return Array.from({ length: n }, (_, i) => at(i / (n - 1)));
 }
 
-/** An analog ramp's ease: quick off the mark, tapering into the target. */
-const adsrEase = (p: number) => 1 - (1 - p) * (1 - p);
+/**
+ * Where the envelope's three joints sit in the picture, 0..1 both ways:
+ * the attack's peak, the decay's landing on the sustain level, and the
+ * sustain's edge into the release — the handles the design pins there.
+ */
+export function envelopeJoints(
+  params: ModulationParams
+): { stage: EnvStage; x: number; y: number }[] {
+  const sustain = clamp01(params.sustain);
+  const share = (key: keyof typeof ADSR_STAGE_MAX) =>
+    0.04 + 0.24 * Math.min(1, (secs(params[key]) * 1000) / ADSR_STAGE_MAX[key]);
+  const wA = share('attack');
+  return [
+    { stage: 'attack', x: wA, y: 1 },
+    { stage: 'decay', x: wA + share('decay'), y: sustain },
+    { stage: 'release', x: 1 - share('release'), y: sustain },
+  ];
+}
 
 /** A stage's length in seconds; a held sustain never ends on its own. */
 function adsrStageLength(stage: AdsrStage, params: ModulationParams): number {
@@ -616,13 +649,21 @@ function adsrStageLength(stage: AdsrStage, params: ModulationParams): number {
 export const ADSR_DEF: ModTypeDef = {
   type: 'adsr',
   label: 'ADSR',
-  defaults: { attack: 10, decay: 300, sustain: 0.6, release: 600, loop: false },
+  defaults: {
+    attack: 10, decay: 300, sustain: 0.6, release: 600, loop: false,
+    // The attack keeps its analog leap; decay and release start straight,
+    // as the design draws them — every ramp bendable from its pad.
+    attackCurve: 0.5, decayCurve: 0, releaseCurve: 0,
+  },
   controls: [
     { type: 'slider', path: 'attack', label: 'Attack', min: 0, max: ADSR_STAGE_MAX.attack, step: 1, unit: 'ms', envStage: 'attack' },
     { type: 'slider', path: 'decay', label: 'Decay', min: 0, max: ADSR_STAGE_MAX.decay, step: 1, unit: 'ms', envStage: 'decay' },
     { type: 'slider', path: 'sustain', label: 'Sustain', min: 0, max: 1, step: 0.01, envStage: 'sustain' },
-    { type: 'slider', path: 'release', label: 'Release', min: 0, max: ADSR_STAGE_MAX.release, step: 1, unit: 'ms', envStage: 'release' },
+    /* Declared after sustain so its pad sits under the sustain column —
+       the attack, decay and release columns keep their pads for the
+       hold-to-bend gesture. */
     { type: 'toggle', path: 'loop', label: 'Loop' },
+    { type: 'slider', path: 'release', label: 'Release', min: 0, max: ADSR_STAGE_MAX.release, step: 1, unit: 'ms', envStage: 'release' },
   ],
   createState: (): AdsrState => ({ stage: 'idle', t: 0, from: 0, env: 0, gate: false }),
   gate(state, on) {
@@ -671,12 +712,14 @@ export const ADSR_DEF: ModTypeDef = {
       }
     }
 
+    // Each ramp bends by its own curve param, so the signal IS the shape
+    // the display draws — bend the picture and the modulation follows.
     const len = adsrStageLength(s.stage, params);
-    const shaped = adsrEase(len > 0 && Number.isFinite(len) ? Math.min(1, s.t / len) : 1);
-    if (s.stage === 'attack') s.env = s.from + (1 - s.from) * shaped;
-    else if (s.stage === 'decay') s.env = s.from + (sustain - s.from) * shaped;
+    const p = len > 0 && Number.isFinite(len) ? Math.min(1, s.t / len) : 1;
+    if (s.stage === 'attack') s.env = s.from + (1 - s.from) * adsrShape(p, params.attackCurve);
+    else if (s.stage === 'decay') s.env = s.from + (sustain - s.from) * adsrShape(p, params.decayCurve);
     else if (s.stage === 'sustain') s.env = sustain;
-    else if (s.stage === 'release') s.env = s.from * (1 - shaped);
+    else if (s.stage === 'release') s.env = s.from * (1 - adsrShape(p, params.releaseCurve));
     else s.env = 0;
     return clamp01(s.env);
   },

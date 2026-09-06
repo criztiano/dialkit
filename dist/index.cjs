@@ -49,6 +49,7 @@ __export(index_exports, {
   CurvePreview: () => CurvePreview,
   DEFAULT_GRADIENT: () => DEFAULT_GRADIENT,
   DEFAULT_TRIGGER_STEPS: () => DEFAULT_TRIGGER_STEPS,
+  ENV_BEND_STAGES: () => ENV_BEND_STAGES,
   EasingVisualization: () => EasingVisualization,
   FILTER_DB_CEIL: () => FILTER_DB_CEIL,
   FILTER_DB_FLOOR: () => FILTER_DB_FLOOR,
@@ -152,6 +153,8 @@ __export(index_exports, {
   dialSpan: () => dialSpan,
   displayHex: () => displayHex,
   enumOptionIcon: () => enumOptionIcon,
+  envCurveParam: () => envCurveParam,
+  envelopeJoints: () => envelopeJoints,
   envelopePoints: () => envelopePoints,
   filterHand01: () => filterHand01,
   filterHandValue: () => filterHandValue,
@@ -4155,6 +4158,12 @@ var SH_DEF = {
 registerModType(SH_DEF);
 var secs = (ms) => Math.max(0, Number(ms) || 0) / 1e3;
 var ADSR_STAGE_MAX = { attack: 2e3, decay: 2e3, release: 4e3 };
+var ENV_BEND_STAGES = ["attack", "decay", "release"];
+var envCurveParam = (stage) => `${stage}Curve`;
+var adsrShape = (p, curve) => {
+  const c = clamp5(Number(curve) || 0, -1, 1);
+  return 1 - Math.pow(1 - p, Math.pow(4, c));
+};
 function envelopePoints(params, count) {
   const n = Math.max(2, count);
   const sustain = clamp014(params.sustain);
@@ -4163,14 +4172,23 @@ function envelopePoints(params, count) {
   const wD = share("decay");
   const wR = share("release");
   const at = (t) => {
-    if (t < wA) return adsrEase(t / wA);
-    if (t < wA + wD) return 1 - (1 - sustain) * adsrEase((t - wA) / wD);
+    if (t < wA) return adsrShape(t / wA, params.attackCurve);
+    if (t < wA + wD) return 1 - (1 - sustain) * adsrShape((t - wA) / wD, params.decayCurve);
     if (t < 1 - wR) return sustain;
-    return sustain * (1 - adsrEase((t - (1 - wR)) / wR));
+    return sustain * (1 - adsrShape((t - (1 - wR)) / wR, params.releaseCurve));
   };
   return Array.from({ length: n }, (_, i) => at(i / (n - 1)));
 }
-var adsrEase = (p) => 1 - (1 - p) * (1 - p);
+function envelopeJoints(params) {
+  const sustain = clamp014(params.sustain);
+  const share = (key) => 0.04 + 0.24 * Math.min(1, secs(params[key]) * 1e3 / ADSR_STAGE_MAX[key]);
+  const wA = share("attack");
+  return [
+    { stage: "attack", x: wA, y: 1 },
+    { stage: "decay", x: wA + share("decay"), y: sustain },
+    { stage: "release", x: 1 - share("release"), y: sustain }
+  ];
+}
 function adsrStageLength(stage, params) {
   if (stage === "attack") return secs(params.attack);
   if (stage === "decay") return secs(params.decay);
@@ -4180,13 +4198,27 @@ function adsrStageLength(stage, params) {
 var ADSR_DEF = {
   type: "adsr",
   label: "ADSR",
-  defaults: { attack: 10, decay: 300, sustain: 0.6, release: 600, loop: false },
+  defaults: {
+    attack: 10,
+    decay: 300,
+    sustain: 0.6,
+    release: 600,
+    loop: false,
+    // The attack keeps its analog leap; decay and release start straight,
+    // as the design draws them — every ramp bendable from its pad.
+    attackCurve: 0.5,
+    decayCurve: 0,
+    releaseCurve: 0
+  },
   controls: [
     { type: "slider", path: "attack", label: "Attack", min: 0, max: ADSR_STAGE_MAX.attack, step: 1, unit: "ms", envStage: "attack" },
     { type: "slider", path: "decay", label: "Decay", min: 0, max: ADSR_STAGE_MAX.decay, step: 1, unit: "ms", envStage: "decay" },
     { type: "slider", path: "sustain", label: "Sustain", min: 0, max: 1, step: 0.01, envStage: "sustain" },
-    { type: "slider", path: "release", label: "Release", min: 0, max: ADSR_STAGE_MAX.release, step: 1, unit: "ms", envStage: "release" },
-    { type: "toggle", path: "loop", label: "Loop" }
+    /* Declared after sustain so its pad sits under the sustain column —
+       the attack, decay and release columns keep their pads for the
+       hold-to-bend gesture. */
+    { type: "toggle", path: "loop", label: "Loop" },
+    { type: "slider", path: "release", label: "Release", min: 0, max: ADSR_STAGE_MAX.release, step: 1, unit: "ms", envStage: "release" }
   ],
   createState: () => ({ stage: "idle", t: 0, from: 0, env: 0, gate: false }),
   gate(state2, on) {
@@ -4229,11 +4261,11 @@ var ADSR_DEF = {
       }
     }
     const len = adsrStageLength(s.stage, params);
-    const shaped = adsrEase(len > 0 && Number.isFinite(len) ? Math.min(1, s.t / len) : 1);
-    if (s.stage === "attack") s.env = s.from + (1 - s.from) * shaped;
-    else if (s.stage === "decay") s.env = s.from + (sustain - s.from) * shaped;
+    const p = len > 0 && Number.isFinite(len) ? Math.min(1, s.t / len) : 1;
+    if (s.stage === "attack") s.env = s.from + (1 - s.from) * adsrShape(p, params.attackCurve);
+    else if (s.stage === "decay") s.env = s.from + (sustain - s.from) * adsrShape(p, params.decayCurve);
     else if (s.stage === "sustain") s.env = sustain;
-    else if (s.stage === "release") s.env = s.from * (1 - shaped);
+    else if (s.stage === "release") s.env = s.from * (1 - adsrShape(p, params.releaseCurve));
     else s.env = 0;
     return clamp014(s.env);
   }
@@ -11156,11 +11188,26 @@ function MoveSlotFilterBody({
 }
 function MoveSlotEnvBody({
   points,
-  stages
+  stages,
+  joints = []
 }) {
   const d = points.map((v, i) => `${i === 0 ? "M" : "L"} ${i / (points.length - 1) * 100} ${100 - v * 100}`).join(" ");
   return /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)(import_jsx_runtime41.Fragment, { children: [
-    /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("div", { className: "tweakers-move-env-display", children: /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(MoveSlotShape, { d, className: "tweakers-move-env-shape" }) }),
+    /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)("div", { className: "tweakers-move-env-display", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(MoveSlotShape, { d, className: "tweakers-move-env-shape" }),
+      joints.map((j) => /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(
+        "span",
+        {
+          className: "tweakers-move-env-handle",
+          "data-held": j.held || void 0,
+          style: {
+            left: `${j.x * 100}%`,
+            top: `calc(6px + (100% - 12px) * ${(1 - j.y).toFixed(4)})`
+          }
+        },
+        j.stage
+      ))
+    ] }),
     stages.map((s) => /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)("div", { className: "tweakers-move-env-readout", "data-stage": s.stage, children: [
       /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-label", children: s.label }),
       /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-value", children: s.value })
@@ -11296,6 +11343,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const [panels, setPanels] = (0, import_react44.useState)([]);
   const [track, setTrack] = (0, import_react44.useState)(0);
   const [dragPath, setDragPath] = (0, import_react44.useState)(null);
+  const [bendHeld, setBendHeld] = (0, import_react44.useState)(null);
+  const bendRef = (0, import_react44.useRef)(null);
   const [handTouch, setHandTouch] = (0, import_react44.useState)({});
   const [hwHeld, setHwHeld] = (0, import_react44.useState)({});
   const [hwLatched, setHwLatched] = (0, import_react44.useState)({});
@@ -11902,7 +11951,10 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
               attack: Number(values.attack) || 0,
               decay: Number(values.decay) || 0,
               sustain: Number(values.sustain) || 0,
-              release: Number(values.release) || 0
+              release: Number(values.release) || 0,
+              attackCurve: Number(modSlot?.params.attackCurve) || 0,
+              decayCurve: Number(modSlot?.params.decayCurve) || 0,
+              releaseCurve: Number(modSlot?.params.releaseCurve) || 0
             };
             const envActive = stageDials.some(
               (s) => dragPath === s.meta.path || !!handTouch[s.meta.path] || !!hwHeld[s.meta.path]
@@ -11923,7 +11975,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                     MoveSlotEnvBody,
                     {
                       points: envelopePoints(envParams, 129),
-                      stages: stageDials.map((s) => ({ stage: s.stage, label: s.meta.label, value: reading(s.meta) }))
+                      stages: stageDials.map((s) => ({ stage: s.stage, label: s.meta.label, value: reading(s.meta) })),
+                      joints: envelopeJoints(envParams).map((j) => ({ ...j, held: bendHeld === j.stage }))
                     }
                   ),
                   /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("div", { className: "tweakers-move-env-zones", children: stageDials.map(({ meta: m }) => /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
@@ -12042,6 +12095,49 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
             );
           }
           const meta = padRows[row][col];
+          const bendStage = !meta && settingsPanel && padRows[row] === page.toggles && modSettings ? modLayout?.dials[col]?.stage : void 0;
+          if (bendStage && ENV_BEND_STAGES.includes(bendStage)) {
+            return /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)(
+              "button",
+              {
+                className: "tweakers-move-pad",
+                "data-kind": "bend",
+                "data-on": bendHeld === bendStage || void 0,
+                onPointerDown: (e) => {
+                  try {
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                  } catch {
+                  }
+                  setBendHeld(bendStage);
+                  bendRef.current = {
+                    y: e.clientY,
+                    curve: Number(modSlot?.params[envCurveParam(bendStage)]) || 0
+                  };
+                },
+                onPointerMove: (e) => {
+                  if (bendHeld !== bendStage || !bendRef.current) return;
+                  const v = Math.min(1, Math.max(
+                    -1,
+                    bendRef.current.curve + (bendRef.current.y - e.clientY) / 60
+                  ));
+                  ModulationStore.updateSlotParams(modSettings.index, { [envCurveParam(bendStage)]: v });
+                },
+                onPointerUp: () => {
+                  setBendHeld(null);
+                  bendRef.current = null;
+                },
+                onPointerCancel: () => {
+                  setBendHeld(null);
+                  bendRef.current = null;
+                },
+                children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "tweakers-move-pad-indicator" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "tweakers-move-pad-title", children: "Curve" })
+                ]
+              },
+              `bend-${bendStage}`
+            );
+          }
           if (!meta) return /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
           if (padRows[row] === page.toggles) {
             return /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)(
@@ -15966,6 +16062,7 @@ function AudioLevelMeter(props) {
   CurvePreview,
   DEFAULT_GRADIENT,
   DEFAULT_TRIGGER_STEPS,
+  ENV_BEND_STAGES,
   EasingVisualization,
   FILTER_DB_CEIL,
   FILTER_DB_FLOOR,
@@ -16069,6 +16166,8 @@ function AudioLevelMeter(props) {
   dialSpan,
   displayHex,
   enumOptionIcon,
+  envCurveParam,
+  envelopeJoints,
   envelopePoints,
   filterHand01,
   filterHandValue,

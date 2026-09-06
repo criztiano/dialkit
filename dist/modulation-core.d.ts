@@ -239,6 +239,10 @@ declare const ADSR_STAGE_MAX: {
     readonly decay: 2000;
     readonly release: 4000;
 };
+/** The stages whose ramps can bend — sustain is a level, not a ramp. */
+declare const ENV_BEND_STAGES: readonly EnvStage[];
+/** A bendable stage's curve param name (`attackCurve`, ...). */
+declare const envCurveParam: (stage: EnvStage) => string;
 /**
  * The whole envelope as one drawing: `count` samples, each 0..1, across a
  * single display that spans the four stage columns. Each timed stage takes
@@ -248,6 +252,16 @@ declare const ADSR_STAGE_MAX: {
  * dial and its part of the picture stretches or falls in place.
  */
 declare function envelopePoints(params: ModulationParams, count: number): number[];
+/**
+ * Where the envelope's three joints sit in the picture, 0..1 both ways:
+ * the attack's peak, the decay's landing on the sustain level, and the
+ * sustain's edge into the release — the handles the design pins there.
+ */
+declare function envelopeJoints(params: ModulationParams): {
+    stage: EnvStage;
+    x: number;
+    y: number;
+}[];
 /**
  * The ADSR: attack up to full, decay down to the sustain level, sustain
  * held while the gate is on, release back to rest. The signal is unipolar
@@ -292,4 +306,4 @@ declare function curveComposition(params: ModulationParams): CurveComposition;
 declare function curveDuration(params: ModulationParams, bpm: number): number;
 declare const CURVE_DEF: ModTypeDef;
 
-export { ADSR_DEF, ADSR_STAGE_MAX, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, type EnvStage, LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, curveComposition, curveDuration, envelopePoints, getModType, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modPageWidth, modRingArc, registerModType, visibleModControls };
+export { ADSR_DEF, ADSR_STAGE_MAX, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, ENV_BEND_STAGES, type EnvStage, LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, curveComposition, curveDuration, envCurveParam, envelopeJoints, envelopePoints, getModType, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modPageWidth, modRingArc, registerModType, visibleModControls };
