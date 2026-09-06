@@ -186,10 +186,9 @@ describe('the S&H', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it('lays out rate, depth, offset dials and the jitter/smooth texture pad', () => {
-    expect(SH_DEF.controls.map((c) => c.path)).toEqual(['rate', 'depth', 'offset', 'texture']);
-    const xy = SH_DEF.controls.find((c) => c.type === 'xy')!;
-    expect([xy.xParam, xy.yParam]).toEqual(['jitter', 'smooth']);
+  it('lays out rate, depth, offset, jitter and smooth dials, the scope in rate', () => {
+    expect(SH_DEF.controls.map((c) => c.path)).toEqual(['rate', 'depth', 'offset', 'jitter', 'smooth']);
+    expect(SH_DEF.controls.find((c) => c.path === 'rate')?.scope).toBe(true);
   });
 
   it('holds a value between samples and redraws at the rate', () => {
@@ -266,11 +265,13 @@ describe('the ADSR', () => {
 
   const held = { attack: 100, decay: 100, sustain: 0.5, release: 200, loop: false };
 
-  it('lays out the four dials and the loop switch', () => {
+  it('lays out the four dials and the loop switch in a big slot of its own', () => {
     expect(ADSR_DEF.controls.map((c) => c.path)).toEqual([
       'attack', 'decay', 'sustain', 'release', 'loop',
     ]);
-    expect(ADSR_DEF.controls.find((c) => c.path === 'loop')!.type).toBe('toggle');
+    const loop = ADSR_DEF.controls.find((c) => c.path === 'loop')!;
+    expect(loop.type).toBe('toggle');
+    expect(loop.big).toBe(true);
   });
 
   it('rests at zero until something gates it', () => {

@@ -73,6 +73,7 @@ var ICON_PANEL = {
 var LUCIDE_ICONS = {
   /* directions and traversal */
   "arrow-right": ["M5 12h14", "m12 5 7 7-7 7"],
+  "arrow-left": ["M19 12H5", "m12 19-7-7 7-7"],
   "arrow-left-right": ["M8 3 4 7l4 4", "M4 7h16", "m16 21 4-4-4-4", "M20 17H4"],
   "fold-horizontal": [
     "M2 12h6",

@@ -41,6 +41,19 @@ import { ListScreen } from './ListScreen';
  * - `filter`  — the 2-slot control: cutoff and resonance as one picture,
  *   the magnitude response maximised across both columns, each hand's
  *   small label sitting where its own slot's label would have been.
+ * - `env`     — the 4-slot control: the whole ADSR drawn as one shape on a
+ *   single display spanning the four stage columns, one caption and drag
+ *   zone per stage, square handles pinned on the joints.
+ * - `scope`   — a dial with the oscilloscope in it: the modulator's live
+ *   signal fills the slot behind the dial's own readout and bar.
+ * - `toggle`  — a switch in a big slot of its own: the pad's language at
+ *   slot size, the whole slot inverting when it is on.
+ *
+ * Multi-slot controls (`filter` spans 2 columns, `env` spans 4) follow one
+ * pattern: the container takes `grid-column: span N`, the display and its
+ * drawing stretch across the whole span, and each hand or stage keeps a
+ * small caption where its own single slot's label would have been — so the
+ * hardware's one-knob-per-column rule still holds under the shared picture.
  */
 export type MoveSlotKind =
   | 'default'
@@ -59,14 +72,19 @@ export type MoveSlotKind =
   | 'pan'
   | 'stereo-width'
   | 'pitch'
-  | 'playback';
+  | 'playback'
+  | 'env'
+  | 'scope'
+  | 'toggle';
 
 /** Which face a control wears in its slot, from its meta and moment. */
 export function moveSlotKind(
   meta: ControlMeta,
-  opts: { enum?: boolean; shape?: string | null; glyph?: string | null; valueFirst?: boolean; value?: unknown } = {}
+  opts: { enum?: boolean; shape?: string | null; glyph?: string | null; valueFirst?: boolean; value?: unknown; stage?: string | null } = {}
 ): MoveSlotKind {
   if (meta.type === 'filter') return 'filter';
+  if (opts.stage) return 'env';
+  if (meta.type === 'toggle') return 'toggle';
   if (meta.type === 'transfer') return 'transfer';
   if (meta.type === 'gradient') return 'ramp';
   if (meta.type === 'slider' && meta.display === 'dial') return 'dial';
@@ -451,6 +469,97 @@ export function MoveSlotFilterBody({
 }
 
 /**
+ * The 4-slot envelope's face, the filter's big sibling: the whole ADSR
+ * drawn as one shape on a single display spanning all four stage columns,
+ * with each stage's small label sitting where its own slot's label would
+ * have been — attack, decay, sustain, release, left to right, each caption
+ * over its own drag zone and hardware knob.
+ */
+export function MoveSlotEnvBody({
+  points, stages, joints = [],
+}: {
+  /** The whole envelope's samples, each 0..1, left to right. */
+  points: number[];
+  /** One caption per stage column, in column order. */
+  stages: { stage: string; label: string; value: ReactNode }[];
+  /** The joint handles — small squares pinned where the ramps meet. */
+  joints?: { stage: string; x: number; y: number; held?: boolean }[];
+}) {
+  const d = points
+    .map((v, i) => `${i === 0 ? 'M' : 'L'} ${(i / (points.length - 1)) * 100} ${100 - v * 100}`)
+    .join(' ');
+  return (
+    <>
+      <div className="tweakers-move-env-display">
+        <MoveSlotShape d={d} className="tweakers-move-env-shape" />
+        {/* The drawing keeps 6px of vertical air (the shape svg's inset), so
+            a joint's y maps through the same band to land on the line. */}
+        {joints.map((j) => (
+          <span
+            key={j.stage}
+            className="tweakers-move-env-handle"
+            data-held={j.held || undefined}
+            style={{
+              left: `${j.x * 100}%`,
+              top: `calc(6px + (100% - 12px) * ${(1 - j.y).toFixed(4)})`,
+            }}
+          />
+        ))}
+      </div>
+      {stages.map((s) => (
+        <div key={s.stage} className="tweakers-move-env-readout" data-stage={s.stage}>
+          <span className="tweakers-move-dial-label">{s.label}</span>
+          <span className="tweakers-move-dial-value">{s.value}</span>
+        </div>
+      ))}
+    </>
+  );
+}
+
+/**
+ * A dial with the oscilloscope living in it — the Rate slot's face. The
+ * live wave (passed in as the drawing, so the body stays pure) fills the
+ * whole slot above the bar, edge to edge with no title in its way; the
+ * dial's own readout floats over it and the fill bar keeps the bottom.
+ * The control stays a control — you turn the wave you're watching.
+ */
+export function MoveSlotScopeBody({
+  label, value, pct, children,
+}: {
+  label: string;
+  value: ReactNode;
+  /** Fill extent, 0–100. */
+  pct: number;
+  /** The live wave — an svg the host keeps ticking. */
+  children: ReactNode;
+}) {
+  return (
+    <>
+      <div className="tweakers-move-scope-display">{children}</div>
+      <MoveSlotReadout label={label} value={value} />
+      <div className="tweakers-move-dial-bar">
+        <div className="tweakers-move-dial-fill" style={{ width: `${pct}%` }} />
+      </div>
+    </>
+  );
+}
+
+/**
+ * A toggle in a big slot of its own — the pad's language at slot size: the
+ * indicator bar up top, the name centred, the whole slot inverting when it
+ * is on. For the switches that deserve a column (the envelope's Loop, with
+ * its pad row spent on the bend gesture).
+ */
+export function MoveSlotToggleBody({ label, on }: { label: string; on: boolean }) {
+  return (
+    <>
+      <span className="tweakers-move-dial-toggle-indicator" data-on={on || undefined} />
+      <span className="tweakers-move-dial-toggle-label">{label}</span>
+    </>
+  );
+}
+
+/**
  * The dictionary itself — every big-slot case the kit knows, named, with
  * the component that draws it. `value`, `icon`, `curve` and `enum` are
  * faces of shared bodies (the same markup, chosen by `moveSlotKind`);
@@ -471,6 +580,9 @@ export const MOVE_SLOT_LIBRARY = {
   xy: { description: 'two axes in one gesture field, or a live shape preview', component: MoveSlotXYBody },
   range: { description: 'two handles on one bar; volume knob is the second hand', component: MoveSlotRangeBody },
   filter: { description: '2 slots: cutoff + resonance as one response picture', component: MoveSlotFilterBody },
+  env: { description: '4 slots: the whole ADSR as one shape, a caption per stage', component: MoveSlotEnvBody },
+  scope: { description: 'a dial with the live signal filling it behind the readout', component: MoveSlotScopeBody },
+  toggle: { description: 'a switch in a big slot — the pad’s language at slot size', component: MoveSlotToggleBody },
   transfer: { description: 'a response curve, one knob holding one of its points', component: MoveSlotTransferBody },
   ramp: { description: 'a colour ramp, one knob holding one of its stops', component: MoveSlotRampBody },
   dial: { description: 'a needle, for values whose two ends are the same place', component: MoveSlotDialBody },

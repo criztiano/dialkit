@@ -1135,6 +1135,18 @@ A picture slot reads top down and drops the label/value crossfade, which has not
 
 Bipolar sliders (`bipolar: true` or an `origin`) keep their character on the dial: the fill anchors at an origin tick and grows toward the handle on either side, and the readout shows the real signed value (`+12`, `-8`) instead of the 0–100 position.
 
+### The big-slot library, and multi-slot controls
+
+Every face a dial slot can wear lives in one dictionary, `MOVE_SLOT_LIBRARY` (`src/components/move-slots.tsx`): `default`, `value`, `icon`, `curve`, `enum`, `xy`, `range`, `filter`, `env`, `scope`. Each entry is a pure body — a drawing of computed props with no gestures of its own — so a new face is added by writing a body and dispatching to it from the MovePanel, and the gestures (pointer capture, fine drag, modulation arming) stay in one place.
+
+Some controls are bigger than one column. A **multi-slot control** follows one pattern, whatever its width:
+
+- The container takes `grid-column: span N` — it owns N consecutive columns, and occupancy checks treat it as sitting in all of them.
+- One display (the dark screen cut into the face) stretches across the whole span, and the drawing is maximised across it.
+- Each column keeps a small caption where its own single slot's label would have been, crossfading to its value on touch — so the hardware's one-knob-per-column rule still holds under the shared picture: every knob edits the hand or stage its column names.
+
+Two ship today: `filter` (2 slots — cutoff and resonance as one magnitude response) and `env` (4 slots — the whole ADSR as one shape on the modulator's settings page, one caption and drag zone per stage).
+
 ### Waveform
 
 The panel gives an app its knobs; `MoveWaveform` gives it the sample they are acting on, on the same surface and driven by the same hardware.

@@ -6131,6 +6131,237 @@ input.tweakers-list-item-title:focus {
   white-space: nowrap;
 }
 
+/* The 4-slot envelope — the filter's big sibling. One display spans the
+   four stage columns and draws the whole ADSR as one shape; each stage
+   keeps a small caption where its own slot's label would have been, over
+   its own drag zone, so the hardware's one-knob-per-column rule holds
+   under the shared picture. (The span itself is set inline — the control
+   spans however many stage columns the layout gives it.) */
+.tweakers-move-env-display {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 9px;
+  bottom: 28px;
+  background: var(--move-display, #1e1e1e);
+  border-radius: var(--move-radius-small, 8px);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* The drawing runs the display's full width, with a little vertical air so
+   the peak and the floor keep their full stroke. */
+.tweakers-move-env-shape {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  width: 100%;
+  height: calc(100% - 12px);
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* The same ink weight as the filter and the curve-selection slot — every
+   picture on the page from one hand. */
+.tweakers-move-env-shape path {
+  fill: none;
+  stroke: var(--move-text);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.5;
+  transition: opacity 0.12s;
+}
+
+.tweakers-move-dial[data-kind="env"]:hover .tweakers-move-env-shape path,
+.tweakers-move-dial[data-kind="env"][data-active] .tweakers-move-env-shape path {
+  opacity: 1;
+}
+
+/* The joint handles — small squares pinned where the ramps meet (the
+   attack's peak, the decay's landing, the sustain's edge), the design's
+   own marks. They share the line's ink and dim with it; the one whose
+   bend pad is held comes up to full brightness on its own. */
+.tweakers-move-env-handle {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--move-text);
+  border-radius: 3px;
+  background: var(--move-display, #1e1e1e);
+  opacity: 0.5;
+  transition: opacity 0.12s;
+  pointer-events: none;
+}
+
+.tweakers-move-dial[data-kind="env"]:hover .tweakers-move-env-handle,
+.tweakers-move-dial[data-kind="env"][data-active] .tweakers-move-env-handle,
+.tweakers-move-env-handle[data-held] {
+  opacity: 1;
+}
+
+/* A stage caption per column, the filter readout's rule at a quarter of
+   the width — the label sits where its own slot's label would have been,
+   and gives way to its stage's value on touch. */
+.tweakers-move-env-readout {
+  position: absolute;
+  bottom: 6px;
+  width: 25%;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.tweakers-move-env-readout[data-stage="attack"] { left: 0; }
+.tweakers-move-env-readout[data-stage="decay"] { left: 25%; }
+.tweakers-move-env-readout[data-stage="sustain"] { left: 50%; }
+.tweakers-move-env-readout[data-stage="release"] { left: 75%; }
+
+.tweakers-move-env-readout .tweakers-move-dial-label,
+.tweakers-move-env-readout .tweakers-move-dial-value {
+  font-size: 13px;
+  line-height: 16px;
+  white-space: nowrap;
+  -webkit-line-clamp: 1;
+}
+
+/* The drag zones: one per stage column, over the whole slot — the pointer
+   edits the stage whose column it is in. */
+.tweakers-move-env-zones {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+.tweakers-move-env-zone {
+  position: relative;
+  flex: 1;
+}
+
+/* The scope lives IN the rate dial: the live signal fills everything above
+   the bar, edge to edge with no title in its way, and the dial's own
+   readout floats over the wave. You turn the wave you're watching. */
+.tweakers-move-scope-display {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  right: 7px;
+  bottom: 21px;
+  background: var(--move-display, #1e1e1e);
+  border-radius: var(--move-radius-small, 8px);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* The wave keeps a little vertical air so its peaks hold their stroke. */
+.tweakers-move-scope-wave {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  width: 100%;
+  height: calc(100% - 8px);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.tweakers-move-scope-wave path {
+  fill: none;
+  stroke: var(--move-text);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.8;
+}
+
+/* The readout reads over the rolling wave the way a shape slot's label
+   reads over its drawing — lifted, with the display's own dark behind it. */
+.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-readout {
+  z-index: 1;
+}
+
+.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-label,
+.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-value {
+  text-shadow: 0 0 6px var(--move-display, #1e1e1e), 0 0 6px var(--move-display, #1e1e1e);
+}
+
+/* A big toggle — the pad's language at slot size: the indicator bar up
+   top, the name centred, the whole slot inverting when it is on. */
+.tweakers-move-dial[data-kind="toggle"][data-on] {
+  background: var(--move-text);
+  color: var(--move-text-inverse);
+}
+
+.tweakers-move-dial-toggle-indicator {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 4px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--move-bg);
+}
+
+.tweakers-move-dial-toggle-indicator[data-on] {
+  background: var(--move-chip);
+}
+
+.tweakers-move-dial-toggle-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--move-font-label);
+  font-size: 16px;
+  line-height: 20px;
+}
+
+/* The plain enum face — the list screen at slot size: the options on the
+   display, dim, the current one bright on its highlight. No pagination
+   cells to count; you see where you are and where a turn takes you. */
+.tweakers-move-enum-list {
+  position: absolute;
+  top: 26px;
+  left: 6px;
+  right: 7px;
+  bottom: 8px;
+  padding: 4px;
+  background: var(--move-display, #1e1e1e);
+  border-radius: var(--move-radius-small, 8px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.tweakers-move-enum-row {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-family: var(--move-font-label);
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--move-text);
+  opacity: 0.22;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity 0.12s, background 0.12s;
+}
+
+.tweakers-move-enum-row[data-selected] {
+  background: rgba(222, 227, 201, 0.1);
+  opacity: 1;
+}
+
 /* Range slot — the bar fills BETWEEN two handle ticks (the span), and the
    ticks poke past the bar so a collapsed range still reads as two hands. */
 .tweakers-move-dial-range {

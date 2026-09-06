@@ -14,7 +14,7 @@ export { buildMovePages, buildModMovePage, movePadRows, moveAppPadRow, visibleCo
 export type { MovePage } from './move-layout';
 
 // The big-slot library — the dictionary of what a Move dial slot can be
-export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotPlaybackDrawing, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
+export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotPlaybackDrawing, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
 export { moveNumericDrawing, movePlaybackMode, moveVisualReading } from './move-visual-core';
 export type { MoveVisual, MoveSliderVisual, MoveSelectVisual, MovePlaybackMode, MoveNumericDrawing } from './move-visual-core';
 export type { MoveSlotKind } from './components/move-slots';
@@ -81,9 +81,16 @@ export {
   MOD_RING_CIRCUMFERENCE,
   LFO_SYNC_DIVISIONS,
   lfoSyncedHz,
+  envelopePoints,
+  envelopeJoints,
+  envCurveParam,
+  ENV_BEND_STAGES,
+  modPageWidth,
+  ADSR_STAGE_MAX,
 } from './modulation-core';
 export type {
   ModulationType,
+  EnvStage,
   ModulationParams,
   ModulationParamValue,
   ModulationSlot,
