@@ -75,6 +75,8 @@ type ModControlMeta = ControlMeta & {
     yParam?: string;
     /** Sits in a small slot under its dial's column instead of taking a big one. */
     chip?: boolean;
+    /** A toggle that takes a big dial slot of its own instead of a pad. */
+    big?: boolean;
     /** Shown only when this says so — a control that belongs to one mode. */
     when?: (params: ModulationParams) => boolean;
     /** This dial draws the modulator's own shape (the type's `preview`). */

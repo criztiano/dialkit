@@ -113,10 +113,10 @@ describe('ADSR envelope picture', () => {
     assert.equal(stageOf('release'), 'release');
   });
 
-  it('the loop pad sits under sustain, leaving the ramp columns to the bend pads', () => {
+  it('loop takes a big slot of its own, leaving every pad to the bend gesture', () => {
     const layout = modPageLayout(ADSR_DEF.controls, ADSR_DEF.defaults);
-    const sustainCol = layout.dials.findIndex((d) => d.path === 'sustain');
-    assert.equal(layout.toggles[sustainCol]?.path, 'loop');
+    assert.equal(layout.dials[layout.dials.length - 1]?.path, 'loop');
+    assert.ok(layout.toggles.every((t) => t === null));
   });
 
   it('the joints sit on the line: peak, landing, and the sustain edge', () => {

@@ -95,6 +95,7 @@ __export(index_exports, {
   MoveSlotReadout: () => MoveSlotReadout,
   MoveSlotScopeBody: () => MoveSlotScopeBody,
   MoveSlotShape: () => MoveSlotShape,
+  MoveSlotToggleBody: () => MoveSlotToggleBody,
   MoveSurfaceStore: () => MoveSurfaceStore,
   MoveVolumeDisplay: () => MoveVolumeDisplay,
   MoveWaveform: () => MoveWaveform,
@@ -3951,7 +3952,7 @@ var MOD_COLORS = [
 ];
 var modColor = (index) => MOD_COLORS[(index % MOD_SLOTS + MOD_SLOTS) % MOD_SLOTS];
 var MOD_PAGE_DIALS = 8;
-var isModDial = (c) => !c.chip && (c.scope || c.type === "select" || c.type === "slider" || c.type === "xy" || c.type === "range" || c.type === "number" && c.min != null && c.max != null);
+var isModDial = (c) => !c.chip && (c.scope || c.type === "toggle" && c.big || c.type === "select" || c.type === "slider" || c.type === "xy" || c.type === "range" || c.type === "number" && c.min != null && c.max != null);
 var slotOf = (c) => ({
   path: c.path,
   ...c.drawsPreview ? { preview: true } : {},
@@ -4214,11 +4215,10 @@ var ADSR_DEF = {
     { type: "slider", path: "attack", label: "Attack", min: 0, max: ADSR_STAGE_MAX.attack, step: 1, unit: "ms", envStage: "attack" },
     { type: "slider", path: "decay", label: "Decay", min: 0, max: ADSR_STAGE_MAX.decay, step: 1, unit: "ms", envStage: "decay" },
     { type: "slider", path: "sustain", label: "Sustain", min: 0, max: 1, step: 0.01, envStage: "sustain" },
-    /* Declared after sustain so its pad sits under the sustain column —
-       the attack, decay and release columns keep their pads for the
-       hold-to-bend gesture. */
-    { type: "toggle", path: "loop", label: "Loop" },
-    { type: "slider", path: "release", label: "Release", min: 0, max: ADSR_STAGE_MAX.release, step: 1, unit: "ms", envStage: "release" }
+    { type: "slider", path: "release", label: "Release", min: 0, max: ADSR_STAGE_MAX.release, step: 1, unit: "ms", envStage: "release" },
+    /* A big slot of its own, beside the envelope — the pad row under the
+       ramps belongs to the hold-to-bend gesture. */
+    { type: "toggle", path: "loop", label: "Loop", big: true }
   ],
   createState: () => ({ stage: "idle", t: 0, from: 0, env: 0, gate: false }),
   gate(state2, on) {
@@ -9035,8 +9035,8 @@ function buildModMovePage(panel, layout) {
   const dials = [];
   const toggles = [];
   for (const c of controls) {
-    if (c.type === "toggle") toggles[Math.max(0, dials.length - 1)] = c;
-    else if (c.type === "select" || isDial(c)) dials.push(c);
+    if (c.type === "toggle" && !c.big) toggles[Math.max(0, dials.length - 1)] = c;
+    else if (c.type === "toggle" || c.type === "select" || isDial(c)) dials.push(c);
   }
   return { panel, dials: dials.slice(0, MOVE_DIALS), toggles: toggles.slice(0, MOVE_PADS), values: [], actions: [] };
 }
@@ -11226,6 +11226,12 @@ function MoveSlotScopeBody({
     /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("div", { className: "tweakers-move-dial-fill", style: { width: `${pct}%` } }) })
   ] });
 }
+function MoveSlotToggleBody({ label, on }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)(import_jsx_runtime41.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-toggle-indicator", "data-on": on || void 0 }),
+    /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-toggle-label", children: label })
+  ] });
+}
 var MOVE_SLOT_LIBRARY = {
   default: { description: "name centred, value on touch, fill bar", component: MoveSlotDefaultBody },
   value: { description: "value-first: the value is the headline, the name a tag on top", component: MoveSlotDefaultBody },
@@ -11235,7 +11241,8 @@ var MOVE_SLOT_LIBRARY = {
   range: { description: "two handles on one bar; volume knob is the second hand", component: MoveSlotRangeBody },
   filter: { description: "2 slots: cutoff + resonance as one response picture", component: MoveSlotFilterBody },
   env: { description: "4 slots: the whole ADSR as one shape, a caption per stage", component: MoveSlotEnvBody },
-  scope: { description: "a dial with the live signal filling it behind the readout", component: MoveSlotScopeBody }
+  scope: { description: "a dial with the live signal filling it behind the readout", component: MoveSlotScopeBody },
+  toggle: { description: "a switch in a big slot \u2014 the pad\u2019s language at slot size", component: MoveSlotToggleBody }
 };
 
 // src/move-surface-store.ts
@@ -11890,6 +11897,22 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                       glyph
                     }
                   )
+                ]
+              },
+              meta.path
+            );
+          }
+          if (meta.type === "toggle") {
+            return /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)(
+              "div",
+              {
+                className: "tweakers-move-dial",
+                "data-kind": "toggle",
+                "data-on": !!values[meta.path] || void 0,
+                onClick: () => TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path]),
+                children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(ModDot, { path: meta.path }),
+                  /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(MoveSlotToggleBody, { label: meta.label, on: !!values[meta.path] })
                 ]
               },
               meta.path
@@ -16108,6 +16131,7 @@ function AudioLevelMeter(props) {
   MoveSlotReadout,
   MoveSlotScopeBody,
   MoveSlotShape,
+  MoveSlotToggleBody,
   MoveSurfaceStore,
   MoveVolumeDisplay,
   MoveWaveform,

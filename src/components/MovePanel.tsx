@@ -9,7 +9,7 @@ import { isDevDefault } from '../env';
 import type { TweakTheme } from './TweakRoot';
 import { buildMovePages, buildModMovePage, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, isEnumDial, isSpanContinuation, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_DIALS, MOVE_PADS } from '../move-layout';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotEnvBody, MoveSlotScopeBody } from './move-slots';
+import { MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody } from './move-slots';
 import { MoveSurfaceStore, type MovePadCell } from '../move-surface-store';
 import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValue, applyDetentAxis, type XYValue } from '../xy-pad-core';
 import { nearestHandle, type RangeValue } from '../range-slider-core';
@@ -846,6 +846,23 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                         shape={shape}
                         glyph={glyph}
                       />
+                    </div>
+                  );
+                }
+                // A big toggle — a switch that earned a whole slot (the
+                // envelope's Loop): the pad's language at slot size, the
+                // whole slot inverting when it is on.
+                if (meta.type === 'toggle') {
+                  return (
+                    <div
+                      key={meta.path}
+                      className="tweakers-move-dial"
+                      data-kind="toggle"
+                      data-on={!!values[meta.path] || undefined}
+                      onClick={() => TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path])}
+                    >
+                      <ModDot path={meta.path} />
+                      <MoveSlotToggleBody label={meta.label} on={!!values[meta.path]} />
                     </div>
                   );
                 }

@@ -6002,6 +6002,38 @@ input.tweakers-list-item-title:focus {
   text-shadow: 0 0 6px var(--move-display, #1e1e1e), 0 0 6px var(--move-display, #1e1e1e);
 }
 
+/* A big toggle — the pad's language at slot size: the indicator bar up
+   top, the name centred, the whole slot inverting when it is on. */
+.tweakers-move-dial[data-kind="toggle"][data-on] {
+  background: var(--move-text);
+  color: var(--move-text-inverse);
+}
+
+.tweakers-move-dial-toggle-indicator {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 4px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--move-bg);
+}
+
+.tweakers-move-dial-toggle-indicator[data-on] {
+  background: var(--move-chip);
+}
+
+.tweakers-move-dial-toggle-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--move-font-label);
+  font-size: 16px;
+  line-height: 20px;
+}
+
 /* The plain enum face — the list screen at slot size: the options on the
    display, dim, the current one bright on its highlight. No pagination
    cells to count; you see where you are and where a turn takes you. */

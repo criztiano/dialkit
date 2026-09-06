@@ -117,6 +117,8 @@ export type ModControlMeta = ControlMeta & {
   yParam?: string;
   /** Sits in a small slot under its dial's column instead of taking a big one. */
   chip?: boolean;
+  /** A toggle that takes a big dial slot of its own instead of a pad. */
+  big?: boolean;
   /** Shown only when this says so — a control that belongs to one mode. */
   when?: (params: ModulationParams) => boolean;
   /** This dial draws the modulator's own shape (the type's `preview`). */
@@ -209,7 +211,8 @@ export const MOD_PAGE_DIALS = 8;
 
 const isModDial = (c: ModControlMeta) =>
   !c.chip &&
-  (c.scope || c.type === 'select' || c.type === 'slider' || c.type === 'xy' || c.type === 'range' ||
+  (c.scope || (c.type === 'toggle' && c.big) ||
+    c.type === 'select' || c.type === 'slider' || c.type === 'xy' || c.type === 'range' ||
     (c.type === 'number' && c.min != null && c.max != null));
 
 const slotOf = (c: ModControlMeta): ModPageSlot => ({
@@ -659,11 +662,10 @@ export const ADSR_DEF: ModTypeDef = {
     { type: 'slider', path: 'attack', label: 'Attack', min: 0, max: ADSR_STAGE_MAX.attack, step: 1, unit: 'ms', envStage: 'attack' },
     { type: 'slider', path: 'decay', label: 'Decay', min: 0, max: ADSR_STAGE_MAX.decay, step: 1, unit: 'ms', envStage: 'decay' },
     { type: 'slider', path: 'sustain', label: 'Sustain', min: 0, max: 1, step: 0.01, envStage: 'sustain' },
-    /* Declared after sustain so its pad sits under the sustain column —
-       the attack, decay and release columns keep their pads for the
-       hold-to-bend gesture. */
-    { type: 'toggle', path: 'loop', label: 'Loop' },
     { type: 'slider', path: 'release', label: 'Release', min: 0, max: ADSR_STAGE_MAX.release, step: 1, unit: 'ms', envStage: 'release' },
+    /* A big slot of its own, beside the envelope — the pad row under the
+       ramps belongs to the hold-to-bend gesture. */
+    { type: 'toggle', path: 'loop', label: 'Loop', big: true },
   ],
   createState: (): AdsrState => ({ stage: 'idle', t: 0, from: 0, env: 0, gate: false }),
   gate(state, on) {

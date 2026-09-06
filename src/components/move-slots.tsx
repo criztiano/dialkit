@@ -55,7 +55,8 @@ export type MoveSlotKind =
   | 'range'
   | 'filter'
   | 'env'
-  | 'scope';
+  | 'scope'
+  | 'toggle';
 
 /** Which face a control wears in its slot, from its meta and moment. */
 export function moveSlotKind(
@@ -359,6 +360,21 @@ export function MoveSlotScopeBody({
 }
 
 /**
+ * A toggle in a big slot of its own — the pad's language at slot size: the
+ * indicator bar up top, the name centred, the whole slot inverting when it
+ * is on. For the switches that deserve a column (the envelope's Loop, with
+ * its pad row spent on the bend gesture).
+ */
+export function MoveSlotToggleBody({ label, on }: { label: string; on: boolean }) {
+  return (
+    <>
+      <span className="tweakers-move-dial-toggle-indicator" data-on={on || undefined} />
+      <span className="tweakers-move-dial-toggle-label">{label}</span>
+    </>
+  );
+}
+
+/**
  * The dictionary itself — every big-slot case the kit knows, named, with
  * the component that draws it. `value`, `icon`, `curve` and `enum` are
  * faces of shared bodies (the same markup, chosen by `moveSlotKind`);
@@ -375,4 +391,5 @@ export const MOVE_SLOT_LIBRARY = {
   filter: { description: '2 slots: cutoff + resonance as one response picture', component: MoveSlotFilterBody },
   env: { description: '4 slots: the whole ADSR as one shape, a caption per stage', component: MoveSlotEnvBody },
   scope: { description: 'a dial with the live signal filling it behind the readout', component: MoveSlotScopeBody },
+  toggle: { description: 'a switch in a big slot — the pad’s language at slot size', component: MoveSlotToggleBody },
 } as const;

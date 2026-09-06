@@ -265,13 +265,13 @@ describe('the ADSR', () => {
 
   const held = { attack: 100, decay: 100, sustain: 0.5, release: 200, loop: false };
 
-  it('lays out the four dials and the loop switch, loop under the sustain column', () => {
-    // Loop is declared after sustain so its pad takes the sustain column,
-    // keeping the ramp columns' pads free for the hold-to-bend gesture.
+  it('lays out the four dials and the loop switch in a big slot of its own', () => {
     expect(ADSR_DEF.controls.map((c) => c.path)).toEqual([
-      'attack', 'decay', 'sustain', 'loop', 'release',
+      'attack', 'decay', 'sustain', 'release', 'loop',
     ]);
-    expect(ADSR_DEF.controls.find((c) => c.path === 'loop')!.type).toBe('toggle');
+    const loop = ADSR_DEF.controls.find((c) => c.path === 'loop')!;
+    expect(loop.type).toBe('toggle');
+    expect(loop.big).toBe(true);
   });
 
   it('rests at zero until something gates it', () => {
