@@ -9,7 +9,10 @@ import { isDevDefault } from '../env';
 import type { TweakTheme } from './TweakRoot';
 import { buildMovePages, buildModMovePage, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, isEnumDial, isSpanContinuation, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_DIALS, MOVE_PADS } from '../move-layout';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody } from './move-slots';
+import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotNumericBody } from './move-slots';
+import { normalizeGradient, rampCss } from '../gradient-core';
+import { valueToBearing, angleFromPointer } from '../angle-core';
+import { normalizeTransfer, movePoint, nearestPoint, sampleTransfer, type TransferValue } from '../transfer-core';
 import { moveNumericDrawing, movePlaybackMode, moveVisualReading, moveKeyboardValue } from '../move-visual-core';
 import { ModRing } from './ModRing';
 import { MoveSurfaceStore, type MovePadCell } from '../move-surface-store';
@@ -155,6 +158,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const [dragPath, setDragPath] = useState<string | null>(null);
   // Hardware presence, by control path — from the bridge kit's window events.
   const [handTouch, setHandTouch] = useState<Record<string, boolean>>({});
+  // Which point of a transfer curve each knob is holding. One knob shapes a
+  // whole curve, so the slot has to carry the choice; a knob tap (or a click
+  // near another point) moves it on.
+  const [curvePoint, setCurvePoint] = useState<Record<string, number>>({});
+  // …and which stop of a ramp. Same idea: one knob, a list of things. */
+  const [rampStop, setRampStop] = useState<Record<string, number>>({});
   const [hwHeld, setHwHeld] = useState<Record<string, boolean>>({});
   const [hwLatched, setHwLatched] = useState<Record<string, boolean>>({});
   // Screen-side value-chip substitution: a held chip peeks, a tapped chip latches.
@@ -393,6 +402,64 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       x: applyDetentAxis(raw.x, xa, Math.abs(px - origin.x) * (w || 1)),
       y: applyDetentAxis(raw.y, ya, Math.abs(py - origin.y) * (h || 1)),
     });
+  };
+
+  // A transfer slot's pointer picks the nearest point on press and drags it
+  // after — the same gesture as the panel's own curve editor, in a slot.
+  const transferFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, down: boolean) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const w = rect.width - XY_INSET.left - XY_INSET.right;
+    const h = rect.height - XY_INSET.top - XY_INSET.bottom;
+    const x = Math.min(1, Math.max(0, (e.clientX - rect.left - XY_INSET.left) / (w || 1)));
+    const y = 1 - Math.min(1, Math.max(0, (e.clientY - rect.top - XY_INSET.top) / (h || 1)));
+    const points = normalizeTransfer(values[meta.path]).points;
+    let index = curvePoint[meta.path] ?? 0;
+    if (down) {
+      const hit = nearestPoint(points, x, y, 0.18);
+      index = hit >= 0 ? hit : index;
+      setCurvePoint((prev) => ({ ...prev, [meta.path]: Math.min(index, points.length - 1) }));
+    }
+    index = Math.min(index, points.length - 1);
+    TweakStore.updateValue(page.panel.id, meta.path, { points: movePoint(points, index, x, y) });
+  };
+
+  // A needle follows the pointer round, the way the panel's own dial does —
+  // dragging a bearing sideways along a track is the gesture a needle exists
+  // to replace.
+  const needleFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const min = meta.min ?? 0, max = meta.max ?? 1;
+    const wraps = meta.wrap ?? Math.abs(max - min) >= 360;
+    const next = angleFromPointer(
+      e.clientX - (rect.left + rect.width / 2),
+      e.clientY - (rect.top + rect.height / 2),
+      Number(values[meta.path] ?? min), min, max, meta.step ?? 1, wraps,
+    );
+    if (next !== null) TweakStore.updateValue(page.panel.id, meta.path, next);
+  };
+
+  // A ramp slot's pointer picks the nearest stop on press and slides it after.
+  const rampFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, down: boolean) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const w = rect.width - XY_INSET.left - XY_INSET.right;
+    const x = Math.min(1, Math.max(0, (e.clientX - rect.left - XY_INSET.left) / (w || 1)));
+    const g = normalizeGradient(values[meta.path] as never);
+    let index = Math.min(rampStop[meta.path] ?? 0, g.stops.length - 1);
+    if (down) {
+      let best = 0;
+      g.stops.forEach((st, i) => {
+        if (Math.abs(st.position - x) < Math.abs(g.stops[best]!.position - x)) best = i;
+      });
+      index = best;
+      setRampStop((prev) => ({ ...prev, [meta.path]: index }));
+    }
+    // Stops stay in order: dragging one past its neighbour would reorder the
+    // ramp under the knob that is holding it.
+    const lo = index > 0 ? g.stops[index - 1]!.position : 0;
+    const hi = index < g.stops.length - 1 ? g.stops[index + 1]!.position : 1;
+    const stops = g.stops.map((st, i) =>
+      i === index ? { ...st, position: Math.min(hi, Math.max(lo, x)) } : st);
+    TweakStore.updateValue(page.panel.id, meta.path, { ...g, stops });
   };
 
   // Joystick-style pads rest at their centre when the pointer lets go.
@@ -681,6 +748,110 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     >
                       <MoveModRing panelId={page.panel.id} path={meta.path} />
                       <MoveSlotFilterBody meta={meta} value={fv} shape={shape} />
+                    </div>
+                  );
+                }
+                // A ramp fills its slot with the ramp — a list of colours has
+                // nothing to say as a number.
+                if (meta.type === 'gradient') {
+                  const g = normalizeGradient(values[meta.path] as never);
+                  const index = Math.min(rampStop[meta.path] ?? 0, g.stops.length - 1);
+                  return (
+                    <div
+                      key={meta.path}
+                      className="tweakers-move-dial"
+                      data-kind="ramp"
+                      data-active={active || undefined}
+                      onPointerDown={(e) => {
+                        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                        fineRef.current = null;
+                        setDragPath(meta.path);
+                        armMod(meta.path);
+                        rampFromPointer(e, meta, true);
+                      }}
+                      onPointerMove={(e) => {
+                        if (dragPath === meta.path) rampFromPointer(e, meta, false);
+                      }}
+                      onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
+                      onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                    >
+                      <MoveModRing panelId={page.panel.id} path={meta.path} />
+                      <MoveSlotRampBody
+                        label={meta.label}
+                        value={`${index + 1}/${g.stops.length}`}
+                        css={rampCss(g.stops)}
+                        stop={g.stops[index]?.position ?? null}
+                      />
+                    </div>
+                  );
+                }
+                // A bounded value whose two ends are the same place draws a
+                // needle: on a bar, 359° and 1° sit as far apart as they can.
+                if (meta.type === 'slider' && meta.display === 'dial') {
+                  const min = meta.min ?? 0, max = meta.max ?? 1;
+                  const v = Number(values[meta.path] ?? min);
+                  return (
+                    <div
+                      key={meta.path}
+                      className="tweakers-move-dial"
+                      data-kind="dial"
+                      data-active={active || undefined}
+                      onPointerDown={(e) => {
+                        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                        fineRef.current = null;
+                        setDragPath(meta.path);
+                        armMod(meta.path);
+                        needleFromPointer(e, meta);
+                      }}
+                      onPointerMove={(e) => {
+                        if (dragPath === meta.path) needleFromPointer(e, meta);
+                      }}
+                      onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
+                      onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                    >
+                      <MoveModRing panelId={page.panel.id} path={meta.path} />
+                      <MoveSlotDialBody
+                        label={meta.label}
+                        value={`${Number(v.toFixed(2))}${meta.unit ?? (Math.abs(max - min) >= 180 ? '°' : '')}`}
+                        bearing={valueToBearing(v, min, max)}
+                        origin={valueToBearing(meta.origin ?? min, min, max)}
+                      />
+                    </div>
+                  );
+                }
+                // A transfer curve fills its slot with the shape itself: the
+                // whole curve drawn, and a dot on the point this knob holds.
+                if (meta.type === 'transfer') {
+                  const points = normalizeTransfer(values[meta.path] as TransferValue).points;
+                  const index = Math.min(curvePoint[meta.path] ?? 0, points.length - 1);
+                  const held = points[index]!;
+                  const samples = Array.from({ length: 48 }, (_, k) => sampleTransfer(points, k / 47));
+                  return (
+                    <div
+                      key={meta.path}
+                      className="tweakers-move-dial"
+                      data-kind="transfer"
+                      data-active={active || undefined}
+                      onPointerDown={(e) => {
+                        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                        fineRef.current = null;
+                        setDragPath(meta.path);
+                        armMod(meta.path);
+                        transferFromPointer(e, meta, true);
+                      }}
+                      onPointerMove={(e) => {
+                        if (dragPath === meta.path) transferFromPointer(e, meta, false);
+                      }}
+                      onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
+                      onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                    >
+                      <MoveModRing panelId={page.panel.id} path={meta.path} />
+                      <MoveSlotTransferBody
+                        label={meta.label}
+                        value={`${index + 1}/${points.length}`}
+                        shape={previewPathData(samples)}
+                        point={{ x: held.x, y: 1 - held.y }}
+                      />
                     </div>
                   );
                 }

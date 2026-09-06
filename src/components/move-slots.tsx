@@ -5,6 +5,7 @@ export { MoveSlotNumericBody, MoveSlotPlaybackDrawing } from './move-visuals';
 import type { ControlMeta } from '../store/TweakStore';
 import { LUCIDE_ICONS } from '../icons';
 import { enumOptionLabel, enumOptionValue } from '../move-layout';
+import { arcPath } from '../angle-core';
 import { resolveFilterAxis, type FilterValue } from '../filter-core';
 import { ListScreen } from './ListScreen';
 
@@ -50,6 +51,9 @@ export type MoveSlotKind =
   | 'xy'
   | 'range'
   | 'filter'
+  | 'transfer'
+  | 'ramp'
+  | 'dial'
   | 'opacity'
   | 'blur'
   | 'pan'
@@ -63,6 +67,9 @@ export function moveSlotKind(
   opts: { enum?: boolean; shape?: string | null; glyph?: string | null; valueFirst?: boolean; value?: unknown } = {}
 ): MoveSlotKind {
   if (meta.type === 'filter') return 'filter';
+  if (meta.type === 'transfer') return 'transfer';
+  if (meta.type === 'gradient') return 'ramp';
+  if (meta.type === 'slider' && meta.display === 'dial') return 'dial';
   if (meta.type === 'xy') return 'xy';
   if (meta.type === 'range') return 'range';
   const drawing = moveNumericDrawing(meta, opts.value ?? meta.min);
@@ -268,6 +275,117 @@ export function MoveSlotXYBody({ label, value, position, gridN, shape = null }: 
   );
 }
 
+/**
+ * A slot that draws instead of counting: the curve, the ramp and the needle
+ * all sit on the same dark display the filter's response uses, with a small
+ * label under it. A big centred name over a faint line — the first cut of
+ * this — read as neither.
+ */
+function MoveSlotDisplay({ children }: { children: ReactNode }) {
+  return <div className="tweakers-move-slot-display">{children}</div>;
+}
+
+function MoveSlotDisplayFoot({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="tweakers-move-slot-foot">
+      <span className="tweakers-move-slot-foot-label">{label}</span>
+      <span className="tweakers-move-slot-foot-value">{value}</span>
+    </div>
+  );
+}
+
+/**
+ * The transfer-curve slot. The curve fills the display, with a dot on the
+ * point the knob is holding — one knob shapes a whole curve, so the slot has
+ * to say WHICH point it is shaping.
+ */
+export function MoveSlotTransferBody({ label, value, shape, point }: {
+  label: string;
+  value: ReactNode;
+  /** The whole curve as an SVG path, in the slot's own y-down space. */
+  shape: string;
+  /** The held point's normalized screen position (y down), or null. */
+  point: { x: number; y: number } | null;
+}) {
+  return (
+    <>
+      <MoveSlotDisplay>
+        <MoveSlotShape d={shape} className="tweakers-move-slot-shape" />
+        {point && (
+          <span
+            className="tweakers-move-slot-dot"
+            style={{ left: `${point.x * 100}%`, top: `${point.y * 100}%` }}
+          />
+        )}
+      </MoveSlotDisplay>
+      <MoveSlotDisplayFoot label={label} value={value} />
+    </>
+  );
+}
+
+/**
+ * The colour-ramp slot: the ramp itself fills the display, because a list of
+ * colours has nothing to say as a number. A tick marks the stop the knob is
+ * holding.
+ */
+export function MoveSlotRampBody({ label, value, css, stop }: {
+  label: string;
+  value: ReactNode;
+  /** The ramp as a CSS `linear-gradient(...)`. */
+  css: string;
+  /** The held stop's position 0..1, or null. */
+  stop: number | null;
+}) {
+  return (
+    <>
+      <MoveSlotDisplay>
+        <span className="tweakers-move-slot-ramp" style={{ background: css }} />
+        {stop !== null && (
+          // Inset a hair so a stop at either end still shows its whole tick —
+          // the only thing saying which stop the knob is holding.
+          <span
+            className="tweakers-move-slot-tick"
+            style={{ left: `calc(${stop * 100}% + ${(0.5 - stop) * 4}px)` }}
+          />
+        )}
+      </MoveSlotDisplay>
+      <MoveSlotDisplayFoot label={label} value={value} />
+    </>
+  );
+}
+
+/**
+ * The dial slot — a needle, for the values whose two ends are the same place.
+ * A bar would put 359° and 1° as far apart as a slot can show them.
+ */
+export function MoveSlotDialBody({ label, value, bearing, origin }: {
+  label: string;
+  value: ReactNode;
+  /** Compass bearing in degrees, 0 = up, clockwise. */
+  bearing: number;
+  /** The bearing the sweep grows out of. */
+  origin: number;
+}) {
+  const rad = ((bearing - 90) * Math.PI) / 180;
+  return (
+    <>
+      <MoveSlotDisplay>
+        <svg className="tweakers-move-slot-needle" viewBox="-12 -12 24 24" aria-hidden="true">
+          <circle className="tweakers-move-needle-face" cx="0" cy="0" r="8.5" />
+          <path className="tweakers-move-needle-sweep" d={arcPath(origin, bearing, 8.5)} />
+          <line
+            className="tweakers-move-needle-hand"
+            x1="0" y1="0"
+            x2={(8.5 * Math.cos(rad)).toFixed(3)}
+            y2={(8.5 * Math.sin(rad)).toFixed(3)}
+          />
+        </svg>
+      </MoveSlotDisplay>
+      <MoveSlotDisplayFoot label={label} value={value} />
+    </>
+  );
+}
+
 /** The range slot — readout plus the two-handled span bar. */
 export function MoveSlotRangeBody({
   label, value, lo, hi,
@@ -353,4 +471,7 @@ export const MOVE_SLOT_LIBRARY = {
   xy: { description: 'two axes in one gesture field, or a live shape preview', component: MoveSlotXYBody },
   range: { description: 'two handles on one bar; volume knob is the second hand', component: MoveSlotRangeBody },
   filter: { description: '2 slots: cutoff + resonance as one response picture', component: MoveSlotFilterBody },
+  transfer: { description: 'a response curve, one knob holding one of its points', component: MoveSlotTransferBody },
+  ramp: { description: 'a colour ramp, one knob holding one of its stops', component: MoveSlotRampBody },
+  dial: { description: 'a needle, for values whose two ends are the same place', component: MoveSlotDialBody },
 } as const satisfies Record<MoveSlotKind, { description: string; component: unknown }>;

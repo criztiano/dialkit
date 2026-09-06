@@ -1,5 +1,5 @@
 import { ModulationSlot, ModulationType, ModulationParams, ModulationAssignment, ModPageLayout } from './modulation-core.js';
-import './TweakStore-ChWM8M9D.js';
+import './TweakStore-BUrrkY5L.js';
 import './range-slider-core.js';
 import './curve-composer-core.js';
 

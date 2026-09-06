@@ -50,11 +50,14 @@ export const isEnumDial = (c: ControlMeta) =>
   c.type === 'select' && Array.isArray(c.options) && c.options.length > 1;
 
 const isDial = (c: ControlMeta) =>
-  c.type === 'slider' || c.type === 'xy' || c.type === 'range' || c.type === 'filter' || isEnumDial(c) ||
+  c.type === 'slider' || c.type === 'xy' || c.type === 'range' || c.type === 'filter' ||
+  c.type === 'transfer' || c.type === 'gradient' || isEnumDial(c) ||
   (c.type === 'number' && c.min != null && c.max != null);
 
 /** Two-handed dials and enums need a slot of their own, never a value chip. */
-const noChip = (c: ControlMeta) => c.type === 'xy' || c.type === 'range' || c.type === 'filter' || isEnumDial(c);
+const noChip = (c: ControlMeta) =>
+  c.type === 'xy' || c.type === 'range' || c.type === 'filter' || c.type === 'transfer' ||
+  c.type === 'gradient' || isEnumDial(c);
 
 /**
  * How many dial columns a control claims. The filter is the kit's first

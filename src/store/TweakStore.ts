@@ -6,6 +6,7 @@ import { HEX_COLOR_REGEX } from '../color-core';
 import { normalizeGradient, DEFAULT_GRADIENT, type GradientValue } from '../gradient-core';
 import { resolveAxis, normalizeValue as normalizeXYValue, type XYValue } from '../xy-pad-core';
 import { clampRange } from '../range-slider-core';
+import { normalizeTransfer, DEFAULT_TRANSFER, type TransferValue } from '../transfer-core';
 import { resolveFilterAxis, normalizeFilterValue, type FilterAxisConfig, type FilterValue } from '../filter-core';
 import { resolvePersistTarget, loadPersisted, savePersisted, type PersistTarget } from './persist';
 // Type-only (erased in JS): lets consumers import `RangeValue` from the package types.
@@ -13,6 +14,7 @@ import type { RangeValue } from '../range-slider-core';
 
 export type { XYValue };
 export type { RangeValue };
+export type { TransferValue };
 
 /**
  * One axis of an XY pad control. Partial — every field falls back through
@@ -95,6 +97,12 @@ export type ColorConfig = {
 export type GradientConfig = {
   type: 'gradient';
   default?: GradientValue;
+  /**
+   * `ramp` opens the editor without the fill-shape chrome (no linear/radial/
+   * conic switcher, no transform pad) — for gradients read along one axis,
+   * like a colour scale or a shader lookup, where a shape would do nothing.
+   */
+  form?: 'fill' | 'ramp';
 };
 
 export type XYConfig = {
@@ -145,6 +153,25 @@ export type FilterConfig = {
   enabled?: boolean;
 };
 
+/**
+ * An editable transfer curve — input on x, output on y, both 0..1. For the
+ * parameters that are really the shape of a response (a gamma, a depth
+ * falloff, an edge ramp) and that a row of sliders can only approximate.
+ * The value is the control points; read the shape with `sampleTransfer`, or
+ * bake it for a shader with `transferLut`.
+ */
+export type TransferConfig = {
+  type: 'transfer';
+  /** Starting shape. Repaired through `normalizeTransfer`; absent = straight through. */
+  default?: TransferValue;
+  /** Surface height in px, clamped 64–200. Default 104. */
+  height?: number;
+  /** Grid divisions behind the curve (default 4). 0 hides it. */
+  grid?: number;
+  /** Names for the two axes, shown small at the edges. */
+  axisLabels?: { x?: string; y?: string };
+};
+
 export type RangeConfig = {
   type: 'range';
   min: number;
@@ -182,6 +209,18 @@ export type SliderConfig = {
   bipolar?: boolean;
   /** `vertical` renders the column card (fill grows bottom-up, label at base). */
   orientation?: 'horizontal' | 'vertical';
+  /**
+   * `dial` draws the value as a rotary needle instead of a track — for the
+   * parameters whose two ends are the same place (a heading, a sun position,
+   * a tilt). It stays a slider everywhere else, so a hardware knob and a
+   * preset see no difference; only the drawing changes.
+   */
+  display?: 'track' | 'dial';
+  /**
+   * Past the end, come back around instead of stopping. Dial only; defaults
+   * to true when the range covers a full turn (360, or -180..180).
+   */
+  wrap?: boolean;
 };
 
 /**
@@ -410,7 +449,7 @@ export type ListField = {
   defaultValue: number | boolean | string;
 };
 
-export type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue | FilterConfig | FilterValue;
+export type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue | FilterConfig | FilterValue | TransferConfig | TransferValue;
 
 export type TweakConfig = {
   // CurveConfig and AnalyserConfig are not TweakValues: they never enter the
@@ -424,7 +463,7 @@ export type ReservedKey = '_collapsed' | '_collapsible' | '_tabs';
 export type ResolvedValues<T extends TweakConfig> = {
   // Curve rows are display-only, and reserved keys are metadata; neither keeps
   // its key in the resolved shape.
-  [K in keyof T as T[K] extends CurveConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?]
+  [K in keyof T as T[K] extends CurveConfig ? never : T[K] extends AnalyserConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?]
     ? number
     : T[K] extends SliderConfig
     ? number
@@ -450,6 +489,8 @@ export type ResolvedValues<T extends TweakConfig> = {
                   ? RangeValue
                 : T[K] extends FilterConfig
                   ? FilterValue
+                : T[K] extends TransferConfig
+                  ? TransferValue
                 : T[K] extends GalleryConfig
                   ? string
                   : T[K] extends FileConfig
@@ -510,7 +551,7 @@ export type AffordanceConfig = {
 
 export type ControlMeta = {
   moveVisual?: MoveVisual;
-  type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser' | 'filter';
+  type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser' | 'filter' | 'transfer';
   path: string;
   label: string;
   /** One line of help, revealed on hover or when focus lands inside the control. */
@@ -522,6 +563,12 @@ export type ControlMeta = {
   step?: number;
   /** Range control's configured reset target — its `default`, else the full {min,max} span. */
   rangeDefault?: RangeValue;
+  /** Gradient's editor form — `ramp` drops the fill-shape chrome. */
+  gradientForm?: 'fill' | 'ramp';
+  /** Transfer curve's surface height, grid divisions and axis names. */
+  curveHeight?: number;
+  gridDivisions?: number;
+  axisLabels?: { x?: string; y?: string };
   children?: ControlMeta[];
   defaultOpen?: boolean;
   /** Folder declared `_enabled` — renders as a module whose header switch drives `<path>._enabled`. */
@@ -537,8 +584,10 @@ export type ControlMeta = {
   options?: (string | { value: string; label: string; icon?: string })[];
   /** Select's per-option shape sampler — swapped in place by syncCurveConfigs. */
   preview?: (value: string) => ((t: number) => number) | null | undefined;
-  /** Select's rendering mode, from the SelectConfig form. */
-  display?: 'dropdown' | 'segmented';
+  /** Select's rendering mode, or a slider's `dial` form. */
+  display?: 'dropdown' | 'segmented' | 'track' | 'dial';
+  /** Dial slider: wrap past the ends instead of stopping. */
+  wrap?: boolean;
   placeholder?: string;
   items?: GalleryItem[];
   columns?: number;
@@ -1645,6 +1694,8 @@ class TweakStoreClass {
           origin: value.origin,
           bipolar: value.bipolar,
           orientation: value.orientation,
+          display: value.display,
+          wrap: value.wrap,
           shortcut,
         });
       } else if (this.isNumberConfig(value)) {
@@ -1671,7 +1722,7 @@ class TweakStoreClass {
       } else if (this.isColorConfig(value)) {
         controls.push({ type: 'color', path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {
-        controls.push({ type: 'gradient', path, label });
+        controls.push({ type: 'gradient', path, label, gradientForm: value.form });
       } else if (this.isXYConfig(value)) {
         controls.push({ type: 'xy', path, label, xAxis: value.x, yAxis: value.y, grid: value.grid, density: value.density, snap: value.snap, returnToCenter: value.returnToCenter, showValues: value.showValues });
       } else if (this.isFilterConfig(value)) {
@@ -1680,6 +1731,11 @@ class TweakStoreClass {
         controls.push({ type: 'filter', path, label, cutoffAxis: value.cutoff, resonanceAxis: value.resonance, response: value.response, filterEnabled: value.enabled });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: 'text', path, label, placeholder: value.placeholder });
+      } else if (this.isTransferConfig(value)) {
+        // No `shortcut`: a transfer value is a point list, which the
+        // numeric-nudge shortcut path can't drive (the range precedent).
+        controls.push({ type: 'transfer', path, label, curveHeight: value.height,
+          gridDivisions: value.grid, axisLabels: value.axisLabels });
       } else if (this.isRangeConfig(value)) {
         // No `shortcut`: a range value is {min,max}, which the numeric-nudge
         // shortcut path can't drive, and RangeSlider has no shortcut prop.
@@ -1837,6 +1893,8 @@ class TweakStoreClass {
         values[path] = normalizeXYValue(value.default, xAxis, yAxis, value.snap ?? false);
       } else if (this.isTextConfig(value)) {
         values[path] = value.default ?? '';
+      } else if (this.isTransferConfig(value)) {
+        values[path] = normalizeTransfer(value.default ?? DEFAULT_TRANSFER);
       } else if (this.isRangeConfig(value)) {
         values[path] = value.default ?? { min: value.min, max: value.max };
       } else if (this.isFilterConfig(value)) {
@@ -1946,6 +2004,15 @@ class TweakStoreClass {
       value !== null &&
       'type' in value &&
       (value as FilterConfig).type === 'filter'
+    );
+  }
+
+  private isTransferConfig(value: unknown): value is TransferConfig {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      !Array.isArray(value) &&
+      (value as TransferConfig).type === 'transfer'
     );
   }
 
@@ -2238,6 +2305,13 @@ class TweakStoreClass {
         // Items are self-validating ({type, params}); preserve the user's array
         // across config edits, falling back to the default when shape is lost.
         return Array.isArray(existingValue) ? existingValue : defaultValue;
+      case 'transfer':
+        // A point list is a leaf preserved by identity (like color), not a
+        // folder — never let a panel update drop it. normalizeTransfer repairs
+        // whatever survived; a lost shape falls back to straight through.
+        return typeof existingValue === 'object' && existingValue !== null && !Array.isArray(existingValue)
+          ? normalizeTransfer(existingValue)
+          : defaultValue;
       case 'range': {
         // A range value is a leaf {min,max} preserved by identity (like color),
         // not a folder — never let a panel update drop it. Reconcile the stored

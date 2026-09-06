@@ -262,6 +262,9 @@ var normColor = (color) => {
   const rgba = parseHex(color);
   return rgba ? formatHex(rgba, true) : "#000000ff";
 };
+function rampCss(stops) {
+  return gradientToCss({ type: "linear", angle: 90, stops });
+}
 function gradientToCss(value) {
   const stopStr = stopString(value.stops);
   const angle = round2(wrapAngle(value.angle), 2);
@@ -566,6 +569,117 @@ function handleLeftStyles(lowPercent, highPercent) {
     low: `max(0px, min(calc(100% - 2px), calc(${lowPercent}% - 1px - ${ramp})))`,
     high: `min(calc(100% - 2px), max(0px, calc(${highPercent}% - 1px + ${ramp})))`
   };
+}
+
+// src/transfer-core.ts
+var DEFAULT_TRANSFER = { points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] };
+var TRANSFER_MIN_GAP = 0.02;
+var TRANSFER_MAX_POINTS = 12;
+var clamp013 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
+var finite = (v, fallback) => typeof v === "number" && Number.isFinite(v) ? v : fallback;
+function normalizeTransfer(value) {
+  const raw = value?.points;
+  if (!Array.isArray(raw) || raw.length < 2) return { points: DEFAULT_TRANSFER.points.map((p) => ({ ...p })) };
+  const points = raw.map((p) => ({ x: clamp013(finite(p?.x, 0)), y: clamp013(finite(p?.y, 0)) })).sort((a, b) => a.x - b.x);
+  points[0].x = 0;
+  points[points.length - 1].x = 1;
+  const out = [points[0]];
+  for (let i = 1; i < points.length - 1; i++) {
+    if (points[i].x - out[out.length - 1].x < TRANSFER_MIN_GAP) continue;
+    if (1 - points[i].x < TRANSFER_MIN_GAP) continue;
+    out.push(points[i]);
+  }
+  out.push(points[points.length - 1]);
+  return { points: out.slice(0, TRANSFER_MAX_POINTS) };
+}
+function tangents(points) {
+  const n = points.length;
+  const secant = new Array(n - 1);
+  for (let i = 0; i < n - 1; i++) {
+    const dx = points[i + 1].x - points[i].x;
+    secant[i] = dx > 0 ? (points[i + 1].y - points[i].y) / dx : 0;
+  }
+  const m = new Array(n);
+  m[0] = secant[0];
+  m[n - 1] = secant[n - 2];
+  for (let i = 1; i < n - 1; i++) {
+    m[i] = secant[i - 1] * secant[i] <= 0 ? 0 : (secant[i - 1] + secant[i]) / 2;
+  }
+  for (let i = 0; i < n - 1; i++) {
+    if (secant[i] === 0) {
+      m[i] = 0;
+      m[i + 1] = 0;
+      continue;
+    }
+    const a = m[i] / secant[i];
+    const b = m[i + 1] / secant[i];
+    const h = Math.hypot(a, b);
+    if (h > 3) {
+      m[i] = 3 / h * a * secant[i];
+      m[i + 1] = 3 / h * b * secant[i];
+    }
+  }
+  return m;
+}
+function sampleTransfer(points, x) {
+  if (!points.length) return clamp013(x);
+  if (points.length === 1) return points[0].y;
+  const t = clamp013(finite(x, 0));
+  if (t <= points[0].x) return points[0].y;
+  const last = points[points.length - 1];
+  if (t >= last.x) return last.y;
+  let i = 0;
+  while (i < points.length - 2 && points[i + 1].x < t) i++;
+  const p0 = points[i], p1 = points[i + 1];
+  const h = p1.x - p0.x;
+  if (h <= 0) return p1.y;
+  const m = tangents(points);
+  const s = (t - p0.x) / h;
+  const s2 = s * s, s3 = s2 * s;
+  return clamp013(
+    (2 * s3 - 3 * s2 + 1) * p0.y + (s3 - 2 * s2 + s) * h * m[i] + (-2 * s3 + 3 * s2) * p1.y + (s3 - s2) * h * m[i + 1]
+  );
+}
+function transferLut(points, size = 256) {
+  const out = new Float32Array(size);
+  for (let i = 0; i < size; i++) out[i] = sampleTransfer(points, size === 1 ? 0 : i / (size - 1));
+  return out;
+}
+function insertPoint(points, x, y) {
+  const next = normalizeTransfer({ points: [...points, { x: clamp013(x), y: clamp013(y) }] }).points;
+  const index = next.findIndex((p) => Math.abs(p.x - clamp013(x)) < 1e-9);
+  return { points: next, index: index < 0 ? 0 : index };
+}
+function removePoint(points, index) {
+  if (index <= 0 || index >= points.length - 1) return points;
+  return points.filter((_, i) => i !== index);
+}
+function movePoint(points, index, x, y) {
+  if (index < 0 || index >= points.length) return points;
+  const out = points.map((p) => ({ ...p }));
+  const ny = clamp013(finite(y, 0));
+  if (index === 0 || index === points.length - 1) {
+    out[index].y = ny;
+    return out;
+  }
+  const lo = out[index - 1].x + TRANSFER_MIN_GAP;
+  const hi = out[index + 1].x - TRANSFER_MIN_GAP;
+  out[index] = { x: hi < lo ? out[index].x : Math.min(hi, Math.max(lo, clamp013(finite(x, 0)))), y: ny };
+  return out;
+}
+function nearestPoint(points, x, y, tolerance) {
+  let best = -1, bestD = tolerance;
+  for (let i = 0; i < points.length; i++) {
+    const d = Math.hypot(points[i].x - x, points[i].y - y);
+    if (d <= bestD) {
+      best = i;
+      bestD = d;
+    }
+  }
+  return best;
+}
+function isIdentityTransfer(points) {
+  return points.length === 2 && points[0].x === 0 && points[0].y === 0 && points[1].x === 1 && points[1].y === 1;
 }
 
 // src/filter-core.ts
@@ -1427,6 +1541,8 @@ var TweakStoreClass = class {
           origin: value.origin,
           bipolar: value.bipolar,
           orientation: value.orientation,
+          display: value.display,
+          wrap: value.wrap,
           shortcut
         });
       } else if (this.isNumberConfig(value)) {
@@ -1453,13 +1569,22 @@ var TweakStoreClass = class {
       } else if (this.isColorConfig(value)) {
         controls.push({ type: "color", path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {
-        controls.push({ type: "gradient", path, label });
+        controls.push({ type: "gradient", path, label, gradientForm: value.form });
       } else if (this.isXYConfig(value)) {
         controls.push({ type: "xy", path, label, xAxis: value.x, yAxis: value.y, grid: value.grid, density: value.density, snap: value.snap, returnToCenter: value.returnToCenter, showValues: value.showValues });
       } else if (this.isFilterConfig(value)) {
         controls.push({ type: "filter", path, label, cutoffAxis: value.cutoff, resonanceAxis: value.resonance, response: value.response, filterEnabled: value.enabled });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: "text", path, label, placeholder: value.placeholder });
+      } else if (this.isTransferConfig(value)) {
+        controls.push({
+          type: "transfer",
+          path,
+          label,
+          curveHeight: value.height,
+          gridDivisions: value.grid,
+          axisLabels: value.axisLabels
+        });
       } else if (this.isRangeConfig(value)) {
         controls.push({
           type: "range",
@@ -1596,6 +1721,8 @@ var TweakStoreClass = class {
         values[path] = normalizeValue(value.default, xAxis, yAxis, value.snap ?? false);
       } else if (this.isTextConfig(value)) {
         values[path] = value.default ?? "";
+      } else if (this.isTransferConfig(value)) {
+        values[path] = normalizeTransfer(value.default ?? DEFAULT_TRANSFER);
       } else if (this.isRangeConfig(value)) {
         values[path] = value.default ?? { min: value.min, max: value.max };
       } else if (this.isFilterConfig(value)) {
@@ -1648,6 +1775,9 @@ var TweakStoreClass = class {
   }
   isFilterConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "filter";
+  }
+  isTransferConfig(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value) && value.type === "transfer";
   }
   isRangeConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "range";
@@ -1814,6 +1944,8 @@ var TweakStoreClass = class {
         return typeof existingValue === "string" ? existingValue : defaultValue;
       case "list":
         return Array.isArray(existingValue) ? existingValue : defaultValue;
+      case "transfer":
+        return typeof existingValue === "object" && existingValue !== null && !Array.isArray(existingValue) ? normalizeTransfer(existingValue) : defaultValue;
       case "range": {
         if (!this.isRangeValue(existingValue)) {
           return defaultValue;
@@ -2125,7 +2257,27 @@ function buildResolvedValues(config, flatValues, prefix) {
       result[key] = flatValues[path] ?? configValue.default ?? [];
     } else if (isListConfig(configValue)) {
       result[key] = flatValues[path] ?? normalizeListItems(configValue);
-    } else if (isCurveConfig(configValue)) {
+    } else if (isXYConfig(configValue)) {
+      const cfg = configValue;
+      result[key] = flatValues[path] ?? normalizeValue(
+        cfg.default,
+        resolveAxis(cfg.x),
+        resolveAxis(cfg.y),
+        cfg.snap ?? false
+      );
+    } else if (isRangeConfig(configValue)) {
+      const cfg = configValue;
+      result[key] = flatValues[path] ?? cfg.default ?? { min: cfg.min, max: cfg.max };
+    } else if (isFilterConfig(configValue)) {
+      const cfg = configValue;
+      result[key] = flatValues[path] ?? normalizeFilterValue(
+        cfg.default,
+        resolveFilterAxis(cfg.cutoff, "cutoff"),
+        resolveFilterAxis(cfg.resonance, "resonance")
+      );
+    } else if (isTransferConfig(configValue)) {
+      result[key] = flatValues[path] ?? normalizeTransfer(configValue.default ?? DEFAULT_TRANSFER);
+    } else if (isCurveConfig(configValue) || isAnalyserConfig(configValue)) {
     } else if (typeof configValue === "object" && configValue !== null) {
       result[key] = buildResolvedValues(configValue, flatValues, path);
     }
@@ -2177,6 +2329,21 @@ function isSliderConfig(value) {
 function isListConfig(value) {
   return hasType(value, "list") && "itemTypes" in value && typeof value.itemTypes === "object";
 }
+function isXYConfig(value) {
+  return hasType(value, "xy");
+}
+function isRangeConfig(value) {
+  return hasType(value, "range");
+}
+function isFilterConfig(value) {
+  return hasType(value, "filter");
+}
+function isTransferConfig(value) {
+  return hasType(value, "transfer");
+}
+function isAnalyserConfig(value) {
+  return hasType(value, "analyser");
+}
 function isCurveConfig(value) {
   return hasType(value, "curve") && typeof value.sample === "function";
 }
@@ -2186,7 +2353,7 @@ function getFirstOptionValue(options) {
 }
 
 // src/components/TweakRoot.tsx
-import { useEffect as useEffect20, useState as useState23, useRef as useRef27, useCallback as useCallback18 } from "react";
+import { useEffect as useEffect22, useState as useState25, useRef as useRef29, useCallback as useCallback20 } from "react";
 import { createPortal as createPortal7 } from "react-dom";
 
 // src/store/TimelineStore.ts
@@ -2721,7 +2888,7 @@ function Folder({ title, children, defaultOpen = true, collapsible = true, isRoo
 }
 
 // src/components/Panel.tsx
-import { useState as useState22, useSyncExternalStore as useSyncExternalStore7 } from "react";
+import { useState as useState24, useSyncExternalStore as useSyncExternalStore7 } from "react";
 import { motion as motion10, AnimatePresence as AnimatePresence7 } from "motion/react";
 
 // src/panel-tabs.ts
@@ -3099,7 +3266,7 @@ var DRAG_THRESHOLD = 3;
 var EDGE_HIT = 6;
 var CURVE_MIN_WEIGHT_FRAC = 0.06;
 var lerp = (a, b, t) => a + (b - a) * t;
-var clamp013 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
+var clamp014 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
 var clampBipolar = (v) => v < -1 ? -1 : v > 1 ? 1 : v;
 var SKEW_MAX = 0.45;
 var BACK_MAX = 0.8;
@@ -3122,10 +3289,10 @@ function deriveEase(type, curvature, steepness = 0, overshoot = 0, anticipate = 
   const pts = s >= 0 ? lerp4(base, easingExtremes[key], s) : lerp4(easingPresets.linear, base, s + 1);
   let [x1, y1, x2, y2] = pts;
   const shift = clampBipolar(curvature) * SKEW_MAX;
-  x1 = clamp013(x1 + shift);
-  x2 = clamp013(x2 + shift);
-  y2 += clamp013(overshoot) * BACK_MAX;
-  y1 -= clamp013(anticipate) * BACK_MAX;
+  x1 = clamp014(x1 + shift);
+  x2 = clamp014(x2 + shift);
+  y2 += clamp014(overshoot) * BACK_MAX;
+  y1 -= clamp014(anticipate) * BACK_MAX;
   return [x1, y1, x2, y2];
 }
 function bezierAxis(p1, p2, s) {
@@ -3137,14 +3304,14 @@ function bezierAxisDeriv(p1, p2, s) {
   return 3 * u * u * p1 + 6 * u * s * (p2 - p1) + 3 * s * s * (1 - p2);
 }
 function bezierY(ease, x) {
-  const tx = clamp013(x);
+  const tx = clamp014(x);
   let s = tx;
   for (let i = 0; i < 6; i++) {
     const xs = bezierAxis(ease[0], ease[2], s) - tx;
     if (Math.abs(xs) < 1e-5) break;
     const d = bezierAxisDeriv(ease[0], ease[2], s);
     if (Math.abs(d) < 1e-6) break;
-    s = clamp013(s - xs / d);
+    s = clamp014(s - xs / d);
   }
   return bezierAxis(ease[1], ease[3], s);
 }
@@ -3177,7 +3344,7 @@ function integrateSpringTrace(targets, stiffness, damping, mass, initial, collec
 }
 function springPoints(curvature, steepness = 0) {
   const visualDuration = 1;
-  const bounce = clamp013((clampBipolar(curvature) + 1) / 2) * 0.6;
+  const bounce = clamp014((clampBipolar(curvature) + 1) / 2) * 0.6;
   const mass = 1;
   let stiffness = 2 * Math.PI / visualDuration;
   stiffness = stiffness * stiffness;
@@ -3190,7 +3357,7 @@ function springPoints(curvature, steepness = 0) {
   }).points;
 }
 function interp(points, t) {
-  const x = clamp013(t) * (points.length - 1);
+  const x = clamp014(t) * (points.length - 1);
   const i = Math.floor(x);
   if (i >= points.length - 1) return points[points.length - 1];
   return lerp(points[i], points[i + 1], x - i);
@@ -3272,7 +3439,7 @@ function totalWeight(segments) {
 }
 function timelineSlots(segments, gap = 0) {
   const n = segments.length;
-  const g = n > 1 ? clamp013(gap) : 0;
+  const g = n > 1 ? clamp014(gap) : 0;
   const total = totalWeight(segments);
   const content = 1 - g;
   const gapW = n > 1 ? g / (n - 1) : 0;
@@ -3312,13 +3479,13 @@ function segmentSpan(segments, index, gap = 0) {
 }
 function segmentIndexAt(xNorm, segments, gap = 0) {
   if (gap > 0) {
-    const x2 = clamp013(xNorm);
+    const x2 = clamp014(xNorm);
     const slots = timelineSlots(segments, gap);
     for (const s of slots) if (x2 < s.b) return s.index;
     return segments.length - 1;
   }
   const total = totalWeight(segments);
-  const x = clamp013(xNorm) * total;
+  const x = clamp014(xNorm) * total;
   let acc = 0;
   for (let i = 0; i < segments.length; i++) {
     acc += segments[i].weight;
@@ -3341,7 +3508,7 @@ function boundaryAt(xNorm, segments, edgeHitNorm, gap = 0) {
   return best;
 }
 function smootherstep(t) {
-  const x = clamp013(t);
+  const x = clamp014(t);
   return x * x * x * (x * (x * 6 - 15) + 10);
 }
 function cloneSegments(comp, segments) {
@@ -3421,14 +3588,14 @@ function setSegmentOvershoot(comp, index, overshoot) {
   const src = comp.segments[index];
   if (!src) return comp;
   const next = comp.segments.slice();
-  next[index] = { ...src, overshoot: clamp013(overshoot) };
+  next[index] = { ...src, overshoot: clamp014(overshoot) };
   return cloneSegments(comp, next);
 }
 function setSegmentAnticipate(comp, index, anticipate) {
   const src = comp.segments[index];
   if (!src) return comp;
   const next = comp.segments.slice();
-  next[index] = { ...src, anticipate: clamp013(anticipate) };
+  next[index] = { ...src, anticipate: clamp014(anticipate) };
   return cloneSegments(comp, next);
 }
 function redistributeWeight(comp, boundaryIndex, deltaFrac) {
@@ -3467,11 +3634,11 @@ function setDriverSteepness(comp, steepness) {
 }
 function setDriverOvershoot(comp, overshoot) {
   if (!comp.driver) return comp;
-  return { ...comp, driver: { ...comp.driver, overshoot: clamp013(overshoot) } };
+  return { ...comp, driver: { ...comp.driver, overshoot: clamp014(overshoot) } };
 }
 function setDriverAnticipate(comp, anticipate) {
   if (!comp.driver) return comp;
-  return { ...comp, driver: { ...comp.driver, anticipate: clamp013(anticipate) } };
+  return { ...comp, driver: { ...comp.driver, anticipate: clamp014(anticipate) } };
 }
 var DRAG_ENERGY_GAIN = 0.6;
 var DRAG_STEEP_GAIN = 0.6;
@@ -3482,7 +3649,7 @@ function headerHit(xN, py, segments, layout) {
   return null;
 }
 function toLocalCoords(clientX, clientY, rect, totalH) {
-  const xN = clamp013((clientX - rect.left) / (rect.width || 1));
+  const xN = clamp014((clientX - rect.left) / (rect.width || 1));
   const py = (clientY - rect.top) / (rect.height || 1) * totalH;
   return { xN, py };
 }
@@ -3508,14 +3675,14 @@ function buildSamplers(comp) {
   };
 }
 function directionPhase(u, dir) {
-  const x = clamp013(u);
+  const x = clamp014(u);
   if (dir === "reverse") return 1 - x;
   if (dir === "mirror") return 1 - Math.abs(1 - 2 * x);
   return x;
 }
 function readComposition(comp, u, s) {
   const inputPhase = directionPhase(u, comp.direction);
-  const warpedPhase = s.driver ? clamp013(s.driver(inputPhase)) : inputPhase;
+  const warpedPhase = s.driver ? clamp014(s.driver(inputPhase)) : inputPhase;
   const gap = comp.gap ?? 0;
   if (gap > 0 && comp.segments.length > 1) {
     const slots = timelineSlots(comp.segments, gap);
@@ -3617,8 +3784,8 @@ var TRIGGER_FLYBACK = 0.5;
 function triggersCrossed(prevValue, curValue, steps) {
   const n = Math.max(2, Math.floor(steps));
   const seg = 1 / (n - 1);
-  const p = clamp013(prevValue);
-  const c = clamp013(curValue);
+  const p = clamp014(prevValue);
+  const c = clamp014(curValue);
   const delta = c - p;
   const fired = [];
   if (Math.abs(delta) > TRIGGER_FLYBACK) {
@@ -3718,10 +3885,10 @@ var listModTypes = () => [...registry.values()];
 var MOD_SETTINGS_PANEL = "mod-settings";
 var modKey = (panelId, path) => `${panelId}\0${path}`;
 var clamp5 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-var clamp014 = (v) => clamp5(Number(v) || 0, 0, 1);
+var clamp015 = (v) => clamp5(Number(v) || 0, 0, 1);
 var clampSigned = (v) => clamp5(Number(v) || 0, -1, 1);
 function applyModulation(base, signal, amount, min, max) {
-  const offset = clamp5(signal, -1, 1) * clamp014(amount) * (max - min) / 2;
+  const offset = clamp5(signal, -1, 1) * clamp015(amount) * (max - min) / 2;
   return clamp5(base + offset, min, max);
 }
 var MOD_RING_RADIUS = 6;
@@ -3729,8 +3896,8 @@ var MOD_RING_CIRCUMFERENCE = 2 * Math.PI * MOD_RING_RADIUS;
 var RING_SWEEP_START = 135 / 360;
 var RING_SWEEP_LEN = 270 / 360;
 function modRingArc(from01, to01) {
-  const a = RING_SWEEP_START + clamp014(from01) * RING_SWEEP_LEN;
-  const b = RING_SWEEP_START + clamp014(to01) * RING_SWEEP_LEN;
+  const a = RING_SWEEP_START + clamp015(from01) * RING_SWEEP_LEN;
+  const b = RING_SWEEP_START + clamp015(to01) * RING_SWEEP_LEN;
   return {
     length: Math.abs(b - a) * MOD_RING_CIRCUMFERENCE,
     offset: -Math.min(a, b) * MOD_RING_CIRCUMFERENCE
@@ -3775,16 +3942,16 @@ var LFO_DEF = {
     const hz = params.sync ? lfoSyncedHz(Number(params.division) || 0, bpm) : Math.max(0, Number(params.rate) || 0);
     const before = s.phase;
     s.phase = (s.phase + dt * hz) % 1;
-    if (s.phase < before) s.driftTarget = (Math.random() * 2 - 1) * clamp014(params.jitter);
-    if (!clamp014(params.jitter)) {
+    if (s.phase < before) s.driftTarget = (Math.random() * 2 - 1) * clamp015(params.jitter);
+    if (!clamp015(params.jitter)) {
       s.drift = 0;
       s.driftTarget = 0;
     } else s.drift += (s.driftTarget - s.drift) * Math.min(1, dt * hz * 4);
     const w = clamp5(Number(params.width) || 0, 0.01, 0.99);
-    const ph = (s.phase + clamp014(params.phase)) % 1;
+    const ph = (s.phase + clamp015(params.phase)) % 1;
     const tri = ph < w ? ph / w : 1 - (ph - w) / (1 - w);
     let v = clamp5(tri * 2 - 1 + s.drift, -1, 1);
-    const smooth = clamp014(params.smooth);
+    const smooth = clamp015(params.smooth);
     if (smooth > 0 && s.out !== null) {
       const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
       v = s.out + (v - s.out) * k;
@@ -3819,12 +3986,12 @@ var SH_DEF = {
     if (s.out === null || s.wait <= 0) {
       s.held = Math.random() * 2 - 1;
       const hz = Math.max(0.01, Number(params.rate) || 0);
-      const len = 1 / hz * (1 + (Math.random() * 2 - 1) * clamp014(params.jitter) * 0.9);
+      const len = 1 / hz * (1 + (Math.random() * 2 - 1) * clamp015(params.jitter) * 0.9);
       s.wait = Math.max(5e-3, len);
     }
     const offset = clamp5(Number(params.offset) || 0, -1, 1);
-    let v = clamp5(s.held * clamp014(params.depth) + offset, -1, 1);
-    const smooth = clamp014(params.smooth);
+    let v = clamp5(s.held * clamp015(params.depth) + offset, -1, 1);
+    const smooth = clamp015(params.smooth);
     if (smooth > 0 && s.out !== null) {
       const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
       v = s.out + (v - s.out) * k;
@@ -3870,7 +4037,7 @@ var ADSR_DEF = {
   tick(state2, params, dt) {
     const s = state2;
     const loop = !!params.loop;
-    const sustain = clamp014(params.sustain);
+    const sustain = clamp015(params.sustain);
     if (s.stage === "idle") {
       if (!loop) return s.env = 0;
       s.stage = "attack";
@@ -3900,7 +4067,7 @@ var ADSR_DEF = {
     else if (s.stage === "sustain") s.env = sustain;
     else if (s.stage === "release") s.env = s.from * (1 - shaped);
     else s.env = 0;
-    return clamp014(s.env);
+    return clamp015(s.env);
   }
 };
 registerModType(ADSR_DEF);
@@ -3939,7 +4106,7 @@ function curveComposition(params) {
     segments: readClips(params),
     driver: null,
     direction: DIRECTIONS[i < 0 ? 0 : i],
-    gap: clamp014(params.gap)
+    gap: clamp015(params.gap)
   };
 }
 function curveDuration(params, bpm) {
@@ -4039,7 +4206,7 @@ var CURVE_DEF = {
       s.samplers = buildSamplers(comp);
     }
     s.phase = (s.phase + dt / curveDuration(params, bpm)) % 1;
-    let v = clamp014(readComposition(comp, s.phase, s.samplers).value);
+    let v = clamp015(readComposition(comp, s.phase, s.samplers).value);
     if (params.flip) v = 1 - v;
     if (params.signal !== "trigger") {
       s.prev = v;
@@ -4073,8 +4240,8 @@ var CURVE_DEF = {
         ...list[sel],
         curvature: clampSigned(next.curvature),
         steepness: clampSigned(next.steepness),
-        anticipate: clamp014(next.anticipate),
-        overshoot: clamp014(next.overshoot)
+        anticipate: clamp015(next.anticipate),
+        overshoot: clamp015(next.overshoot)
       };
     } else {
       const clip = list[sel];
@@ -4115,7 +4282,7 @@ var CURVE_DEF = {
     const span = CURVE_PREVIEW_BAND.hi - CURVE_PREVIEW_BAND.lo;
     const n = Math.max(2, count);
     return {
-      points: Array.from({ length: n }, (_, i) => clamp014((sampler(i / (n - 1)) - CURVE_PREVIEW_BAND.lo) / span)),
+      points: Array.from({ length: n }, (_, i) => clamp015((sampler(i / (n - 1)) - CURVE_PREVIEW_BAND.lo) / span)),
       label: `${CURVE_LABELS[list[sel].type]} ${sel + 1}/${list.length}`
     };
   }
@@ -5459,9 +5626,295 @@ function Slider({
   ) });
 }
 
-// src/components/NumberControl.tsx
+// src/components/AngleDial.tsx
 import { useRef as useRef8, useState as useState6, useCallback as useCallback5, useEffect as useEffect8 } from "react";
+
+// src/angle-core.ts
+var ANGLE_DEAD_ZONE_PX = 4;
+function decimalsForStep3(step) {
+  const s = String(step);
+  const dot = s.indexOf(".");
+  return dot === -1 ? 0 : s.length - dot - 1;
+}
+function snapAngle(value, min, step) {
+  if (!(step > 0)) return value;
+  return parseFloat((min + Math.round((value - min) / step) * step).toFixed(decimalsForStep3(step)));
+}
+function normalizeAngle(value, min, max, wrap) {
+  const span = max - min;
+  if (!wrap || span <= 0) return Math.min(max, Math.max(min, value));
+  const t = ((value - min) % span + span) % span;
+  return min + t;
+}
+function valueToBearing(value, min, max) {
+  const span = max - min || 1;
+  return (value - min) / span * 360;
+}
+function bearingToValue(bearing, min, max) {
+  const span = max - min || 1;
+  return min + (bearing % 360 + 360) % 360 / 360 * span;
+}
+function angleFromPointer(dx, dy, current, min, max, step, wrap) {
+  if (Math.hypot(dx, dy) < ANGLE_DEAD_ZONE_PX) return null;
+  const bearing = Math.atan2(dx, -dy) * 180 / Math.PI;
+  let value = bearingToValue(bearing, min, max);
+  if (wrap) {
+    const span = max - min;
+    while (value - current > span / 2) value -= span;
+    while (current - value > span / 2) value += span;
+  }
+  return normalizeAngle(snapAngle(value, min, step), min, max, wrap);
+}
+function nudgeAngle(value, delta, min, max, step, wrap) {
+  return normalizeAngle(snapAngle(value + delta * (step || 1), min, step), min, max, wrap);
+}
+function arcPath(from, to, radius, cx = 0, cy = 0) {
+  const point = (deg) => {
+    const rad = (deg - 90) * Math.PI / 180;
+    return `${(cx + radius * Math.cos(rad)).toFixed(3)} ${(cy + radius * Math.sin(rad)).toFixed(3)}`;
+  };
+  const delta = to - from;
+  if (Math.abs(delta) < 0.01) return "";
+  if (Math.abs(delta) >= 359.99) {
+    return `M ${point(from)} A ${radius} ${radius} 0 0 1 ${point(from + 180)} A ${radius} ${radius} 0 0 1 ${point(from + 359.99)}`;
+  }
+  return `M ${point(from)} A ${radius} ${radius} 0 ${Math.abs(delta) > 180 ? 1 : 0} ${delta > 0 ? 1 : 0} ${point(to)}`;
+}
+
+// src/components/AngleDial.tsx
 import { jsx as jsx8, jsxs as jsxs7 } from "react/jsx-runtime";
+var RADIUS = 8.5;
+var DEG = "\xB0";
+function AngleDial({
+  label,
+  value,
+  onChange,
+  min = 0,
+  max = 360,
+  step = 1,
+  unit,
+  formatValue,
+  origin,
+  wrap
+}) {
+  const dialRef = useRef8(null);
+  const [isDragging, setIsDragging] = useState6(false);
+  const wraps = wrap ?? Math.abs(max - min) >= 360;
+  const resolvedOrigin = Math.min(max, Math.max(min, origin ?? min));
+  const bearing = valueToBearing(value, min, max);
+  const originBearing = valueToBearing(resolvedOrigin, min, max);
+  const needle = (bearing - 90) * Math.PI / 180;
+  const applyFromPointer = useCallback5((clientX, clientY) => {
+    const el = dialRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const next = angleFromPointer(
+      clientX - (r.left + r.width / 2),
+      clientY - (r.top + r.height / 2),
+      value,
+      min,
+      max,
+      step,
+      wraps
+    );
+    if (next !== null && next !== value) onChange(next);
+  }, [value, min, max, step, wraps, onChange]);
+  const onPointerDown = (e) => {
+    e.preventDefault();
+    e.target.setPointerCapture?.(e.pointerId);
+    setIsDragging(true);
+    applyFromPointer(e.clientX, e.clientY);
+  };
+  useEffect8(() => {
+    if (!isDragging) return;
+    const move = (e) => applyFromPointer(e.clientX, e.clientY);
+    const up = () => setIsDragging(false);
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+    };
+  }, [isDragging, applyFromPointer]);
+  const onKeyDown = (e) => {
+    const dir = e.key === "ArrowUp" || e.key === "ArrowRight" ? 1 : e.key === "ArrowDown" || e.key === "ArrowLeft" ? -1 : 0;
+    if (dir) {
+      e.preventDefault();
+      onChange(nudgeAngle(value, dir * (e.shiftKey ? 10 : 1), min, max, step, wraps));
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      onChange(snapAngle(resolvedOrigin, min, step));
+    }
+  };
+  const text = formatValue ? formatValue(value) : `${Number(value.toFixed(2))}${unit ?? (Math.abs(max - min) >= 180 ? DEG : "")}`;
+  return /* @__PURE__ */ jsxs7("div", { className: "tweakers-angle-control", "data-dragging": isDragging || void 0, children: [
+    /* @__PURE__ */ jsx8(
+      "div",
+      {
+        ref: dialRef,
+        className: "tweakers-angle-dial",
+        role: "slider",
+        tabIndex: 0,
+        "aria-label": label,
+        "aria-valuemin": min,
+        "aria-valuemax": max,
+        "aria-valuenow": value,
+        "aria-valuetext": text,
+        onPointerDown,
+        onKeyDown,
+        onDoubleClick: () => onChange(snapAngle(resolvedOrigin, min, step)),
+        children: /* @__PURE__ */ jsxs7("svg", { viewBox: "-12 -12 24 24", "aria-hidden": "true", children: [
+          /* @__PURE__ */ jsx8("circle", { className: "tweakers-angle-face", cx: "0", cy: "0", r: RADIUS }),
+          /* @__PURE__ */ jsx8("path", { className: "tweakers-angle-sweep", d: arcPath(originBearing, bearing, RADIUS) }),
+          /* @__PURE__ */ jsx8(
+            "line",
+            {
+              className: "tweakers-angle-needle",
+              x1: "0",
+              y1: "0",
+              x2: (RADIUS * Math.cos(needle)).toFixed(3),
+              y2: (RADIUS * Math.sin(needle)).toFixed(3)
+            }
+          )
+        ] })
+      }
+    ),
+    /* @__PURE__ */ jsx8("span", { className: "tweakers-angle-label", children: label }),
+    /* @__PURE__ */ jsx8("span", { className: "tweakers-angle-value", children: text })
+  ] });
+}
+
+// src/components/TransferCurve.tsx
+import { useRef as useRef9, useState as useState7, useCallback as useCallback6, useEffect as useEffect9, useMemo } from "react";
+import { jsx as jsx9, jsxs as jsxs8 } from "react/jsx-runtime";
+var PLOT = 100;
+var GRAB_PX = 9;
+var DROP_PX = 26;
+var SAMPLES = 96;
+function TransferCurve({ label, value, onChange, height = 104, grid = 4, axisLabels }) {
+  const boxRef = useRef9(null);
+  const [dragIndex, setDragIndex] = useState7(null);
+  const [hoverIndex, setHoverIndex] = useState7(null);
+  const [dropping, setDropping] = useState7(false);
+  const points = normalizeTransfer(value).points;
+  const h = Math.min(200, Math.max(64, height));
+  const path = useMemo(() => {
+    let d = "";
+    for (let i = 0; i < SAMPLES; i++) {
+      const x = i / (SAMPLES - 1);
+      const y = sampleTransfer(points, x);
+      d += `${i ? "L" : "M"} ${(x * PLOT).toFixed(2)} ${((1 - y) * PLOT).toFixed(2)} `;
+    }
+    return d.trim();
+  }, [points]);
+  const toCurve = useCallback6((clientX, clientY) => {
+    const r = boxRef.current.getBoundingClientRect();
+    return {
+      x: (clientX - r.left) / r.width,
+      y: 1 - (clientY - r.top) / r.height,
+      outside: Math.max(
+        r.left - clientX,
+        clientX - r.right,
+        r.top - clientY,
+        clientY - r.bottom
+      ) > DROP_PX,
+      rect: r
+    };
+  }, []);
+  const onPointerDown = (e) => {
+    e.preventDefault();
+    const { x, y, rect } = toCurve(e.clientX, e.clientY);
+    const hit = nearestPoint(points, x, y, GRAB_PX / Math.min(rect.width, rect.height));
+    if (hit >= 0) {
+      setDragIndex(hit);
+      return;
+    }
+    if (points.length >= TRANSFER_MAX_POINTS) return;
+    const { points: next, index } = insertPoint(points, x, y);
+    onChange({ points: next });
+    setDragIndex(index);
+  };
+  useEffect9(() => {
+    if (dragIndex === null) return;
+    const move = (e) => {
+      const { x, y, outside } = toCurve(e.clientX, e.clientY);
+      const removable = dragIndex > 0 && dragIndex < points.length - 1;
+      setDropping(outside && removable);
+      onChange({ points: movePoint(points, dragIndex, x, y) });
+    };
+    const up = (e) => {
+      const { outside } = toCurve(e.clientX, e.clientY);
+      if (outside && dragIndex > 0 && dragIndex < points.length - 1) {
+        onChange({ points: removePoint(points, dragIndex) });
+      }
+      setDragIndex(null);
+      setDropping(false);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+    };
+  }, [dragIndex, points, onChange, toCurve]);
+  const onHover = (e) => {
+    if (dragIndex !== null) return;
+    const { x, y, rect } = toCurve(e.clientX, e.clientY);
+    setHoverIndex(nearestPoint(points, x, y, GRAB_PX / Math.min(rect.width, rect.height)));
+  };
+  const reset = () => onChange({ points: DEFAULT_TRANSFER.points.map((p) => ({ ...p })) });
+  const lines = grid > 0 ? Array.from({ length: grid - 1 }, (_, i) => (i + 1) * PLOT / grid) : [];
+  return /* @__PURE__ */ jsxs8("div", { className: "tweakers-transfer-control", "data-idle": isIdentityTransfer(points) || void 0, children: [
+    /* @__PURE__ */ jsxs8("div", { className: "tweakers-transfer-head", children: [
+      /* @__PURE__ */ jsx9("span", { className: "tweakers-transfer-label", children: label }),
+      axisLabels?.y ? /* @__PURE__ */ jsx9("span", { className: "tweakers-transfer-axis", children: axisLabels.y }) : null
+    ] }),
+    /* @__PURE__ */ jsxs8(
+      "div",
+      {
+        ref: boxRef,
+        className: "tweakers-transfer-box",
+        "data-dropping": dropping || void 0,
+        style: { height: h },
+        role: "application",
+        "aria-label": `${label} curve, ${points.length} points`,
+        onPointerDown,
+        onPointerMove: onHover,
+        onPointerLeave: () => setHoverIndex(null),
+        onDoubleClick: reset,
+        children: [
+          /* @__PURE__ */ jsxs8("svg", { viewBox: `0 0 ${PLOT} ${PLOT}`, preserveAspectRatio: "none", "aria-hidden": "true", children: [
+            lines.map((p) => /* @__PURE__ */ jsxs8("g", { children: [
+              /* @__PURE__ */ jsx9("line", { className: "tweakers-transfer-grid", x1: p, y1: "0", x2: p, y2: PLOT }),
+              /* @__PURE__ */ jsx9("line", { className: "tweakers-transfer-grid", x1: "0", y1: p, x2: PLOT, y2: p })
+            ] }, p)),
+            /* @__PURE__ */ jsx9("line", { className: "tweakers-transfer-unity", x1: "0", y1: PLOT, x2: PLOT, y2: "0" }),
+            /* @__PURE__ */ jsx9("path", { className: "tweakers-transfer-stroke", d: path, vectorEffect: "non-scaling-stroke" })
+          ] }),
+          points.map((p, i) => /* @__PURE__ */ jsx9(
+            "span",
+            {
+              className: "tweakers-transfer-point",
+              "data-active": dragIndex === i || hoverIndex === i || void 0,
+              "data-end": i === 0 || i === points.length - 1 || void 0,
+              style: { left: `${p.x * 100}%`, top: `${(1 - p.y) * 100}%` }
+            },
+            i
+          ))
+        ]
+      }
+    ),
+    axisLabels?.x ? /* @__PURE__ */ jsx9("span", { className: "tweakers-transfer-axis-x", children: axisLabels.x }) : null
+  ] });
+}
+
+// src/components/NumberControl.tsx
+import { useRef as useRef10, useState as useState8, useCallback as useCallback7, useEffect as useEffect10 } from "react";
+import { jsx as jsx10, jsxs as jsxs9 } from "react/jsx-runtime";
 var CLICK_THRESHOLD2 = 3;
 function NumberControl({
   label,
@@ -5475,15 +5928,15 @@ function NumberControl({
   orientation = "horizontal"
 }) {
   const isVertical = orientation === "vertical";
-  const inputRef = useRef8(null);
-  const [isScrubbing, setIsScrubbing] = useState6(false);
-  const [showInput, setShowInput] = useState6(false);
-  const [inputValue, setInputValue] = useState6("");
-  const pointerDownPos = useRef8(null);
-  const isClickRef = useRef8(true);
-  const scrubStartValue = useRef8(0);
-  const isPointerHeld = useRef8(false);
-  const clamp9 = useCallback5(
+  const inputRef = useRef10(null);
+  const [isScrubbing, setIsScrubbing] = useState8(false);
+  const [showInput, setShowInput] = useState8(false);
+  const [inputValue, setInputValue] = useState8("");
+  const pointerDownPos = useRef10(null);
+  const isClickRef = useRef10(true);
+  const scrubStartValue = useRef10(0);
+  const isPointerHeld = useRef10(false);
+  const clamp9 = useCallback7(
     (v) => {
       let out = v;
       if (min != null) out = Math.max(min, out);
@@ -5492,7 +5945,7 @@ function NumberControl({
     },
     [min, max]
   );
-  const handlePointerDown = useCallback5(
+  const handlePointerDown = useCallback7(
     (e) => {
       if (showInput) return;
       if (e.metaKey) return;
@@ -5505,7 +5958,7 @@ function NumberControl({
     },
     [showInput, value]
   );
-  const handlePointerMove = useCallback5(
+  const handlePointerMove = useCallback7(
     (e) => {
       if (!isPointerHeld.current || !pointerDownPos.current) return;
       const dx = e.clientX - pointerDownPos.current.x;
@@ -5524,7 +5977,7 @@ function NumberControl({
     },
     [isVertical, step, clamp9, onChange]
   );
-  const handlePointerUp = useCallback5(() => {
+  const handlePointerUp = useCallback7(() => {
     if (!isPointerHeld.current) return;
     if (isClickRef.current) {
       setShowInput(true);
@@ -5534,7 +5987,7 @@ function NumberControl({
     pointerDownPos.current = null;
     setIsScrubbing(false);
   }, [value, step]);
-  useEffect8(() => {
+  useEffect10(() => {
     if (showInput && inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select();
@@ -5560,7 +6013,7 @@ function NumberControl({
     isVertical ? "tweakers-number-control-vertical" : "",
     isScrubbing ? "tweakers-number-control-engaged" : ""
   ].filter(Boolean).join(" ");
-  return /* @__PURE__ */ jsxs7(
+  return /* @__PURE__ */ jsxs9(
     "div",
     {
       className,
@@ -5568,8 +6021,8 @@ function NumberControl({
       onPointerMove: handlePointerMove,
       onPointerUp: handlePointerUp,
       children: [
-        /* @__PURE__ */ jsx8("span", { className: "tweakers-number-label", children: label }),
-        showInput ? /* @__PURE__ */ jsx8(
+        /* @__PURE__ */ jsx10("span", { className: "tweakers-number-label", children: label }),
+        showInput ? /* @__PURE__ */ jsx10(
           "input",
           {
             ref: inputRef,
@@ -5582,9 +6035,9 @@ function NumberControl({
             onClick: (e) => e.stopPropagation(),
             onPointerDown: (e) => e.stopPropagation()
           }
-        ) : /* @__PURE__ */ jsxs7("span", { className: "tweakers-number-value", children: [
+        ) : /* @__PURE__ */ jsxs9("span", { className: "tweakers-number-value", children: [
           displayValue,
-          unit && /* @__PURE__ */ jsx8("span", { className: "tweakers-number-unit", children: unit })
+          unit && /* @__PURE__ */ jsx10("span", { className: "tweakers-number-unit", children: unit })
         ] })
       ]
     }
@@ -5592,9 +6045,9 @@ function NumberControl({
 }
 
 // src/components/RangeSlider.tsx
-import { useRef as useRef9, useState as useState7, useCallback as useCallback6, useEffect as useEffect9 } from "react";
+import { useRef as useRef11, useState as useState9, useCallback as useCallback8, useEffect as useEffect11 } from "react";
 import { motion as motion3, useMotionValue as useMotionValue2, useTransform as useTransform2, animate as animate2 } from "motion/react";
-import { jsx as jsx9, jsxs as jsxs8 } from "react/jsx-runtime";
+import { jsx as jsx11, jsxs as jsxs10 } from "react/jsx-runtime";
 var CLICK_THRESHOLD3 = 3;
 var HANDLE_HIT_PX = 12;
 function RangeSlider({
@@ -5606,32 +6059,32 @@ function RangeSlider({
   step = 0.01,
   defaultValue
 }) {
-  const wrapperRef = useRef9(null);
-  const trackRef = useRef9(null);
-  const inputRef = useRef9(null);
-  const [isInteracting, setIsInteracting] = useState7(false);
-  const [isDragging, setIsDragging] = useState7(false);
-  const [isHovered, setIsHovered] = useState7(false);
-  const [editing, setEditing] = useState7(null);
-  const [inputValue, setInputValue] = useState7("");
-  const pointerDownPos = useRef9(null);
-  const isClickRef = useRef9(true);
-  const dragTargetRef = useRef9(null);
-  const clickMovesRef = useRef9(false);
-  const dragStartValueRef = useRef9(rawValue);
-  const dragStartValueAtRef = useRef9(0);
-  const fineRef = useRef9(null);
-  const dragValueRef = useRef9(rawValue);
-  const lowAnimRef = useRef9(null);
-  const highAnimRef = useRef9(null);
-  const stopAnims = useCallback6(() => {
+  const wrapperRef = useRef11(null);
+  const trackRef = useRef11(null);
+  const inputRef = useRef11(null);
+  const [isInteracting, setIsInteracting] = useState9(false);
+  const [isDragging, setIsDragging] = useState9(false);
+  const [isHovered, setIsHovered] = useState9(false);
+  const [editing, setEditing] = useState9(null);
+  const [inputValue, setInputValue] = useState9("");
+  const pointerDownPos = useRef11(null);
+  const isClickRef = useRef11(true);
+  const dragTargetRef = useRef11(null);
+  const clickMovesRef = useRef11(false);
+  const dragStartValueRef = useRef11(rawValue);
+  const dragStartValueAtRef = useRef11(0);
+  const fineRef = useRef11(null);
+  const dragValueRef = useRef11(rawValue);
+  const lowAnimRef = useRef11(null);
+  const highAnimRef = useRef11(null);
+  const stopAnims = useCallback8(() => {
     lowAnimRef.current?.stop();
     highAnimRef.current?.stop();
     lowAnimRef.current = null;
     highAnimRef.current = null;
   }, []);
-  const wrapperRectRef = useRef9(null);
-  const scaleRef = useRef9(1);
+  const wrapperRectRef = useRef11(null);
+  const scaleRef = useRef11(1);
   const value = isInteracting ? rawValue : clampRange(rawValue, min, max);
   const span = max - min;
   const lowPercent = span === 0 ? 0 : (value.min - min) / span * 100;
@@ -5646,13 +6099,13 @@ function RangeSlider({
   );
   const lowHandleLeft = useTransform2([lowMotion, highMotion], ([lo, hi]) => handleLeftStyles(lo, hi).low);
   const highHandleLeft = useTransform2([lowMotion, highMotion], ([lo, hi]) => handleLeftStyles(lo, hi).high);
-  useEffect9(() => {
+  useEffect11(() => {
     if (!isInteracting && !lowAnimRef.current && !highAnimRef.current) {
       lowMotion.jump(lowPercent);
       highMotion.jump(highPercent);
     }
   }, [lowPercent, highPercent, isInteracting, lowMotion, highMotion]);
-  const positionToValue = useCallback6(
+  const positionToValue = useCallback8(
     (clientX) => {
       const rect = wrapperRectRef.current;
       if (!rect) return value.min;
@@ -5665,18 +6118,18 @@ function RangeSlider({
     },
     [min, max, value.min]
   );
-  const percentFromValue = useCallback6(
+  const percentFromValue = useCallback8(
     (v) => span === 0 ? 0 : (v - min) / span * 100,
     [min, span]
   );
-  const syncMotion = useCallback6(
+  const syncMotion = useCallback8(
     (next) => {
       lowMotion.jump(percentFromValue(next.min));
       highMotion.jump(percentFromValue(next.max));
     },
     [lowMotion, highMotion, percentFromValue]
   );
-  const handlePointerDown = useCallback6(
+  const handlePointerDown = useCallback8(
     (e) => {
       if (editing) return;
       e.preventDefault();
@@ -5702,7 +6155,7 @@ function RangeSlider({
     },
     [editing, positionToValue, value, min, max]
   );
-  const handlePointerMove = useCallback6(
+  const handlePointerMove = useCallback8(
     (e) => {
       if (!isInteracting || !pointerDownPos.current) return;
       const dx = e.clientX - pointerDownPos.current.x;
@@ -5758,7 +6211,7 @@ function RangeSlider({
     },
     [isInteracting, positionToValue, step, min, max, value, syncMotion, onChange, stopAnims]
   );
-  const handlePointerUp = useCallback6(
+  const handlePointerUp = useCallback8(
     (e) => {
       if (!isInteracting) return;
       if (isClickRef.current && clickMovesRef.current) {
@@ -5790,7 +6243,7 @@ function RangeSlider({
     },
     [isInteracting, positionToValue, step, value, min, max, lowMotion, highMotion, percentFromValue, onChange, stopAnims]
   );
-  const handlePointerCancel = useCallback6(() => {
+  const handlePointerCancel = useCallback8(() => {
     if (!isInteracting) return;
     setIsInteracting(false);
     setIsDragging(false);
@@ -5798,7 +6251,7 @@ function RangeSlider({
     dragTargetRef.current = null;
     fineRef.current = null;
   }, [isInteracting]);
-  const handleDoubleClick = useCallback6(() => {
+  const handleDoubleClick = useCallback8(() => {
     if (editing !== null) return;
     const d = clampRange(defaultValue ?? { min, max }, min, max);
     stopAnims();
@@ -5822,21 +6275,21 @@ function RangeSlider({
     });
     onChange(d);
   }, [editing, defaultValue, min, max, lowMotion, highMotion, percentFromValue, onChange, stopAnims]);
-  useEffect9(() => {
+  useEffect11(() => {
     if (editing && inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select();
     }
   }, [editing]);
   const decimals = decimalsForStep2(step);
-  const openEditor = useCallback6(
+  const openEditor = useCallback8(
     (which) => {
       setEditing(which);
       setInputValue((which === "min" ? value.min : value.max).toFixed(decimals));
     },
     [value.min, value.max, decimals]
   );
-  const commitEditor = useCallback6(() => {
+  const commitEditor = useCallback8(() => {
     if (!editing) return;
     const parsed = parseFloat(inputValue);
     if (!isNaN(parsed)) {
@@ -5858,7 +6311,7 @@ function RangeSlider({
   const restOpacity = 0.35;
   const lowOpacity = !isActive ? restOpacity : isDragging && dragTargetRef.current === "min" ? 0.95 : 0.7;
   const highOpacity = !isActive ? restOpacity : isDragging && dragTargetRef.current === "max" ? 0.95 : 0.7;
-  return /* @__PURE__ */ jsx9("div", { ref: wrapperRef, className: "tweakers-range-slider-wrapper", children: /* @__PURE__ */ jsxs8(
+  return /* @__PURE__ */ jsx11("div", { ref: wrapperRef, className: "tweakers-range-slider-wrapper", children: /* @__PURE__ */ jsxs10(
     motion3.div,
     {
       ref: trackRef,
@@ -5871,14 +6324,14 @@ function RangeSlider({
       onMouseEnter: () => setIsHovered(true),
       onMouseLeave: () => setIsHovered(false),
       children: [
-        /* @__PURE__ */ jsx9(
+        /* @__PURE__ */ jsx11(
           motion3.div,
           {
             className: "tweakers-range-slider-fill",
             style: { left: fillLeft, width: fillWidth }
           }
         ),
-        /* @__PURE__ */ jsx9(
+        /* @__PURE__ */ jsx11(
           motion3.div,
           {
             className: "tweakers-range-slider-handle",
@@ -5887,7 +6340,7 @@ function RangeSlider({
             transition: { opacity: { duration: 0.15 } }
           }
         ),
-        /* @__PURE__ */ jsx9(
+        /* @__PURE__ */ jsx11(
           motion3.div,
           {
             className: "tweakers-range-slider-handle",
@@ -5896,8 +6349,8 @@ function RangeSlider({
             transition: { opacity: { duration: 0.15 } }
           }
         ),
-        /* @__PURE__ */ jsx9("span", { className: "tweakers-range-slider-label", children: label }),
-        editing !== null ? /* @__PURE__ */ jsx9(
+        /* @__PURE__ */ jsx11("span", { className: "tweakers-range-slider-label", children: label }),
+        editing !== null ? /* @__PURE__ */ jsx11(
           "input",
           {
             ref: inputRef,
@@ -5910,8 +6363,8 @@ function RangeSlider({
             onClick: (e) => e.stopPropagation(),
             onPointerDown: (e) => e.stopPropagation()
           }
-        ) : /* @__PURE__ */ jsxs8("span", { className: "tweakers-range-slider-value", children: [
-          /* @__PURE__ */ jsx9(
+        ) : /* @__PURE__ */ jsxs10("span", { className: "tweakers-range-slider-value", children: [
+          /* @__PURE__ */ jsx11(
             "span",
             {
               className: "tweakers-range-slider-bound",
@@ -5923,8 +6376,8 @@ function RangeSlider({
               children: lowText
             }
           ),
-          /* @__PURE__ */ jsx9("span", { className: "tweakers-range-slider-dash", children: "\u2013" }),
-          /* @__PURE__ */ jsx9(
+          /* @__PURE__ */ jsx11("span", { className: "tweakers-range-slider-dash", children: "\u2013" }),
+          /* @__PURE__ */ jsx11(
             "span",
             {
               className: "tweakers-range-slider-bound",
@@ -5943,29 +6396,29 @@ function RangeSlider({
 }
 
 // src/components/Toggle.tsx
-import { jsx as jsx10, jsxs as jsxs9 } from "react/jsx-runtime";
+import { jsx as jsx12, jsxs as jsxs11 } from "react/jsx-runtime";
 function Toggle({ label, checked, onChange, shortcut, shortcutActive }) {
-  return /* @__PURE__ */ jsxs9("div", { className: "tweakers-labeled-control tweakers-labeled-control-check", children: [
-    /* @__PURE__ */ jsx10(Checkbox, { checked, onChange, label }),
-    /* @__PURE__ */ jsxs9("span", { className: "tweakers-labeled-control-label", children: [
+  return /* @__PURE__ */ jsxs11("div", { className: "tweakers-labeled-control tweakers-labeled-control-check", children: [
+    /* @__PURE__ */ jsx12(Checkbox, { checked, onChange, label }),
+    /* @__PURE__ */ jsxs11("span", { className: "tweakers-labeled-control-label", children: [
       label,
-      shortcut && /* @__PURE__ */ jsx10("span", { className: `tweakers-shortcut-pill${shortcutActive ? " tweakers-shortcut-pill-active" : ""}`, children: formatToggleShortcut(shortcut) })
+      shortcut && /* @__PURE__ */ jsx12("span", { className: `tweakers-shortcut-pill${shortcutActive ? " tweakers-shortcut-pill-active" : ""}`, children: formatToggleShortcut(shortcut) })
     ] })
   ] });
 }
 
 // src/components/SegmentedControl.tsx
-import { useRef as useRef10, useState as useState8, useLayoutEffect as useLayoutEffect2, useCallback as useCallback7 } from "react";
-import { jsx as jsx11, jsxs as jsxs10 } from "react/jsx-runtime";
+import { useRef as useRef12, useState as useState10, useLayoutEffect as useLayoutEffect2, useCallback as useCallback9 } from "react";
+import { jsx as jsx13, jsxs as jsxs12 } from "react/jsx-runtime";
 function SegmentedControl({
   options,
   value,
   onChange
 }) {
-  const containerRef = useRef10(null);
-  const hasAnimated = useRef10(false);
-  const [pillStyle, setPillStyle] = useState8(null);
-  const measure = useCallback7(() => {
+  const containerRef = useRef12(null);
+  const hasAnimated = useRef12(false);
+  const [pillStyle, setPillStyle] = useState10(null);
+  const measure = useCallback9(() => {
     const container = containerRef.current;
     if (!container) return;
     const activeButton = container.querySelector('[data-active="true"]');
@@ -5989,8 +6442,8 @@ function SegmentedControl({
   }, [measure]);
   const shouldAnimate = hasAnimated.current;
   hasAnimated.current = true;
-  return /* @__PURE__ */ jsxs10("div", { className: "tweakers-segmented", ref: containerRef, children: [
-    pillStyle && /* @__PURE__ */ jsx11(
+  return /* @__PURE__ */ jsxs12("div", { className: "tweakers-segmented", ref: containerRef, children: [
+    pillStyle && /* @__PURE__ */ jsx13(
       "div",
       {
         className: "tweakers-segmented-pill",
@@ -6006,7 +6459,7 @@ function SegmentedControl({
     ),
     options.map((option) => {
       const isActive = value === option.value;
-      return /* @__PURE__ */ jsx11(
+      return /* @__PURE__ */ jsx13(
         "button",
         {
           onClick: () => onChange(option.value),
@@ -6021,7 +6474,7 @@ function SegmentedControl({
 }
 
 // src/components/SpringVisualization.tsx
-import { jsx as jsx12, jsxs as jsxs11 } from "react/jsx-runtime";
+import { jsx as jsx14, jsxs as jsxs13 } from "react/jsx-runtime";
 function generateSpringCurve(stiffness, damping, mass, duration) {
   const points = [];
   const steps = 100;
@@ -6076,13 +6529,13 @@ function SpringVisualization({ spring, isSimpleMode }) {
     const x = width / 4 * i;
     const y = height / 4 * i;
     gridLines.push(
-      /* @__PURE__ */ jsx12("line", { x1: x, y1: 0, x2: x, y2: height, stroke: "rgba(255, 255, 255, 0.08)", strokeWidth: "1" }, `v-${i}`),
-      /* @__PURE__ */ jsx12("line", { x1: 0, y1: y, x2: width, y2: y, stroke: "rgba(255, 255, 255, 0.08)", strokeWidth: "1" }, `h-${i}`)
+      /* @__PURE__ */ jsx14("line", { x1: x, y1: 0, x2: x, y2: height, stroke: "rgba(255, 255, 255, 0.08)", strokeWidth: "1" }, `v-${i}`),
+      /* @__PURE__ */ jsx14("line", { x1: 0, y1: y, x2: width, y2: y, stroke: "rgba(255, 255, 255, 0.08)", strokeWidth: "1" }, `h-${i}`)
     );
   }
-  return /* @__PURE__ */ jsxs11("svg", { viewBox: `0 0 ${width} ${height}`, className: "tweakers-spring-viz", children: [
+  return /* @__PURE__ */ jsxs13("svg", { viewBox: `0 0 ${width} ${height}`, className: "tweakers-spring-viz", children: [
     gridLines,
-    /* @__PURE__ */ jsx12(
+    /* @__PURE__ */ jsx14(
       "line",
       {
         x1: 0,
@@ -6094,7 +6547,7 @@ function SpringVisualization({ spring, isSimpleMode }) {
         strokeDasharray: "4,4"
       }
     ),
-    /* @__PURE__ */ jsx12(
+    /* @__PURE__ */ jsx14(
       "path",
       {
         d: pathData,
@@ -6109,8 +6562,8 @@ function SpringVisualization({ spring, isSimpleMode }) {
 }
 
 // src/components/SpringControl.tsx
-import { useSyncExternalStore as useSyncExternalStore3, useRef as useRef11 } from "react";
-import { Fragment as Fragment2, jsx as jsx13, jsxs as jsxs12 } from "react/jsx-runtime";
+import { useSyncExternalStore as useSyncExternalStore3, useRef as useRef13 } from "react";
+import { Fragment as Fragment2, jsx as jsx15, jsxs as jsxs14 } from "react/jsx-runtime";
 function SpringControl({ panelId, path, label, spring, onChange }) {
   const mode = useSyncExternalStore3(
     (cb) => TweakStore.subscribe(panelId, cb),
@@ -6118,7 +6571,7 @@ function SpringControl({ panelId, path, label, spring, onChange }) {
     () => TweakStore.getSpringMode(panelId, path)
   );
   const isSimpleMode = mode === "simple";
-  const cache2 = useRef11({
+  const cache2 = useRef13({
     simple: spring.visualDuration !== void 0 ? spring : { type: "spring", visualDuration: 0.3, bounce: 0.2 },
     advanced: spring.stiffness !== void 0 ? spring : { type: "spring", stiffness: 200, damping: 25, mass: 1 }
   });
@@ -6144,11 +6597,11 @@ function SpringControl({ panelId, path, label, spring, onChange }) {
       onChange({ ...rest, [key]: value });
     }
   };
-  return /* @__PURE__ */ jsx13(Folder, { title: label, defaultOpen: true, children: /* @__PURE__ */ jsxs12("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: [
-    /* @__PURE__ */ jsx13(SpringVisualization, { spring, isSimpleMode }),
-    /* @__PURE__ */ jsxs12("div", { className: "tweakers-labeled-control", children: [
-      /* @__PURE__ */ jsx13("span", { className: "tweakers-labeled-control-label", children: "Type" }),
-      /* @__PURE__ */ jsx13(
+  return /* @__PURE__ */ jsx15(Folder, { title: label, defaultOpen: true, children: /* @__PURE__ */ jsxs14("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: [
+    /* @__PURE__ */ jsx15(SpringVisualization, { spring, isSimpleMode }),
+    /* @__PURE__ */ jsxs14("div", { className: "tweakers-labeled-control", children: [
+      /* @__PURE__ */ jsx15("span", { className: "tweakers-labeled-control-label", children: "Type" }),
+      /* @__PURE__ */ jsx15(
         SegmentedControl,
         {
           options: [
@@ -6160,8 +6613,8 @@ function SpringControl({ panelId, path, label, spring, onChange }) {
         }
       )
     ] }),
-    isSimpleMode ? /* @__PURE__ */ jsxs12(Fragment2, { children: [
-      /* @__PURE__ */ jsx13(
+    isSimpleMode ? /* @__PURE__ */ jsxs14(Fragment2, { children: [
+      /* @__PURE__ */ jsx15(
         Slider,
         {
           label: "Duration",
@@ -6173,7 +6626,7 @@ function SpringControl({ panelId, path, label, spring, onChange }) {
           unit: "s"
         }
       ),
-      /* @__PURE__ */ jsx13(
+      /* @__PURE__ */ jsx15(
         Slider,
         {
           label: "Bounce",
@@ -6184,8 +6637,8 @@ function SpringControl({ panelId, path, label, spring, onChange }) {
           step: 0.05
         }
       )
-    ] }) : /* @__PURE__ */ jsxs12(Fragment2, { children: [
-      /* @__PURE__ */ jsx13(
+    ] }) : /* @__PURE__ */ jsxs14(Fragment2, { children: [
+      /* @__PURE__ */ jsx15(
         Slider,
         {
           label: "Stiffness",
@@ -6196,7 +6649,7 @@ function SpringControl({ panelId, path, label, spring, onChange }) {
           step: 10
         }
       ),
-      /* @__PURE__ */ jsx13(
+      /* @__PURE__ */ jsx15(
         Slider,
         {
           label: "Damping",
@@ -6207,7 +6660,7 @@ function SpringControl({ panelId, path, label, spring, onChange }) {
           step: 1
         }
       ),
-      /* @__PURE__ */ jsx13(
+      /* @__PURE__ */ jsx15(
         Slider,
         {
           label: "Mass",
@@ -6223,7 +6676,7 @@ function SpringControl({ panelId, path, label, spring, onChange }) {
 }
 
 // src/components/EasingVisualization.tsx
-import { jsx as jsx14, jsxs as jsxs13 } from "react/jsx-runtime";
+import { jsx as jsx16, jsxs as jsxs15 } from "react/jsx-runtime";
 function EasingVisualization({ easing }) {
   const ease = easing.ease;
   const s = 200;
@@ -6239,14 +6692,14 @@ function EasingVisualization({ easing }) {
   const p1 = toSvg(ease[0], ease[1]);
   const p2 = toSvg(ease[2], ease[3]);
   const curvePath2 = `M ${start.x} ${start.y} C ${p1.x} ${p1.y}, ${p2.x} ${p2.y}, ${end.x} ${end.y}`;
-  return /* @__PURE__ */ jsxs13(
+  return /* @__PURE__ */ jsxs15(
     "svg",
     {
       viewBox: `0 0 ${s} ${s}`,
       preserveAspectRatio: "xMidYMid slice",
       className: "tweakers-spring-viz tweakers-easing-viz",
       children: [
-        /* @__PURE__ */ jsx14(
+        /* @__PURE__ */ jsx16(
           "line",
           {
             x1: start.x,
@@ -6258,15 +6711,15 @@ function EasingVisualization({ easing }) {
             strokeDasharray: "4,4"
           }
         ),
-        /* @__PURE__ */ jsx14("path", { d: curvePath2, fill: "none", stroke: "rgba(255, 255, 255, 0.6)", strokeWidth: "2", strokeLinecap: "round" })
+        /* @__PURE__ */ jsx16("path", { d: curvePath2, fill: "none", stroke: "rgba(255, 255, 255, 0.6)", strokeWidth: "2", strokeLinecap: "round" })
       ]
     }
   );
 }
 
 // src/components/TransitionControl.tsx
-import { useSyncExternalStore as useSyncExternalStore4, useRef as useRef12, useState as useState9 } from "react";
-import { Fragment as Fragment3, jsx as jsx15, jsxs as jsxs14 } from "react/jsx-runtime";
+import { useSyncExternalStore as useSyncExternalStore4, useRef as useRef14, useState as useState11 } from "react";
+import { Fragment as Fragment3, jsx as jsx17, jsxs as jsxs16 } from "react/jsx-runtime";
 function TransitionControl({
   panelId,
   path,
@@ -6283,7 +6736,7 @@ function TransitionControl({
   );
   const isEasing = mode === "easing";
   const isSimpleSpring = mode === "simple";
-  const cache2 = useRef12({
+  const cache2 = useRef14({
     easing: value.type === "easing" ? value : { type: "easing", duration: 0.3, ease: [1, -0.4, 0.5, 1] },
     simple: value.type === "spring" && value.visualDuration !== void 0 ? value : { type: "spring", visualDuration: 0.3, bounce: 0.2 },
     advanced: value.type === "spring" && value.stiffness !== void 0 ? value : { type: "spring", stiffness: 200, damping: 25, mass: 1 }
@@ -6321,7 +6774,7 @@ function TransitionControl({
     newEase[index] = val;
     onChange({ ...easing, ease: newEase });
   };
-  const durationSlider = !hideDuration && (isEasing || isSimpleSpring) ? /* @__PURE__ */ jsx15(
+  const durationSlider = !hideDuration && (isEasing || isSimpleSpring) ? /* @__PURE__ */ jsx17(
     Slider,
     {
       label: "Duration",
@@ -6336,11 +6789,11 @@ function TransitionControl({
       unit: "s"
     }
   ) : null;
-  return /* @__PURE__ */ jsx15(Folder, { title: label, defaultOpen: true, children: /* @__PURE__ */ jsxs14("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: [
-    isEasing ? /* @__PURE__ */ jsx15(EasingVisualization, { easing }) : /* @__PURE__ */ jsx15(SpringVisualization, { spring, isSimpleMode: isSimpleSpring }),
-    /* @__PURE__ */ jsxs14("div", { className: "tweakers-labeled-control", children: [
-      /* @__PURE__ */ jsx15("span", { className: "tweakers-labeled-control-label", children: "Type" }),
-      /* @__PURE__ */ jsx15(
+  return /* @__PURE__ */ jsx17(Folder, { title: label, defaultOpen: true, children: /* @__PURE__ */ jsxs16("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: [
+    isEasing ? /* @__PURE__ */ jsx17(EasingVisualization, { easing }) : /* @__PURE__ */ jsx17(SpringVisualization, { spring, isSimpleMode: isSimpleSpring }),
+    /* @__PURE__ */ jsxs16("div", { className: "tweakers-labeled-control", children: [
+      /* @__PURE__ */ jsx17("span", { className: "tweakers-labeled-control-label", children: "Type" }),
+      /* @__PURE__ */ jsx17(
         SegmentedControl,
         {
           options: [
@@ -6353,16 +6806,16 @@ function TransitionControl({
         }
       )
     ] }),
-    isEasing ? /* @__PURE__ */ jsxs14(Fragment3, { children: [
-      /* @__PURE__ */ jsx15(Slider, { label: "x1", value: easing.ease[0], onChange: (v) => updateEase(0, v), min: 0, max: 1, step: 0.01 }),
-      /* @__PURE__ */ jsx15(Slider, { label: "y1", value: easing.ease[1], onChange: (v) => updateEase(1, v), min: -1, max: 2, step: 0.01 }),
-      /* @__PURE__ */ jsx15(Slider, { label: "x2", value: easing.ease[2], onChange: (v) => updateEase(2, v), min: 0, max: 1, step: 0.01 }),
-      /* @__PURE__ */ jsx15(Slider, { label: "y2", value: easing.ease[3], onChange: (v) => updateEase(3, v), min: -1, max: 2, step: 0.01 }),
-      /* @__PURE__ */ jsx15(EaseTextInput, { ease: easing.ease, onChange: (newEase) => onChange({ ...easing, ease: newEase }) })
-    ] }) : isSimpleSpring ? /* @__PURE__ */ jsx15(Slider, { label: "Bounce", value: spring.bounce ?? 0.2, onChange: (v) => handleSpringUpdate("bounce", v), min: 0, max: 1, step: 0.05 }) : /* @__PURE__ */ jsxs14(Fragment3, { children: [
-      /* @__PURE__ */ jsx15(Slider, { label: "Stiffness", value: spring.stiffness ?? 400, onChange: (v) => handleSpringUpdate("stiffness", v), min: 1, max: 1e3, step: 10 }),
-      /* @__PURE__ */ jsx15(Slider, { label: "Damping", value: spring.damping ?? 17, onChange: (v) => handleSpringUpdate("damping", v), min: 1, max: 100, step: 1 }),
-      /* @__PURE__ */ jsx15(Slider, { label: "Mass", value: spring.mass ?? 1, onChange: (v) => handleSpringUpdate("mass", v), min: 0.1, max: 10, step: 0.1 })
+    isEasing ? /* @__PURE__ */ jsxs16(Fragment3, { children: [
+      /* @__PURE__ */ jsx17(Slider, { label: "x1", value: easing.ease[0], onChange: (v) => updateEase(0, v), min: 0, max: 1, step: 0.01 }),
+      /* @__PURE__ */ jsx17(Slider, { label: "y1", value: easing.ease[1], onChange: (v) => updateEase(1, v), min: -1, max: 2, step: 0.01 }),
+      /* @__PURE__ */ jsx17(Slider, { label: "x2", value: easing.ease[2], onChange: (v) => updateEase(2, v), min: 0, max: 1, step: 0.01 }),
+      /* @__PURE__ */ jsx17(Slider, { label: "y2", value: easing.ease[3], onChange: (v) => updateEase(3, v), min: -1, max: 2, step: 0.01 }),
+      /* @__PURE__ */ jsx17(EaseTextInput, { ease: easing.ease, onChange: (newEase) => onChange({ ...easing, ease: newEase }) })
+    ] }) : isSimpleSpring ? /* @__PURE__ */ jsx17(Slider, { label: "Bounce", value: spring.bounce ?? 0.2, onChange: (v) => handleSpringUpdate("bounce", v), min: 0, max: 1, step: 0.05 }) : /* @__PURE__ */ jsxs16(Fragment3, { children: [
+      /* @__PURE__ */ jsx17(Slider, { label: "Stiffness", value: spring.stiffness ?? 400, onChange: (v) => handleSpringUpdate("stiffness", v), min: 1, max: 1e3, step: 10 }),
+      /* @__PURE__ */ jsx17(Slider, { label: "Damping", value: spring.damping ?? 17, onChange: (v) => handleSpringUpdate("damping", v), min: 1, max: 100, step: 1 }),
+      /* @__PURE__ */ jsx17(Slider, { label: "Mass", value: spring.mass ?? 1, onChange: (v) => handleSpringUpdate("mass", v), min: 0.1, max: 10, step: 0.1 })
     ] }),
     durationSlider
   ] }) });
@@ -6378,8 +6831,8 @@ function parseEase(str) {
   return null;
 }
 function EaseTextInput({ ease, onChange }) {
-  const [editing, setEditing] = useState9(false);
-  const [draft, setDraft] = useState9("");
+  const [editing, setEditing] = useState11(false);
+  const [draft, setDraft] = useState11("");
   const handleFocus = () => {
     setDraft(formatEase(ease));
     setEditing(true);
@@ -6394,9 +6847,9 @@ function EaseTextInput({ ease, onChange }) {
       e.target.blur();
     }
   };
-  return /* @__PURE__ */ jsxs14("div", { className: "tweakers-labeled-control", children: [
-    /* @__PURE__ */ jsx15("span", { className: "tweakers-labeled-control-label", children: "Ease" }),
-    /* @__PURE__ */ jsx15(
+  return /* @__PURE__ */ jsxs16("div", { className: "tweakers-labeled-control", children: [
+    /* @__PURE__ */ jsx17("span", { className: "tweakers-labeled-control-label", children: "Ease" }),
+    /* @__PURE__ */ jsx17(
       "input",
       {
         type: "text",
@@ -6413,11 +6866,11 @@ function EaseTextInput({ ease, onChange }) {
 }
 
 // src/components/TextControl.tsx
-import { jsx as jsx16, jsxs as jsxs15 } from "react/jsx-runtime";
+import { jsx as jsx18, jsxs as jsxs17 } from "react/jsx-runtime";
 function TextControl({ label, value, onChange, placeholder }) {
-  return /* @__PURE__ */ jsxs15("div", { className: "tweakers-text-control", children: [
-    /* @__PURE__ */ jsx16("label", { className: "tweakers-text-label", children: label }),
-    /* @__PURE__ */ jsx16(
+  return /* @__PURE__ */ jsxs17("div", { className: "tweakers-text-control", children: [
+    /* @__PURE__ */ jsx18("label", { className: "tweakers-text-label", children: label }),
+    /* @__PURE__ */ jsx18(
       "input",
       {
         type: "text",
@@ -6431,19 +6884,19 @@ function TextControl({ label, value, onChange, placeholder }) {
 }
 
 // src/components/SelectControl.tsx
-import { useState as useState10, useRef as useRef13, useEffect as useEffect10, useCallback as useCallback8 } from "react";
+import { useState as useState12, useRef as useRef15, useEffect as useEffect12, useCallback as useCallback10 } from "react";
 import { createPortal as createPortal2 } from "react-dom";
 import { motion as motion5, AnimatePresence as AnimatePresence2 } from "motion/react";
 
 // src/components/PresenceMotionDiv.tsx
 import { motion as motion4 } from "motion/react";
-import { jsx as jsx17 } from "react/jsx-runtime";
+import { jsx as jsx19 } from "react/jsx-runtime";
 function PresenceMotionDiv({ divRef, ...props }) {
-  return /* @__PURE__ */ jsx17(motion4.div, { ref: divRef, ...props });
+  return /* @__PURE__ */ jsx19(motion4.div, { ref: divRef, ...props });
 }
 
 // src/components/SelectControl.tsx
-import { jsx as jsx18, jsxs as jsxs16 } from "react/jsx-runtime";
+import { jsx as jsx20, jsxs as jsxs18 } from "react/jsx-runtime";
 function toTitleCase(s) {
   return s.replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -6453,14 +6906,14 @@ function normalizeOptions(options) {
   );
 }
 function SelectControl({ label, value, options, onChange }) {
-  const [isOpen, setIsOpen] = useState10(false);
-  const triggerRef = useRef13(null);
-  const dropdownRef = useRef13(null);
-  const [portalTarget, setPortalTarget] = useState10(null);
-  const [pos, setPos] = useState10(null);
+  const [isOpen, setIsOpen] = useState12(false);
+  const triggerRef = useRef15(null);
+  const dropdownRef = useRef15(null);
+  const [portalTarget, setPortalTarget] = useState12(null);
+  const [pos, setPos] = useState12(null);
   const normalized = normalizeOptions(options);
   const selectedOption = normalized.find((o) => o.value === value);
-  const updatePos = useCallback8(() => {
+  const updatePos = useCallback10(() => {
     const el = triggerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -6474,15 +6927,15 @@ function SelectControl({ label, value, options, onChange }) {
       above
     });
   }, [normalized.length]);
-  useEffect10(() => {
+  useEffect12(() => {
     const root = triggerRef.current?.closest(".tweakers-root");
     setPortalTarget(root ?? document.body);
   }, []);
-  useEffect10(() => {
+  useEffect12(() => {
     if (!isOpen) return;
     updatePos();
   }, [isOpen, updatePos]);
-  useEffect10(() => {
+  useEffect12(() => {
     if (!isOpen) return;
     const handleClick = (e) => {
       const target = e.target;
@@ -6493,8 +6946,8 @@ function SelectControl({ label, value, options, onChange }) {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [isOpen]);
-  return /* @__PURE__ */ jsxs16("div", { className: "tweakers-select-row", children: [
-    /* @__PURE__ */ jsxs16(
+  return /* @__PURE__ */ jsxs18("div", { className: "tweakers-select-row", children: [
+    /* @__PURE__ */ jsxs18(
       "button",
       {
         ref: triggerRef,
@@ -6502,10 +6955,10 @@ function SelectControl({ label, value, options, onChange }) {
         onClick: () => setIsOpen(!isOpen),
         "data-open": String(isOpen),
         children: [
-          /* @__PURE__ */ jsx18("span", { className: "tweakers-select-label", children: label }),
-          /* @__PURE__ */ jsxs16("div", { className: "tweakers-select-right", children: [
-            /* @__PURE__ */ jsx18("span", { className: "tweakers-select-value", children: selectedOption?.label ?? value }),
-            /* @__PURE__ */ jsx18(
+          /* @__PURE__ */ jsx20("span", { className: "tweakers-select-label", children: label }),
+          /* @__PURE__ */ jsxs18("div", { className: "tweakers-select-right", children: [
+            /* @__PURE__ */ jsx20("span", { className: "tweakers-select-value", children: selectedOption?.label ?? value }),
+            /* @__PURE__ */ jsx20(
               motion5.svg,
               {
                 className: "tweakers-select-chevron",
@@ -6517,7 +6970,7 @@ function SelectControl({ label, value, options, onChange }) {
                 strokeLinejoin: "round",
                 animate: { rotate: isOpen ? 180 : 0 },
                 transition: { type: "spring", visualDuration: 0.2, bounce: 0.15 },
-                children: /* @__PURE__ */ jsx18("path", { d: ICON_CHEVRON })
+                children: /* @__PURE__ */ jsx20("path", { d: ICON_CHEVRON })
               }
             )
           ] })
@@ -6525,7 +6978,7 @@ function SelectControl({ label, value, options, onChange }) {
       }
     ),
     portalTarget && createPortal2(
-      /* @__PURE__ */ jsx18(AnimatePresence2, { children: isOpen && pos && /* @__PURE__ */ jsx18(
+      /* @__PURE__ */ jsx20(AnimatePresence2, { children: isOpen && pos && /* @__PURE__ */ jsx20(
         PresenceMotionDiv,
         {
           divRef: dropdownRef,
@@ -6540,7 +6993,7 @@ function SelectControl({ label, value, options, onChange }) {
             width: pos.width,
             ...pos.above ? { bottom: window.innerHeight - pos.top, transformOrigin: "bottom" } : { top: pos.top, transformOrigin: "top" }
           },
-          children: normalized.map((option) => /* @__PURE__ */ jsx18(
+          children: normalized.map((option) => /* @__PURE__ */ jsx20(
             "button",
             {
               className: "tweakers-select-option",
@@ -6561,12 +7014,12 @@ function SelectControl({ label, value, options, onChange }) {
 }
 
 // src/components/ColorControl.tsx
-import { useState as useState12, useRef as useRef15, useEffect as useEffect12, useCallback as useCallback10 } from "react";
+import { useState as useState14, useRef as useRef17, useEffect as useEffect14, useCallback as useCallback12 } from "react";
 import { createPortal as createPortal3 } from "react-dom";
 import { motion as motion6, AnimatePresence as AnimatePresence3 } from "motion/react";
 
 // src/components/ColorPickerPanel.tsx
-import { useState as useState11, useRef as useRef14, useEffect as useEffect11, useCallback as useCallback9 } from "react";
+import { useState as useState13, useRef as useRef16, useEffect as useEffect13, useCallback as useCallback11 } from "react";
 
 // src/color-palette-store.ts
 var cache = null;
@@ -6619,7 +7072,7 @@ function subscribePalette(cb) {
 }
 
 // src/components/ColorPickerPanel.tsx
-import { Fragment as Fragment4, jsx as jsx19, jsxs as jsxs17 } from "react/jsx-runtime";
+import { Fragment as Fragment4, jsx as jsx21, jsxs as jsxs19 } from "react/jsx-runtime";
 var FORMAT_OPTIONS = [
   { value: "hex", label: "HEX" },
   { value: "rgb", label: "RGB" },
@@ -6629,9 +7082,9 @@ var FORMAT_OPTIONS = [
 var stickyFormat = "hex";
 var BLACK = { h: 0, s: 0, v: 0, a: 1 };
 function useAreaDrag(onPoint) {
-  const ref = useRef14(null);
-  const draggingRef = useRef14(false);
-  const readPoint = useCallback9(
+  const ref = useRef16(null);
+  const draggingRef = useRef16(false);
+  const readPoint = useCallback11(
     (e) => {
       const el = ref.current;
       if (!el) return;
@@ -6661,14 +7114,14 @@ function useAreaDrag(onPoint) {
   return { ref, onPointerDown, onPointerMove, onPointerUp: endDrag, onPointerCancel: endDrag };
 }
 function ChannelField({ spec, value, onCommit }) {
-  const [draft, setDraft] = useState11(null);
+  const [draft, setDraft] = useState13(null);
   const display = draft ?? String(value);
   const commit = () => {
     if (draft !== null) onCommit(Number(draft));
     setDraft(null);
   };
-  return /* @__PURE__ */ jsxs17("label", { className: "tweakers-color-field", children: [
-    /* @__PURE__ */ jsx19(
+  return /* @__PURE__ */ jsxs19("label", { className: "tweakers-color-field", children: [
+    /* @__PURE__ */ jsx21(
       "input",
       {
         type: "text",
@@ -6692,11 +7145,11 @@ function ChannelField({ spec, value, onCommit }) {
         }
       }
     ),
-    /* @__PURE__ */ jsx19("span", { className: "tweakers-color-field-label", children: spec.label })
+    /* @__PURE__ */ jsx21("span", { className: "tweakers-color-field-label", children: spec.label })
   ] });
 }
 function HexField({ value, alpha, onCommit }) {
-  const [draft, setDraft] = useState11(null);
+  const [draft, setDraft] = useState13(null);
   const commit = () => {
     if (draft !== null) {
       const normalized = normalizeHex(draft, alpha);
@@ -6704,8 +7157,8 @@ function HexField({ value, alpha, onCommit }) {
     }
     setDraft(null);
   };
-  return /* @__PURE__ */ jsxs17("label", { className: "tweakers-color-field tweakers-color-field-hex", children: [
-    /* @__PURE__ */ jsx19(
+  return /* @__PURE__ */ jsxs19("label", { className: "tweakers-color-field tweakers-color-field-hex", children: [
+    /* @__PURE__ */ jsx21(
       "input",
       {
         type: "text",
@@ -6729,7 +7182,7 @@ function HexField({ value, alpha, onCommit }) {
         }
       }
     ),
-    /* @__PURE__ */ jsx19("span", { className: "tweakers-color-field-label", children: "HEX" })
+    /* @__PURE__ */ jsx21("span", { className: "tweakers-color-field-label", children: "HEX" })
   ] });
 }
 function PaletteSlot({
@@ -6738,18 +7191,18 @@ function PaletteSlot({
   onApply,
   onClear
 }) {
-  const [holding, setHolding] = useState11(false);
-  const timerRef = useRef14(null);
-  const originRef = useRef14(null);
-  const firedRef = useRef14(false);
+  const [holding, setHolding] = useState13(false);
+  const timerRef = useRef16(null);
+  const originRef = useRef16(null);
+  const firedRef = useRef16(false);
   const cancelHold = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = null;
     originRef.current = null;
     setHolding(false);
   };
-  useEffect11(() => () => cancelHold(), []);
-  return /* @__PURE__ */ jsx19(
+  useEffect13(() => () => cancelHold(), []);
+  return /* @__PURE__ */ jsx21(
     "button",
     {
       className: "tweakers-color-palette-slot",
@@ -6791,24 +7244,24 @@ function PaletteSlot({
   );
 }
 function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
-  const [hsva, setHsva] = useState11(() => {
+  const [hsva, setHsva] = useState13(() => {
     const rgba2 = parseHex(value);
     return rgba2 ? rgbToHsv(rgba2) : BLACK;
   });
-  const [format, setFormat] = useState11(stickyFormat);
-  const [slots, setSlots] = useState11(() => palette ? loadPalette() : emptyPalette());
-  const lastEmittedRef = useRef14(value);
-  useEffect11(() => {
+  const [format, setFormat] = useState13(stickyFormat);
+  const [slots, setSlots] = useState13(() => palette ? loadPalette() : emptyPalette());
+  const lastEmittedRef = useRef16(value);
+  useEffect13(() => {
     if (value === lastEmittedRef.current) return;
     lastEmittedRef.current = value;
     const rgba2 = parseHex(value);
     if (rgba2) setHsva(rgbToHsv(rgba2));
   }, [value]);
-  useEffect11(() => {
+  useEffect13(() => {
     if (!palette) return;
     return subscribePalette(setSlots);
   }, [palette]);
-  const emit2 = useCallback9(
+  const emit2 = useCallback11(
     (next) => {
       setHsva(next);
       const hex = formatHex(hsvToRgb(next), alpha);
@@ -6817,7 +7270,7 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
     },
     [alpha, onChange]
   );
-  const applyHex = useCallback9(
+  const applyHex = useCallback11(
     (hex) => {
       const rgba2 = parseHex(hex);
       if (!rgba2) return;
@@ -6828,16 +7281,16 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
     },
     [alpha, onChange]
   );
-  const hsvaRef = useRef14(hsva);
+  const hsvaRef = useRef16(hsva);
   hsvaRef.current = hsva;
   const svDrag = useAreaDrag(
-    useCallback9((x, y) => emit2({ ...hsvaRef.current, s: x, v: 1 - y }), [emit2])
+    useCallback11((x, y) => emit2({ ...hsvaRef.current, s: x, v: 1 - y }), [emit2])
   );
   const hueDrag = useAreaDrag(
-    useCallback9((x) => emit2({ ...hsvaRef.current, h: Math.min(x * 360, 359.999) }), [emit2])
+    useCallback11((x) => emit2({ ...hsvaRef.current, h: Math.min(x * 360, 359.999) }), [emit2])
   );
   const alphaDrag = useAreaDrag(
-    useCallback9((x) => emit2({ ...hsvaRef.current, a: x }), [emit2])
+    useCallback11((x) => emit2({ ...hsvaRef.current, a: x }), [emit2])
   );
   const rgba = hsvToRgb(hsva);
   const opaqueHex = formatHex(rgba, false);
@@ -6853,8 +7306,8 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
     if (nextHsva.v === 0) nextHsva.s = hsva.s;
     emit2(nextHsva);
   };
-  return /* @__PURE__ */ jsxs17("div", { className: "tweakers-color-picker", style: { "--picker-hue": hsva.h }, children: [
-    /* @__PURE__ */ jsx19(
+  return /* @__PURE__ */ jsxs19("div", { className: "tweakers-color-picker", style: { "--picker-hue": hsva.h }, children: [
+    /* @__PURE__ */ jsx21(
       "div",
       {
         className: "tweakers-color-sv",
@@ -6863,7 +7316,7 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
         onPointerMove: svDrag.onPointerMove,
         onPointerUp: svDrag.onPointerUp,
         onPointerCancel: svDrag.onPointerCancel,
-        children: /* @__PURE__ */ jsx19(
+        children: /* @__PURE__ */ jsx21(
           "div",
           {
             className: "tweakers-color-sv-thumb",
@@ -6872,7 +7325,7 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
         )
       }
     ),
-    /* @__PURE__ */ jsx19(
+    /* @__PURE__ */ jsx21(
       "div",
       {
         className: "tweakers-color-slider tweakers-color-hue",
@@ -6881,7 +7334,7 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
         onPointerMove: hueDrag.onPointerMove,
         onPointerUp: hueDrag.onPointerUp,
         onPointerCancel: hueDrag.onPointerCancel,
-        children: /* @__PURE__ */ jsx19(
+        children: /* @__PURE__ */ jsx21(
           "div",
           {
             className: "tweakers-color-slider-thumb",
@@ -6890,7 +7343,7 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
         )
       }
     ),
-    alpha && /* @__PURE__ */ jsxs17(
+    alpha && /* @__PURE__ */ jsxs19(
       "div",
       {
         className: "tweakers-color-slider tweakers-color-alpha tweakers-checker",
@@ -6900,14 +7353,14 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
         onPointerUp: alphaDrag.onPointerUp,
         onPointerCancel: alphaDrag.onPointerCancel,
         children: [
-          /* @__PURE__ */ jsx19(
+          /* @__PURE__ */ jsx21(
             "div",
             {
               className: "tweakers-color-alpha-gradient",
               style: { background: `linear-gradient(to right, transparent, ${opaqueHex})` }
             }
           ),
-          /* @__PURE__ */ jsx19(
+          /* @__PURE__ */ jsx21(
             "div",
             {
               className: "tweakers-color-slider-thumb",
@@ -6917,7 +7370,7 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
         ]
       }
     ),
-    /* @__PURE__ */ jsx19(
+    /* @__PURE__ */ jsx21(
       SegmentedControl,
       {
         options: FORMAT_OPTIONS,
@@ -6928,9 +7381,9 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
         }
       }
     ),
-    /* @__PURE__ */ jsx19("div", { className: "tweakers-color-fields", "data-format": format, children: format === "hex" ? /* @__PURE__ */ jsxs17(Fragment4, { children: [
-      /* @__PURE__ */ jsx19(HexField, { value: currentHex, alpha, onCommit: applyHex }),
-      alpha && /* @__PURE__ */ jsx19(
+    /* @__PURE__ */ jsx21("div", { className: "tweakers-color-fields", "data-format": format, children: format === "hex" ? /* @__PURE__ */ jsxs19(Fragment4, { children: [
+      /* @__PURE__ */ jsx21(HexField, { value: currentHex, alpha, onCommit: applyHex }),
+      alpha && /* @__PURE__ */ jsx21(
         ChannelField,
         {
           spec: { key: "a", label: "A", min: 0, max: 100, step: 1, precision: 0 },
@@ -6938,8 +7391,8 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
           onCommit: (n) => emit2({ ...hsva, a: Math.min(1, Math.max(0, n / 100)) })
         }
       )
-    ] }) : channelSpecs.map((spec, i) => /* @__PURE__ */ jsx19(ChannelField, { spec, value: channelValues[i], onCommit: (n) => commitChannel(i, n) }, `${format}-${spec.key}`)) }),
-    palette && /* @__PURE__ */ jsx19("div", { className: "tweakers-color-palette", children: Array.from({ length: PALETTE_SIZE }, (_, i) => /* @__PURE__ */ jsx19(
+    ] }) : channelSpecs.map((spec, i) => /* @__PURE__ */ jsx21(ChannelField, { spec, value: channelValues[i], onCommit: (n) => commitChannel(i, n) }, `${format}-${spec.key}`)) }),
+    palette && /* @__PURE__ */ jsx21("div", { className: "tweakers-color-palette", children: Array.from({ length: PALETTE_SIZE }, (_, i) => /* @__PURE__ */ jsx21(
       PaletteSlot,
       {
         color: slots[i] ?? null,
@@ -6956,33 +7409,33 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
 }
 
 // src/components/ColorControl.tsx
-import { Fragment as Fragment5, jsx as jsx20, jsxs as jsxs18 } from "react/jsx-runtime";
+import { Fragment as Fragment5, jsx as jsx22, jsxs as jsxs20 } from "react/jsx-runtime";
 var PICKER_WIDTH = 240;
 var PICKER_BASE_HEIGHT = 270;
 var PICKER_ALPHA_HEIGHT = 22;
 var PICKER_PALETTE_HEIGHT = 30;
 function ColorControl({ label, value, onChange, alpha = false, palette = false }) {
-  const [isEditing, setIsEditing] = useState12(false);
-  const [editValue, setEditValue] = useState12(() => bareHex(value));
-  const [isOpen, setIsOpen] = useState12(false);
-  const swatchRef = useRef15(null);
-  const pickerRef = useRef15(null);
-  const [portalTarget, setPortalTarget] = useState12(null);
-  const [pos, setPos] = useState12(null);
-  const hexInputRef = useRef15(null);
+  const [isEditing, setIsEditing] = useState14(false);
+  const [editValue, setEditValue] = useState14(() => bareHex(value));
+  const [isOpen, setIsOpen] = useState14(false);
+  const swatchRef = useRef17(null);
+  const pickerRef = useRef17(null);
+  const [portalTarget, setPortalTarget] = useState14(null);
+  const [pos, setPos] = useState14(null);
+  const hexInputRef = useRef17(null);
   const rgba = parseHex(value);
-  useEffect12(() => {
+  useEffect14(() => {
     if (!isEditing) {
       setEditValue(bareHex(value));
     }
   }, [value, isEditing]);
-  useEffect12(() => {
+  useEffect14(() => {
     if (isEditing) {
       hexInputRef.current?.focus();
       hexInputRef.current?.select();
     }
   }, [isEditing]);
-  const updatePos = useCallback10(() => {
+  const updatePos = useCallback12(() => {
     const el = swatchRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -6996,11 +7449,11 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
     updatePos();
     setIsOpen(true);
   };
-  useEffect12(() => {
+  useEffect14(() => {
     const root = swatchRef.current?.closest(".tweakers-root");
     setPortalTarget(root ?? document.body);
   }, []);
-  useEffect12(() => {
+  useEffect14(() => {
     if (!isOpen) return;
     updatePos();
     const onViewport = () => updatePos();
@@ -7044,12 +7497,12 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
       setEditValue(bareHex(value));
     }
   }
-  return /* @__PURE__ */ jsxs18("div", { className: "tweakers-color-control", children: [
-    /* @__PURE__ */ jsx20("span", { className: "tweakers-color-label", children: label }),
-    /* @__PURE__ */ jsxs18("div", { className: "tweakers-color-inputs", children: [
-      /* @__PURE__ */ jsxs18("span", { className: "tweakers-color-hex-wrap", onClick: () => setIsEditing(true), children: [
-        /* @__PURE__ */ jsx20("span", { className: "tweakers-color-hash", "aria-hidden": "true", children: "#" }),
-        isEditing ? /* @__PURE__ */ jsx20(
+  return /* @__PURE__ */ jsxs20("div", { className: "tweakers-color-control", children: [
+    /* @__PURE__ */ jsx22("span", { className: "tweakers-color-label", children: label }),
+    /* @__PURE__ */ jsxs20("div", { className: "tweakers-color-inputs", children: [
+      /* @__PURE__ */ jsxs20("span", { className: "tweakers-color-hex-wrap", onClick: () => setIsEditing(true), children: [
+        /* @__PURE__ */ jsx22("span", { className: "tweakers-color-hash", "aria-hidden": "true", children: "#" }),
+        isEditing ? /* @__PURE__ */ jsx22(
           "input",
           {
             ref: hexInputRef,
@@ -7061,17 +7514,17 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
             onBlur: handleTextSubmit,
             onKeyDown: handleKeyDown
           }
-        ) : /* @__PURE__ */ jsx20("span", { className: "tweakers-color-hex", "aria-label": `Hex color for ${label}`, children: bareHex(value) })
+        ) : /* @__PURE__ */ jsx22("span", { className: "tweakers-color-hex", "aria-label": `Hex color for ${label}`, children: bareHex(value) })
       ] }),
-      alpha && rgba && /* @__PURE__ */ jsxs18(Fragment5, { children: [
-        /* @__PURE__ */ jsx20("span", { className: "tweakers-color-divider", "aria-hidden": "true" }),
-        /* @__PURE__ */ jsxs18("span", { className: "tweakers-color-opacity", children: [
+      alpha && rgba && /* @__PURE__ */ jsxs20(Fragment5, { children: [
+        /* @__PURE__ */ jsx22("span", { className: "tweakers-color-divider", "aria-hidden": "true" }),
+        /* @__PURE__ */ jsxs20("span", { className: "tweakers-color-opacity", children: [
           opacityPercent(rgba),
           " ",
-          /* @__PURE__ */ jsx20("span", { className: "tweakers-color-opacity-unit", children: "%" })
+          /* @__PURE__ */ jsx22("span", { className: "tweakers-color-opacity-unit", children: "%" })
         ] })
       ] }),
-      /* @__PURE__ */ jsx20(
+      /* @__PURE__ */ jsx22(
         "button",
         {
           ref: swatchRef,
@@ -7086,7 +7539,7 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
       )
     ] }),
     portalTarget && createPortal3(
-      /* @__PURE__ */ jsx20(AnimatePresence3, { children: isOpen && pos && /* @__PURE__ */ jsx20(
+      /* @__PURE__ */ jsx22(AnimatePresence3, { children: isOpen && pos && /* @__PURE__ */ jsx22(
         motion6.div,
         {
           ref: pickerRef,
@@ -7101,7 +7554,7 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
             width: PICKER_WIDTH,
             ...pos.above ? { bottom: window.innerHeight - pos.top, transformOrigin: "bottom right" } : { top: pos.top, transformOrigin: "top right" }
           },
-          children: /* @__PURE__ */ jsx20(ColorPickerPanel, { value, onChange, alpha, palette })
+          children: /* @__PURE__ */ jsx22(ColorPickerPanel, { value, onChange, alpha, palette })
         }
       ) }),
       portalTarget
@@ -7110,24 +7563,24 @@ function ColorControl({ label, value, onChange, alpha = false, palette = false }
 }
 
 // src/components/GradientControl.tsx
-import { useState as useState15, useRef as useRef18, useEffect as useEffect14, useCallback as useCallback11 } from "react";
+import { useState as useState17, useRef as useRef20, useEffect as useEffect16, useCallback as useCallback13 } from "react";
 import { createPortal as createPortal4 } from "react-dom";
 import { motion as motion7, AnimatePresence as AnimatePresence4 } from "motion/react";
 
 // src/components/GradientPanel.tsx
-import { useState as useState14, useRef as useRef17, useEffect as useEffect13 } from "react";
+import { useState as useState16, useRef as useRef19, useEffect as useEffect15 } from "react";
 
 // src/components/GradientTransformPad.tsx
-import { useLayoutEffect as useLayoutEffect3, useRef as useRef16, useState as useState13 } from "react";
-import { Fragment as Fragment6, jsx as jsx21, jsxs as jsxs19 } from "react/jsx-runtime";
+import { useLayoutEffect as useLayoutEffect3, useRef as useRef18, useState as useState15 } from "react";
+import { Fragment as Fragment6, jsx as jsx23, jsxs as jsxs21 } from "react/jsx-runtime";
 var clamp7 = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 var wrap360 = (deg) => (deg % 360 + 360) % 360;
 var RAD = Math.PI / 180;
 var vectorToAngle = (dx, dy) => wrap360(Math.atan2(dx, -dy) / RAD);
 function GradientTransformPad({ value, onChange }) {
-  const padRef = useRef16(null);
-  const drag = useRef16(null);
-  const [size, setSize] = useState13({ w: 0, h: 0 });
+  const padRef = useRef18(null);
+  const drag = useRef18(null);
+  const [size, setSize] = useState15({ w: 0, h: 0 });
   useLayoutEffect3(() => {
     const el = padRef.current;
     if (!el) return;
@@ -7213,8 +7666,8 @@ function GradientTransformPad({ value, onChange }) {
     onLostPointerCapture: onHandleUp
   });
   const fill = gradientFillBox(value, w, h);
-  return /* @__PURE__ */ jsxs19("div", { ref: padRef, className: "tweakers-gradient-pad tweakers-checker", children: [
-    /* @__PURE__ */ jsx21(
+  return /* @__PURE__ */ jsxs21("div", { ref: padRef, className: "tweakers-gradient-pad tweakers-checker", children: [
+    /* @__PURE__ */ jsx23(
       "div",
       {
         className: "tweakers-gradient-pad-fill",
@@ -7229,15 +7682,15 @@ function GradientTransformPad({ value, onChange }) {
         }
       }
     ),
-    radial && /* @__PURE__ */ jsxs19(Fragment6, { children: [
-      /* @__PURE__ */ jsx21(
+    radial && /* @__PURE__ */ jsxs21(Fragment6, { children: [
+      /* @__PURE__ */ jsx23(
         "div",
         {
           className: "tweakers-gradient-pad-line",
           style: { left: cxPx, top: cyPx, width: majorLineLen, transform: `rotate(${majorLineAngle}deg)` }
         }
       ),
-      /* @__PURE__ */ jsx21(
+      /* @__PURE__ */ jsx23(
         "button",
         {
           type: "button",
@@ -7248,7 +7701,7 @@ function GradientTransformPad({ value, onChange }) {
           ...handleProps("major")
         }
       ),
-      /* @__PURE__ */ jsx21(
+      /* @__PURE__ */ jsx23(
         "button",
         {
           type: "button",
@@ -7260,15 +7713,15 @@ function GradientTransformPad({ value, onChange }) {
         }
       )
     ] }),
-    !radial && /* @__PURE__ */ jsxs19(Fragment6, { children: [
-      /* @__PURE__ */ jsx21(
+    !radial && /* @__PURE__ */ jsxs21(Fragment6, { children: [
+      /* @__PURE__ */ jsx23(
         "div",
         {
           className: "tweakers-gradient-pad-line",
           style: { left: angleOx, top: angleOy, width: angleLineLen, transform: `rotate(${angleLineAngle}deg)` }
         }
       ),
-      /* @__PURE__ */ jsx21(
+      /* @__PURE__ */ jsx23(
         "button",
         {
           type: "button",
@@ -7280,7 +7733,7 @@ function GradientTransformPad({ value, onChange }) {
         }
       )
     ] }),
-    (radial || conic) && /* @__PURE__ */ jsx21(
+    (radial || conic) && /* @__PURE__ */ jsx23(
       "button",
       {
         type: "button",
@@ -7295,22 +7748,19 @@ function GradientTransformPad({ value, onChange }) {
 }
 
 // src/components/GradientPanel.tsx
-import { jsx as jsx22, jsxs as jsxs20 } from "react/jsx-runtime";
+import { jsx as jsx24, jsxs as jsxs22 } from "react/jsx-runtime";
 var TYPE_OPTIONS = [
   { value: "linear", label: "Linear" },
   { value: "radial", label: "Radial" },
   { value: "conic", label: "Conic" }
 ];
-function rampCss(stops) {
-  return gradientToCss({ type: "linear", angle: 90, stops });
-}
-function GradientPanel({ value, onChange, onDrag }) {
-  const [selectedIndex, setSelectedIndex] = useState14(0);
-  const [holdingIndex, setHoldingIndex] = useState14(-1);
-  const [detach, setDetach] = useState14(null);
-  const stripRef = useRef17(null);
-  const gripRef = useRef17(null);
-  const gripOrigin = useRef17(null);
+function GradientPanel({ value, onChange, onDrag, form = "fill" }) {
+  const [selectedIndex, setSelectedIndex] = useState16(0);
+  const [holdingIndex, setHoldingIndex] = useState16(-1);
+  const [detach, setDetach] = useState16(null);
+  const stripRef = useRef19(null);
+  const gripRef = useRef19(null);
+  const gripOrigin = useRef19(null);
   const onGripDown = (e) => {
     e.preventDefault();
     try {
@@ -7327,10 +7777,10 @@ function GradientPanel({ value, onChange, onDrag }) {
   const onGripUp = () => {
     gripOrigin.current = null;
   };
-  const drag = useRef17({ mode: "idle", activeIndex: -1, originX: 0, originY: 0, timer: null, working: value });
-  const valueRef = useRef17(value);
+  const drag = useRef19({ mode: "idle", activeIndex: -1, originX: 0, originY: 0, timer: null, working: value });
+  const valueRef = useRef19(value);
   valueRef.current = value;
-  useEffect13(() => () => {
+  useEffect15(() => () => {
     if (drag.current.timer) clearTimeout(drag.current.timer);
   }, []);
   const safeIndex = Math.min(selectedIndex, value.stops.length - 1);
@@ -7440,9 +7890,9 @@ function GradientPanel({ value, onChange, onDrag }) {
     resetDrag();
   };
   const previewStops = detach ? value.stops.filter((_, i) => i !== detach.index) : value.stops;
-  return /* @__PURE__ */ jsxs20("div", { className: "tweakers-gradient-panel", children: [
-    /* @__PURE__ */ jsxs20("div", { className: "tweakers-gradient-toolbar", children: [
-      /* @__PURE__ */ jsx22(
+  return /* @__PURE__ */ jsxs22("div", { className: "tweakers-gradient-panel", children: [
+    /* @__PURE__ */ jsxs22("div", { className: "tweakers-gradient-toolbar", children: [
+      /* @__PURE__ */ jsx24(
         "button",
         {
           ref: gripRef,
@@ -7455,20 +7905,20 @@ function GradientPanel({ value, onChange, onDrag }) {
           onPointerUp: onGripUp,
           onPointerCancel: onGripUp,
           onLostPointerCapture: onGripUp,
-          children: /* @__PURE__ */ jsx22("svg", { viewBox: "0 0 24 24", fill: "currentColor", "aria-hidden": "true", children: ICON_GRIP.map((c, i) => /* @__PURE__ */ jsx22("circle", { cx: c.cx, cy: c.cy, r: "1.5" }, i)) })
+          children: /* @__PURE__ */ jsx24("svg", { viewBox: "0 0 24 24", fill: "currentColor", "aria-hidden": "true", children: ICON_GRIP.map((c, i) => /* @__PURE__ */ jsx24("circle", { cx: c.cx, cy: c.cy, r: "1.5" }, i)) })
         }
       ),
-      /* @__PURE__ */ jsx22(
+      form === "fill" ? /* @__PURE__ */ jsx24(
         SegmentedControl,
         {
           options: TYPE_OPTIONS,
           value: value.type,
           onChange: (t) => onChange(setGradientType(value, t))
         }
-      )
+      ) : null
     ] }),
-    /* @__PURE__ */ jsx22(GradientTransformPad, { value, onChange }),
-    /* @__PURE__ */ jsx22(
+    form === "fill" ? /* @__PURE__ */ jsx24(GradientTransformPad, { value, onChange }) : null,
+    /* @__PURE__ */ jsx24(
       "div",
       {
         ref: stripRef,
@@ -7480,7 +7930,7 @@ function GradientPanel({ value, onChange, onDrag }) {
         onPointerCancel: onPointerUp,
         children: value.stops.map((stop, i) => {
           const detaching = detach?.index === i;
-          return /* @__PURE__ */ jsx22(
+          return /* @__PURE__ */ jsx24(
             "button",
             {
               type: "button",
@@ -7502,8 +7952,8 @@ function GradientPanel({ value, onChange, onDrag }) {
         })
       }
     ),
-    /* @__PURE__ */ jsx22("span", { className: "tweakers-gradient-divider", "aria-hidden": "true" }),
-    /* @__PURE__ */ jsx22(
+    /* @__PURE__ */ jsx24("span", { className: "tweakers-gradient-divider", "aria-hidden": "true" }),
+    /* @__PURE__ */ jsx24(
       ColorPickerPanel,
       {
         value: value.stops[safeIndex].color,
@@ -7517,18 +7967,19 @@ function GradientPanel({ value, onChange, onDrag }) {
 }
 
 // src/components/GradientControl.tsx
-import { jsx as jsx23, jsxs as jsxs21 } from "react/jsx-runtime";
+import { jsx as jsx25, jsxs as jsxs23 } from "react/jsx-runtime";
 var PANEL_WIDTH = 240;
 var PANEL_HEIGHT_ANGLED = 470;
+var PANEL_HEIGHT_RAMP = 300;
 var PANEL_HEIGHT_RADIAL = 430;
-function GradientControl({ label, value, onChange }) {
-  const [isOpen, setIsOpen] = useState15(false);
-  const triggerRef = useRef18(null);
-  const panelRef = useRef18(null);
-  const [portalTarget, setPortalTarget] = useState15(null);
-  const [pos, setPos] = useState15(null);
-  const [dragPos, setDragPos] = useState15(null);
-  const onPanelDrag = useCallback11((dx, dy) => {
+function GradientControl({ label, value, onChange, form = "fill" }) {
+  const [isOpen, setIsOpen] = useState17(false);
+  const triggerRef = useRef20(null);
+  const panelRef = useRef20(null);
+  const [portalTarget, setPortalTarget] = useState17(null);
+  const [pos, setPos] = useState17(null);
+  const [dragPos, setDragPos] = useState17(null);
+  const onPanelDrag = useCallback13((dx, dy) => {
     setDragPos((prev) => {
       let base = prev;
       if (!base) {
@@ -7541,11 +7992,11 @@ function GradientControl({ label, value, onChange }) {
       return { left, top };
     });
   }, [pos]);
-  const updatePos = useCallback11(() => {
+  const updatePos = useCallback13(() => {
     const el = triggerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const panelHeight = value.type === "radial" ? PANEL_HEIGHT_RADIAL : PANEL_HEIGHT_ANGLED;
+    const panelHeight = form === "ramp" ? PANEL_HEIGHT_RAMP : value.type === "radial" ? PANEL_HEIGHT_RADIAL : PANEL_HEIGHT_ANGLED;
     const spaceBelow = window.innerHeight - rect.bottom - 4;
     const above = spaceBelow < panelHeight && rect.top > spaceBelow;
     const left = Math.max(8, rect.right - PANEL_WIDTH);
@@ -7556,11 +8007,11 @@ function GradientControl({ label, value, onChange }) {
     updatePos();
     setIsOpen(true);
   };
-  useEffect14(() => {
+  useEffect16(() => {
     const root = triggerRef.current?.closest(".tweakers-root");
     setPortalTarget(root ?? document.body);
   }, []);
-  useEffect14(() => {
+  useEffect16(() => {
     if (!isOpen) return;
     updatePos();
     const onViewport = () => updatePos();
@@ -7586,9 +8037,9 @@ function GradientControl({ label, value, onChange }) {
       window.removeEventListener("scroll", onViewport, true);
     };
   }, [isOpen, updatePos]);
-  return /* @__PURE__ */ jsxs21("div", { className: "tweakers-gradient-control", children: [
-    /* @__PURE__ */ jsx23("span", { className: "tweakers-gradient-label", children: label }),
-    /* @__PURE__ */ jsx23(
+  return /* @__PURE__ */ jsxs23("div", { className: "tweakers-gradient-control", children: [
+    /* @__PURE__ */ jsx25("span", { className: "tweakers-gradient-label", children: label }),
+    /* @__PURE__ */ jsx25(
       "button",
       {
         ref: triggerRef,
@@ -7602,7 +8053,7 @@ function GradientControl({ label, value, onChange }) {
       }
     ),
     portalTarget && createPortal4(
-      /* @__PURE__ */ jsx23(AnimatePresence4, { children: isOpen && pos && /* @__PURE__ */ jsx23(
+      /* @__PURE__ */ jsx25(AnimatePresence4, { children: isOpen && pos && /* @__PURE__ */ jsx25(
         motion7.div,
         {
           ref: panelRef,
@@ -7616,7 +8067,7 @@ function GradientControl({ label, value, onChange }) {
             width: PANEL_WIDTH,
             ...dragPos ? { left: dragPos.left, top: dragPos.top, transformOrigin: "top left" } : pos.above ? { left: pos.left, bottom: window.innerHeight - pos.top, transformOrigin: "bottom right" } : { left: pos.left, top: pos.top, transformOrigin: "top right" }
           },
-          children: /* @__PURE__ */ jsx23(GradientPanel, { value, onChange, onDrag: onPanelDrag })
+          children: /* @__PURE__ */ jsx25(GradientPanel, { value, onChange, form, onDrag: onPanelDrag })
         }
       ) }),
       portalTarget
@@ -7625,18 +8076,18 @@ function GradientControl({ label, value, onChange }) {
 }
 
 // src/components/XYPad.tsx
-import { useRef as useRef19, useState as useState16, useCallback as useCallback12 } from "react";
-import { jsx as jsx24, jsxs as jsxs22 } from "react/jsx-runtime";
+import { useRef as useRef21, useState as useState18, useCallback as useCallback14 } from "react";
+import { jsx as jsx26, jsxs as jsxs24 } from "react/jsx-runtime";
 var DEFAULT_GRID_X = 5;
 var DEFAULT_GRID_Y = 5;
 var FINE_DRAG = 0.15;
-function decimalsForStep3(step) {
+function decimalsForStep4(step) {
   const s = step.toString();
   const dot = s.indexOf(".");
   return dot === -1 ? 0 : s.length - dot - 1;
 }
 function formatComponent(v, axis) {
-  return (v + 0).toFixed(decimalsForStep3(axis.step));
+  return (v + 0).toFixed(decimalsForStep4(axis.step));
 }
 function XYPad({
   label,
@@ -7657,13 +8108,13 @@ function XYPad({
 }) {
   const xAxis = resolveAxis(x);
   const yAxis = resolveAxis(y);
-  const areaRef = useRef19(null);
-  const draggingRef = useRef19(false);
-  const [active, setActive] = useState16(false);
-  const [dragging, setDragging] = useState16(false);
-  const valueRef = useRef19(value);
+  const areaRef = useRef21(null);
+  const draggingRef = useRef21(false);
+  const [active, setActive] = useState18(false);
+  const [dragging, setDragging] = useState18(false);
+  const valueRef = useRef21(value);
   valueRef.current = value;
-  const pointToValue = useCallback12(
+  const pointToValue = useCallback14(
     (clientX, clientY, fine) => {
       const el = areaRef.current;
       if (!el) return valueRef.current;
@@ -7688,7 +8139,7 @@ function XYPad({
     },
     [xAxis, yAxis, snap2]
   );
-  const emit2 = useCallback12(
+  const emit2 = useCallback14(
     (next) => {
       valueRef.current = next;
       onChange(next);
@@ -7797,12 +8248,12 @@ function XYPad({
   const point = pointFromValue(value, xAxis, yAxis);
   const leftPct = `${point.x * 100}%`;
   const topPct = `${point.y * 100}%`;
-  return /* @__PURE__ */ jsxs22("div", { className: "tweakers-xy", "data-active": String(active), "data-disabled": String(disabled), children: [
-    /* @__PURE__ */ jsx24("div", { className: "tweakers-xy-header", children: /* @__PURE__ */ jsxs22("span", { className: "tweakers-xy-label", children: [
+  return /* @__PURE__ */ jsxs24("div", { className: "tweakers-xy", "data-active": String(active), "data-disabled": String(disabled), children: [
+    /* @__PURE__ */ jsx26("div", { className: "tweakers-xy-header", children: /* @__PURE__ */ jsxs24("span", { className: "tweakers-xy-label", children: [
       label,
-      shortcut && /* @__PURE__ */ jsx24("span", { className: `tweakers-shortcut-pill${shortcutActive ? " tweakers-shortcut-pill-active" : ""}`, children: formatSliderShortcut(shortcut) })
+      shortcut && /* @__PURE__ */ jsx26("span", { className: `tweakers-shortcut-pill${shortcutActive ? " tweakers-shortcut-pill-active" : ""}`, children: formatSliderShortcut(shortcut) })
     ] }) }),
-    /* @__PURE__ */ jsxs22(
+    /* @__PURE__ */ jsxs24(
       "div",
       {
         ref: areaRef,
@@ -7836,7 +8287,7 @@ function XYPad({
           if (!draggingRef.current) setActive(false);
         },
         children: [
-          showGrid && /* @__PURE__ */ jsx24(
+          showGrid && /* @__PURE__ */ jsx26(
             "div",
             {
               className: "tweakers-xy-grid",
@@ -7847,11 +8298,11 @@ function XYPad({
               }
             }
           ),
-          /* @__PURE__ */ jsx24("div", { className: "tweakers-xy-axis tweakers-xy-axis-x", "aria-hidden": "true", children: xVisual }),
-          /* @__PURE__ */ jsx24("div", { className: "tweakers-xy-axis tweakers-xy-axis-y", "aria-hidden": "true", children: yVisual }),
-          /* @__PURE__ */ jsx24("div", { className: "tweakers-xy-guide tweakers-xy-guide-v", "aria-hidden": "true", style: { left: leftPct } }),
-          /* @__PURE__ */ jsx24("div", { className: "tweakers-xy-guide tweakers-xy-guide-h", "aria-hidden": "true", style: { top: topPct } }),
-          /* @__PURE__ */ jsx24("div", { className: "tweakers-xy-thumb", "aria-hidden": "true", style: { left: leftPct, top: topPct } })
+          /* @__PURE__ */ jsx26("div", { className: "tweakers-xy-axis tweakers-xy-axis-x", "aria-hidden": "true", children: xVisual }),
+          /* @__PURE__ */ jsx26("div", { className: "tweakers-xy-axis tweakers-xy-axis-y", "aria-hidden": "true", children: yVisual }),
+          /* @__PURE__ */ jsx26("div", { className: "tweakers-xy-guide tweakers-xy-guide-v", "aria-hidden": "true", style: { left: leftPct } }),
+          /* @__PURE__ */ jsx26("div", { className: "tweakers-xy-guide tweakers-xy-guide-h", "aria-hidden": "true", style: { top: topPct } }),
+          /* @__PURE__ */ jsx26("div", { className: "tweakers-xy-thumb", "aria-hidden": "true", style: { left: leftPct, top: topPct } })
         ]
       }
     )
@@ -7859,9 +8310,9 @@ function XYPad({
 }
 
 // src/components/XYControl.tsx
-import { jsx as jsx25 } from "react/jsx-runtime";
+import { jsx as jsx27 } from "react/jsx-runtime";
 function XYControl({ label, value, onChange, x, y, grid, density, snap: snap2, returnToCenter, showValues, shortcut, shortcutActive }) {
-  return /* @__PURE__ */ jsx25(
+  return /* @__PURE__ */ jsx27(
     XYPad,
     {
       label,
@@ -7881,17 +8332,17 @@ function XYControl({ label, value, onChange, x, y, grid, density, snap: snap2, r
 }
 
 // src/components/GalleryControl.tsx
-import { useState as useState17, useRef as useRef20, useEffect as useEffect15 } from "react";
-import { jsx as jsx26, jsxs as jsxs23 } from "react/jsx-runtime";
+import { useState as useState19, useRef as useRef22, useEffect as useEffect17 } from "react";
+import { jsx as jsx28, jsxs as jsxs25 } from "react/jsx-runtime";
 function itemContent(item, skeleton) {
   if (item.render) return item.render();
   if (!item.src) return null;
-  return skeleton ? /* @__PURE__ */ jsx26(GalleryImage, { item }) : /* @__PURE__ */ jsx26("img", { src: item.src, alt: "", draggable: false });
+  return skeleton ? /* @__PURE__ */ jsx28(GalleryImage, { item }) : /* @__PURE__ */ jsx28("img", { src: item.src, alt: "", draggable: false });
 }
 function GalleryImage({ item }) {
-  const [loaded, setLoaded] = useState17(false);
-  const imgRef = useRef20(null);
-  useEffect15(() => {
+  const [loaded, setLoaded] = useState19(false);
+  const imgRef = useRef22(null);
+  useEffect17(() => {
     const img = imgRef.current;
     if (!img) return;
     if (img.complete && img.naturalWidth > 0) {
@@ -7906,15 +8357,15 @@ function GalleryImage({ item }) {
       img.removeEventListener("error", done);
     };
   }, []);
-  return /* @__PURE__ */ jsxs23(
+  return /* @__PURE__ */ jsxs25(
     "span",
     {
       className: "tweakers-gallery-media",
       "data-fixed": item.aspect ? "true" : "false",
       style: item.aspect ? { aspectRatio: String(item.aspect) } : void 0,
       children: [
-        /* @__PURE__ */ jsx26("span", { className: "tweakers-gallery-skeleton", "data-done": String(loaded), "aria-hidden": "true" }),
-        /* @__PURE__ */ jsx26(
+        /* @__PURE__ */ jsx28("span", { className: "tweakers-gallery-skeleton", "data-done": String(loaded), "aria-hidden": "true" }),
+        /* @__PURE__ */ jsx28(
           "img",
           {
             ref: imgRef,
@@ -7932,11 +8383,11 @@ function GalleryImage({ item }) {
   );
 }
 function GalleryControl({ label, value, items, onChange, columns = 2 }) {
-  const [isOpen, setIsOpen] = useState17(false);
+  const [isOpen, setIsOpen] = useState19(false);
   const selected = items.find((it) => it.id === value) ?? items[0];
   const preview = selected ? itemContent(selected, false) : null;
-  return /* @__PURE__ */ jsxs23("div", { className: "tweakers-gallery", "data-open": String(isOpen), children: [
-    /* @__PURE__ */ jsxs23(
+  return /* @__PURE__ */ jsxs25("div", { className: "tweakers-gallery", "data-open": String(isOpen), children: [
+    /* @__PURE__ */ jsxs25(
       "button",
       {
         type: "button",
@@ -7944,10 +8395,10 @@ function GalleryControl({ label, value, items, onChange, columns = 2 }) {
         "aria-expanded": isOpen,
         onClick: () => setIsOpen((o) => !o),
         children: [
-          /* @__PURE__ */ jsx26("span", { className: "tweakers-gallery-label", children: label }),
-          /* @__PURE__ */ jsxs23("span", { className: "tweakers-gallery-right", children: [
-            preview && /* @__PURE__ */ jsx26("span", { className: "tweakers-gallery-preview", "aria-hidden": "true", children: preview }),
-            /* @__PURE__ */ jsx26(
+          /* @__PURE__ */ jsx28("span", { className: "tweakers-gallery-label", children: label }),
+          /* @__PURE__ */ jsxs25("span", { className: "tweakers-gallery-right", children: [
+            preview && /* @__PURE__ */ jsx28("span", { className: "tweakers-gallery-preview", "aria-hidden": "true", children: preview }),
+            /* @__PURE__ */ jsx28(
               "svg",
               {
                 className: "tweakers-gallery-chevron",
@@ -7957,16 +8408,16 @@ function GalleryControl({ label, value, items, onChange, columns = 2 }) {
                 strokeWidth: "2.5",
                 strokeLinecap: "round",
                 strokeLinejoin: "round",
-                children: /* @__PURE__ */ jsx26("path", { d: ICON_CHEVRON })
+                children: /* @__PURE__ */ jsx28("path", { d: ICON_CHEVRON })
               }
             )
           ] })
         ]
       }
     ),
-    /* @__PURE__ */ jsx26("div", { className: "tweakers-gallery-reveal", "aria-hidden": !isOpen, children: /* @__PURE__ */ jsx26("div", { className: "tweakers-gallery-reveal-inner", children: /* @__PURE__ */ jsx26("div", { className: "tweakers-gallery-box", children: /* @__PURE__ */ jsx26("div", { className: "tweakers-gallery-masonry", style: { columnCount: columns }, children: items.map((item) => {
+    /* @__PURE__ */ jsx28("div", { className: "tweakers-gallery-reveal", "aria-hidden": !isOpen, children: /* @__PURE__ */ jsx28("div", { className: "tweakers-gallery-reveal-inner", children: /* @__PURE__ */ jsx28("div", { className: "tweakers-gallery-box", children: /* @__PURE__ */ jsx28("div", { className: "tweakers-gallery-masonry", style: { columnCount: columns }, children: items.map((item) => {
       const isSelected = item.id === value;
-      return /* @__PURE__ */ jsxs23(
+      return /* @__PURE__ */ jsxs25(
         "button",
         {
           type: "button",
@@ -7978,7 +8429,7 @@ function GalleryControl({ label, value, items, onChange, columns = 2 }) {
           onClick: () => onChange(item.id),
           children: [
             itemContent(item, true),
-            /* @__PURE__ */ jsx26("span", { className: "tweakers-gallery-check", "aria-hidden": "true", children: /* @__PURE__ */ jsx26("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "3", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsx26("path", { d: ICON_CHECK }) }) })
+            /* @__PURE__ */ jsx28("span", { className: "tweakers-gallery-check", "aria-hidden": "true", children: /* @__PURE__ */ jsx28("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "3", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsx28("path", { d: ICON_CHECK }) }) })
           ]
         },
         item.id
@@ -7988,10 +8439,10 @@ function GalleryControl({ label, value, items, onChange, columns = 2 }) {
 }
 
 // src/components/FileControl.tsx
-import { useRef as useRef21 } from "react";
-import { jsx as jsx27, jsxs as jsxs24 } from "react/jsx-runtime";
+import { useRef as useRef23 } from "react";
+import { jsx as jsx29, jsxs as jsxs26 } from "react/jsx-runtime";
 function FileControl({ label, value, accept, multiple = false, onChange, onPick }) {
-  const inputRef = useRef21(null);
+  const inputRef = useRef23(null);
   const handleChange = (e) => {
     const files = e.currentTarget.files;
     if (!files || files.length === 0) return;
@@ -8003,11 +8454,11 @@ function FileControl({ label, value, accept, multiple = false, onChange, onPick 
     if (inputRef.current) inputRef.current.value = "";
     onChange("");
   };
-  return /* @__PURE__ */ jsxs24("div", { className: "tweakers-file-row", children: [
-    /* @__PURE__ */ jsxs24("button", { type: "button", className: "tweakers-file-trigger", onClick: () => inputRef.current?.click(), children: [
-      /* @__PURE__ */ jsx27("span", { className: "tweakers-file-label", children: label }),
-      /* @__PURE__ */ jsxs24("span", { className: "tweakers-file-right", children: [
-        /* @__PURE__ */ jsx27(
+  return /* @__PURE__ */ jsxs26("div", { className: "tweakers-file-row", children: [
+    /* @__PURE__ */ jsxs26("button", { type: "button", className: "tweakers-file-trigger", onClick: () => inputRef.current?.click(), children: [
+      /* @__PURE__ */ jsx29("span", { className: "tweakers-file-label", children: label }),
+      /* @__PURE__ */ jsxs26("span", { className: "tweakers-file-right", children: [
+        /* @__PURE__ */ jsx29(
           "svg",
           {
             className: "tweakers-file-icon",
@@ -8018,14 +8469,14 @@ function FileControl({ label, value, accept, multiple = false, onChange, onPick 
             strokeLinecap: "round",
             strokeLinejoin: "round",
             "aria-hidden": "true",
-            children: /* @__PURE__ */ jsx27("path", { d: ICON_FILE })
+            children: /* @__PURE__ */ jsx29("path", { d: ICON_FILE })
           }
         ),
-        /* @__PURE__ */ jsx27("span", { className: "tweakers-file-name", "data-empty": String(!value), children: value || "Choose file\u2026" })
+        /* @__PURE__ */ jsx29("span", { className: "tweakers-file-name", "data-empty": String(!value), children: value || "Choose file\u2026" })
       ] })
     ] }),
-    value && /* @__PURE__ */ jsx27("button", { type: "button", className: "tweakers-file-clear", onClick: clear, "aria-label": "Clear file", children: /* @__PURE__ */ jsx27("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", children: /* @__PURE__ */ jsx27("path", { d: ICON_CLOSE }) }) }),
-    /* @__PURE__ */ jsx27(
+    value && /* @__PURE__ */ jsx29("button", { type: "button", className: "tweakers-file-clear", onClick: clear, "aria-label": "Clear file", children: /* @__PURE__ */ jsx29("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", children: /* @__PURE__ */ jsx29("path", { d: ICON_CLOSE }) }) }),
+    /* @__PURE__ */ jsx29(
       "input",
       {
         ref: inputRef,
@@ -8040,23 +8491,23 @@ function FileControl({ label, value, accept, multiple = false, onChange, onPick 
 }
 
 // src/components/SwatchControl.tsx
-import { useState as useState18, useRef as useRef22, useEffect as useEffect16, useCallback as useCallback13 } from "react";
+import { useState as useState20, useRef as useRef24, useEffect as useEffect18, useCallback as useCallback15 } from "react";
 import { createPortal as createPortal5 } from "react-dom";
 import { motion as motion8, AnimatePresence as AnimatePresence5 } from "motion/react";
-import { jsx as jsx28, jsxs as jsxs25 } from "react/jsx-runtime";
+import { jsx as jsx30, jsxs as jsxs27 } from "react/jsx-runtime";
 function Preview({ colors }) {
-  return /* @__PURE__ */ jsx28("span", { className: "tweakers-swatch-preview", "aria-hidden": "true", children: colors.map((c, i) => /* @__PURE__ */ jsx28("span", { className: "tweakers-swatch-chip", style: { background: c } }, i)) });
+  return /* @__PURE__ */ jsx30("span", { className: "tweakers-swatch-preview", "aria-hidden": "true", children: colors.map((c, i) => /* @__PURE__ */ jsx30("span", { className: "tweakers-swatch-chip", style: { background: c } }, i)) });
 }
 function SwatchControl({ label, value, options, onChange }) {
-  const [isOpen, setIsOpen] = useState18(false);
-  const [highlight, setHighlight] = useState18(-1);
-  const triggerRef = useRef22(null);
-  const dropdownRef = useRef22(null);
-  const [portalTarget, setPortalTarget] = useState18(null);
-  const [pos, setPos] = useState18(null);
+  const [isOpen, setIsOpen] = useState20(false);
+  const [highlight, setHighlight] = useState20(-1);
+  const triggerRef = useRef24(null);
+  const dropdownRef = useRef24(null);
+  const [portalTarget, setPortalTarget] = useState20(null);
+  const [pos, setPos] = useState20(null);
   const selectedOption = options.find((o) => o.value === value);
   const selectedIndex = options.findIndex((o) => o.value === value);
-  const updatePos = useCallback13(() => {
+  const updatePos = useCallback15(() => {
     const el = triggerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -8096,11 +8547,11 @@ function SwatchControl({ label, value, options, onChange }) {
       if (highlight >= 0 && highlight < options.length) select(options[highlight].value);
     }
   };
-  useEffect16(() => {
+  useEffect18(() => {
     const root = triggerRef.current?.closest(".tweakers-root");
     setPortalTarget(root ?? document.body);
   }, []);
-  useEffect16(() => {
+  useEffect18(() => {
     if (!isOpen) return;
     updatePos();
     const onViewport = () => updatePos();
@@ -8118,8 +8569,8 @@ function SwatchControl({ label, value, options, onChange }) {
       window.removeEventListener("scroll", onViewport, true);
     };
   }, [isOpen, updatePos]);
-  return /* @__PURE__ */ jsxs25("div", { className: "tweakers-select-row", children: [
-    /* @__PURE__ */ jsxs25(
+  return /* @__PURE__ */ jsxs27("div", { className: "tweakers-select-row", children: [
+    /* @__PURE__ */ jsxs27(
       "button",
       {
         ref: triggerRef,
@@ -8128,11 +8579,11 @@ function SwatchControl({ label, value, options, onChange }) {
         onKeyDown,
         "data-open": String(isOpen),
         children: [
-          /* @__PURE__ */ jsx28("span", { className: "tweakers-select-label", children: label }),
-          /* @__PURE__ */ jsxs25("div", { className: "tweakers-select-right", children: [
-            selectedOption && /* @__PURE__ */ jsx28(Preview, { colors: selectedOption.colors }),
-            /* @__PURE__ */ jsx28("span", { className: "tweakers-select-value", children: selectedOption?.label ?? value }),
-            /* @__PURE__ */ jsx28(
+          /* @__PURE__ */ jsx30("span", { className: "tweakers-select-label", children: label }),
+          /* @__PURE__ */ jsxs27("div", { className: "tweakers-select-right", children: [
+            selectedOption && /* @__PURE__ */ jsx30(Preview, { colors: selectedOption.colors }),
+            /* @__PURE__ */ jsx30("span", { className: "tweakers-select-value", children: selectedOption?.label ?? value }),
+            /* @__PURE__ */ jsx30(
               motion8.svg,
               {
                 className: "tweakers-select-chevron",
@@ -8144,7 +8595,7 @@ function SwatchControl({ label, value, options, onChange }) {
                 strokeLinejoin: "round",
                 animate: { rotate: isOpen ? 180 : 0 },
                 transition: { type: "spring", visualDuration: 0.2, bounce: 0.15 },
-                children: /* @__PURE__ */ jsx28("path", { d: ICON_CHEVRON })
+                children: /* @__PURE__ */ jsx30("path", { d: ICON_CHEVRON })
               }
             )
           ] })
@@ -8152,7 +8603,7 @@ function SwatchControl({ label, value, options, onChange }) {
       }
     ),
     portalTarget && createPortal5(
-      /* @__PURE__ */ jsx28(AnimatePresence5, { children: isOpen && pos && /* @__PURE__ */ jsx28(
+      /* @__PURE__ */ jsx30(AnimatePresence5, { children: isOpen && pos && /* @__PURE__ */ jsx30(
         PresenceMotionDiv,
         {
           divRef: dropdownRef,
@@ -8167,7 +8618,7 @@ function SwatchControl({ label, value, options, onChange }) {
             width: pos.width,
             ...pos.above ? { bottom: window.innerHeight - pos.top, transformOrigin: "bottom" } : { top: pos.top, transformOrigin: "top" }
           },
-          children: options.map((option, i) => /* @__PURE__ */ jsxs25(
+          children: options.map((option, i) => /* @__PURE__ */ jsxs27(
             "button",
             {
               className: "tweakers-select-option tweakers-swatch-option",
@@ -8176,8 +8627,8 @@ function SwatchControl({ label, value, options, onChange }) {
               onClick: () => select(option.value),
               onMouseEnter: () => setHighlight(i),
               children: [
-                /* @__PURE__ */ jsx28(Preview, { colors: option.colors }),
-                /* @__PURE__ */ jsx28("span", { className: "tweakers-swatch-option-label", children: option.label })
+                /* @__PURE__ */ jsx30(Preview, { colors: option.colors }),
+                /* @__PURE__ */ jsx30("span", { className: "tweakers-swatch-option-label", children: option.label })
               ]
             },
             option.value
@@ -8190,12 +8641,12 @@ function SwatchControl({ label, value, options, onChange }) {
 }
 
 // src/components/ChipsControl.tsx
-import { jsx as jsx29, jsxs as jsxs26 } from "react/jsx-runtime";
+import { jsx as jsx31, jsxs as jsxs28 } from "react/jsx-runtime";
 function ChipsControl({ label, value, options, onChange, onRemove }) {
-  return /* @__PURE__ */ jsxs26("div", { className: "tweakers-chips", children: [
-    label && /* @__PURE__ */ jsx29("span", { className: "tweakers-chips-label", children: label }),
-    /* @__PURE__ */ jsx29("div", { className: "tweakers-chips-grid", role: "listbox", "aria-label": label, children: options.map((option) => /* @__PURE__ */ jsxs26("div", { className: "tweakers-chip", "data-active": String(option.value === value), children: [
-      /* @__PURE__ */ jsx29(
+  return /* @__PURE__ */ jsxs28("div", { className: "tweakers-chips", children: [
+    label && /* @__PURE__ */ jsx31("span", { className: "tweakers-chips-label", children: label }),
+    /* @__PURE__ */ jsx31("div", { className: "tweakers-chips-grid", role: "listbox", "aria-label": label, children: options.map((option) => /* @__PURE__ */ jsxs28("div", { className: "tweakers-chip", "data-active": String(option.value === value), children: [
+      /* @__PURE__ */ jsx31(
         "button",
         {
           type: "button",
@@ -8206,14 +8657,14 @@ function ChipsControl({ label, value, options, onChange, onRemove }) {
           children: option.label
         }
       ),
-      option.removable && /* @__PURE__ */ jsx29(
+      option.removable && /* @__PURE__ */ jsx31(
         "button",
         {
           type: "button",
           className: "tweakers-chip-remove",
           "aria-label": `Remove ${option.label}`,
           onClick: () => onRemove(option.value),
-          children: /* @__PURE__ */ jsx29("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", children: /* @__PURE__ */ jsx29("path", { d: ICON_CLOSE }) })
+          children: /* @__PURE__ */ jsx31("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", children: /* @__PURE__ */ jsx31("path", { d: ICON_CLOSE }) })
         }
       )
     ] }, option.value)) })
@@ -8221,7 +8672,7 @@ function ChipsControl({ label, value, options, onChange, onRemove }) {
 }
 
 // src/components/MultiSelectControl.tsx
-import { jsx as jsx30, jsxs as jsxs27 } from "react/jsx-runtime";
+import { jsx as jsx32, jsxs as jsxs29 } from "react/jsx-runtime";
 function toggle(value, options, toggled) {
   const next = new Set(value);
   if (next.has(toggled)) next.delete(toggled);
@@ -8229,11 +8680,11 @@ function toggle(value, options, toggled) {
   return options.filter((o) => next.has(o.value)).map((o) => o.value);
 }
 function MultiSelectControl({ label, value, options, onChange }) {
-  return /* @__PURE__ */ jsxs27("div", { className: "tweakers-multiselect", children: [
-    label && /* @__PURE__ */ jsx30("span", { className: "tweakers-multiselect-label", children: label }),
-    /* @__PURE__ */ jsx30("div", { className: "tweakers-multiselect-list", role: "listbox", "aria-label": label, "aria-multiselectable": "true", children: options.map((option) => {
+  return /* @__PURE__ */ jsxs29("div", { className: "tweakers-multiselect", children: [
+    label && /* @__PURE__ */ jsx32("span", { className: "tweakers-multiselect-label", children: label }),
+    /* @__PURE__ */ jsx32("div", { className: "tweakers-multiselect-list", role: "listbox", "aria-label": label, "aria-multiselectable": "true", children: options.map((option) => {
       const checked = value.includes(option.value);
-      return /* @__PURE__ */ jsxs27(
+      return /* @__PURE__ */ jsxs29(
         "button",
         {
           type: "button",
@@ -8243,13 +8694,13 @@ function MultiSelectControl({ label, value, options, onChange }) {
           "data-checked": String(checked),
           onClick: () => onChange(toggle(value, options, option.value)),
           children: [
-            /* @__PURE__ */ jsx30("span", { className: "tweakers-multiselect-box", "aria-hidden": "true", children: checked && /* @__PURE__ */ jsx30("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "3", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsx30("path", { d: ICON_CHECK }) }) }),
-            /* @__PURE__ */ jsxs27("span", { className: "tweakers-multiselect-text", children: [
-              /* @__PURE__ */ jsxs27("span", { className: "tweakers-multiselect-line", children: [
+            /* @__PURE__ */ jsx32("span", { className: "tweakers-multiselect-box", "aria-hidden": "true", children: checked && /* @__PURE__ */ jsx32("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "3", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsx32("path", { d: ICON_CHECK }) }) }),
+            /* @__PURE__ */ jsxs29("span", { className: "tweakers-multiselect-text", children: [
+              /* @__PURE__ */ jsxs29("span", { className: "tweakers-multiselect-line", children: [
                 option.label,
-                option.tag && /* @__PURE__ */ jsx30("span", { className: "tweakers-multiselect-tag", children: option.tag })
+                option.tag && /* @__PURE__ */ jsx32("span", { className: "tweakers-multiselect-tag", children: option.tag })
               ] }),
-              option.hint && /* @__PURE__ */ jsx30("span", { className: "tweakers-multiselect-hint", children: option.hint })
+              option.hint && /* @__PURE__ */ jsx32("span", { className: "tweakers-multiselect-hint", children: option.hint })
             ] })
           ]
         },
@@ -8260,22 +8711,22 @@ function MultiSelectControl({ label, value, options, onChange }) {
 }
 
 // src/components/ListControl.tsx
-import { useRef as useRef23, useState as useState19, useEffect as useEffect17 } from "react";
-import { jsx as jsx31, jsxs as jsxs28 } from "react/jsx-runtime";
+import { useRef as useRef25, useState as useState21, useEffect as useEffect19 } from "react";
+import { jsx as jsx33, jsxs as jsxs30 } from "react/jsx-runtime";
 function FieldControl({ field, value, onChange }) {
   switch (field.kind) {
     case "slider":
-      return /* @__PURE__ */ jsx31(Slider, { label: field.label, value, min: field.min, max: field.max, step: field.step, onChange });
+      return /* @__PURE__ */ jsx33(Slider, { label: field.label, value, min: field.min, max: field.max, step: field.step, onChange });
     case "toggle":
-      return /* @__PURE__ */ jsx31(Toggle, { label: field.label, checked: value, onChange });
+      return /* @__PURE__ */ jsx33(Toggle, { label: field.label, checked: value, onChange });
     case "select":
-      return /* @__PURE__ */ jsx31(SelectControl, { label: field.label, value, options: field.options ?? [], onChange });
+      return /* @__PURE__ */ jsx33(SelectControl, { label: field.label, value, options: field.options ?? [], onChange });
     case "color":
-      return /* @__PURE__ */ jsx31(ColorControl, { label: field.label, value, palette: field.palette, onChange });
+      return /* @__PURE__ */ jsx33(ColorControl, { label: field.label, value, palette: field.palette, onChange });
     case "swatch":
-      return /* @__PURE__ */ jsx31(SwatchControl, { label: field.label, value, options: field.swatchOptions ?? [], onChange });
+      return /* @__PURE__ */ jsx33(SwatchControl, { label: field.label, value, options: field.swatchOptions ?? [], onChange });
     case "text":
-      return /* @__PURE__ */ jsx31(TextControl, { label: field.label, value, onChange, placeholder: field.placeholder });
+      return /* @__PURE__ */ jsx33(TextControl, { label: field.label, value, onChange, placeholder: field.placeholder });
     default:
       return null;
   }
@@ -8286,7 +8737,7 @@ function FieldList({
   rowId,
   onChange
 }) {
-  return /* @__PURE__ */ jsx31("div", { className: "tweakers-list-item-fields", children: fields.map((field) => /* @__PURE__ */ jsx31(ControlShell, { hint: field.hint, id: hintDomId(rowId, field.key), children: /* @__PURE__ */ jsx31(
+  return /* @__PURE__ */ jsx33("div", { className: "tweakers-list-item-fields", children: fields.map((field) => /* @__PURE__ */ jsx33(ControlShell, { hint: field.hint, id: hintDomId(rowId, field.key), children: /* @__PURE__ */ jsx33(
     FieldControl,
     {
       field,
@@ -8296,18 +8747,18 @@ function FieldList({
   ) }, field.key)) });
 }
 function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, onEvent }) {
-  const idCounter = useRef23(0);
+  const idCounter = useRef25(0);
   const mkId = () => `li-${idCounter.current++}`;
-  const [ids, setIds] = useState19(() => value.map(mkId));
-  const [picking, setPicking] = useState19(false);
-  const [editing, setEditing] = useState19(null);
-  const armedRef = useRef23(null);
-  const [dragIndex, setDragIndex] = useState19(null);
-  const [over, setOver] = useState19(null);
+  const [ids, setIds] = useState21(() => value.map(mkId));
+  const [picking, setPicking] = useState21(false);
+  const [editing, setEditing] = useState21(null);
+  const armedRef = useRef25(null);
+  const [dragIndex, setDragIndex] = useState21(null);
+  const [over, setOver] = useState21(null);
   if (ids.length !== value.length) {
     setIds((cur) => value.map((_, i) => cur[i] ?? mkId()));
   }
-  useEffect17(() => {
+  useEffect19(() => {
     const disarm = () => {
       armedRef.current = null;
     };
@@ -8372,15 +8823,15 @@ function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, on
     setDragIndex(null);
     setOver(null);
   };
-  return /* @__PURE__ */ jsxs28(Folder, { title: label, defaultOpen: true, children: [
-    /* @__PURE__ */ jsxs28("div", { className: "tweakers-list-items", onDragOver: (e) => e.preventDefault(), onDrop, children: [
+  return /* @__PURE__ */ jsxs30(Folder, { title: label, defaultOpen: true, children: [
+    /* @__PURE__ */ jsxs30("div", { className: "tweakers-list-items", onDragOver: (e) => e.preventDefault(), onDrop, children: [
       value.map((item, index) => {
         const type = itemTypes[item.type];
         if (!type) return null;
         const { flat: flat2, groups } = groupListFields(parseListItemSchema(type.schema, type.hints, type.groups));
         const overState = over?.index === index ? over.after ? "after" : "before" : void 0;
         const rowTitle = item.title ?? type.label;
-        return /* @__PURE__ */ jsxs28(
+        return /* @__PURE__ */ jsxs30(
           "div",
           {
             className: "tweakers-list-item",
@@ -8409,8 +8860,8 @@ function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, on
               setOver(null);
             },
             children: [
-              /* @__PURE__ */ jsxs28("div", { className: "tweakers-list-item-head", children: [
-                /* @__PURE__ */ jsx31(
+              /* @__PURE__ */ jsxs30("div", { className: "tweakers-list-item-head", children: [
+                /* @__PURE__ */ jsx33(
                   "button",
                   {
                     type: "button",
@@ -8419,13 +8870,13 @@ function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, on
                     onMouseDown: () => {
                       armedRef.current = index;
                     },
-                    children: /* @__PURE__ */ jsx31("svg", { viewBox: "0 0 24 24", fill: "currentColor", "aria-hidden": "true", children: ICON_GRIP.map((c, i) => /* @__PURE__ */ jsx31("circle", { cx: c.cx, cy: c.cy, r: "1.5" }, i)) })
+                    children: /* @__PURE__ */ jsx33("svg", { viewBox: "0 0 24 24", fill: "currentColor", "aria-hidden": "true", children: ICON_GRIP.map((c, i) => /* @__PURE__ */ jsx33("circle", { cx: c.cx, cy: c.cy, r: "1.5" }, i)) })
                   }
                 ),
                 editing === index ? (
                   // Uncontrolled: the field owns the draft, so Escape can restore
                   // the original and let the shared blur path no-op it away.
-                  /* @__PURE__ */ jsx31(
+                  /* @__PURE__ */ jsx33(
                     "input",
                     {
                       className: "tweakers-list-item-title",
@@ -8443,7 +8894,7 @@ function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, on
                       }
                     }
                   )
-                ) : /* @__PURE__ */ jsx31(
+                ) : /* @__PURE__ */ jsx33(
                   "button",
                   {
                     type: "button",
@@ -8453,18 +8904,18 @@ function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, on
                     children: rowTitle
                   }
                 ),
-                /* @__PURE__ */ jsx31("div", { className: "tweakers-list-item-actions", children: /* @__PURE__ */ jsx31(
+                /* @__PURE__ */ jsx33("div", { className: "tweakers-list-item-actions", children: /* @__PURE__ */ jsx33(
                   "button",
                   {
                     type: "button",
                     className: "tweakers-list-icon-btn tweakers-list-remove",
                     onClick: () => removeItem(index),
                     "aria-label": `Remove ${rowTitle}`,
-                    children: /* @__PURE__ */ jsx31("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round", strokeLinejoin: "round", children: ICON_TRASH.map((d, i) => /* @__PURE__ */ jsx31("path", { d }, i)) })
+                    children: /* @__PURE__ */ jsx33("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round", strokeLinejoin: "round", children: ICON_TRASH.map((d, i) => /* @__PURE__ */ jsx33("path", { d }, i)) })
                   }
                 ) })
               ] }),
-              flat2.length > 0 && /* @__PURE__ */ jsx31(
+              flat2.length > 0 && /* @__PURE__ */ jsx33(
                 FieldList,
                 {
                   fields: flat2,
@@ -8473,7 +8924,7 @@ function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, on
                   onChange: (key, v) => setParam(index, key, v)
                 }
               ),
-              groups.map((group, groupIndex) => /* @__PURE__ */ jsx31(Folder, { title: group.label, defaultOpen: groupIndex === 0, children: /* @__PURE__ */ jsx31(
+              groups.map((group, groupIndex) => /* @__PURE__ */ jsx33(Folder, { title: group.label, defaultOpen: groupIndex === 0, children: /* @__PURE__ */ jsx33(
                 FieldList,
                 {
                   fields: group.fields,
@@ -8487,14 +8938,14 @@ function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, on
           ids[index]
         );
       }),
-      value.length === 0 && !picking && /* @__PURE__ */ jsx31("div", { className: "tweakers-list-empty", children: "No items yet" })
+      value.length === 0 && !picking && /* @__PURE__ */ jsx33("div", { className: "tweakers-list-empty", children: "No items yet" })
     ] }),
-    !atCapacity && /* @__PURE__ */ jsxs28("div", { className: "tweakers-list-add", children: [
-      /* @__PURE__ */ jsxs28("button", { type: "button", className: "tweakers-list-add-btn", "data-open": String(picking), onClick: handleAdd, children: [
-        /* @__PURE__ */ jsx31("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsx31("path", { d: ICON_PLUS }) }),
-        /* @__PURE__ */ jsx31("span", { children: addLabel ?? "Add" })
+    !atCapacity && /* @__PURE__ */ jsxs30("div", { className: "tweakers-list-add", children: [
+      /* @__PURE__ */ jsxs30("button", { type: "button", className: "tweakers-list-add-btn", "data-open": String(picking), onClick: handleAdd, children: [
+        /* @__PURE__ */ jsx33("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsx33("path", { d: ICON_PLUS }) }),
+        /* @__PURE__ */ jsx33("span", { children: addLabel ?? "Add" })
       ] }),
-      typeEntries.length > 1 && /* @__PURE__ */ jsx31("div", { className: "tweakers-list-picker", "data-open": String(picking), children: /* @__PURE__ */ jsx31("div", { className: "tweakers-list-picker-inner", children: typeEntries.map(([key, type]) => /* @__PURE__ */ jsx31(
+      typeEntries.length > 1 && /* @__PURE__ */ jsx33("div", { className: "tweakers-list-picker", "data-open": String(picking), children: /* @__PURE__ */ jsx33("div", { className: "tweakers-list-picker-inner", children: typeEntries.map(([key, type]) => /* @__PURE__ */ jsx33(
         "button",
         {
           type: "button",
@@ -8512,7 +8963,7 @@ function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, on
 }
 
 // src/components/CurvePreview.tsx
-import { useCallback as useCallback14, useSyncExternalStore as useSyncExternalStore5 } from "react";
+import { useCallback as useCallback16, useSyncExternalStore as useSyncExternalStore5 } from "react";
 
 // src/curve-preview-core.ts
 var CURVE_SAMPLE_COUNT = 160;
@@ -8541,12 +8992,12 @@ function plotCurve(sample, options = {}) {
   if (explicit && Number.isFinite(explicit[0]) && Number.isFinite(explicit[1]) && explicit[0] < explicit[1]) {
     domain = [explicit[0], explicit[1]];
   } else {
-    const finite = ys.filter((y) => Number.isFinite(y));
-    if (finite.length === 0) {
+    const finite2 = ys.filter((y) => Number.isFinite(y));
+    if (finite2.length === 0) {
       domain = [0, 1];
     } else {
-      let lo2 = Math.min(...finite);
-      let hi2 = Math.max(...finite);
+      let lo2 = Math.min(...finite2);
+      let hi2 = Math.max(...finite2);
       if (lo2 === hi2) {
         lo2 -= 0.5;
         hi2 += 0.5;
@@ -8590,11 +9041,11 @@ function round3(value) {
 }
 
 // src/components/CurvePreview.tsx
-import { jsx as jsx32, jsxs as jsxs29 } from "react/jsx-runtime";
+import { jsx as jsx34, jsxs as jsxs31 } from "react/jsx-runtime";
 var VIEW_WIDTH = 232;
 var PAD_Y = 4;
 function CurvePreview({ panelId, control }) {
-  const subscribe = useCallback14(
+  const subscribe = useCallback16(
     (callback) => TweakStore.subscribeControlState(panelId, callback),
     [panelId]
   );
@@ -8605,9 +9056,9 @@ function CurvePreview({ panelId, control }) {
   const pathData = curvePathData(plot.segments, VIEW_WIDTH, height, PAD_Y);
   const baselineY = plot.baseline !== null ? curveY(plot.baseline, height, PAD_Y) : null;
   const markerXs = normalizeCurveMarkers(markers);
-  return /* @__PURE__ */ jsxs29("div", { className: "tweakers-curve", children: [
-    !control.hideLabel && /* @__PURE__ */ jsx32("span", { className: "tweakers-curve-label", children: control.label }),
-    /* @__PURE__ */ jsxs29(
+  return /* @__PURE__ */ jsxs31("div", { className: "tweakers-curve", children: [
+    !control.hideLabel && /* @__PURE__ */ jsx34("span", { className: "tweakers-curve-label", children: control.label }),
+    /* @__PURE__ */ jsxs31(
       "svg",
       {
         className: "tweakers-curve-surface",
@@ -8618,7 +9069,7 @@ function CurvePreview({ panelId, control }) {
         role: "img",
         "aria-label": control.label,
         children: [
-          baselineY !== null && /* @__PURE__ */ jsx32(
+          baselineY !== null && /* @__PURE__ */ jsx34(
             "line",
             {
               className: "tweakers-curve-baseline",
@@ -8629,7 +9080,7 @@ function CurvePreview({ panelId, control }) {
               vectorEffect: "non-scaling-stroke"
             }
           ),
-          markerXs.map((m, i) => /* @__PURE__ */ jsx32(
+          markerXs.map((m, i) => /* @__PURE__ */ jsx34(
             "line",
             {
               className: "tweakers-curve-marker",
@@ -8641,7 +9092,7 @@ function CurvePreview({ panelId, control }) {
             },
             i
           )),
-          pathData && /* @__PURE__ */ jsx32("path", { className: "tweakers-curve-stroke", d: pathData, fill: "none", vectorEffect: "non-scaling-stroke" })
+          pathData && /* @__PURE__ */ jsx34("path", { className: "tweakers-curve-stroke", d: pathData, fill: "none", vectorEffect: "non-scaling-stroke" })
         ]
       }
     )
@@ -8660,8 +9111,8 @@ var flat = (controls, out = []) => {
   return out;
 };
 var isEnumDial = (c) => c.type === "select" && Array.isArray(c.options) && c.options.length > 1;
-var isDial = (c) => c.type === "slider" || c.type === "xy" || c.type === "range" || c.type === "filter" || isEnumDial(c) || c.type === "number" && c.min != null && c.max != null;
-var noChip = (c) => c.type === "xy" || c.type === "range" || c.type === "filter" || isEnumDial(c);
+var isDial = (c) => c.type === "slider" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c) || c.type === "number" && c.min != null && c.max != null;
+var noChip = (c) => c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c);
 var dialSpan = (c) => c?.type === "filter" ? 2 : 1;
 var isSpanContinuation = (page, i) => i > 0 && page.dials[i] !== void 0 && page.dials[i] === page.dials[i - 1];
 function buildModMovePage(panel, layout) {
@@ -8866,19 +9317,19 @@ function dialOrigin(meta) {
 }
 
 // src/components/FilterControl.tsx
-import { jsx as jsx33, jsxs as jsxs30 } from "react/jsx-runtime";
+import { jsx as jsx35, jsxs as jsxs32 } from "react/jsx-runtime";
 var FILTER_SURFACE_HEIGHT = 56;
 function FilterControl({ control, value, onChange }) {
   const ca = resolveFilterAxis(control.cutoffAxis, "cutoff");
   const ra = resolveFilterAxis(control.resonanceAxis, "resonance");
   const v = normalizeFilterValue(value, ca, ra);
   const shape = filterShapePath(control, v);
-  return /* @__PURE__ */ jsxs30("div", { className: "tweakers-filter", children: [
-    /* @__PURE__ */ jsxs30("div", { className: "tweakers-curve", children: [
-      /* @__PURE__ */ jsx33("span", { className: "tweakers-curve-label", children: control.label }),
-      /* @__PURE__ */ jsx33("div", { className: "tweakers-curve-surface", style: { height: FILTER_SURFACE_HEIGHT }, children: shape && /* @__PURE__ */ jsx33("svg", { viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": "true", style: { display: "block", width: "100%", height: "100%" }, children: /* @__PURE__ */ jsx33("path", { className: "tweakers-curve-stroke", d: shape, fill: "none", vectorEffect: "non-scaling-stroke" }) }) })
+  return /* @__PURE__ */ jsxs32("div", { className: "tweakers-filter", children: [
+    /* @__PURE__ */ jsxs32("div", { className: "tweakers-curve", children: [
+      /* @__PURE__ */ jsx35("span", { className: "tweakers-curve-label", children: control.label }),
+      /* @__PURE__ */ jsx35("div", { className: "tweakers-curve-surface", style: { height: FILTER_SURFACE_HEIGHT }, children: shape && /* @__PURE__ */ jsx35("svg", { viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": "true", style: { display: "block", width: "100%", height: "100%" }, children: /* @__PURE__ */ jsx35("path", { className: "tweakers-curve-stroke", d: shape, fill: "none", vectorEffect: "non-scaling-stroke" }) }) })
     ] }),
-    /* @__PURE__ */ jsx33(
+    /* @__PURE__ */ jsx35(
       Slider,
       {
         label: ca.label,
@@ -8890,7 +9341,7 @@ function FilterControl({ control, value, onChange }) {
         onChange: (cutoff) => onChange({ ...v, cutoff })
       }
     ),
-    /* @__PURE__ */ jsx33(
+    /* @__PURE__ */ jsx35(
       Slider,
       {
         label: ra.label,
@@ -8906,10 +9357,10 @@ function FilterControl({ control, value, onChange }) {
 }
 
 // src/components/AnalyserRow.tsx
-import { useCallback as useCallback15, useLayoutEffect as useLayoutEffect4, useRef as useRef25, useState as useState20, useSyncExternalStore as useSyncExternalStore6 } from "react";
+import { useCallback as useCallback17, useLayoutEffect as useLayoutEffect4, useRef as useRef27, useState as useState22, useSyncExternalStore as useSyncExternalStore6 } from "react";
 
 // src/components/AnalyserVisualization.tsx
-import { useRef as useRef24, useEffect as useEffect18 } from "react";
+import { useRef as useRef26, useEffect as useEffect20 } from "react";
 
 // src/analyser-core.ts
 function byteFreqToUnit(v) {
@@ -9533,7 +9984,7 @@ function createAnalyserEngine(canvas, get) {
 }
 
 // src/components/AnalyserVisualization.tsx
-import { jsx as jsx34, jsxs as jsxs31 } from "react/jsx-runtime";
+import { jsx as jsx36, jsxs as jsxs33 } from "react/jsx-runtime";
 function AnalyserVisualization({
   analyser = null,
   analyserB = null,
@@ -9559,8 +10010,8 @@ function AnalyserVisualization({
   width = 256,
   height = 140
 }) {
-  const canvasRef = useRef24(null);
-  const runtimeRef = useRef24(null);
+  const canvasRef = useRef26(null);
+  const runtimeRef = useRef26(null);
   runtimeRef.current = {
     analyser,
     analyserB,
@@ -9583,31 +10034,31 @@ function AnalyserVisualization({
     width,
     height
   };
-  useEffect18(() => {
+  useEffect20(() => {
     if (!canvasRef.current) return;
     const engine = createAnalyserEngine(canvasRef.current, () => runtimeRef.current);
     return () => engine.destroy();
   }, []);
-  return /* @__PURE__ */ jsxs31("div", { className: "tweakers-analyser-viz-wrap", style: { width }, children: [
-    /* @__PURE__ */ jsx34("canvas", { ref: canvasRef, className: "tweakers-analyser-viz", style: { width, height } }),
-    (onMuteChange || onSoloChange) && /* @__PURE__ */ jsxs31("div", { className: "tweakers-analyser-actions", children: [
-      onMuteChange && /* @__PURE__ */ jsx34("button", { type: "button", "aria-label": "Mute", "aria-pressed": muted, onClick: () => onMuteChange(!muted), children: "M" }),
-      onSoloChange && /* @__PURE__ */ jsx34("button", { type: "button", "aria-label": "Solo", "aria-pressed": soloed, onClick: () => onSoloChange(!soloed), children: "S" })
+  return /* @__PURE__ */ jsxs33("div", { className: "tweakers-analyser-viz-wrap", style: { width }, children: [
+    /* @__PURE__ */ jsx36("canvas", { ref: canvasRef, className: "tweakers-analyser-viz", style: { width, height } }),
+    (onMuteChange || onSoloChange) && /* @__PURE__ */ jsxs33("div", { className: "tweakers-analyser-actions", children: [
+      onMuteChange && /* @__PURE__ */ jsx36("button", { type: "button", "aria-label": "Mute", "aria-pressed": muted, onClick: () => onMuteChange(!muted), children: "M" }),
+      onSoloChange && /* @__PURE__ */ jsx36("button", { type: "button", "aria-label": "Solo", "aria-pressed": soloed, onClick: () => onSoloChange(!soloed), children: "S" })
     ] })
   ] });
 }
 
 // src/components/AnalyserRow.tsx
-import { jsx as jsx35, jsxs as jsxs32 } from "react/jsx-runtime";
+import { jsx as jsx37, jsxs as jsxs34 } from "react/jsx-runtime";
 var DEFAULT_HEIGHT = 56;
 function AnalyserRow({ panelId, control }) {
-  const subscribe = useCallback15(
+  const subscribe = useCallback17(
     (callback) => TweakStore.subscribeControlState(panelId, callback),
     [panelId]
   );
   const row = useSyncExternalStore6(subscribe, () => control.analyserRow, () => control.analyserRow);
-  const wrapRef = useRef25(null);
-  const [width, setWidth] = useState20(0);
+  const wrapRef = useRef27(null);
+  const [width, setWidth] = useState22(0);
   useLayoutEffect4(() => {
     const el = wrapRef.current;
     if (!el) return;
@@ -9618,9 +10069,9 @@ function AnalyserRow({ panelId, control }) {
     return () => ro.disconnect();
   }, []);
   const height = clampCurveHeight(row?.height ?? DEFAULT_HEIGHT);
-  return /* @__PURE__ */ jsxs32("div", { className: "tweakers-analyser-row", ref: wrapRef, children: [
-    !control.hideLabel && /* @__PURE__ */ jsx35("span", { className: "tweakers-curve-label", children: control.label }),
-    row && width > 0 && /* @__PURE__ */ jsx35(
+  return /* @__PURE__ */ jsxs34("div", { className: "tweakers-analyser-row", ref: wrapRef, children: [
+    !control.hideLabel && /* @__PURE__ */ jsx37("span", { className: "tweakers-curve-label", children: control.label }),
+    row && width > 0 && /* @__PURE__ */ jsx37(
       AnalyserVisualization,
       {
         analyser: row.analyser() ?? null,
@@ -9640,7 +10091,7 @@ function AnalyserRow({ panelId, control }) {
 }
 
 // src/components/ControlRenderer.tsx
-import { Fragment as Fragment7, jsx as jsx36, jsxs as jsxs33 } from "react/jsx-runtime";
+import { Fragment as Fragment7, jsx as jsx38, jsxs as jsxs35 } from "react/jsx-runtime";
 function ControlRenderer({ panelId, controls, values, transitionDuration }) {
   const shortcutCtx = useContext(ShortcutContext);
   const renderControlNode = (control) => {
@@ -9650,7 +10101,25 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
     }
     switch (control.type) {
       case "slider":
-        return /* @__PURE__ */ jsx36(
+        if (control.display === "dial") {
+          return /* @__PURE__ */ jsx38(
+            AngleDial,
+            {
+              label: control.label,
+              value,
+              onChange: (v) => TweakStore.updateValue(panelId, control.path, v),
+              min: control.min,
+              max: control.max,
+              step: control.step,
+              unit: control.unit,
+              formatValue: control.formatValue,
+              origin: control.origin,
+              wrap: control.wrap
+            },
+            control.path
+          );
+        }
+        return /* @__PURE__ */ jsx38(
           Slider,
           {
             label: control.label,
@@ -9670,7 +10139,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "number":
-        return /* @__PURE__ */ jsx36(
+        return /* @__PURE__ */ jsx38(
           NumberControl,
           {
             label: control.label,
@@ -9685,8 +10154,21 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           },
           control.path
         );
+      case "transfer":
+        return /* @__PURE__ */ jsx38(
+          TransferCurve,
+          {
+            label: control.label,
+            value,
+            onChange: (v) => TweakStore.updateValue(panelId, control.path, v),
+            height: control.curveHeight,
+            grid: control.gridDivisions,
+            axisLabels: control.axisLabels
+          },
+          control.path
+        );
       case "range":
-        return /* @__PURE__ */ jsx36(
+        return /* @__PURE__ */ jsx38(
           RangeSlider,
           {
             label: control.label,
@@ -9700,7 +10182,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "toggle":
-        return /* @__PURE__ */ jsx36(
+        return /* @__PURE__ */ jsx38(
           Toggle,
           {
             label: control.label,
@@ -9712,7 +10194,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "spring":
-        return /* @__PURE__ */ jsx36(
+        return /* @__PURE__ */ jsx38(
           SpringControl,
           {
             panelId,
@@ -9724,7 +10206,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "transition":
-        return /* @__PURE__ */ jsx36(
+        return /* @__PURE__ */ jsx38(
           TransitionControl,
           {
             panelId,
@@ -9739,7 +10221,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
       case "folder": {
         if (control.module) {
           const enabledPath = `${control.path}._enabled`;
-          return /* @__PURE__ */ jsx36(
+          return /* @__PURE__ */ jsx38(
             ModuleFolder,
             {
               title: control.label,
@@ -9755,7 +10237,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
         }
         const [first, ...rest] = control.children ?? [];
         const headerTabs = first && first.type === "select" && first.display === "segmented" ? first : null;
-        return /* @__PURE__ */ jsx36(
+        return /* @__PURE__ */ jsx38(
           Folder,
           {
             title: control.label,
@@ -9763,7 +10245,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
             collapsible: control.collapsible ?? true,
             hint: control.hint,
             hintId: hintDomId(panelId, control.path),
-            toolbar: headerTabs ? /* @__PURE__ */ jsx36(
+            toolbar: headerTabs ? /* @__PURE__ */ jsx38(
               SegmentedControl,
               {
                 options: (headerTabs.options ?? []).map(
@@ -9779,7 +10261,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
         );
       }
       case "text":
-        return /* @__PURE__ */ jsx36(
+        return /* @__PURE__ */ jsx38(
           TextControl,
           {
             label: control.label,
@@ -9791,9 +10273,9 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
         );
       case "select":
         if (control.display === "segmented") {
-          return /* @__PURE__ */ jsxs33("div", { className: "tweakers-labeled-control", children: [
-            /* @__PURE__ */ jsx36("span", { className: "tweakers-labeled-control-label", children: control.label }),
-            /* @__PURE__ */ jsx36(
+          return /* @__PURE__ */ jsxs35("div", { className: "tweakers-labeled-control", children: [
+            /* @__PURE__ */ jsx38("span", { className: "tweakers-labeled-control-label", children: control.label }),
+            /* @__PURE__ */ jsx38(
               SegmentedControl,
               {
                 options: (control.options ?? []).map(
@@ -9805,7 +10287,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
             )
           ] }, control.path);
         }
-        return /* @__PURE__ */ jsx36(
+        return /* @__PURE__ */ jsx38(
           SelectControl,
           {
             label: control.label,
@@ -9816,7 +10298,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "color":
-        return /* @__PURE__ */ jsx36(
+        return /* @__PURE__ */ jsx38(
           ColorControl,
           {
             label: control.label,
@@ -9828,17 +10310,18 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "gradient":
-        return /* @__PURE__ */ jsx36(
+        return /* @__PURE__ */ jsx38(
           GradientControl,
           {
             label: control.label,
             value,
-            onChange: (v) => TweakStore.updateValue(panelId, control.path, v)
+            onChange: (v) => TweakStore.updateValue(panelId, control.path, v),
+            form: control.gradientForm
           },
           control.path
         );
       case "xy":
-        return /* @__PURE__ */ jsx36(
+        return /* @__PURE__ */ jsx38(
           XYControl,
           {
             label: control.label,
@@ -9857,7 +10340,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "gallery":
-        return /* @__PURE__ */ jsx36(
+        return /* @__PURE__ */ jsx38(
           GalleryControl,
           {
             label: control.label,
@@ -9869,7 +10352,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "file":
-        return /* @__PURE__ */ jsx36(
+        return /* @__PURE__ */ jsx38(
           FileControl,
           {
             label: control.label,
@@ -9882,7 +10365,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "swatch":
-        return /* @__PURE__ */ jsx36(
+        return /* @__PURE__ */ jsx38(
           SwatchControl,
           {
             label: control.label,
@@ -9893,7 +10376,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "chips":
-        return /* @__PURE__ */ jsx36(
+        return /* @__PURE__ */ jsx38(
           ChipsControl,
           {
             label: control.label,
@@ -9905,7 +10388,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "multiselect":
-        return /* @__PURE__ */ jsx36(
+        return /* @__PURE__ */ jsx38(
           MultiSelectControl,
           {
             label: control.label,
@@ -9916,7 +10399,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "list":
-        return /* @__PURE__ */ jsx36(
+        return /* @__PURE__ */ jsx38(
           ListControl,
           {
             label: control.label,
@@ -9930,7 +10413,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "filter":
-        return /* @__PURE__ */ jsx36(
+        return /* @__PURE__ */ jsx38(
           FilterControl,
           {
             control,
@@ -9940,11 +10423,11 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "curve":
-        return /* @__PURE__ */ jsx36(CurvePreview, { panelId, control }, control.path);
+        return /* @__PURE__ */ jsx38(CurvePreview, { panelId, control }, control.path);
       case "analyser":
-        return /* @__PURE__ */ jsx36(AnalyserRow, { panelId, control }, control.path);
+        return /* @__PURE__ */ jsx38(AnalyserRow, { panelId, control }, control.path);
       case "action": {
-        const button = /* @__PURE__ */ jsx36(
+        const button = /* @__PURE__ */ jsx38(
           "button",
           {
             className: "tweakers-button",
@@ -9955,8 +10438,8 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
         if (control.caption === void 0) return button;
-        return /* @__PURE__ */ jsxs33("div", { className: "tweakers-labeled-control tweakers-captioned-action", children: [
-          /* @__PURE__ */ jsx36("span", { className: "tweakers-labeled-control-label", children: control.caption }),
+        return /* @__PURE__ */ jsxs35("div", { className: "tweakers-labeled-control tweakers-captioned-action", children: [
+          /* @__PURE__ */ jsx38("span", { className: "tweakers-labeled-control-label", children: control.caption }),
           button
         ] }, control.path);
       }
@@ -9967,7 +10450,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
   const renderControl = (control) => {
     const node = renderControlNode(control);
     if (control.type === "folder") return node;
-    return /* @__PURE__ */ jsx36(
+    return /* @__PURE__ */ jsx38(
       ControlShell,
       {
         hint: control.hint,
@@ -9981,26 +10464,26 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
       control.path
     );
   };
-  return /* @__PURE__ */ jsx36(Fragment7, { children: controls.map(renderControl) });
+  return /* @__PURE__ */ jsx38(Fragment7, { children: controls.map(renderControl) });
 }
 
 // src/components/PresetManager.tsx
-import { useState as useState21, useRef as useRef26, useEffect as useEffect19, useCallback as useCallback16 } from "react";
+import { useState as useState23, useRef as useRef28, useEffect as useEffect21, useCallback as useCallback18 } from "react";
 import { createPortal as createPortal6 } from "react-dom";
 import { motion as motion9, AnimatePresence as AnimatePresence6 } from "motion/react";
-import { jsx as jsx37, jsxs as jsxs34 } from "react/jsx-runtime";
+import { jsx as jsx39, jsxs as jsxs36 } from "react/jsx-runtime";
 function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode = false, editSignal = 0 }) {
-  const [isOpen, setIsOpen] = useState21(false);
-  const triggerRef = useRef26(null);
-  const dropdownRef = useRef26(null);
-  const [pos, setPos] = useState21({ top: 0, left: 0, width: 0 });
-  const [editingId, setEditingId] = useState21(null);
-  const [draftName, setDraftName] = useState21("");
-  const editInputRef = useRef26(null);
-  const lastEditSignal = useRef26(editSignal);
+  const [isOpen, setIsOpen] = useState23(false);
+  const triggerRef = useRef28(null);
+  const dropdownRef = useRef28(null);
+  const [pos, setPos] = useState23({ top: 0, left: 0, width: 0 });
+  const [editingId, setEditingId] = useState23(null);
+  const [draftName, setDraftName] = useState23("");
+  const editInputRef = useRef28(null);
+  const lastEditSignal = useRef28(editSignal);
   const hasPresets = presets.length > 0;
   const activePreset = presets.find((p) => p.id === activePresetId);
-  const open = useCallback16(() => {
+  const open = useCallback18(() => {
     if (!hasPresets) return;
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
@@ -10008,12 +10491,12 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
     }
     setIsOpen(true);
   }, [hasPresets]);
-  const close = useCallback16(() => setIsOpen(false), []);
-  const toggle2 = useCallback16(() => {
+  const close = useCallback18(() => setIsOpen(false), []);
+  const toggle2 = useCallback18(() => {
     if (isOpen) close();
     else open();
   }, [isOpen, open, close]);
-  useEffect19(() => {
+  useEffect21(() => {
     if (!isOpen) return;
     const handler = (e) => {
       const target = e.target;
@@ -10031,17 +10514,17 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
     e.stopPropagation();
     TweakStore.removePreset(panelId, presetId);
   };
-  const startEditing = useCallback16((presetId, name) => {
+  const startEditing = useCallback18((presetId, name) => {
     setEditingId(presetId);
     setDraftName(name);
   }, []);
-  const commitEdit = useCallback16(() => {
+  const commitEdit = useCallback18(() => {
     if (editingId && draftName.trim()) {
       TweakStore.renamePreset(panelId, editingId, draftName);
     }
     setEditingId(null);
   }, [panelId, editingId, draftName]);
-  useEffect19(() => {
+  useEffect21(() => {
     if (editSignal === lastEditSignal.current) return;
     const active = presets.find((p) => p.id === activePresetId);
     if (!active || !(active.renamable ?? true)) return;
@@ -10049,11 +10532,11 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
     open();
     startEditing(active.id, active.name);
   }, [editSignal, activePresetId, presets, open, startEditing]);
-  useEffect19(() => {
+  useEffect21(() => {
     if (editingId) editInputRef.current?.select();
   }, [editingId]);
-  return /* @__PURE__ */ jsxs34("div", { className: "tweakers-preset-manager", children: [
-    /* @__PURE__ */ jsxs34(
+  return /* @__PURE__ */ jsxs36("div", { className: "tweakers-preset-manager", children: [
+    /* @__PURE__ */ jsxs36(
       "button",
       {
         ref: triggerRef,
@@ -10063,8 +10546,8 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
         "data-has-preset": String(!!activePreset),
         "data-disabled": String(!hasPresets),
         children: [
-          /* @__PURE__ */ jsx37("span", { className: "tweakers-preset-label", children: activePreset ? activePreset.name : providerMode ? "Presets" : "Version 1" }),
-          /* @__PURE__ */ jsx37(
+          /* @__PURE__ */ jsx39("span", { className: "tweakers-preset-label", children: activePreset ? activePreset.name : providerMode ? "Presets" : "Version 1" }),
+          /* @__PURE__ */ jsx39(
             motion9.svg,
             {
               className: "tweakers-select-chevron",
@@ -10076,14 +10559,14 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
               strokeLinejoin: "round",
               animate: { rotate: isOpen ? 180 : 0, opacity: hasPresets ? 0.6 : 0.25 },
               transition: { type: "spring", visualDuration: 0.2, bounce: 0.15 },
-              children: /* @__PURE__ */ jsx37("path", { d: ICON_CHEVRON })
+              children: /* @__PURE__ */ jsx39("path", { d: ICON_CHEVRON })
             }
           )
         ]
       }
     ),
     createPortal6(
-      /* @__PURE__ */ jsx37(AnimatePresence6, { children: isOpen && /* @__PURE__ */ jsxs34(
+      /* @__PURE__ */ jsx39(AnimatePresence6, { children: isOpen && /* @__PURE__ */ jsxs36(
         PresenceMotionDiv,
         {
           divRef: dropdownRef,
@@ -10094,23 +10577,23 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
           exit: { opacity: 0, y: 4, scale: 0.97, pointerEvents: "none" },
           transition: { type: "spring", visualDuration: 0.15, bounce: 0 },
           children: [
-            !providerMode && /* @__PURE__ */ jsx37(
+            !providerMode && /* @__PURE__ */ jsx39(
               "div",
               {
                 className: "tweakers-preset-item",
                 "data-active": String(!activePresetId),
                 onClick: () => handleSelect(null),
-                children: /* @__PURE__ */ jsx37("span", { className: "tweakers-preset-name", children: "Version 1" })
+                children: /* @__PURE__ */ jsx39("span", { className: "tweakers-preset-name", children: "Version 1" })
               }
             ),
-            presets.map((preset) => /* @__PURE__ */ jsxs34(
+            presets.map((preset) => /* @__PURE__ */ jsxs36(
               "div",
               {
                 className: "tweakers-preset-item",
                 "data-active": String(preset.id === activePresetId),
                 onClick: editingId === preset.id ? void 0 : () => handleSelect(preset.id),
                 children: [
-                  editingId === preset.id ? /* @__PURE__ */ jsx37(
+                  editingId === preset.id ? /* @__PURE__ */ jsx39(
                     "input",
                     {
                       ref: editInputRef,
@@ -10125,8 +10608,8 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
                         e.stopPropagation();
                       }
                     }
-                  ) : /* @__PURE__ */ jsx37("span", { className: "tweakers-preset-name", children: preset.name }),
-                  editingId !== preset.id && (preset.renamable ?? true) && /* @__PURE__ */ jsx37(
+                  ) : /* @__PURE__ */ jsx39("span", { className: "tweakers-preset-name", children: preset.name }),
+                  editingId !== preset.id && (preset.renamable ?? true) && /* @__PURE__ */ jsx39(
                     "button",
                     {
                       className: "tweakers-preset-rename",
@@ -10135,16 +10618,16 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
                         startEditing(preset.id, preset.name);
                       },
                       title: "Rename preset",
-                      children: /* @__PURE__ */ jsx37("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: ICON_PENCIL.map((d, i) => /* @__PURE__ */ jsx37("path", { d }, i)) })
+                      children: /* @__PURE__ */ jsx39("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: ICON_PENCIL.map((d, i) => /* @__PURE__ */ jsx39("path", { d }, i)) })
                     }
                   ),
-                  editingId !== preset.id && (preset.deletable ?? true) && /* @__PURE__ */ jsx37(
+                  editingId !== preset.id && (preset.deletable ?? true) && /* @__PURE__ */ jsx39(
                     "button",
                     {
                       className: "tweakers-preset-delete",
                       onClick: (e) => handleDelete(e, preset.id),
                       title: "Delete preset",
-                      children: /* @__PURE__ */ jsx37("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: ICON_TRASH.map((d, i) => /* @__PURE__ */ jsx37("path", { d }, i)) })
+                      children: /* @__PURE__ */ jsx39("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: ICON_TRASH.map((d, i) => /* @__PURE__ */ jsx39("path", { d }, i)) })
                     }
                   )
                 ]
@@ -10160,10 +10643,10 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
 }
 
 // src/components/Panel.tsx
-import { Fragment as Fragment8, jsx as jsx38, jsxs as jsxs35 } from "react/jsx-runtime";
+import { Fragment as Fragment8, jsx as jsx40, jsxs as jsxs37 } from "react/jsx-runtime";
 function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
-  const [copied, setCopied] = useState22(false);
-  const [, setIsPanelOpen] = useState22(defaultOpen);
+  const [copied, setCopied] = useState24(false);
+  const [, setIsPanelOpen] = useState24(defaultOpen);
   const values = useSyncExternalStore7(
     (cb) => TweakStore.subscribe(panel.id, cb),
     () => TweakStore.getValues(panel.id),
@@ -10172,7 +10655,7 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
   const presets = TweakStore.getPresetItems(panel.id);
   const activePresetId = TweakStore.getActivePresetId(panel.id);
   const providerMode = TweakStore.hasPresetProvider(panel.id);
-  const [presetEditSignal, setPresetEditSignal] = useState22(0);
+  const [presetEditSignal, setPresetEditSignal] = useState24(0);
   const handleAddPreset = () => {
     TweakStore.createPreset(panel.id);
     setPresetEditSignal((n) => n + 1);
@@ -10183,7 +10666,7 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
     setTimeout(() => setCopied(false), 1500);
   };
   const { tabs, activeTab, looseControls, pageControls } = splitPanelTabs(panel.controls, values[TAB_PATH]);
-  const tabBar = activeTab ? /* @__PURE__ */ jsx38(
+  const tabBar = activeTab ? /* @__PURE__ */ jsx40(
     SegmentedControl,
     {
       options: tabs.map((tab) => ({ value: tab.path, label: tab.label })),
@@ -10191,14 +10674,14 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
       onChange: (v) => TweakStore.updateValue(panel.id, TAB_PATH, v)
     }
   ) : void 0;
-  const renderRows = (controls) => /* @__PURE__ */ jsx38(ControlRenderer, { panelId: panel.id, controls, values });
-  const renderControls = () => activeTab ? /* @__PURE__ */ jsxs35(Fragment8, { children: [
+  const renderRows = (controls) => /* @__PURE__ */ jsx40(ControlRenderer, { panelId: panel.id, controls, values });
+  const renderControls = () => activeTab ? /* @__PURE__ */ jsxs37(Fragment8, { children: [
     renderRows(looseControls),
-    /* @__PURE__ */ jsx38("div", { className: "tweakers-panel-tab-page", children: renderRows(pageControls) }, activeTab.path)
+    /* @__PURE__ */ jsx40("div", { className: "tweakers-panel-tab-page", children: renderRows(pageControls) }, activeTab.path)
   ] }) : renderRows(pageControls);
   const presetsHidden = TweakStore.arePresetsHidden(panel.id);
-  const toolbar = presetsHidden ? toolbarExtra : /* @__PURE__ */ jsxs35(Fragment8, { children: [
-    /* @__PURE__ */ jsx38(
+  const toolbar = presetsHidden ? toolbarExtra : /* @__PURE__ */ jsxs37(Fragment8, { children: [
+    /* @__PURE__ */ jsx40(
       motion10.button,
       {
         className: "tweakers-toolbar-add",
@@ -10206,10 +10689,10 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
         title: "Add preset",
         whileTap: { scale: 0.9 },
         transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-        children: /* @__PURE__ */ jsx38("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: ICON_ADD_PRESET.map((d, i) => /* @__PURE__ */ jsx38("path", { d }, i)) })
+        children: /* @__PURE__ */ jsx40("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: ICON_ADD_PRESET.map((d, i) => /* @__PURE__ */ jsx40("path", { d }, i)) })
       }
     ),
-    /* @__PURE__ */ jsx38(
+    /* @__PURE__ */ jsx40(
       PresetManager,
       {
         panelId: panel.id,
@@ -10220,7 +10703,7 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
         editSignal: presetEditSignal
       }
     ),
-    /* @__PURE__ */ jsx38(
+    /* @__PURE__ */ jsx40(
       motion10.button,
       {
         className: "tweakers-toolbar-add",
@@ -10228,7 +10711,7 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
         title: "Copy parameters",
         whileTap: { scale: 0.9 },
         transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-        children: /* @__PURE__ */ jsx38("span", { style: { position: "relative", width: 14, height: 14 }, children: /* @__PURE__ */ jsx38(AnimatePresence7, { initial: false, mode: "wait", children: copied ? /* @__PURE__ */ jsx38(
+        children: /* @__PURE__ */ jsx40("span", { style: { position: "relative", width: 14, height: 14 }, children: /* @__PURE__ */ jsx40(AnimatePresence7, { initial: false, mode: "wait", children: copied ? /* @__PURE__ */ jsx40(
           motion10.svg,
           {
             viewBox: "0 0 24 24",
@@ -10242,10 +10725,10 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
             animate: { scale: 1, opacity: 1 },
             exit: { scale: 0.8, opacity: 0 },
             transition: { duration: 0.08 },
-            children: /* @__PURE__ */ jsx38("path", { d: ICON_CHECK })
+            children: /* @__PURE__ */ jsx40("path", { d: ICON_CHECK })
           },
           "check"
-        ) : /* @__PURE__ */ jsxs35(
+        ) : /* @__PURE__ */ jsxs37(
           motion10.svg,
           {
             viewBox: "0 0 24 24",
@@ -10256,9 +10739,9 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
             exit: { scale: 0.8, opacity: 0 },
             transition: { duration: 0.08 },
             children: [
-              /* @__PURE__ */ jsx38("path", { d: ICON_CLIPBOARD.board, stroke: "currentColor", strokeWidth: "2", strokeLinejoin: "round" }),
-              /* @__PURE__ */ jsx38("path", { d: ICON_CLIPBOARD.sparkle, fill: "currentColor" }),
-              /* @__PURE__ */ jsx38("path", { d: ICON_CLIPBOARD.body, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" })
+              /* @__PURE__ */ jsx40("path", { d: ICON_CLIPBOARD.board, stroke: "currentColor", strokeWidth: "2", strokeLinejoin: "round" }),
+              /* @__PURE__ */ jsx40("path", { d: ICON_CLIPBOARD.sparkle, fill: "currentColor" }),
+              /* @__PURE__ */ jsx40("path", { d: ICON_CLIPBOARD.body, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" })
             ]
           },
           "clipboard"
@@ -10267,7 +10750,7 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
     ),
     toolbarExtra
   ] });
-  return /* @__PURE__ */ jsx38("div", { className: "tweakers-panel-wrapper", children: /* @__PURE__ */ jsx38(
+  return /* @__PURE__ */ jsx40("div", { className: "tweakers-panel-wrapper", children: /* @__PURE__ */ jsx40(
     Folder,
     {
       title: panel.name,
@@ -10285,7 +10768,7 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
 }
 
 // src/components/Timeline/TimelineToggleButton.tsx
-import { useCallback as useCallback17, useSyncExternalStore as useSyncExternalStore8 } from "react";
+import { useCallback as useCallback19, useSyncExternalStore as useSyncExternalStore8 } from "react";
 import { motion as motion11 } from "motion/react";
 
 // src/store/TimelineUiStore.ts
@@ -10351,16 +10834,16 @@ var TimelineUiStoreClass = class {
 var TimelineUiStore = /* @__PURE__ */ new TimelineUiStoreClass();
 
 // src/components/Timeline/TimelineToggleButton.tsx
-import { jsx as jsx39 } from "react/jsx-runtime";
+import { jsx as jsx41 } from "react/jsx-runtime";
 function TimelineToggleButton() {
-  const subscribe = useCallback17(
+  const subscribe = useCallback19(
     (listener) => TimelineUiStore.subscribe(listener),
     []
   );
-  const getVisible = useCallback17(() => TimelineUiStore.getVisible(), []);
+  const getVisible = useCallback19(() => TimelineUiStore.getVisible(), []);
   const visible = useSyncExternalStore8(subscribe, getVisible, getVisible);
   const label = visible ? "Hide timeline" : "Show timeline";
-  return /* @__PURE__ */ jsx39(
+  return /* @__PURE__ */ jsx41(
     motion11.button,
     {
       className: "tweakers-toolbar-add tweakers-timeline-toolbar-toggle",
@@ -10371,32 +10854,32 @@ function TimelineToggleButton() {
       onClick: () => TimelineUiStore.toggle(),
       whileTap: { scale: 0.9 },
       transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-      children: /* @__PURE__ */ jsx39("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: ICON_TIMELINE.map((d, i) => /* @__PURE__ */ jsx39("path", { d, fill: "currentColor" }, i)) })
+      children: /* @__PURE__ */ jsx41("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: ICON_TIMELINE.map((d, i) => /* @__PURE__ */ jsx41("path", { d, fill: "currentColor" }, i)) })
     }
   );
 }
 
 // src/components/TweakRoot.tsx
-import { jsx as jsx40 } from "react/jsx-runtime";
+import { jsx as jsx42 } from "react/jsx-runtime";
 function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover", theme = "system", productionEnabled = isDevDefault, panels: only, chrome = "card" }) {
   if (!productionEnabled) return null;
-  const [panels, setPanels] = useState23([]);
-  const [timelineCount, setTimelineCount] = useState23(0);
-  const [mounted, setMounted] = useState23(false);
+  const [panels, setPanels] = useState25([]);
+  const [timelineCount, setTimelineCount] = useState25(0);
+  const [mounted, setMounted] = useState25(false);
   const inline = mode === "inline";
-  const panelRef = useRef27(null);
-  const [dragOffset, setDragOffset] = useState23(null);
-  const [activePosition, setActivePosition] = useState23(position);
-  const lastDragOffset = useRef27(null);
-  const draggingRef = useRef27(false);
-  const dragStartRef = useRef27(null);
-  const didDragRef = useRef27(false);
+  const panelRef = useRef29(null);
+  const [dragOffset, setDragOffset] = useState25(null);
+  const [activePosition, setActivePosition] = useState25(position);
+  const lastDragOffset = useRef29(null);
+  const draggingRef = useRef29(false);
+  const dragStartRef = useRef29(null);
+  const didDragRef = useRef29(false);
   const onlyKey = Array.isArray(only) ? only.join("\0") : only;
-  const read = useCallback18(
+  const read = useCallback20(
     () => TweakStore.selectPanels(onlyKey === void 0 ? void 0 : onlyKey.split("\0")),
     [onlyKey]
   );
-  useEffect20(() => {
+  useEffect22(() => {
     setMounted(true);
     setPanels(read());
     setTimelineCount(TimelineStore.getTimelines().length);
@@ -10411,7 +10894,7 @@ function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover
       unsubscribeTimelines();
     };
   }, []);
-  useEffect20(() => {
+  useEffect22(() => {
     if (!panelRef.current || inline) return;
     const observer = new MutationObserver(() => {
       const inner = panelRef.current?.querySelector(".tweakers-panel-inner");
@@ -10434,7 +10917,7 @@ function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover
     observer.observe(panelRef.current, { subtree: true, attributes: true, attributeFilter: ["data-collapsed"] });
     return () => observer.disconnect();
   }, [inline, dragOffset, position]);
-  const handlePointerDown = useCallback18((e) => {
+  const handlePointerDown = useCallback20((e) => {
     const inner = panelRef.current?.querySelector(".tweakers-panel-inner");
     if (!inner || inner.getAttribute("data-collapsed") !== "true") return;
     const rect = panelRef.current.getBoundingClientRect();
@@ -10448,7 +10931,7 @@ function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover
     draggingRef.current = true;
     e.target.setPointerCapture(e.pointerId);
   }, []);
-  const handlePointerMove = useCallback18((e) => {
+  const handlePointerMove = useCallback20((e) => {
     if (!draggingRef.current || !dragStartRef.current) return;
     const dx = e.clientX - dragStartRef.current.pointerX;
     const dy = e.clientY - dragStartRef.current.pointerY;
@@ -10459,7 +10942,7 @@ function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover
       y: dragStartRef.current.elY + dy
     });
   }, []);
-  const handlePointerUp = useCallback18((e) => {
+  const handlePointerUp = useCallback20((e) => {
     if (!draggingRef.current) return;
     draggingRef.current = false;
     dragStartRef.current = null;
@@ -10486,8 +10969,8 @@ function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover
     right: "auto",
     bottom: "auto"
   } : void 0;
-  const timelineToggle = timelineCount > 0 && onlyKey === void 0 ? /* @__PURE__ */ jsx40(TimelineToggleButton, {}) : null;
-  const content = /* @__PURE__ */ jsx40(ShortcutListener, { children: /* @__PURE__ */ jsx40("div", { className: "tweakers-root", "data-mode": mode, "data-theme": theme, "data-chrome": chrome, children: /* @__PURE__ */ jsx40(
+  const timelineToggle = timelineCount > 0 && onlyKey === void 0 ? /* @__PURE__ */ jsx42(TimelineToggleButton, {}) : null;
+  const content = /* @__PURE__ */ jsx42(ShortcutListener, { children: /* @__PURE__ */ jsx42("div", { className: "tweakers-root", "data-mode": mode, "data-theme": theme, "data-chrome": chrome, children: /* @__PURE__ */ jsx42(
     "div",
     {
       ref: panelRef,
@@ -10498,7 +10981,7 @@ function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover
       onPointerDown: !inline ? handlePointerDown : void 0,
       onPointerMove: !inline ? handlePointerMove : void 0,
       onPointerUp: !inline ? handlePointerUp : void 0,
-      children: panels.length === 0 ? /* @__PURE__ */ jsx40("div", { className: "tweakers-panel-wrapper", children: /* @__PURE__ */ jsx40(
+      children: panels.length === 0 ? /* @__PURE__ */ jsx42("div", { className: "tweakers-panel-wrapper", children: /* @__PURE__ */ jsx42(
         Folder,
         {
           title: "Tweakers",
@@ -10506,9 +10989,9 @@ function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover
           isRoot: true,
           inline,
           toolbar: timelineToggle,
-          children: /* @__PURE__ */ jsx40("div", { className: "tweakers-timeline-toolkit-only", children: "Timeline" })
+          children: /* @__PURE__ */ jsx42("div", { className: "tweakers-timeline-toolkit-only", children: "Timeline" })
         }
-      ) }) : panels.map((panel) => /* @__PURE__ */ jsx40(Panel, { panel, defaultOpen: inline || defaultOpen, inline, toolbarExtra: timelineToggle }, panel.id))
+      ) }) : panels.map((panel) => /* @__PURE__ */ jsx42(Panel, { panel, defaultOpen: inline || defaultOpen, inline, toolbarExtra: timelineToggle }, panel.id))
     }
   ) }) });
   if (inline) {
@@ -10518,12 +11001,12 @@ function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover
 }
 
 // src/components/MovePanel.tsx
-import { useEffect as useEffect23, useRef as useRef30, useState as useState25, useSyncExternalStore as useSyncExternalStore9, useCallback as useCallback19 } from "react";
+import { useEffect as useEffect25, useRef as useRef32, useState as useState27, useSyncExternalStore as useSyncExternalStore9, useCallback as useCallback21 } from "react";
 import { createPortal as createPortal8 } from "react-dom";
 
 // src/components/CurveComposer.tsx
-import { useRef as useRef28, useEffect as useEffect21, useMemo, useState as useState24 } from "react";
-import { Fragment as Fragment9, jsx as jsx41, jsxs as jsxs36 } from "react/jsx-runtime";
+import { useRef as useRef30, useEffect as useEffect23, useMemo as useMemo2, useState as useState26 } from "react";
+import { Fragment as Fragment9, jsx as jsx43, jsxs as jsxs38 } from "react/jsx-runtime";
 function CurveComposer({
   segments,
   driver = null,
@@ -10547,25 +11030,25 @@ function CurveComposer({
 }) {
   const layout = composerLayout(width, height, driver != null);
   const { W, totalH, mainRect, driverRect } = layout;
-  const composition = useMemo(
+  const composition = useMemo2(
     () => ({ segments, driver, direction, gap }),
     [segments, driver, direction, gap]
   );
-  const samplers = useMemo(() => buildSamplers(composition), [composition]);
-  const liveRef = useRef28({ composition, samplers, getPhase, phase, mode, triggerSteps });
+  const samplers = useMemo2(() => buildSamplers(composition), [composition]);
+  const liveRef = useRef30({ composition, samplers, getPhase, phase, mode, triggerSteps });
   liveRef.current = { composition, samplers, getPhase, phase, mode, triggerSteps };
-  const onTriggerRef = useRef28(onTrigger);
+  const onTriggerRef = useRef30(onTrigger);
   onTriggerRef.current = onTrigger;
-  const svgRef = useRef28(null);
-  const seriesPlayheadRef = useRef28(null);
-  const seriesDotRef = useRef28(null);
-  const driverPlayheadRef = useRef28(null);
-  const prevTrigValue = useRef28(Number.NaN);
-  const [drag, setDrag] = useState24(null);
-  const [hover, setHover] = useState24(null);
-  const dragRef = useRef28(null);
+  const svgRef = useRef30(null);
+  const seriesPlayheadRef = useRef30(null);
+  const seriesDotRef = useRef30(null);
+  const driverPlayheadRef = useRef30(null);
+  const prevTrigValue = useRef30(Number.NaN);
+  const [drag, setDrag] = useState26(null);
+  const [hover, setHover] = useState26(null);
+  const dragRef = useRef30(null);
   dragRef.current = drag;
-  useEffect21(() => {
+  useEffect23(() => {
     let raf = 0;
     prevTrigValue.current = Number.NaN;
     const tick = () => {
@@ -10717,17 +11200,17 @@ function CurveComposer({
     for (let i = 1; i < n; i++) {
       const gx = i / n * W;
       lines.push(
-        /* @__PURE__ */ jsx41("line", { x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h, className: "tweakers-cc-grid" }, `g-${rect.y}-${i}`)
+        /* @__PURE__ */ jsx43("line", { x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h, className: "tweakers-cc-grid" }, `g-${rect.y}-${i}`)
       );
     }
     return lines;
   };
-  const renderLaneBg = (rect, key) => /* @__PURE__ */ jsx41("rect", { className: "tweakers-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 }, key);
+  const renderLaneBg = (rect, key) => /* @__PURE__ */ jsx43("rect", { className: "tweakers-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 }, key);
   const diagonal = (rect, span, key) => {
     const d = diagonalLine(rect, span, W);
-    return /* @__PURE__ */ jsx41("line", { className: "tweakers-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 }, key);
+    return /* @__PURE__ */ jsx43("line", { className: "tweakers-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 }, key);
   };
-  return /* @__PURE__ */ jsx41("div", { className: "tweakers-cc-wrap", style: { width: W }, children: /* @__PURE__ */ jsxs36(
+  return /* @__PURE__ */ jsx43("div", { className: "tweakers-cc-wrap", style: { width: W }, children: /* @__PURE__ */ jsxs38(
     "svg",
     {
       ref: svgRef,
@@ -10747,7 +11230,7 @@ function CurveComposer({
         renderLaneGrid(mainRect),
         selectedIndex != null && selectedIndex >= 0 && selectedIndex < segments.length && (() => {
           const span = segmentSpan(segments, selectedIndex, gap);
-          return /* @__PURE__ */ jsx41(
+          return /* @__PURE__ */ jsx43(
             "rect",
             {
               className: "tweakers-cc-seg-selected",
@@ -10761,7 +11244,7 @@ function CurveComposer({
         })(),
         hover?.kind === "segment" && !drag && (() => {
           const span = segmentSpan(segments, hover.index, gap);
-          return /* @__PURE__ */ jsx41(
+          return /* @__PURE__ */ jsx43(
             "rect",
             {
               className: "tweakers-cc-seg-hover",
@@ -10775,13 +11258,13 @@ function CurveComposer({
         })(),
         segments.map((seg, i) => {
           const span = segmentSpan(segments, i, gap);
-          return /* @__PURE__ */ jsxs36("g", { children: [
+          return /* @__PURE__ */ jsxs38("g", { children: [
             diagonal(mainRect, span, `diag-${i}`),
-            /* @__PURE__ */ jsx41("path", { className: "tweakers-cc-curve", d: curvePath(seg, mainRect, span, W) }),
-            /* @__PURE__ */ jsx41("text", { className: "tweakers-cc-label", x: (span[0] + span[1]) * 0.5 * W, y: mainRect.y + 13, children: seg.type })
+            /* @__PURE__ */ jsx43("path", { className: "tweakers-cc-curve", d: curvePath(seg, mainRect, span, W) }),
+            /* @__PURE__ */ jsx43("text", { className: "tweakers-cc-label", x: (span[0] + span[1]) * 0.5 * W, y: mainRect.y + 13, children: seg.type })
           ] }, `seg-${i}`);
         }),
-        gap > 0 && timelineSlots(segments, gap).filter((slot) => slot.kind === "gap" && slot.b > slot.a).map((slot) => /* @__PURE__ */ jsx41(
+        gap > 0 && timelineSlots(segments, gap).filter((slot) => slot.kind === "gap" && slot.b > slot.a).map((slot) => /* @__PURE__ */ jsx43(
           "path",
           {
             className: "tweakers-cc-connector",
@@ -10789,7 +11272,7 @@ function CurveComposer({
           },
           `conn-${slot.index}`
         )),
-        interior.map((bx, i) => /* @__PURE__ */ jsx41(
+        interior.map((bx, i) => /* @__PURE__ */ jsx43(
           "line",
           {
             className: "tweakers-cc-boundary",
@@ -10803,19 +11286,19 @@ function CurveComposer({
           },
           `b-${i}`
         )),
-        /* @__PURE__ */ jsx41("line", { ref: seriesPlayheadRef, className: "tweakers-cc-playhead", x1: 0, y1: mainRect.y, x2: 0, y2: mainRect.y + mainRect.h, style: { stroke: playheadColor } }),
-        /* @__PURE__ */ jsx41("circle", { ref: seriesDotRef, className: "tweakers-cc-dot", cx: 0, cy: mapY(mainRect, 0), r: 3, style: { fill: playheadColor } }),
-        driverRect && /* @__PURE__ */ jsxs36(Fragment9, { children: [
+        /* @__PURE__ */ jsx43("line", { ref: seriesPlayheadRef, className: "tweakers-cc-playhead", x1: 0, y1: mainRect.y, x2: 0, y2: mainRect.y + mainRect.h, style: { stroke: playheadColor } }),
+        /* @__PURE__ */ jsx43("circle", { ref: seriesDotRef, className: "tweakers-cc-dot", cx: 0, cy: mapY(mainRect, 0), r: 3, style: { fill: playheadColor } }),
+        driverRect && /* @__PURE__ */ jsxs38(Fragment9, { children: [
           renderLaneBg(driverRect, "driver-bg"),
           renderLaneGrid(driverRect),
-          hover?.kind === "driver" && !drag && /* @__PURE__ */ jsx41("rect", { className: "tweakers-cc-seg-hover", x: 0, y: driverRect.y, width: W, height: driverRect.h, rx: 8 }),
+          hover?.kind === "driver" && !drag && /* @__PURE__ */ jsx43("rect", { className: "tweakers-cc-seg-hover", x: 0, y: driverRect.y, width: W, height: driverRect.h, rx: 8 }),
           diagonal(driverRect, [0, 1], "driver-diag"),
-          /* @__PURE__ */ jsx41("path", { className: "tweakers-cc-curve tweakers-cc-curve-driver", d: curvePath(driver, driverRect, [0, 1], W) }),
-          /* @__PURE__ */ jsxs36("text", { className: "tweakers-cc-label", x: W * 0.5, y: driverRect.y + 13, children: [
+          /* @__PURE__ */ jsx43("path", { className: "tweakers-cc-curve tweakers-cc-curve-driver", d: curvePath(driver, driverRect, [0, 1], W) }),
+          /* @__PURE__ */ jsxs38("text", { className: "tweakers-cc-label", x: W * 0.5, y: driverRect.y + 13, children: [
             "driver \xB7 ",
             driver.type
           ] }),
-          /* @__PURE__ */ jsx41("line", { ref: driverPlayheadRef, className: "tweakers-cc-playhead", x1: 0, y1: driverRect.y, x2: 0, y2: driverRect.y + driverRect.h, style: { stroke: playheadColor } })
+          /* @__PURE__ */ jsx43("line", { ref: driverPlayheadRef, className: "tweakers-cc-playhead", x1: 0, y1: driverRect.y, x2: 0, y2: driverRect.y + driverRect.h, style: { stroke: playheadColor } })
         ] })
       ]
     }
@@ -10823,7 +11306,7 @@ function CurveComposer({
 }
 
 // src/move-visual-core.ts
-var clamp015 = (value) => Math.max(0, Math.min(1, value));
+var clamp016 = (value) => Math.max(0, Math.min(1, value));
 var between = (value, min, max) => value >= min && value <= max;
 function moveNumericDrawing(meta, value) {
   const visual = meta.moveVisual;
@@ -10846,7 +11329,7 @@ function moveNumericDrawing(meta, value) {
       const right = visual.right ?? 1;
       if (![left, center, right].every(Number.isFinite) || left >= center || center >= right || lo < left || hi > right) return null;
       const position = v <= center ? (v - left) / (center - left) / 2 : 0.5 + (v - center) / (right - center) / 2;
-      return { kind: "pan", position: clamp015(position) };
+      return { kind: "pan", position: clamp016(position) };
     }
     case "stereo-width": {
       const mono = visual.mono ?? 0;
@@ -10926,17 +11409,17 @@ function moveKeyboardValue(meta, value, key, fine = false) {
 }
 
 // src/components/move-visuals.tsx
-import { Fragment as Fragment10, jsx as jsx42, jsxs as jsxs37 } from "react/jsx-runtime";
+import { Fragment as Fragment10, jsx as jsx44, jsxs as jsxs39 } from "react/jsx-runtime";
 function MoveSlotNumericBody({ label, value, drawing }) {
-  return /* @__PURE__ */ jsxs37(Fragment10, { children: [
-    /* @__PURE__ */ jsx42("span", { className: "tweakers-move-dial-tag", children: label }),
-    /* @__PURE__ */ jsxs37("svg", { className: "tweakers-move-visual", viewBox: "0 0 100 60", "aria-hidden": "true", children: [
-      drawing.kind === "opacity" && /* @__PURE__ */ jsxs37(Fragment10, { children: [
-        /* @__PURE__ */ jsx42("circle", { className: "tweakers-move-visual-guide", cx: "40", cy: "30", r: "18" }),
-        /* @__PURE__ */ jsx42("circle", { className: "tweakers-move-visual-guide", cx: "60", cy: "30", r: "18" }),
-        /* @__PURE__ */ jsx42("circle", { className: "tweakers-move-visual-solid", cx: "60", cy: "30", r: "18", opacity: drawing.alpha })
+  return /* @__PURE__ */ jsxs39(Fragment10, { children: [
+    /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-tag", children: label }),
+    /* @__PURE__ */ jsxs39("svg", { className: "tweakers-move-visual", viewBox: "0 0 100 60", "aria-hidden": "true", children: [
+      drawing.kind === "opacity" && /* @__PURE__ */ jsxs39(Fragment10, { children: [
+        /* @__PURE__ */ jsx44("circle", { className: "tweakers-move-visual-guide", cx: "40", cy: "30", r: "18" }),
+        /* @__PURE__ */ jsx44("circle", { className: "tweakers-move-visual-guide", cx: "60", cy: "30", r: "18" }),
+        /* @__PURE__ */ jsx44("circle", { className: "tweakers-move-visual-solid", cx: "60", cy: "30", r: "18", opacity: drawing.alpha })
       ] }),
-      drawing.kind === "blur" && /* @__PURE__ */ jsx42(
+      drawing.kind === "blur" && /* @__PURE__ */ jsx44(
         "circle",
         {
           className: "tweakers-move-visual-solid",
@@ -10946,10 +11429,10 @@ function MoveSlotNumericBody({ label, value, drawing }) {
           style: { filter: `blur(${drawing.radius}px)` }
         }
       ),
-      drawing.kind === "pan" && /* @__PURE__ */ jsxs37(Fragment10, { children: [
-        /* @__PURE__ */ jsx42("path", { className: "tweakers-move-visual-guide", d: "M16 30H84M50 12V48" }),
-        /* @__PURE__ */ jsx42("path", { className: "tweakers-move-visual-line", d: `M50 30H${16 + drawing.position * 68}` }),
-        /* @__PURE__ */ jsx42(
+      drawing.kind === "pan" && /* @__PURE__ */ jsxs39(Fragment10, { children: [
+        /* @__PURE__ */ jsx44("path", { className: "tweakers-move-visual-guide", d: "M16 30H84M50 12V48" }),
+        /* @__PURE__ */ jsx44("path", { className: "tweakers-move-visual-line", d: `M50 30H${16 + drawing.position * 68}` }),
+        /* @__PURE__ */ jsx44(
           "circle",
           {
             className: "tweakers-move-visual-point",
@@ -10959,25 +11442,25 @@ function MoveSlotNumericBody({ label, value, drawing }) {
             r: "5"
           }
         ),
-        /* @__PURE__ */ jsx42("text", { x: "5", y: "30", dominantBaseline: "central", children: "L" }),
-        /* @__PURE__ */ jsx42("text", { x: "95", y: "30", dominantBaseline: "central", children: "R" })
+        /* @__PURE__ */ jsx44("text", { x: "5", y: "30", dominantBaseline: "central", children: "L" }),
+        /* @__PURE__ */ jsx44("text", { x: "95", y: "30", dominantBaseline: "central", children: "R" })
       ] }),
-      drawing.kind === "stereo-width" && /* @__PURE__ */ jsxs37(Fragment10, { children: [
-        /* @__PURE__ */ jsx42("path", { className: "tweakers-move-visual-guide", d: "M50 13V47" }),
-        drawing.unity !== null && /* @__PURE__ */ jsxs37("g", { className: "tweakers-move-visual-reference", children: [
-          /* @__PURE__ */ jsx42("ellipse", { cx: 50 - drawing.unity * 28, cy: "30", rx: "12", ry: "17" }),
-          /* @__PURE__ */ jsx42("ellipse", { cx: 50 + drawing.unity * 28, cy: "30", rx: "12", ry: "17" })
+      drawing.kind === "stereo-width" && /* @__PURE__ */ jsxs39(Fragment10, { children: [
+        /* @__PURE__ */ jsx44("path", { className: "tweakers-move-visual-guide", d: "M50 13V47" }),
+        drawing.unity !== null && /* @__PURE__ */ jsxs39("g", { className: "tweakers-move-visual-reference", children: [
+          /* @__PURE__ */ jsx44("ellipse", { cx: 50 - drawing.unity * 28, cy: "30", rx: "12", ry: "17" }),
+          /* @__PURE__ */ jsx44("ellipse", { cx: 50 + drawing.unity * 28, cy: "30", rx: "12", ry: "17" })
         ] }),
-        /* @__PURE__ */ jsxs37("g", { className: "tweakers-move-visual-lobes", children: [
-          /* @__PURE__ */ jsx42("ellipse", { cx: 50 - drawing.separation * 28, cy: "30", rx: "12", ry: "17" }),
-          /* @__PURE__ */ jsx42("ellipse", { cx: 50 + drawing.separation * 28, cy: "30", rx: "12", ry: "17" })
+        /* @__PURE__ */ jsxs39("g", { className: "tweakers-move-visual-lobes", children: [
+          /* @__PURE__ */ jsx44("ellipse", { cx: 50 - drawing.separation * 28, cy: "30", rx: "12", ry: "17" }),
+          /* @__PURE__ */ jsx44("ellipse", { cx: 50 + drawing.separation * 28, cy: "30", rx: "12", ry: "17" })
         ] })
       ] }),
-      drawing.kind === "pitch" && /* @__PURE__ */ jsxs37("g", { children: [
-        /* @__PURE__ */ jsx42("path", { className: "tweakers-move-visual-guide", d: "M8 30H92M8 25V35M29 27V33M50 25V35M71 27V33M92 25V35" }),
-        drawing.zero !== null && /* @__PURE__ */ jsx42("path", { className: "tweakers-move-visual-reference", d: `M${8 + drawing.zero * 84} 12V48` }),
-        /* @__PURE__ */ jsx42("path", { className: "tweakers-move-visual-line", d: `M${8 + (drawing.zero ?? 0) * 84} 30H${8 + drawing.position * 84}` }),
-        /* @__PURE__ */ jsx42(
+      drawing.kind === "pitch" && /* @__PURE__ */ jsxs39("g", { children: [
+        /* @__PURE__ */ jsx44("path", { className: "tweakers-move-visual-guide", d: "M8 30H92M8 25V35M29 27V33M50 25V35M71 27V33M92 25V35" }),
+        drawing.zero !== null && /* @__PURE__ */ jsx44("path", { className: "tweakers-move-visual-reference", d: `M${8 + drawing.zero * 84} 12V48` }),
+        /* @__PURE__ */ jsx44("path", { className: "tweakers-move-visual-line", d: `M${8 + (drawing.zero ?? 0) * 84} 30H${8 + drawing.position * 84}` }),
+        /* @__PURE__ */ jsx44(
           "path",
           {
             className: "tweakers-move-visual-pitch-marker",
@@ -10987,12 +11470,12 @@ function MoveSlotNumericBody({ label, value, drawing }) {
         )
       ] })
     ] }),
-    /* @__PURE__ */ jsx42("span", { className: "tweakers-move-dial-option tweakers-move-visual-value", children: value })
+    /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-option tweakers-move-visual-value", children: value })
   ] });
 }
 function MoveSlotPlaybackDrawing({ mode }) {
   const icon = mode === "scissors" ? "scissors" : mode === "ping-pong" ? "arrow-left-right" : "arrow-right";
-  return /* @__PURE__ */ jsx42(
+  return /* @__PURE__ */ jsx44(
     "svg",
     {
       className: "tweakers-move-dial-icon",
@@ -11003,14 +11486,14 @@ function MoveSlotPlaybackDrawing({ mode }) {
       strokeLinecap: "round",
       strokeLinejoin: "round",
       "aria-hidden": "true",
-      children: /* @__PURE__ */ jsx42("g", { transform: mode === "reverse" ? "translate(24 0) scale(-1 1)" : void 0, children: LUCIDE_ICONS[icon].map((d) => /* @__PURE__ */ jsx42("path", { d }, d)) })
+      children: /* @__PURE__ */ jsx44("g", { transform: mode === "reverse" ? "translate(24 0) scale(-1 1)" : void 0, children: LUCIDE_ICONS[icon].map((d) => /* @__PURE__ */ jsx44("path", { d }, d)) })
     }
   );
 }
 
 // src/components/ListScreen.tsx
-import { useEffect as useEffect22, useRef as useRef29 } from "react";
-import { jsx as jsx43, jsxs as jsxs38 } from "react/jsx-runtime";
+import { useEffect as useEffect24, useRef as useRef31 } from "react";
+import { jsx as jsx45, jsxs as jsxs40 } from "react/jsx-runtime";
 function itemValue(item) {
   return typeof item === "string" ? item : item.value;
 }
@@ -11032,8 +11515,8 @@ function ListScreen({
   className,
   style
 }) {
-  const rootRef = useRef29(null);
-  useEffect22(() => {
+  const rootRef = useRef31(null);
+  useEffect24(() => {
     const root = rootRef.current;
     if (!root) return;
     const sync = () => {
@@ -11049,7 +11532,7 @@ function ListScreen({
     return () => observer.disconnect();
   }, [value, follow, items.length]);
   const rootClassName = ["tweakers-list-screen", className].filter(Boolean).join(" ");
-  return /* @__PURE__ */ jsx43(
+  return /* @__PURE__ */ jsx45(
     "div",
     {
       ref: rootRef,
@@ -11061,7 +11544,7 @@ function ListScreen({
         const rowValue = itemValue(item);
         const selected = rowValue === value;
         const tag = itemTag(item);
-        return /* @__PURE__ */ jsxs38(
+        return /* @__PURE__ */ jsxs40(
           "button",
           {
             type: "button",
@@ -11073,8 +11556,8 @@ function ListScreen({
             "data-muted": itemMuted(item) || void 0,
             onClick: () => onSelect?.(rowValue),
             children: [
-              /* @__PURE__ */ jsx43("span", { className: "tweakers-list-screen-label", children: itemLabel(item) }),
-              tag && /* @__PURE__ */ jsx43("span", { className: "tweakers-list-screen-tag", children: tag })
+              /* @__PURE__ */ jsx45("span", { className: "tweakers-list-screen-label", children: itemLabel(item) }),
+              tag && /* @__PURE__ */ jsx45("span", { className: "tweakers-list-screen-tag", children: tag })
             ]
           },
           rowValue
@@ -11085,9 +11568,12 @@ function ListScreen({
 }
 
 // src/components/move-slots.tsx
-import { Fragment as Fragment11, jsx as jsx44, jsxs as jsxs39 } from "react/jsx-runtime";
+import { Fragment as Fragment11, jsx as jsx46, jsxs as jsxs41 } from "react/jsx-runtime";
 function moveSlotKind(meta, opts = {}) {
   if (meta.type === "filter") return "filter";
+  if (meta.type === "transfer") return "transfer";
+  if (meta.type === "gradient") return "ramp";
+  if (meta.type === "slider" && meta.display === "dial") return "dial";
   if (meta.type === "xy") return "xy";
   if (meta.type === "range") return "range";
   const drawing = moveNumericDrawing(meta, opts.value ?? meta.min);
@@ -11103,7 +11589,7 @@ function moveSlotKind(meta, opts = {}) {
 function MoveSlotGlyph({ name, className }) {
   const paths = LUCIDE_ICONS[name];
   if (!paths) return null;
-  return /* @__PURE__ */ jsx44(
+  return /* @__PURE__ */ jsx46(
     "svg",
     {
       className,
@@ -11114,18 +11600,18 @@ function MoveSlotGlyph({ name, className }) {
       strokeLinecap: "round",
       strokeLinejoin: "round",
       "aria-hidden": "true",
-      children: paths.map((d) => /* @__PURE__ */ jsx44("path", { d }, d))
+      children: paths.map((d) => /* @__PURE__ */ jsx46("path", { d }, d))
     }
   );
 }
 function MoveSlotReadout({ label, value }) {
-  return /* @__PURE__ */ jsxs39("div", { className: "tweakers-move-dial-readout", children: [
-    /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-label", "data-long": label.length > 9 || void 0, children: label }),
-    /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-value", children: value })
+  return /* @__PURE__ */ jsxs41("div", { className: "tweakers-move-dial-readout", children: [
+    /* @__PURE__ */ jsx46("span", { className: "tweakers-move-dial-label", "data-long": label.length > 9 || void 0, children: label }),
+    /* @__PURE__ */ jsx46("span", { className: "tweakers-move-dial-value", children: value })
   ] });
 }
 function MoveSlotShape({ d, className = "tweakers-move-dial-shape" }) {
-  return /* @__PURE__ */ jsx44("svg", { className, viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": "true", children: /* @__PURE__ */ jsx44("path", { d }) });
+  return /* @__PURE__ */ jsx46("svg", { className, viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": "true", children: /* @__PURE__ */ jsx46("path", { d }) });
 }
 function MoveSlotDefaultBody({
   label,
@@ -11134,10 +11620,10 @@ function MoveSlotDefaultBody({
   originPct,
   atOrigin
 }) {
-  return /* @__PURE__ */ jsxs39(Fragment11, { children: [
-    /* @__PURE__ */ jsx44(MoveSlotReadout, { label, value }),
-    /* @__PURE__ */ jsxs39("div", { className: "tweakers-move-dial-bar", children: [
-      /* @__PURE__ */ jsx44(
+  return /* @__PURE__ */ jsxs41(Fragment11, { children: [
+    /* @__PURE__ */ jsx46(MoveSlotReadout, { label, value }),
+    /* @__PURE__ */ jsxs41("div", { className: "tweakers-move-dial-bar", children: [
+      /* @__PURE__ */ jsx46(
         "div",
         {
           className: "tweakers-move-dial-fill",
@@ -11145,7 +11631,7 @@ function MoveSlotDefaultBody({
           style: originPct != null ? { marginLeft: `${Math.min(pct, originPct)}%`, width: `${Math.abs(pct - originPct)}%` } : { width: `${pct}%` }
         }
       ),
-      atOrigin && /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-zero", style: { left: `${originPct}%` } })
+      atOrigin && /* @__PURE__ */ jsx46("span", { className: "tweakers-move-dial-zero", style: { left: `${originPct}%` } })
     ] })
   ] });
 }
@@ -11161,13 +11647,13 @@ function MoveSlotEnumBody({
 }) {
   const selected = options[activeIdx];
   if (playback || shape || glyph) {
-    return /* @__PURE__ */ jsxs39(Fragment11, { children: [
-      /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-tag", children: label }),
-      playback && /* @__PURE__ */ jsx44(MoveSlotPlaybackDrawing, { mode: playback }),
-      !playback && shape && /* @__PURE__ */ jsx44(MoveSlotShape, { d: shape }),
-      !playback && glyph && /* @__PURE__ */ jsx44(MoveSlotGlyph, { name: glyph, className: "tweakers-move-dial-icon" }),
-      /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-option", children: optionLabel }),
-      /* @__PURE__ */ jsx44("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ jsx44("div", { className: "tweakers-move-dial-enum", children: options.map((opt, j) => /* @__PURE__ */ jsx44(
+    return /* @__PURE__ */ jsxs41(Fragment11, { children: [
+      /* @__PURE__ */ jsx46("span", { className: "tweakers-move-dial-tag", children: label }),
+      playback && /* @__PURE__ */ jsx46(MoveSlotPlaybackDrawing, { mode: playback }),
+      !playback && shape && /* @__PURE__ */ jsx46(MoveSlotShape, { d: shape }),
+      !playback && glyph && /* @__PURE__ */ jsx46(MoveSlotGlyph, { name: glyph, className: "tweakers-move-dial-icon" }),
+      /* @__PURE__ */ jsx46("span", { className: "tweakers-move-dial-option", children: optionLabel }),
+      /* @__PURE__ */ jsx46("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ jsx46("div", { className: "tweakers-move-dial-enum", children: options.map((opt, j) => /* @__PURE__ */ jsx46(
         "span",
         {
           className: "tweakers-move-dial-enum-cell",
@@ -11177,15 +11663,15 @@ function MoveSlotEnumBody({
       )) }) })
     ] });
   }
-  return /* @__PURE__ */ jsxs39(
+  return /* @__PURE__ */ jsxs41(
     "div",
     {
       className: "tweakers-move-dial-screen",
       "data-grow": options.length > MOVE_LIST_ROWS || void 0,
       style: { "--move-list-count": options.length },
       children: [
-        /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-head", children: label }),
-        /* @__PURE__ */ jsx44(
+        /* @__PURE__ */ jsx46("span", { className: "tweakers-move-dial-head", children: label }),
+        /* @__PURE__ */ jsx46(
           ListScreen,
           {
             className: "tweakers-move-dial-list",
@@ -11202,17 +11688,78 @@ function MoveSlotEnumBody({
   );
 }
 function MoveSlotXYBody({ label, value, position, gridN, shape = null }) {
-  return /* @__PURE__ */ jsxs39(Fragment11, { children: [
-    /* @__PURE__ */ jsx44("div", { className: "tweakers-move-xy", children: shape !== null ? /* @__PURE__ */ jsx44(MoveSlotShape, { d: shape, className: "tweakers-move-xy-curve" }) : /* @__PURE__ */ jsxs39(Fragment11, { children: [
-      gridN > 0 && /* @__PURE__ */ jsx44("span", { className: "tweakers-move-xy-grid", style: {
+  return /* @__PURE__ */ jsxs41(Fragment11, { children: [
+    /* @__PURE__ */ jsx46("div", { className: "tweakers-move-xy", children: shape !== null ? /* @__PURE__ */ jsx46(MoveSlotShape, { d: shape, className: "tweakers-move-xy-curve" }) : /* @__PURE__ */ jsxs41(Fragment11, { children: [
+      gridN > 0 && /* @__PURE__ */ jsx46("span", { className: "tweakers-move-xy-grid", style: {
         "--tweak-xy-grid-step-x": `${100 / gridN}%`,
         "--tweak-xy-grid-step-y": `${100 / gridN}%`
       } }),
-      /* @__PURE__ */ jsx44("span", { className: "tweakers-move-xy-line", "data-axis": "x", style: { top: `${position.y * 100}%` } }),
-      /* @__PURE__ */ jsx44("span", { className: "tweakers-move-xy-line", "data-axis": "y", style: { left: `${position.x * 100}%` } }),
-      /* @__PURE__ */ jsx44("span", { className: "tweakers-move-xy-dot", style: { left: `${position.x * 100}%`, top: `${position.y * 100}%` } })
+      /* @__PURE__ */ jsx46("span", { className: "tweakers-move-xy-line", "data-axis": "x", style: { top: `${position.y * 100}%` } }),
+      /* @__PURE__ */ jsx46("span", { className: "tweakers-move-xy-line", "data-axis": "y", style: { left: `${position.x * 100}%` } }),
+      /* @__PURE__ */ jsx46("span", { className: "tweakers-move-xy-dot", style: { left: `${position.x * 100}%`, top: `${position.y * 100}%` } })
     ] }) }),
-    /* @__PURE__ */ jsx44(MoveSlotReadout, { label, value })
+    /* @__PURE__ */ jsx46(MoveSlotReadout, { label, value })
+  ] });
+}
+function MoveSlotDisplay({ children }) {
+  return /* @__PURE__ */ jsx46("div", { className: "tweakers-move-slot-display", children });
+}
+function MoveSlotDisplayFoot({ label, value }) {
+  return /* @__PURE__ */ jsxs41("div", { className: "tweakers-move-slot-foot", children: [
+    /* @__PURE__ */ jsx46("span", { className: "tweakers-move-slot-foot-label", children: label }),
+    /* @__PURE__ */ jsx46("span", { className: "tweakers-move-slot-foot-value", children: value })
+  ] });
+}
+function MoveSlotTransferBody({ label, value, shape, point }) {
+  return /* @__PURE__ */ jsxs41(Fragment11, { children: [
+    /* @__PURE__ */ jsxs41(MoveSlotDisplay, { children: [
+      /* @__PURE__ */ jsx46(MoveSlotShape, { d: shape, className: "tweakers-move-slot-shape" }),
+      point && /* @__PURE__ */ jsx46(
+        "span",
+        {
+          className: "tweakers-move-slot-dot",
+          style: { left: `${point.x * 100}%`, top: `${point.y * 100}%` }
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsx46(MoveSlotDisplayFoot, { label, value })
+  ] });
+}
+function MoveSlotRampBody({ label, value, css, stop }) {
+  return /* @__PURE__ */ jsxs41(Fragment11, { children: [
+    /* @__PURE__ */ jsxs41(MoveSlotDisplay, { children: [
+      /* @__PURE__ */ jsx46("span", { className: "tweakers-move-slot-ramp", style: { background: css } }),
+      stop !== null && // Inset a hair so a stop at either end still shows its whole tick —
+      // the only thing saying which stop the knob is holding.
+      /* @__PURE__ */ jsx46(
+        "span",
+        {
+          className: "tweakers-move-slot-tick",
+          style: { left: `calc(${stop * 100}% + ${(0.5 - stop) * 4}px)` }
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsx46(MoveSlotDisplayFoot, { label, value })
+  ] });
+}
+function MoveSlotDialBody({ label, value, bearing, origin }) {
+  const rad = (bearing - 90) * Math.PI / 180;
+  return /* @__PURE__ */ jsxs41(Fragment11, { children: [
+    /* @__PURE__ */ jsx46(MoveSlotDisplay, { children: /* @__PURE__ */ jsxs41("svg", { className: "tweakers-move-slot-needle", viewBox: "-12 -12 24 24", "aria-hidden": "true", children: [
+      /* @__PURE__ */ jsx46("circle", { className: "tweakers-move-needle-face", cx: "0", cy: "0", r: "8.5" }),
+      /* @__PURE__ */ jsx46("path", { className: "tweakers-move-needle-sweep", d: arcPath(origin, bearing, 8.5) }),
+      /* @__PURE__ */ jsx46(
+        "line",
+        {
+          className: "tweakers-move-needle-hand",
+          x1: "0",
+          y1: "0",
+          x2: (8.5 * Math.cos(rad)).toFixed(3),
+          y2: (8.5 * Math.sin(rad)).toFixed(3)
+        }
+      )
+    ] }) }),
+    /* @__PURE__ */ jsx46(MoveSlotDisplayFoot, { label, value })
   ] });
 }
 function MoveSlotRangeBody({
@@ -11221,18 +11768,18 @@ function MoveSlotRangeBody({
   lo,
   hi
 }) {
-  return /* @__PURE__ */ jsxs39(Fragment11, { children: [
-    /* @__PURE__ */ jsx44(MoveSlotReadout, { label, value }),
-    /* @__PURE__ */ jsx44("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ jsxs39("div", { className: "tweakers-move-dial-range", children: [
-      /* @__PURE__ */ jsx44(
+  return /* @__PURE__ */ jsxs41(Fragment11, { children: [
+    /* @__PURE__ */ jsx46(MoveSlotReadout, { label, value }),
+    /* @__PURE__ */ jsx46("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ jsxs41("div", { className: "tweakers-move-dial-range", children: [
+      /* @__PURE__ */ jsx46(
         "div",
         {
           className: "tweakers-move-dial-span",
           style: { left: `${lo * 100}%`, width: `${(hi - lo) * 100}%` }
         }
       ),
-      /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-handle", style: { left: `${lo * 100}%` } }),
-      /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-handle", style: { left: `${hi * 100}%` } })
+      /* @__PURE__ */ jsx46("span", { className: "tweakers-move-dial-handle", style: { left: `${lo * 100}%` } }),
+      /* @__PURE__ */ jsx46("span", { className: "tweakers-move-dial-handle", style: { left: `${hi * 100}%` } })
     ] }) })
   ] });
 }
@@ -11244,15 +11791,15 @@ function MoveSlotFilterBody({
   const ca = resolveFilterAxis(meta.cutoffAxis, "cutoff");
   const ra = resolveFilterAxis(meta.resonanceAxis, "resonance");
   const fmt = (v, f) => f ? f(v) : Math.abs(v) >= 100 ? Math.round(v).toString() : Number(v.toFixed(2)).toString();
-  return /* @__PURE__ */ jsxs39(Fragment11, { children: [
-    /* @__PURE__ */ jsx44("div", { className: "tweakers-move-filter-display", children: shape && /* @__PURE__ */ jsx44(MoveSlotShape, { d: shape, className: "tweakers-move-filter-shape" }) }),
-    /* @__PURE__ */ jsxs39("div", { className: "tweakers-move-filter-readout", "data-side": "cutoff", children: [
-      /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-label", children: ca.label }),
-      /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-value", children: fmt(value.cutoff, ca.formatValue) })
+  return /* @__PURE__ */ jsxs41(Fragment11, { children: [
+    /* @__PURE__ */ jsx46("div", { className: "tweakers-move-filter-display", children: shape && /* @__PURE__ */ jsx46(MoveSlotShape, { d: shape, className: "tweakers-move-filter-shape" }) }),
+    /* @__PURE__ */ jsxs41("div", { className: "tweakers-move-filter-readout", "data-side": "cutoff", children: [
+      /* @__PURE__ */ jsx46("span", { className: "tweakers-move-dial-label", children: ca.label }),
+      /* @__PURE__ */ jsx46("span", { className: "tweakers-move-dial-value", children: fmt(value.cutoff, ca.formatValue) })
     ] }),
-    /* @__PURE__ */ jsxs39("div", { className: "tweakers-move-filter-readout", "data-side": "resonance", children: [
-      /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-label", children: ra.label }),
-      /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-value", children: fmt(value.resonance, ra.formatValue) })
+    /* @__PURE__ */ jsxs41("div", { className: "tweakers-move-filter-readout", "data-side": "resonance", children: [
+      /* @__PURE__ */ jsx46("span", { className: "tweakers-move-dial-label", children: ra.label }),
+      /* @__PURE__ */ jsx46("span", { className: "tweakers-move-dial-value", children: fmt(value.resonance, ra.formatValue) })
     ] })
   ] });
 }
@@ -11270,7 +11817,10 @@ var MOVE_SLOT_LIBRARY = {
   enum: { description: "stepped option picker showing every option on a list screen", component: MoveSlotEnumBody },
   xy: { description: "two axes in one gesture field, or a live shape preview", component: MoveSlotXYBody },
   range: { description: "two handles on one bar; volume knob is the second hand", component: MoveSlotRangeBody },
-  filter: { description: "2 slots: cutoff + resonance as one response picture", component: MoveSlotFilterBody }
+  filter: { description: "2 slots: cutoff + resonance as one response picture", component: MoveSlotFilterBody },
+  transfer: { description: "a response curve, one knob holding one of its points", component: MoveSlotTransferBody },
+  ramp: { description: "a colour ramp, one knob holding one of its stops", component: MoveSlotRampBody },
+  dial: { description: "a needle, for values whose two ends are the same place", component: MoveSlotDialBody }
 };
 
 // src/move-surface-store.ts
@@ -11353,7 +11903,7 @@ var MoveVolumeDisplayClass = class {
 var MoveVolumeDisplay = new MoveVolumeDisplayClass();
 
 // src/components/MovePanel.tsx
-import { jsx as jsx45, jsxs as jsxs40 } from "react/jsx-runtime";
+import { jsx as jsx47, jsxs as jsxs42 } from "react/jsx-runtime";
 var MOVE_TRACK_COLORS = ["#4274f4", "#d83dff", "#ff4d07", "#52bd06"];
 var PAD_ROWS = 4;
 var DIAL_TRACK_INSET = 10;
@@ -11363,13 +11913,13 @@ var TAP_MS = 300;
 function boldColons(text) {
   if (!text.includes(":")) return text;
   return text.split(":").flatMap(
-    (part, i) => i === 0 ? [part] : [/* @__PURE__ */ jsx45("span", { className: "tweakers-move-volume-sep", children: ":" }, `sep-${i}`), part]
+    (part, i) => i === 0 ? [part] : [/* @__PURE__ */ jsx47("span", { className: "tweakers-move-volume-sep", children: ":" }, `sep-${i}`), part]
   );
 }
 function MoveModRing({ panelId, path, pad }) {
   const assignment = ModulationStore.getAssignment(panelId, path);
   if (!assignment || !ModulationStore.getSlot(assignment.slot)) return null;
-  return /* @__PURE__ */ jsx45(
+  return /* @__PURE__ */ jsx47(
     ModRing,
     {
       panelId,
@@ -11386,26 +11936,28 @@ var MOVE_PAGE_EVENT = "move-tweakers:page";
 var MOVE_PAGE_SELECT_EVENT = "move-tweakers:page-select";
 function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only, dock = "viewport" }) {
   if (!productionEnabled) return null;
-  const [panels, setPanels] = useState25([]);
-  const [track, setTrack] = useState25(0);
-  const [dragPath, setDragPath] = useState25(null);
-  const [handTouch, setHandTouch] = useState25({});
-  const [hwHeld, setHwHeld] = useState25({});
-  const [hwLatched, setHwLatched] = useState25({});
-  const [held, setHeld] = useState25(null);
-  const [latched, setLatched] = useState25({});
-  const holdStart = useRef30(0);
-  const [mounted, setMounted] = useState25(false);
-  const fineRef = useRef30(null);
-  const rangeHandleRef = useRef30("min");
-  const filterHandRef = useRef30("cutoff");
-  const [volume, setVolume] = useState25(() => MoveVolumeDisplay.get());
-  const [liveValue, setLiveValue] = useState25(null);
-  useEffect23(() => {
+  const [panels, setPanels] = useState27([]);
+  const [track, setTrack] = useState27(0);
+  const [dragPath, setDragPath] = useState27(null);
+  const [handTouch, setHandTouch] = useState27({});
+  const [curvePoint, setCurvePoint] = useState27({});
+  const [rampStop, setRampStop] = useState27({});
+  const [hwHeld, setHwHeld] = useState27({});
+  const [hwLatched, setHwLatched] = useState27({});
+  const [held, setHeld] = useState27(null);
+  const [latched, setLatched] = useState27({});
+  const holdStart = useRef32(0);
+  const [mounted, setMounted] = useState27(false);
+  const fineRef = useRef32(null);
+  const rangeHandleRef = useRef32("min");
+  const filterHandRef = useRef32("cutoff");
+  const [volume, setVolume] = useState27(() => MoveVolumeDisplay.get());
+  const [liveValue, setLiveValue] = useState27(null);
+  useEffect25(() => {
     setVolume(MoveVolumeDisplay.get());
     return MoveVolumeDisplay.subscribe(() => setVolume(MoveVolumeDisplay.get()));
   }, []);
-  useEffect23(() => {
+  useEffect25(() => {
     const poll = volume?.getValue;
     if (!poll) {
       setLiveValue(null);
@@ -11418,11 +11970,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     return () => cancelAnimationFrame(raf);
   }, [volume]);
   const onlyKey = Array.isArray(only) ? only.join(" ") : only;
-  const read = useCallback19(
+  const read = useCallback21(
     () => TweakStore.selectPanels(onlyKey === void 0 ? void 0 : onlyKey.split(" ")),
     [onlyKey]
   );
-  useEffect23(() => {
+  useEffect25(() => {
     setMounted(true);
     setPanels(read());
     return TweakStore.subscribeGlobal(() => setPanels(read()));
@@ -11438,27 +11990,27 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const clipIndex = composition ? Math.min(composition.segments.length - 1, Math.max(0, Math.round(Number(modSlot.params.selected) || 0))) : 0;
   const previewPath = modLayout?.dials.find((d) => d.preview)?.path ?? null;
   const values = useSyncExternalStore9(
-    useCallback19((cb) => pageId ? TweakStore.subscribe(pageId, cb) : () => {
+    useCallback21((cb) => pageId ? TweakStore.subscribe(pageId, cb) : () => {
     }, [pageId]),
     () => pageId ? TweakStore.getValues(pageId) : void 0,
     () => void 0
   );
-  const [, bumpControlState] = useState25(0);
-  useEffect23(
+  const [, bumpControlState] = useState27(0);
+  useEffect25(
     () => pageId ? TweakStore.subscribeControlState(pageId, () => bumpControlState((n) => n + 1)) : void 0,
     [pageId]
   );
   useSyncExternalStore9(
-    useCallback19((cb) => ModulationStore.subscribe(cb), []),
+    useCallback21((cb) => ModulationStore.subscribe(cb), []),
     () => ModulationStore.getVersion(),
     () => 0
   );
   const surface = useSyncExternalStore9(
-    useCallback19((cb) => MoveSurfaceStore.subscribe(cb), []),
+    useCallback21((cb) => MoveSurfaceStore.subscribe(cb), []),
     () => MoveSurfaceStore.getState(),
     () => MoveSurfaceStore.getState()
   );
-  useEffect23(() => {
+  useEffect25(() => {
     const forPage = (detail, map) => detail && detail.pageId === pageId ? map ?? {} : {};
     const onTouch = (e) => {
       const d = e.detail;
@@ -11476,10 +12028,10 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       window.removeEventListener(MOVE_OVERRIDE_EVENT, onOverride);
     };
   }, [pageId]);
-  const pagesRef = useRef30(pages);
+  const pagesRef = useRef32(pages);
   pagesRef.current = pages;
-  const sawSettings = useRef30(false);
-  useEffect23(() => {
+  const sawSettings = useRef32(false);
+  useEffect25(() => {
     const onPage = (e) => {
       const id = e.detail?.pageId;
       if (id === MOD_SETTINGS_PANEL) {
@@ -11496,7 +12048,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     window.addEventListener(MOVE_PAGE_EVENT, onPage);
     return () => window.removeEventListener(MOVE_PAGE_EVENT, onPage);
   }, []);
-  useEffect23(() => {
+  useEffect25(() => {
     setHeld(null);
     setLatched({});
   }, [pageId]);
@@ -11561,6 +12113,56 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       x: applyDetentAxis(raw.x, xa, Math.abs(px - origin.x) * (w || 1)),
       y: applyDetentAxis(raw.y, ya, Math.abs(py - origin.y) * (h || 1))
     });
+  };
+  const transferFromPointer = (e, meta, down) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const w = rect.width - XY_INSET.left - XY_INSET.right;
+    const h = rect.height - XY_INSET.top - XY_INSET.bottom;
+    const x = Math.min(1, Math.max(0, (e.clientX - rect.left - XY_INSET.left) / (w || 1)));
+    const y = 1 - Math.min(1, Math.max(0, (e.clientY - rect.top - XY_INSET.top) / (h || 1)));
+    const points = normalizeTransfer(values[meta.path]).points;
+    let index = curvePoint[meta.path] ?? 0;
+    if (down) {
+      const hit = nearestPoint(points, x, y, 0.18);
+      index = hit >= 0 ? hit : index;
+      setCurvePoint((prev) => ({ ...prev, [meta.path]: Math.min(index, points.length - 1) }));
+    }
+    index = Math.min(index, points.length - 1);
+    TweakStore.updateValue(page.panel.id, meta.path, { points: movePoint(points, index, x, y) });
+  };
+  const needleFromPointer = (e, meta) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const min = meta.min ?? 0, max = meta.max ?? 1;
+    const wraps = meta.wrap ?? Math.abs(max - min) >= 360;
+    const next = angleFromPointer(
+      e.clientX - (rect.left + rect.width / 2),
+      e.clientY - (rect.top + rect.height / 2),
+      Number(values[meta.path] ?? min),
+      min,
+      max,
+      meta.step ?? 1,
+      wraps
+    );
+    if (next !== null) TweakStore.updateValue(page.panel.id, meta.path, next);
+  };
+  const rampFromPointer = (e, meta, down) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const w = rect.width - XY_INSET.left - XY_INSET.right;
+    const x = Math.min(1, Math.max(0, (e.clientX - rect.left - XY_INSET.left) / (w || 1)));
+    const g = normalizeGradient(values[meta.path]);
+    let index = Math.min(rampStop[meta.path] ?? 0, g.stops.length - 1);
+    if (down) {
+      let best = 0;
+      g.stops.forEach((st, i) => {
+        if (Math.abs(st.position - x) < Math.abs(g.stops[best].position - x)) best = i;
+      });
+      index = best;
+      setRampStop((prev) => ({ ...prev, [meta.path]: index }));
+    }
+    const lo = index > 0 ? g.stops[index - 1].position : 0;
+    const hi = index < g.stops.length - 1 ? g.stops[index + 1].position : 1;
+    const stops = g.stops.map((st, i) => i === index ? { ...st, position: Math.min(hi, Math.max(lo, x)) } : st);
+    TweakStore.updateValue(page.panel.id, meta.path, { ...g, stops });
   };
   const xyRelease = (meta) => {
     setDragPath(null);
@@ -11676,13 +12278,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const padAt = (x, y) => surface.pads.find((p) => p.x === x && p.y === y);
   const visibleCols = appRows > 0 ? Array.from({ length: MOVE_PADS }, (_, i) => i) : visibleColumns(page);
   const volumeReading = liveValue ?? volume?.value;
-  const headerCluster = volume && /* @__PURE__ */ jsx45("div", { className: "tweakers-move-actions", children: /* @__PURE__ */ jsxs40("div", { className: "tweakers-move-volume", children: [
-    /* @__PURE__ */ jsx45("span", { className: "tweakers-move-volume-tick", style: { background: MOVE_TRACK_COLORS[0] } }),
-    volume.label && volumeReading != null && /* @__PURE__ */ jsx45("span", { className: "tweakers-move-volume-label", children: volume.label }),
-    /* @__PURE__ */ jsx45("span", { className: "tweakers-move-volume-value", children: boldColons(volumeReading ?? volume.label ?? "") })
+  const headerCluster = volume && /* @__PURE__ */ jsx47("div", { className: "tweakers-move-actions", children: /* @__PURE__ */ jsxs42("div", { className: "tweakers-move-volume", children: [
+    /* @__PURE__ */ jsx47("span", { className: "tweakers-move-volume-tick", style: { background: MOVE_TRACK_COLORS[0] } }),
+    volume.label && volumeReading != null && /* @__PURE__ */ jsx47("span", { className: "tweakers-move-volume-label", children: volume.label }),
+    /* @__PURE__ */ jsx47("span", { className: "tweakers-move-volume-value", children: boldColons(volumeReading ?? volume.label ?? "") })
   ] }) });
-  const content = /* @__PURE__ */ jsx45("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-dock": dock, children: /* @__PURE__ */ jsxs40("div", { className: "tweakers-move", "data-dock": dock, "data-overlay": composition ? true : void 0, children: [
-    composition && modSettings && /* @__PURE__ */ jsx45(
+  const content = /* @__PURE__ */ jsx47("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-dock": dock, children: /* @__PURE__ */ jsxs42("div", { className: "tweakers-move", "data-dock": dock, "data-overlay": composition ? true : void 0, children: [
+    composition && modSettings && /* @__PURE__ */ jsx47(
       MoveCurveComposer,
       {
         index: modSettings.index,
@@ -11692,9 +12294,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         selected: clipIndex
       }
     ),
-    /* @__PURE__ */ jsxs40("div", { className: "tweakers-move-inner", style: { "--move-cols": visibleCols.length || MOVE_DIALS }, children: [
-      /* @__PURE__ */ jsxs40("div", { className: "tweakers-move-tracks", children: [
-        /* @__PURE__ */ jsx45("div", { className: "tweakers-move-tracks-group", children: pages.map((pg, i) => /* @__PURE__ */ jsxs40(
+    /* @__PURE__ */ jsxs42("div", { className: "tweakers-move-inner", style: { "--move-cols": visibleCols.length || MOVE_DIALS }, children: [
+      /* @__PURE__ */ jsxs42("div", { className: "tweakers-move-tracks", children: [
+        /* @__PURE__ */ jsx47("div", { className: "tweakers-move-tracks-group", children: pages.map((pg, i) => /* @__PURE__ */ jsxs42(
           "button",
           {
             className: "tweakers-move-track",
@@ -11705,26 +12307,26 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
               window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
             },
             children: [
-              /* @__PURE__ */ jsx45("span", { className: "tweakers-move-track-marker", style: { background: MOVE_TRACK_COLORS[i] } }),
-              /* @__PURE__ */ jsx45("span", { className: "tweakers-move-track-label", children: pg.panel.name })
+              /* @__PURE__ */ jsx47("span", { className: "tweakers-move-track-marker", style: { background: MOVE_TRACK_COLORS[i] } }),
+              /* @__PURE__ */ jsx47("span", { className: "tweakers-move-track-label", children: pg.panel.name })
             ]
           },
           pg.panel.id
         )) }),
-        /* @__PURE__ */ jsx45("div", { className: "tweakers-move-mods", children: surface.steps ? surface.steps.map((s) => /* @__PURE__ */ jsx45("span", { className: "tweakers-move-mod", title: `step ${s.step + 1}`, children: /* @__PURE__ */ jsx45(
+        /* @__PURE__ */ jsx47("div", { className: "tweakers-move-mods", children: surface.steps ? surface.steps.map((s) => /* @__PURE__ */ jsx47("span", { className: "tweakers-move-mod", title: `step ${s.step + 1}`, children: /* @__PURE__ */ jsx47(
           "span",
           {
             className: "tweakers-move-mod-dot",
             style: { background: s.color ?? "var(--move-text)", opacity: s.lit ? 1 : 0.25 }
           }
-        ) }, s.step)) : ModulationStore.getSlots().map((slot) => /* @__PURE__ */ jsx45(MoveModCircle, { slot }, slot.index)) }),
+        ) }, s.step)) : ModulationStore.getSlots().map((slot) => /* @__PURE__ */ jsx47(MoveModCircle, { slot }, slot.index)) }),
         headerCluster
       ] }),
-      visibleCols.length > 0 && /* @__PURE__ */ jsxs40("div", { className: "tweakers-move-grid", children: [
-        /* @__PURE__ */ jsx45("div", { className: "tweakers-move-dials", children: visibleCols.map((i) => {
+      visibleCols.length > 0 && /* @__PURE__ */ jsxs42("div", { className: "tweakers-move-grid", children: [
+        /* @__PURE__ */ jsx47("div", { className: "tweakers-move-dials", children: visibleCols.map((i) => {
           if (isSpanContinuation(page, i)) return null;
           const meta = page.dials[i]?.type === "filter" ? page.dials[i] : dialAt(i);
-          if (!meta) return /* @__PURE__ */ jsx45("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
+          if (!meta) return /* @__PURE__ */ jsx47("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
           const disabled = TweakStore.isDisabled(page.panel.id, meta.path);
           const active = dragPath === meta.path || !!handTouch[meta.path] || !!hwHeld[meta.path] || held !== null && held.col === i;
           const valueFirst = !!settingsPanel && !(meta.min === 0 && meta.max === 1);
@@ -11735,7 +12337,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
               resolveFilterAxis(meta.resonanceAxis, "resonance")
             );
             const shape = filterShapePath(meta, values[meta.path]);
-            return /* @__PURE__ */ jsxs40(
+            return /* @__PURE__ */ jsxs42(
               "div",
               {
                 className: "tweakers-move-dial",
@@ -11764,8 +12366,148 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                   fineRef.current = null;
                 },
                 children: [
-                  /* @__PURE__ */ jsx45(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                  /* @__PURE__ */ jsx45(MoveSlotFilterBody, { meta, value: fv, shape })
+                  /* @__PURE__ */ jsx47(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                  /* @__PURE__ */ jsx47(MoveSlotFilterBody, { meta, value: fv, shape })
+                ]
+              },
+              meta.path
+            );
+          }
+          if (meta.type === "gradient") {
+            const g = normalizeGradient(values[meta.path]);
+            const index = Math.min(rampStop[meta.path] ?? 0, g.stops.length - 1);
+            return /* @__PURE__ */ jsxs42(
+              "div",
+              {
+                className: "tweakers-move-dial",
+                "data-kind": "ramp",
+                "data-active": active || void 0,
+                onPointerDown: (e) => {
+                  try {
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                  } catch {
+                  }
+                  fineRef.current = null;
+                  setDragPath(meta.path);
+                  armMod(meta.path);
+                  rampFromPointer(e, meta, true);
+                },
+                onPointerMove: (e) => {
+                  if (dragPath === meta.path) rampFromPointer(e, meta, false);
+                },
+                onPointerUp: () => {
+                  setDragPath(null);
+                  fineRef.current = null;
+                },
+                onPointerCancel: () => {
+                  setDragPath(null);
+                  fineRef.current = null;
+                },
+                children: [
+                  /* @__PURE__ */ jsx47(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                  /* @__PURE__ */ jsx47(
+                    MoveSlotRampBody,
+                    {
+                      label: meta.label,
+                      value: `${index + 1}/${g.stops.length}`,
+                      css: rampCss(g.stops),
+                      stop: g.stops[index]?.position ?? null
+                    }
+                  )
+                ]
+              },
+              meta.path
+            );
+          }
+          if (meta.type === "slider" && meta.display === "dial") {
+            const min = meta.min ?? 0, max = meta.max ?? 1;
+            const v = Number(values[meta.path] ?? min);
+            return /* @__PURE__ */ jsxs42(
+              "div",
+              {
+                className: "tweakers-move-dial",
+                "data-kind": "dial",
+                "data-active": active || void 0,
+                onPointerDown: (e) => {
+                  try {
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                  } catch {
+                  }
+                  fineRef.current = null;
+                  setDragPath(meta.path);
+                  armMod(meta.path);
+                  needleFromPointer(e, meta);
+                },
+                onPointerMove: (e) => {
+                  if (dragPath === meta.path) needleFromPointer(e, meta);
+                },
+                onPointerUp: () => {
+                  setDragPath(null);
+                  fineRef.current = null;
+                },
+                onPointerCancel: () => {
+                  setDragPath(null);
+                  fineRef.current = null;
+                },
+                children: [
+                  /* @__PURE__ */ jsx47(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                  /* @__PURE__ */ jsx47(
+                    MoveSlotDialBody,
+                    {
+                      label: meta.label,
+                      value: `${Number(v.toFixed(2))}${meta.unit ?? (Math.abs(max - min) >= 180 ? "\xB0" : "")}`,
+                      bearing: valueToBearing(v, min, max),
+                      origin: valueToBearing(meta.origin ?? min, min, max)
+                    }
+                  )
+                ]
+              },
+              meta.path
+            );
+          }
+          if (meta.type === "transfer") {
+            const points = normalizeTransfer(values[meta.path]).points;
+            const index = Math.min(curvePoint[meta.path] ?? 0, points.length - 1);
+            const held2 = points[index];
+            const samples = Array.from({ length: 48 }, (_, k) => sampleTransfer(points, k / 47));
+            return /* @__PURE__ */ jsxs42(
+              "div",
+              {
+                className: "tweakers-move-dial",
+                "data-kind": "transfer",
+                "data-active": active || void 0,
+                onPointerDown: (e) => {
+                  try {
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                  } catch {
+                  }
+                  fineRef.current = null;
+                  setDragPath(meta.path);
+                  armMod(meta.path);
+                  transferFromPointer(e, meta, true);
+                },
+                onPointerMove: (e) => {
+                  if (dragPath === meta.path) transferFromPointer(e, meta, false);
+                },
+                onPointerUp: () => {
+                  setDragPath(null);
+                  fineRef.current = null;
+                },
+                onPointerCancel: () => {
+                  setDragPath(null);
+                  fineRef.current = null;
+                },
+                children: [
+                  /* @__PURE__ */ jsx47(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                  /* @__PURE__ */ jsx47(
+                    MoveSlotTransferBody,
+                    {
+                      label: meta.label,
+                      value: `${index + 1}/${points.length}`,
+                      shape: previewPathData(samples),
+                      point: { x: held2.x, y: 1 - held2.y }
+                    }
+                  )
                 ]
               },
               meta.path
@@ -11782,7 +12524,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
             const preview = meta.path === previewPath ? ModulationStore.getSettingsPreview() : null;
             const gridBase = meta.grid === false ? 0 : typeof meta.grid === "number" ? meta.grid : XY_GRID_DEFAULT;
             const gridN = gridBase > 0 ? Math.round(gridBase * Math.max(0, meta.density ?? 1)) : 0;
-            return /* @__PURE__ */ jsxs40(
+            return /* @__PURE__ */ jsxs42(
               "div",
               {
                 className: "tweakers-move-dial",
@@ -11806,9 +12548,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 onPointerUp: () => xyRelease(meta),
                 onPointerCancel: () => xyRelease(meta),
                 children: [
-                  valueFirst && /* @__PURE__ */ jsx45("span", { className: "tweakers-move-dial-sub", children: meta.label }),
-                  /* @__PURE__ */ jsx45(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                  /* @__PURE__ */ jsx45(
+                  valueFirst && /* @__PURE__ */ jsx47("span", { className: "tweakers-move-dial-sub", children: meta.label }),
+                  /* @__PURE__ */ jsx47(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                  /* @__PURE__ */ jsx47(
                     MoveSlotXYBody,
                     {
                       label: meta.label,
@@ -11825,7 +12567,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
           }
           if (meta.type === "range") {
             const pos = normalizeRangeDial(meta, values[meta.path]);
-            return /* @__PURE__ */ jsxs40(
+            return /* @__PURE__ */ jsxs42(
               "div",
               {
                 className: "tweakers-move-dial",
@@ -11853,8 +12595,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                   fineRef.current = null;
                 },
                 children: [
-                  /* @__PURE__ */ jsx45(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                  /* @__PURE__ */ jsx45(MoveSlotRangeBody, { label: meta.label, value: rangeReading(meta), lo: pos.lo, hi: pos.hi })
+                  /* @__PURE__ */ jsx47(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                  /* @__PURE__ */ jsx47(MoveSlotRangeBody, { label: meta.label, value: rangeReading(meta), lo: pos.lo, hi: pos.hi })
                 ]
               },
               meta.path
@@ -11868,7 +12610,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
             const shape = enumShapePath(meta, values[meta.path]);
             const glyph = enumOptionIcon(option);
             const playback = movePlaybackMode(meta, values[meta.path]);
-            return /* @__PURE__ */ jsxs40(
+            return /* @__PURE__ */ jsxs42(
               "div",
               {
                 className: "tweakers-move-dial",
@@ -11910,8 +12652,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                   fineRef.current = null;
                 },
                 children: [
-                  /* @__PURE__ */ jsx45(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                  /* @__PURE__ */ jsx45(
+                  /* @__PURE__ */ jsx47(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                  /* @__PURE__ */ jsx47(
                     MoveSlotEnumBody,
                     {
                       label: meta.label,
@@ -11936,7 +12678,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
           const drawing = moveNumericDrawing(meta, values[meta.path]);
           const subbed = meta !== page.dials[i];
           const subValue = subbed || valueFirst ? chipValue(meta) : null;
-          return /* @__PURE__ */ jsxs40(
+          return /* @__PURE__ */ jsxs42(
             "div",
             {
               className: "tweakers-move-dial",
@@ -11978,9 +12720,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 fineRef.current = null;
               },
               children: [
-                !drawing && (subbed || valueFirst) && /* @__PURE__ */ jsx45("span", { className: "tweakers-move-dial-sub", children: meta.label }),
-                /* @__PURE__ */ jsx45(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                drawing ? /* @__PURE__ */ jsx45(MoveSlotNumericBody, { label: meta.label, value: moveVisualReading(meta, Number(values[meta.path])), drawing }) : /* @__PURE__ */ jsx45(
+                !drawing && (subbed || valueFirst) && /* @__PURE__ */ jsx47("span", { className: "tweakers-move-dial-sub", children: meta.label }),
+                /* @__PURE__ */ jsx47(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                drawing ? /* @__PURE__ */ jsx47(MoveSlotNumericBody, { label: meta.label, value: moveVisualReading(meta, Number(values[meta.path])), drawing }) : /* @__PURE__ */ jsx47(
                   MoveSlotDefaultBody,
                   {
                     label: meta.label,
@@ -11995,14 +12737,14 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
             meta.path
           );
         }) }),
-        Array.from({ length: PAD_ROWS }, (_, row) => row).filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0)).map((row) => /* @__PURE__ */ jsx45("div", { className: "tweakers-move-pads", children: visibleCols.map((col) => {
+        Array.from({ length: PAD_ROWS }, (_, row) => row).filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0)).map((row) => /* @__PURE__ */ jsx47("div", { className: "tweakers-move-pads", children: visibleCols.map((col) => {
           const appRow = appRowAt(row);
           if (appRow !== null) {
             const cell = padAt(col, appRow);
             if (!cell || cell.empty) {
-              return /* @__PURE__ */ jsx45("div", { className: "tweakers-move-pad", "data-empty": "true" }, `app-${col}`);
+              return /* @__PURE__ */ jsx47("div", { className: "tweakers-move-pad", "data-empty": "true" }, `app-${col}`);
             }
-            return /* @__PURE__ */ jsxs40(
+            return /* @__PURE__ */ jsxs42(
               "button",
               {
                 className: "tweakers-move-pad",
@@ -12010,23 +12752,23 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 "data-on": cell.lit || void 0,
                 onClick: () => MoveSurfaceStore.press(col, appRow),
                 children: [
-                  /* @__PURE__ */ jsx45(
+                  /* @__PURE__ */ jsx47(
                     "span",
                     {
                       className: "tweakers-move-pad-indicator",
                       style: cell.color ? { background: cell.color } : void 0
                     }
                   ),
-                  cell.label && /* @__PURE__ */ jsx45("span", { className: "tweakers-move-pad-title", children: cell.label })
+                  cell.label && /* @__PURE__ */ jsx47("span", { className: "tweakers-move-pad-title", children: cell.label })
                 ]
               },
               `app-${col}`
             );
           }
           const meta = padRows[row][col];
-          if (!meta) return /* @__PURE__ */ jsx45("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
+          if (!meta) return /* @__PURE__ */ jsx47("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
           if (padRows[row] === page.toggles) {
-            return /* @__PURE__ */ jsxs40(
+            return /* @__PURE__ */ jsxs42(
               "button",
               {
                 className: "tweakers-move-pad",
@@ -12034,27 +12776,27 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 "data-on": !!values[meta.path],
                 onClick: () => TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path]),
                 children: [
-                  /* @__PURE__ */ jsx45("span", { className: "tweakers-move-pad-indicator" }),
-                  /* @__PURE__ */ jsx45("span", { className: "tweakers-move-pad-title", children: meta.label })
+                  /* @__PURE__ */ jsx47("span", { className: "tweakers-move-pad-indicator" }),
+                  /* @__PURE__ */ jsx47("span", { className: "tweakers-move-pad-title", children: meta.label })
                 ]
               },
               meta.path
             );
           }
           if (padRows[row] === page.actions) {
-            return /* @__PURE__ */ jsx45(
+            return /* @__PURE__ */ jsx47(
               "button",
               {
                 className: "tweakers-move-pad",
                 "data-kind": "action",
                 onClick: () => TweakStore.triggerAction(page.panel.id, meta.path),
-                children: /* @__PURE__ */ jsx45("span", { className: "tweakers-move-pad-title", children: meta.label })
+                children: /* @__PURE__ */ jsx47("span", { className: "tweakers-move-pad-title", children: meta.label })
               },
               meta.path
             );
           }
           const value = chipValue(meta);
-          return /* @__PURE__ */ jsxs40(
+          return /* @__PURE__ */ jsxs42(
             "button",
             {
               className: "tweakers-move-pad",
@@ -12065,11 +12807,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
               onPointerUp: () => releaseChip(col, meta),
               onPointerCancel: () => setHeld(null),
               children: [
-                /* @__PURE__ */ jsx45(MoveModRing, { panelId: page.panel.id, path: meta.path, pad: true }),
-                /* @__PURE__ */ jsx45("span", { className: "tweakers-move-pad-title", children: meta.label }),
-                /* @__PURE__ */ jsxs40("span", { className: "tweakers-move-pad-reading", children: [
-                  /* @__PURE__ */ jsx45("span", { className: "tweakers-move-pad-number", children: value.num }),
-                  value.unit && /* @__PURE__ */ jsx45("span", { children: value.unit })
+                /* @__PURE__ */ jsx47(MoveModRing, { panelId: page.panel.id, path: meta.path, pad: true }),
+                /* @__PURE__ */ jsx47("span", { className: "tweakers-move-pad-title", children: meta.label }),
+                /* @__PURE__ */ jsxs42("span", { className: "tweakers-move-pad-reading", children: [
+                  /* @__PURE__ */ jsx47("span", { className: "tweakers-move-pad-number", children: value.num }),
+                  value.unit && /* @__PURE__ */ jsx47("span", { children: value.unit })
                 ] })
               ]
             },
@@ -12094,7 +12836,7 @@ function MoveCurveComposer({
   gap,
   selected
 }) {
-  return /* @__PURE__ */ jsx45("div", { className: "tweakers-move-curve", children: /* @__PURE__ */ jsx45(
+  return /* @__PURE__ */ jsx47("div", { className: "tweakers-move-curve", children: /* @__PURE__ */ jsx47(
     CurveComposer,
     {
       segments,
@@ -12110,9 +12852,9 @@ function MoveCurveComposer({
   ) });
 }
 function MoveModCircle({ slot }) {
-  const dotRef = useRef30(null);
-  const pressAt = useRef30(0);
-  useEffect23(() => {
+  const dotRef = useRef32(null);
+  const pressAt = useRef32(0);
+  useEffect25(() => {
     if (typeof window === "undefined") return;
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
     return ModulationStore.subscribeFrames(() => {
@@ -12122,7 +12864,7 @@ function MoveModCircle({ slot }) {
       el.style.transform = `scale(${(0.66 + 0.34 * level).toFixed(3)})`;
     });
   }, [slot.index]);
-  return /* @__PURE__ */ jsx45(
+  return /* @__PURE__ */ jsx47(
     "button",
     {
       type: "button",
@@ -12138,7 +12880,7 @@ function MoveModCircle({ slot }) {
         if (tapped && open && open.index === slot.index) ModulationStore.closeSettings();
         else ModulationStore.openSettings(slot.index);
       },
-      children: /* @__PURE__ */ jsx45(
+      children: /* @__PURE__ */ jsx47(
         "span",
         {
           ref: dotRef,
@@ -12151,7 +12893,7 @@ function MoveModCircle({ slot }) {
 }
 
 // src/components/MoveActionButton.tsx
-import { useEffect as useEffect24, useRef as useRef31, useState as useState26 } from "react";
+import { useEffect as useEffect26, useRef as useRef33, useState as useState28 } from "react";
 
 // src/move-functions.ts
 var MOVE_FUNCTION_MANIFEST = [
@@ -12234,7 +12976,7 @@ var MoveFunctionsClass = class {
 var MoveFunctions = new MoveFunctionsClass();
 
 // src/components/MoveActionButton.tsx
-import { jsx as jsx46, jsxs as jsxs41 } from "react/jsx-runtime";
+import { jsx as jsx48, jsxs as jsxs43 } from "react/jsx-runtime";
 var PRESS_FLASH_MS = 160;
 var KIND_FUNCTION = {
   enter: "jog_click",
@@ -12242,14 +12984,14 @@ var KIND_FUNCTION = {
 };
 function MoveActionButton({ kind, children, onPress, disabled, className }) {
   const name = kind === "shift" ? null : KIND_FUNCTION[kind];
-  const [pressed, setPressed] = useState26(false);
-  const flashTimer = useRef31(void 0);
+  const [pressed, setPressed] = useState28(false);
+  const flashTimer = useRef33(void 0);
   const flash = () => {
     setPressed(true);
     clearTimeout(flashTimer.current);
     flashTimer.current = setTimeout(() => setPressed(false), PRESS_FLASH_MS);
   };
-  useEffect24(() => {
+  useEffect26(() => {
     if (!name) return () => clearTimeout(flashTimer.current);
     const unsubscribe = MoveFunctions.subscribeRuns((ran) => {
       if (ran === name) flash();
@@ -12259,7 +13001,7 @@ function MoveActionButton({ kind, children, onPress, disabled, className }) {
       clearTimeout(flashTimer.current);
     };
   }, [name]);
-  return /* @__PURE__ */ jsxs41(
+  return /* @__PURE__ */ jsxs43(
     "button",
     {
       className: className ? `tweakers-move-action ${className}` : "tweakers-move-action",
@@ -12273,11 +13015,11 @@ function MoveActionButton({ kind, children, onPress, disabled, className }) {
         onPress?.();
       },
       children: [
-        kind === "capture" ? /* @__PURE__ */ jsx46("svg", { className: "tweakers-move-action-icon", width: "14", height: "14", viewBox: ICON_MOVE_CAPTURE.viewBox, fill: "none", children: /* @__PURE__ */ jsx46("path", { d: ICON_MOVE_CAPTURE.path, fill: "currentColor" }) }) : (
+        kind === "capture" ? /* @__PURE__ */ jsx48("svg", { className: "tweakers-move-action-icon", width: "14", height: "14", viewBox: ICON_MOVE_CAPTURE.viewBox, fill: "none", children: /* @__PURE__ */ jsx48("path", { d: ICON_MOVE_CAPTURE.path, fill: "currentColor" }) }) : (
           // Enter and shift share the dot: it is drawn with currentColor, so it
           // comes out light-on-green on the enter pill and black on the light
           // shift pill without a second asset.
-          /* @__PURE__ */ jsx46("svg", { className: "tweakers-move-action-icon", width: "12", height: "12", viewBox: ICON_MOVE_ENTER.viewBox, fill: "none", children: /* @__PURE__ */ jsx46("circle", { ...ICON_MOVE_ENTER.circle, fill: "currentColor" }) })
+          /* @__PURE__ */ jsx48("svg", { className: "tweakers-move-action-icon", width: "12", height: "12", viewBox: ICON_MOVE_ENTER.viewBox, fill: "none", children: /* @__PURE__ */ jsx48("circle", { ...ICON_MOVE_ENTER.circle, fill: "currentColor" }) })
         ),
         children
       ]
@@ -12286,11 +13028,11 @@ function MoveActionButton({ kind, children, onPress, disabled, className }) {
 }
 
 // src/components/MoveWaveform.tsx
-import { useCallback as useCallback20, useEffect as useEffect26, useRef as useRef33, useState as useState28, useSyncExternalStore as useSyncExternalStore10 } from "react";
+import { useCallback as useCallback22, useEffect as useEffect28, useRef as useRef35, useState as useState30, useSyncExternalStore as useSyncExternalStore10 } from "react";
 import { createPortal as createPortal9 } from "react-dom";
 
 // src/components/WaveformVisualization.tsx
-import { useRef as useRef32, useEffect as useEffect25, useState as useState27 } from "react";
+import { useRef as useRef34, useEffect as useEffect27, useState as useState29 } from "react";
 
 // src/waveform-dsp.ts
 function mixToMono(buffer) {
@@ -12683,7 +13425,7 @@ function createWaveformEngine(canvas, get) {
 }
 
 // src/components/WaveformVisualization.tsx
-import { jsx as jsx47, jsxs as jsxs42 } from "react/jsx-runtime";
+import { jsx as jsx49, jsxs as jsxs44 } from "react/jsx-runtime";
 function WaveformVisualization({
   buffer = null,
   progress = 0,
@@ -12704,12 +13446,12 @@ function WaveformVisualization({
   width = 256,
   height = 140
 }) {
-  const canvasRef = useRef32(null);
-  const [ownZoom, setOwnZoom] = useState27(1);
+  const canvasRef = useRef34(null);
+  const [ownZoom, setOwnZoom] = useState29(1);
   const controlled = zoomProp !== void 0;
   const zoom = controlled ? Math.max(1, zoomProp) : ownZoom;
   const setZoom = setOwnZoom;
-  const runtimeRef = useRef32(null);
+  const runtimeRef = useRef34(null);
   runtimeRef.current = {
     buffer,
     progress,
@@ -12730,25 +13472,25 @@ function WaveformVisualization({
     onSeek,
     onLoopChange
   };
-  useEffect25(() => {
+  useEffect27(() => {
     if (!canvasRef.current) return;
     const engine = createWaveformEngine(canvasRef.current, () => runtimeRef.current);
     return () => engine.destroy();
   }, []);
   const atMaxZoom = zoom >= WAVEFORM_MAX_ZOOM;
   const framingLoop = autoZoomOnLoop && !!loop || controlled;
-  return /* @__PURE__ */ jsxs42("div", { className: "tweakers-waveform-viz-wrap", style: { width }, children: [
-    /* @__PURE__ */ jsx47("canvas", { ref: canvasRef, className: "tweakers-waveform-viz", style: { width, height } }),
-    !framingLoop && /* @__PURE__ */ jsxs42("div", { className: "tweakers-waveform-zoom", children: [
-      zoom > 1 && /* @__PURE__ */ jsx47("button", { type: "button", "aria-label": "Zoom out", onClick: () => setZoom((z) => Math.max(1, z / 2)), children: /* @__PURE__ */ jsx47("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ jsx47("path", { d: "M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) }) }),
-      /* @__PURE__ */ jsx47(
+  return /* @__PURE__ */ jsxs44("div", { className: "tweakers-waveform-viz-wrap", style: { width }, children: [
+    /* @__PURE__ */ jsx49("canvas", { ref: canvasRef, className: "tweakers-waveform-viz", style: { width, height } }),
+    !framingLoop && /* @__PURE__ */ jsxs44("div", { className: "tweakers-waveform-zoom", children: [
+      zoom > 1 && /* @__PURE__ */ jsx49("button", { type: "button", "aria-label": "Zoom out", onClick: () => setZoom((z) => Math.max(1, z / 2)), children: /* @__PURE__ */ jsx49("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ jsx49("path", { d: "M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) }) }),
+      /* @__PURE__ */ jsx49(
         "button",
         {
           type: "button",
           "aria-label": "Zoom in",
           disabled: atMaxZoom,
           onClick: () => setZoom((z) => Math.min(WAVEFORM_MAX_ZOOM, z * 2)),
-          children: /* @__PURE__ */ jsx47("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ jsx47("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) })
+          children: /* @__PURE__ */ jsx49("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ jsx49("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) })
         }
       )
     ] })
@@ -12760,13 +13502,13 @@ var MOVE_WAVEFORM_STEPS = 16;
 var SCRUB_PER_DETENT = 0.01;
 var SCRUB_FINE = 2e-3;
 var ZOOM_PER_DETENT = 0.08;
-var clamp016 = (v) => Math.min(1, Math.max(0, v));
+var clamp017 = (v) => Math.min(1, Math.max(0, v));
 function defaultView() {
   return { position: 0, zoom: 1, loop: null, loopAnchor: null };
 }
 function scrubBy(position, delta, fine = false) {
   const step = fine ? SCRUB_FINE : SCRUB_PER_DETENT;
-  const next = clamp016(position + delta * step);
+  const next = clamp017(position + delta * step);
   return Number(next.toFixed(6));
 }
 function zoomBy(zoom, delta) {
@@ -12863,7 +13605,7 @@ var MoveWaveformStoreClass = class {
 var MoveWaveformStore = new MoveWaveformStoreClass();
 
 // src/components/MoveWaveform.tsx
-import { jsx as jsx48, jsxs as jsxs43 } from "react/jsx-runtime";
+import { jsx as jsx50, jsxs as jsxs45 } from "react/jsx-runtime";
 var SLOT_HEIGHT = 140;
 var SLOT_ZOOM = 4;
 var DOCK_GAP = 10;
@@ -12886,27 +13628,27 @@ function MoveWaveform({
   productionEnabled = isDevDefault,
   className
 }) {
-  const hostRef = useRef33(null);
-  const [width, setWidth] = useState28(0);
-  const [dockBottom, setDockBottom] = useState28(0);
-  const [mounted, setMounted] = useState28(false);
-  const seekRef = useRef33(onSeek);
+  const hostRef = useRef35(null);
+  const [width, setWidth] = useState30(0);
+  const [dockBottom, setDockBottom] = useState30(0);
+  const [mounted, setMounted] = useState30(false);
+  const seekRef = useRef35(onSeek);
   seekRef.current = onSeek;
-  const loopRef = useRef33(onLoopChange);
+  const loopRef = useRef35(onLoopChange);
   loopRef.current = onLoopChange;
-  useEffect26(() => {
+  useEffect28(() => {
     if (!productionEnabled) return;
     setMounted(true);
     return MoveWaveformStore.register();
   }, [productionEnabled]);
   const view = useSyncExternalStore10(
-    useCallback20((cb) => MoveWaveformStore.subscribe(cb), []),
+    useCallback22((cb) => MoveWaveformStore.subscribe(cb), []),
     () => MoveWaveformStore.getVersion(),
     () => 0
   );
   const state2 = MoveWaveformStore.getView();
-  const lastSent = useRef33({ position: state2.position, loop: state2.loop });
-  useEffect26(() => {
+  const lastSent = useRef35({ position: state2.position, loop: state2.loop });
+  useEffect28(() => {
     if (state2.position !== lastSent.current.position) {
       lastSent.current.position = state2.position;
       seekRef.current?.(state2.position);
@@ -12916,7 +13658,7 @@ function MoveWaveform({
       loopRef.current?.(state2.loop);
     }
   }, [view, state2.position, state2.loop]);
-  useEffect26(() => {
+  useEffect28(() => {
     const host = hostRef.current;
     if (!host) return;
     const ro = new ResizeObserver((entries) => {
@@ -12926,7 +13668,7 @@ function MoveWaveform({
     ro.observe(host);
     return () => ro.disconnect();
   }, [mounted, variant]);
-  useEffect26(() => {
+  useEffect28(() => {
     if (variant !== "dock" || typeof window === "undefined") return;
     const measure = () => {
       const panel2 = document.querySelector(".tweakers-move-root .tweakers-move");
@@ -12945,7 +13687,7 @@ function MoveWaveform({
   }, [variant, mounted]);
   if (!productionEnabled) return null;
   const boxHeight = height ?? (variant === "slot" ? SLOT_HEIGHT : 180);
-  const wave = /* @__PURE__ */ jsx48(
+  const wave = /* @__PURE__ */ jsx50(
     WaveformVisualization,
     {
       buffer,
@@ -12964,14 +13706,14 @@ function MoveWaveform({
       height: boxHeight
     }
   );
-  const body = /* @__PURE__ */ jsx48(
+  const body = /* @__PURE__ */ jsx50(
     "div",
     {
       ref: hostRef,
       className: `tweakers-move-wave${className ? ` ${className}` : ""}`,
       "data-variant": variant,
       style: variant === "dock" ? { bottom: `${dockBottom}px` } : void 0,
-      children: /* @__PURE__ */ jsxs43("div", { className: "tweakers-move-wave-canvas", style: { height: `${boxHeight}px` }, children: [
+      children: /* @__PURE__ */ jsxs45("div", { className: "tweakers-move-wave-canvas", style: { height: `${boxHeight}px` }, children: [
         width > 0 && wave,
         children
       ] })
@@ -12980,13 +13722,13 @@ function MoveWaveform({
   if (variant !== "dock") return body;
   if (!mounted || typeof document === "undefined") return null;
   return createPortal9(
-    /* @__PURE__ */ jsx48("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-wave-dock": "true", children: body }),
+    /* @__PURE__ */ jsx50("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-wave-dock": "true", children: body }),
     document.body
   );
 }
 
 // src/hooks/useTweakTimeline.ts
-import { useCallback as useCallback21, useEffect as useEffect27, useMemo as useMemo2, useRef as useRef34, useSyncExternalStore as useSyncExternalStore11 } from "react";
+import { useCallback as useCallback23, useEffect as useEffect29, useMemo as useMemo3, useRef as useRef36, useSyncExternalStore as useSyncExternalStore11 } from "react";
 
 // src/transition-math.ts
 function round22(value) {
@@ -13904,58 +14646,58 @@ function buildTimelineValues(staticClips, transport, timelineDuration, loopStart
 // src/hooks/useTweakTimeline.ts
 function useTweakTimeline(name, config, options) {
   const serializedConfig = useSerialized(config);
-  const parsed = useMemo2(() => parseTimelineConfig(config), [serializedConfig]);
+  const parsed = useMemo3(() => parseTimelineConfig(config), [serializedConfig]);
   const { panelId, flatValues } = useTweakStorePanel(name, parsed.tweakConfig, {
     id: options?.id,
     persist: options?.persist,
     kind: "timeline"
   });
-  const staticTimeline = useMemo2(
+  const staticTimeline = useMemo3(
     () => computeStaticTimeline(parsed, flatValues),
     [parsed, flatValues]
   );
   const timelineDuration = staticTimeline.duration;
   const staticClips = staticTimeline.clips;
-  const parsedRef = useRef34(parsed);
+  const parsedRef = useRef36(parsed);
   parsedRef.current = parsed;
-  const optionsRef = useRef34(options);
+  const optionsRef = useRef36(options);
   optionsRef.current = options;
-  const buildMeta = useCallback21(
+  const buildMeta = useCallback23(
     () => buildTimelineMeta(panelId, name, timelineDuration, parsedRef.current, options?.loop),
     [panelId, name, timelineDuration, options?.loop]
   );
-  const buildMetaRef = useRef34(buildMeta);
+  const buildMetaRef = useRef36(buildMeta);
   buildMetaRef.current = buildMeta;
-  useEffect27(() => {
+  useEffect29(() => {
     TimelineStore.register(buildMetaRef.current(), {
       autoplay: optionsRef.current?.autoplay ?? true,
       persist: optionsRef.current?.persist
     });
     return () => TimelineStore.unregister(panelId);
   }, [panelId, name]);
-  const mountedRef = useRef34(false);
-  useEffect27(() => {
+  const mountedRef = useRef36(false);
+  useEffect29(() => {
     if (!mountedRef.current) {
       mountedRef.current = true;
       return;
     }
     TimelineStore.update(buildMeta());
   }, [buildMeta, parsed]);
-  const subscribeTransport = useCallback21(
+  const subscribeTransport = useCallback23(
     (callback) => TimelineStore.subscribe(panelId, callback),
     [panelId]
   );
-  const getTransport = useCallback21(() => TimelineStore.getTransport(panelId), [panelId]);
+  const getTransport = useCallback23(() => TimelineStore.getTransport(panelId), [panelId]);
   const transport = useSyncExternalStore11(subscribeTransport, getTransport, getTransport);
-  const getLoopRegion = useCallback21(() => TimelineStore.getLoopRegion(panelId), [panelId]);
+  const getLoopRegion = useCallback23(() => TimelineStore.getLoopRegion(panelId), [panelId]);
   const loopRegion = useSyncExternalStore11(subscribeTransport, getLoopRegion, getLoopRegion);
   const loopStart = loopRegion ? loopRegion.start : 0;
   const loopEnd = loopRegion ? loopRegion.end : timelineDuration;
-  const play = useCallback21(() => TimelineStore.play(panelId), [panelId]);
-  const pause = useCallback21(() => TimelineStore.pause(panelId), [panelId]);
-  const replay = useCallback21(() => TimelineStore.replay(panelId), [panelId]);
-  const seek = useCallback21((time) => TimelineStore.seek(panelId, time), [panelId]);
-  return useMemo2(
+  const play = useCallback23(() => TimelineStore.play(panelId), [panelId]);
+  const pause = useCallback23(() => TimelineStore.pause(panelId), [panelId]);
+  const replay = useCallback23(() => TimelineStore.replay(panelId), [panelId]);
+  const seek = useCallback23((time) => TimelineStore.seek(panelId, time), [panelId]);
+  return useMemo3(
     () => buildTimelineValues(staticClips, transport, timelineDuration, loopStart, loopEnd, {
       play,
       pause,
@@ -13967,10 +14709,10 @@ function useTweakTimeline(name, config, options) {
 }
 
 // src/components/Timeline/TweakTimeline.tsx
-import { memo, useCallback as useCallback22, useEffect as useEffect28, useLayoutEffect as useLayoutEffect5, useRef as useRef35, useState as useState29, useSyncExternalStore as useSyncExternalStore12 } from "react";
+import { memo, useCallback as useCallback24, useEffect as useEffect30, useLayoutEffect as useLayoutEffect5, useRef as useRef37, useState as useState31, useSyncExternalStore as useSyncExternalStore12 } from "react";
 import { createPortal as createPortal10 } from "react-dom";
 import { AnimatePresence as AnimatePresence8, motion as motion12 } from "motion/react";
-import { Fragment as Fragment12, jsx as jsx49, jsxs as jsxs44 } from "react/jsx-runtime";
+import { Fragment as Fragment12, jsx as jsx51, jsxs as jsxs46 } from "react/jsx-runtime";
 var DRAG_THRESHOLD_PX = 3;
 var LOOP_DRAG_THRESHOLD_PX = 4;
 var MAJOR_TICK_TARGET_PX = 140;
@@ -14016,7 +14758,7 @@ var TweakTimeline = memo(function TweakTimeline2({
   productionEnabled = isDevDefault
 }) {
   if (!productionEnabled) return null;
-  return /* @__PURE__ */ jsx49(
+  return /* @__PURE__ */ jsx51(
     TweakTimelineDock,
     {
       theme,
@@ -14034,28 +14776,28 @@ function TweakTimelineDock({
   onVisibilityChange,
   defaultOpen
 }) {
-  const [mounted, setMounted] = useState29(false);
-  const [dockMaxHeight, setDockMaxHeight] = useState29(DEFAULT_DOCK_MAX_HEIGHT);
-  const visibilityControllerId = useRef35(/* @__PURE__ */ Symbol("tweakers-timeline-visibility"));
-  const dockRef = useRef35(null);
-  const resizeCleanupRef = useRef35(null);
-  useEffect28(() => TimelineUiStore.registerController(visibilityControllerId.current, {
+  const [mounted, setMounted] = useState31(false);
+  const [dockMaxHeight, setDockMaxHeight] = useState31(DEFAULT_DOCK_MAX_HEIGHT);
+  const visibilityControllerId = useRef37(/* @__PURE__ */ Symbol("tweakers-timeline-visibility"));
+  const dockRef = useRef37(null);
+  const resizeCleanupRef = useRef37(null);
+  useEffect30(() => TimelineUiStore.registerController(visibilityControllerId.current, {
     visible,
     defaultVisible,
     onVisibilityChange
   }), []);
-  useEffect28(() => {
+  useEffect30(() => {
     TimelineUiStore.updateController(visibilityControllerId.current, {
       visible,
       defaultVisible,
       onVisibilityChange
     });
   }, [defaultVisible, onVisibilityChange, visible]);
-  useEffect28(() => {
+  useEffect30(() => {
     setMounted(true);
   }, []);
-  useEffect28(() => () => resizeCleanupRef.current?.(), []);
-  const handleResizePointerDown = useCallback22((e) => {
+  useEffect30(() => () => resizeCleanupRef.current?.(), []);
+  const handleResizePointerDown = useCallback24((e) => {
     const dock = dockRef.current;
     if (!dock) return;
     e.preventDefault();
@@ -14089,8 +14831,8 @@ function TweakTimelineDock({
     return null;
   }
   return createPortal10(
-    /* @__PURE__ */ jsxs44("div", { className: "tweakers-root tweakers-timeline", "data-theme": theme, hidden: !dockVisible, children: [
-      /* @__PURE__ */ jsx49(
+    /* @__PURE__ */ jsxs46("div", { className: "tweakers-root tweakers-timeline", "data-theme": theme, hidden: !dockVisible, children: [
+      /* @__PURE__ */ jsx51(
         "div",
         {
           className: "tweakers-timeline-resize-handle",
@@ -14101,13 +14843,13 @@ function TweakTimelineDock({
           title: "Drag to resize timeline"
         }
       ),
-      /* @__PURE__ */ jsx49(
+      /* @__PURE__ */ jsx51(
         "div",
         {
           ref: dockRef,
           className: "tweakers-timeline-dock",
           style: { maxHeight: `min(${dockMaxHeight}px, calc(100vh - 24px))` },
-          children: timelines.map((timeline) => /* @__PURE__ */ jsx49(
+          children: timelines.map((timeline) => /* @__PURE__ */ jsx51(
             TimelineSection,
             {
               meta: timeline,
@@ -14124,13 +14866,13 @@ function TweakTimelineDock({
   );
 }
 function useTransportSubscribe(id) {
-  return useCallback22((callback) => TimelineStore.subscribe(id, callback), [id]);
+  return useCallback24((callback) => TimelineStore.subscribe(id, callback), [id]);
 }
 function PlayPauseButton({ id }) {
   const subscribe = useTransportSubscribe(id);
-  const getPlaying = useCallback22(() => TimelineStore.getTransport(id).playing, [id]);
+  const getPlaying = useCallback24(() => TimelineStore.getTransport(id).playing, [id]);
   const playing = useSyncExternalStore12(subscribe, getPlaying, getPlaying);
-  return /* @__PURE__ */ jsx49(
+  return /* @__PURE__ */ jsx51(
     motion12.button,
     {
       className: "tweakers-toolbar-add",
@@ -14139,7 +14881,7 @@ function PlayPauseButton({ id }) {
       "aria-label": playing ? "Pause" : "Play",
       whileTap: { scale: 0.9 },
       transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-      children: /* @__PURE__ */ jsx49("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ jsx49(AnimatePresence8, { initial: false, mode: "wait", children: playing ? /* @__PURE__ */ jsx49(
+      children: /* @__PURE__ */ jsx51("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ jsx51(AnimatePresence8, { initial: false, mode: "wait", children: playing ? /* @__PURE__ */ jsx51(
         motion12.svg,
         {
           viewBox: "0 0 24 24",
@@ -14150,10 +14892,10 @@ function PlayPauseButton({ id }) {
           animate: { scale: 1, opacity: 1 },
           exit: { scale: 0.8, opacity: 0 },
           transition: { duration: 0.08 },
-          children: ICON_PAUSE.map((d, i) => /* @__PURE__ */ jsx49("path", { d, fill: "currentColor" }, i))
+          children: ICON_PAUSE.map((d, i) => /* @__PURE__ */ jsx51("path", { d, fill: "currentColor" }, i))
         },
         "pause"
-      ) : /* @__PURE__ */ jsx49(
+      ) : /* @__PURE__ */ jsx51(
         motion12.svg,
         {
           viewBox: "0 0 24 24",
@@ -14164,7 +14906,7 @@ function PlayPauseButton({ id }) {
           animate: { scale: 1, opacity: 1 },
           exit: { scale: 0.8, opacity: 0 },
           transition: { duration: 0.08 },
-          children: /* @__PURE__ */ jsx49("path", { d: ICON_PLAY, fill: "currentColor" })
+          children: /* @__PURE__ */ jsx51("path", { d: ICON_PLAY, fill: "currentColor" })
         },
         "play"
       ) }) })
@@ -14172,7 +14914,7 @@ function PlayPauseButton({ id }) {
   );
 }
 function ReplayButton({ onReplay }) {
-  return /* @__PURE__ */ jsx49(
+  return /* @__PURE__ */ jsx51(
     motion12.button,
     {
       className: "tweakers-toolbar-add",
@@ -14181,7 +14923,7 @@ function ReplayButton({ onReplay }) {
       "aria-label": "Replay",
       whileTap: { scale: 0.9 },
       transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-      children: /* @__PURE__ */ jsx49("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: ICON_REPLAY.map((d, i) => /* @__PURE__ */ jsx49("path", { d, fill: "currentColor" }, i)) })
+      children: /* @__PURE__ */ jsx51("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: ICON_REPLAY.map((d, i) => /* @__PURE__ */ jsx51("path", { d, fill: "currentColor" }, i)) })
     }
   );
 }
@@ -14196,11 +14938,11 @@ function TimelinePlayheadFlag({
   onResetView
 }) {
   const subscribe = useTransportSubscribe(id);
-  const getTime = useCallback22(() => TimelineStore.getTransport(id).time, [id]);
+  const getTime = useCallback24(() => TimelineStore.getTransport(id).time, [id]);
   const time = useSyncExternalStore12(subscribe, getTime, getTime);
-  const scrubRef = useRef35(null);
-  const cleanupScrubRef = useRef35(null);
-  const seekFromClientX = useCallback22((clientX) => {
+  const scrubRef = useRef37(null);
+  const cleanupScrubRef = useRef37(null);
+  const seekFromClientX = useCallback24((clientX) => {
     const rect = scrubRef.current?.rect;
     const scrub = scrubRef.current;
     const contentWidth = rect?.width ?? 0;
@@ -14212,7 +14954,7 @@ function TimelinePlayheadFlag({
     );
     TimelineStore.seek(id, nextTime);
   }, [id]);
-  const handlePointerDown = useCallback22((e) => {
+  const handlePointerDown = useCallback24((e) => {
     const rect = rulerRef.current?.getBoundingClientRect();
     if (!rect) return;
     e.preventDefault();
@@ -14245,7 +14987,7 @@ function TimelinePlayheadFlag({
     window.addEventListener("pointercancel", finishWindowScrub);
     cleanupScrubRef.current = finishWindowScrub;
   }, [duration, id, onResetView, rulerRef, seekFromClientX, viewEnd, viewStart]);
-  useEffect28(() => () => cleanupScrubRef.current?.(), []);
+  useEffect30(() => () => cleanupScrubRef.current?.(), []);
   if (time < viewStart || time > viewEnd || laneWidth <= 0) return null;
   const x = clamp8(
     (time - viewStart) * pxPerSecond,
@@ -14259,7 +15001,7 @@ function TimelinePlayheadFlag({
   );
   const flagOffset = flagCenter - x;
   const edge = flagOffset > 0.5 ? "start" : flagOffset < -0.5 ? "end" : "center";
-  return /* @__PURE__ */ jsxs44(
+  return /* @__PURE__ */ jsxs46(
     "div",
     {
       className: "tweakers-timeline-playhead-control",
@@ -14276,8 +15018,8 @@ function TimelinePlayheadFlag({
       "aria-valuenow": time,
       title: "Drag to scrub the timeline",
       children: [
-        /* @__PURE__ */ jsx49("div", { className: "tweakers-timeline-playhead-stem" }),
-        /* @__PURE__ */ jsx49("div", { className: "tweakers-timeline-playhead-anchor", children: /* @__PURE__ */ jsx49("div", { className: "tweakers-timeline-playhead-flag", children: time.toFixed(2) }) })
+        /* @__PURE__ */ jsx51("div", { className: "tweakers-timeline-playhead-stem" }),
+        /* @__PURE__ */ jsx51("div", { className: "tweakers-timeline-playhead-anchor", children: /* @__PURE__ */ jsx51("div", { className: "tweakers-timeline-playhead-flag", children: time.toFixed(2) }) })
       ]
     }
   );
@@ -14290,17 +15032,17 @@ function TimelineOverview({
   onNavigate
 }) {
   const subscribe = useTransportSubscribe(id);
-  const getTime = useCallback22(() => TimelineStore.getTransport(id).time, [id]);
+  const getTime = useCallback24(() => TimelineStore.getTransport(id).time, [id]);
   const time = useSyncExternalStore12(subscribe, getTime, getTime);
-  const scrubRef = useRef35(null);
-  const seekFromClientX = useCallback22((clientX) => {
+  const scrubRef = useRef37(null);
+  const seekFromClientX = useCallback24((clientX) => {
     const rect = scrubRef.current?.rect;
     if (!rect || rect.width <= 0 || duration <= 0) return;
     const nextTime = clamp8((clientX - rect.left) / rect.width * duration, 0, duration);
     TimelineStore.seek(id, nextTime);
     onNavigate(nextTime);
   }, [duration, id, onNavigate]);
-  const handlePointerDown = useCallback22((e) => {
+  const handlePointerDown = useCallback24((e) => {
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     scrubRef.current = {
@@ -14310,17 +15052,17 @@ function TimelineOverview({
     TimelineStore.pause(id);
     seekFromClientX(e.clientX);
   }, [id, seekFromClientX]);
-  const handlePointerMove = useCallback22((e) => {
+  const handlePointerMove = useCallback24((e) => {
     if (scrubRef.current) seekFromClientX(e.clientX);
   }, [seekFromClientX]);
-  const finishScrub = useCallback22(() => {
+  const finishScrub = useCallback24(() => {
     if (scrubRef.current?.wasPlaying) TimelineStore.play(id);
     scrubRef.current = null;
   }, [id]);
   const viewportLeft = duration > 0 ? viewStart / duration * 100 : 0;
   const viewportWidth = duration > 0 ? (viewEnd - viewStart) / duration * 100 : 100;
   const playheadLeft = duration > 0 ? time / duration * 100 : 0;
-  return /* @__PURE__ */ jsxs44(
+  return /* @__PURE__ */ jsxs46(
     "div",
     {
       className: "tweakers-timeline-overview",
@@ -14331,7 +15073,7 @@ function TimelineOverview({
       onLostPointerCapture: finishScrub,
       title: "Drag to scrub the full timeline",
       children: [
-        /* @__PURE__ */ jsx49(
+        /* @__PURE__ */ jsx51(
           "div",
           {
             className: "tweakers-timeline-overview-viewport",
@@ -14339,8 +15081,8 @@ function TimelineOverview({
             style: { left: `${viewportLeft}%`, width: `${viewportWidth}%` }
           }
         ),
-        /* @__PURE__ */ jsx49("div", { className: "tweakers-timeline-overview-progress", style: { width: `${playheadLeft}%` } }),
-        /* @__PURE__ */ jsx49("div", { className: "tweakers-timeline-overview-playhead", style: { left: `${playheadLeft}%` } })
+        /* @__PURE__ */ jsx51("div", { className: "tweakers-timeline-overview-progress", style: { width: `${playheadLeft}%` } }),
+        /* @__PURE__ */ jsx51("div", { className: "tweakers-timeline-overview-playhead", style: { left: `${playheadLeft}%` } })
       ]
     }
   );
@@ -14359,31 +15101,31 @@ var TimelineSection = memo(function TimelineSection2({
   theme,
   dockVisible
 }) {
-  const [open, setOpen] = useState29(defaultOpen);
-  const [copied, setCopied] = useState29(false);
-  const [popover, setPopover] = useState29(null);
-  const [collapsedGroups, setCollapsedGroups] = useState29(() => /* @__PURE__ */ new Set());
-  const [expandedTracks, setExpandedTracks] = useState29(() => /* @__PURE__ */ new Set());
-  const [zoom, setZoom] = useState29(1);
-  const [viewStart, setViewStart] = useState29(0);
-  const subscribeValues = useCallback22(
+  const [open, setOpen] = useState31(defaultOpen);
+  const [copied, setCopied] = useState31(false);
+  const [popover, setPopover] = useState31(null);
+  const [collapsedGroups, setCollapsedGroups] = useState31(() => /* @__PURE__ */ new Set());
+  const [expandedTracks, setExpandedTracks] = useState31(() => /* @__PURE__ */ new Set());
+  const [zoom, setZoom] = useState31(1);
+  const [viewStart, setViewStart] = useState31(0);
+  const subscribeValues = useCallback24(
     (callback) => TweakStore.subscribe(meta.id, callback),
     [meta.id]
   );
-  const getValues = useCallback22(() => TweakStore.getValues(meta.id), [meta.id]);
+  const getValues = useCallback24(() => TweakStore.getValues(meta.id), [meta.id]);
   const values = useSyncExternalStore12(subscribeValues, getValues, getValues);
   const presets = TweakStore.getPresets(meta.id);
   const activePresetId = TweakStore.getActivePresetId(meta.id);
-  const subscribeLoopRegion = useCallback22(
+  const subscribeLoopRegion = useCallback24(
     (callback) => TimelineStore.subscribe(meta.id, callback),
     [meta.id]
   );
-  const getLoopRegion = useCallback22(() => TimelineStore.getLoopRegion(meta.id), [meta.id]);
+  const getLoopRegion = useCallback24(() => TimelineStore.getLoopRegion(meta.id), [meta.id]);
   const loopRegion = useSyncExternalStore12(subscribeLoopRegion, getLoopRegion, getLoopRegion);
-  const [loopDrag, setLoopDrag] = useState29(null);
-  const laneAreaRef = useRef35(null);
-  const horizontalScrollRef = useRef35(null);
-  const [laneWidth, setLaneWidth] = useState29(0);
+  const [loopDrag, setLoopDrag] = useState31(null);
+  const laneAreaRef = useRef37(null);
+  const horizontalScrollRef = useRef37(null);
+  const [laneWidth, setLaneWidth] = useState31(0);
   useLayoutEffect5(() => {
     if (!open) return;
     const ruler = laneAreaRef.current;
@@ -14402,10 +15144,10 @@ var TimelineSection = memo(function TimelineSection2({
   const pxPerSecond = visibleDuration > 0 && laneWidth > 0 ? laneWidth / visibleDuration : 0;
   const millisecondReadableZoom = laneWidth > 0 && meta.duration > 0 ? MAJOR_TICK_TARGET_PX * meta.duration / (MILLISECOND_STEP * 10 * laneWidth) : MIN_TIMELINE_MAX_ZOOM;
   const maxZoom = Math.max(MIN_TIMELINE_MAX_ZOOM, millisecondReadableZoom);
-  useEffect28(() => {
+  useEffect30(() => {
     setZoom((current) => clamp8(current, 1, maxZoom));
   }, [maxZoom]);
-  useEffect28(() => {
+  useEffect30(() => {
     setViewStart((current) => clampViewStart(current, meta.duration, meta.duration / zoom));
   }, [meta.duration, zoom]);
   useLayoutEffect5(() => {
@@ -14416,26 +15158,26 @@ var TimelineSection = memo(function TimelineSection2({
       scroller.scrollLeft = nextScrollLeft;
     }
   }, [open, pxPerSecond, safeViewStart]);
-  useEffect28(() => {
+  useEffect30(() => {
     if (!dockVisible) setPopover(null);
   }, [dockVisible]);
-  const centerViewAt = useCallback22((time) => {
+  const centerViewAt = useCallback24((time) => {
     if (zoom <= 1 || meta.duration <= 0) return;
     const windowDuration = meta.duration / zoom;
     setViewStart(clampViewStart(time - windowDuration / 2, meta.duration, windowDuration));
   }, [meta.duration, zoom]);
-  const resetView = useCallback22(() => {
+  const resetView = useCallback24(() => {
     setZoom(1);
     setViewStart(0);
   }, []);
-  const handleReplay = useCallback22(() => {
+  const handleReplay = useCallback24(() => {
     setViewStart(0);
     TimelineStore.replay(meta.id);
   }, [meta.id]);
-  const handleClearLoopRegion = useCallback22(() => {
+  const handleClearLoopRegion = useCallback24(() => {
     TimelineStore.clearLoopRegion(meta.id);
   }, [meta.id]);
-  const handleHorizontalScroll = useCallback22((e) => {
+  const handleHorizontalScroll = useCallback24((e) => {
     if (pxPerSecond <= 0) return;
     setViewStart(clampViewStart(
       e.currentTarget.scrollLeft / pxPerSecond,
@@ -14443,7 +15185,7 @@ var TimelineSection = memo(function TimelineSection2({
       visibleDuration
     ));
   }, [meta.duration, pxPerSecond, visibleDuration]);
-  const handleTimelineWheel = useCallback22((e) => {
+  const handleTimelineWheel = useCallback24((e) => {
     const scroller = horizontalScrollRef.current;
     if (!scroller || zoom <= 1) return;
     const horizontalDelta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.shiftKey ? e.deltaY : 0;
@@ -14451,9 +15193,9 @@ var TimelineSection = memo(function TimelineSection2({
     e.preventDefault();
     scroller.scrollLeft += horizontalDelta;
   }, [zoom]);
-  const zoomDragRef = useRef35(null);
-  const rulerGestureRef = useRef35(null);
-  const rulerTimeFromClientX = useCallback22(
+  const zoomDragRef = useRef37(null);
+  const rulerGestureRef = useRef37(null);
+  const rulerTimeFromClientX = useCallback24(
     (clientX, rect, viewStartAt, visibleAt) => clamp8(
       viewStartAt + (clientX - rect.left) / rect.width * visibleAt,
       viewStartAt,
@@ -14461,7 +15203,7 @@ var TimelineSection = memo(function TimelineSection2({
     ),
     []
   );
-  const handleRulerPointerDown = useCallback22((e) => {
+  const handleRulerPointerDown = useCallback24((e) => {
     e.preventDefault();
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
@@ -14497,7 +15239,7 @@ var TimelineSection = memo(function TimelineSection2({
       moved: false
     };
   }, [meta.duration, rulerTimeFromClientX, safeViewStart, visibleDuration, zoom]);
-  const handleRulerPointerMove = useCallback22((e) => {
+  const handleRulerPointerMove = useCallback24((e) => {
     const gesture = rulerGestureRef.current;
     if (gesture) {
       const dx2 = e.clientX - gesture.downClientX;
@@ -14525,7 +15267,7 @@ var TimelineSection = memo(function TimelineSection2({
     setZoom(nextZoom);
     setViewStart(nextStart);
   }, [maxZoom, meta.duration, rulerTimeFromClientX]);
-  const handleRulerPointerUp = useCallback22(() => {
+  const handleRulerPointerUp = useCallback24(() => {
     const gesture = rulerGestureRef.current;
     rulerGestureRef.current = null;
     zoomDragRef.current = null;
@@ -14538,13 +15280,13 @@ var TimelineSection = memo(function TimelineSection2({
       setLoopDrag(null);
     }
   }, [loopDrag, meta.id]);
-  const handleRulerPointerCancel = useCallback22(() => {
+  const handleRulerPointerCancel = useCallback24(() => {
     rulerGestureRef.current = null;
     zoomDragRef.current = null;
     setLoopDrag(null);
   }, []);
-  const trackScrubRef = useRef35(null);
-  const seekTrackFromClientX = useCallback22((clientX) => {
+  const trackScrubRef = useRef37(null);
+  const seekTrackFromClientX = useCallback24((clientX) => {
     const scrub = trackScrubRef.current;
     const contentWidth = scrub?.rect.width ?? 0;
     if (!scrub || contentWidth <= 0) return;
@@ -14555,7 +15297,7 @@ var TimelineSection = memo(function TimelineSection2({
     );
     TimelineStore.seek(meta.id, nextTime);
   }, [meta.id]);
-  const handleTrackPointerDown = useCallback22((e) => {
+  const handleTrackPointerDown = useCallback24((e) => {
     const target = e.target;
     if (target.closest(".tweakers-timeline-label, button")) return;
     if (!e.shiftKey && target.closest(".tweakers-timeline-clip")) return;
@@ -14578,24 +15320,24 @@ var TimelineSection = memo(function TimelineSection2({
     TimelineStore.pause(meta.id);
     seekTrackFromClientX(e.clientX);
   }, [meta.duration, meta.id, safeViewStart, seekTrackFromClientX, visibleDuration]);
-  const handleTrackPointerMove = useCallback22((e) => {
+  const handleTrackPointerMove = useCallback24((e) => {
     if (trackScrubRef.current) seekTrackFromClientX(e.clientX);
   }, [seekTrackFromClientX]);
-  const finishTrackScrub = useCallback22(() => {
+  const finishTrackScrub = useCallback24(() => {
     if (trackScrubRef.current?.wasPlaying) TimelineStore.play(meta.id);
     trackScrubRef.current = null;
   }, [meta.id]);
-  const handleCopy = useCallback22(() => {
+  const handleCopy = useCallback24(() => {
     const normalized = normalizeTimelineValuesForCopy(TweakStore.getValues(meta.id), meta.clips);
     navigator.clipboard.writeText(buildCopyInstruction("useTweakTimeline", meta.name, normalized));
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }, [meta.clips, meta.id, meta.name]);
-  const handleAddPreset = useCallback22(() => {
+  const handleAddPreset = useCallback24(() => {
     TweakStore.savePreset(meta.id, `Version ${presets.length + 2}`);
   }, [meta.id, presets.length]);
-  const closePopover = useCallback22(() => setPopover(null), []);
-  const openClipPopover = useCallback22(
+  const closePopover = useCallback24(() => setPopover(null), []);
+  const openClipPopover = useCallback24(
     (clip, rect, stepKey) => {
       const targetPath = stepKey ? `${clip.key}.${stepKey}` : clip.key;
       const exclude = stepKey ? void 0 : clipPopoverExclusions(clip);
@@ -14617,7 +15359,7 @@ var TimelineSection = memo(function TimelineSection2({
     },
     [meta.id]
   );
-  const toggleTracks = useCallback22((clipKey) => {
+  const toggleTracks = useCallback24((clipKey) => {
     setExpandedTracks((prev) => {
       const next = new Set(prev);
       if (next.has(clipKey)) next.delete(clipKey);
@@ -14625,7 +15367,7 @@ var TimelineSection = memo(function TimelineSection2({
       return next;
     });
   }, []);
-  const handleBarClick = useCallback22(
+  const handleBarClick = useCallback24(
     (clip, rect, stepKey) => {
       if (!stepKey && clip.tracks?.length) {
         toggleTracks(clip.key);
@@ -14635,7 +15377,7 @@ var TimelineSection = memo(function TimelineSection2({
     },
     [openClipPopover, toggleTracks]
   );
-  const toggleGroup = useCallback22((group) => {
+  const toggleGroup = useCallback24((group) => {
     setCollapsedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(group)) next.delete(group);
@@ -14671,21 +15413,21 @@ var TimelineSection = memo(function TimelineSection2({
         const group = clip.group;
         const isCollapsed = collapsedGroups.has(group);
         rows.push(
-          /* @__PURE__ */ jsxs44("div", { className: "tweakers-timeline-row tweakers-timeline-group-row", children: [
-            /* @__PURE__ */ jsxs44("div", { className: "tweakers-timeline-label", children: [
-              /* @__PURE__ */ jsx49(
+          /* @__PURE__ */ jsxs46("div", { className: "tweakers-timeline-row tweakers-timeline-group-row", children: [
+            /* @__PURE__ */ jsxs46("div", { className: "tweakers-timeline-label", children: [
+              /* @__PURE__ */ jsx51(
                 "button",
                 {
                   className: "tweakers-timeline-group-toggle",
                   "data-open": !isCollapsed,
                   onClick: () => toggleGroup(group),
                   title: isCollapsed ? "Expand layer" : "Collapse layer",
-                  children: /* @__PURE__ */ jsx49("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsx49("path", { d: ICON_CHEVRON }) })
+                  children: /* @__PURE__ */ jsx51("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsx51("path", { d: ICON_CHEVRON }) })
                 }
               ),
-              /* @__PURE__ */ jsx49("span", { children: formatLabel(group) })
+              /* @__PURE__ */ jsx51("span", { children: formatLabel(group) })
             ] }),
-            /* @__PURE__ */ jsx49("div", { className: "tweakers-timeline-lane" })
+            /* @__PURE__ */ jsx51("div", { className: "tweakers-timeline-lane" })
           ] }, `group:${group}`)
         );
       }
@@ -14695,9 +15437,9 @@ var TimelineSection = memo(function TimelineSection2({
     const tracksOpen = isProps && expandedTracks.has(clip.key);
     const stat = computeClipStaticFromValues(values, clip, meta.duration);
     rows.push(
-      /* @__PURE__ */ jsxs44("div", { className: "tweakers-timeline-row", "data-grouped": clip.group ? "" : void 0, children: [
-        /* @__PURE__ */ jsxs44("div", { className: "tweakers-timeline-label", children: [
-          isProps ? /* @__PURE__ */ jsx49(
+      /* @__PURE__ */ jsxs46("div", { className: "tweakers-timeline-row", "data-grouped": clip.group ? "" : void 0, children: [
+        /* @__PURE__ */ jsxs46("div", { className: "tweakers-timeline-label", children: [
+          isProps ? /* @__PURE__ */ jsx51(
             "button",
             {
               className: "tweakers-timeline-group-toggle",
@@ -14707,12 +15449,12 @@ var TimelineSection = memo(function TimelineSection2({
                 toggleTracks(clip.key);
               },
               title: tracksOpen ? "Collapse properties" : "Expand properties",
-              children: /* @__PURE__ */ jsx49("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsx49("path", { d: ICON_CHEVRON }) })
+              children: /* @__PURE__ */ jsx51("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsx51("path", { d: ICON_CHEVRON }) })
             }
           ) : null,
           clip.label
         ] }),
-        /* @__PURE__ */ jsx49("div", { className: "tweakers-timeline-lane", children: /* @__PURE__ */ jsx49(
+        /* @__PURE__ */ jsx51("div", { className: "tweakers-timeline-lane", children: /* @__PURE__ */ jsx51(
           TimelineClip,
           {
             timelineId: meta.id,
@@ -14748,14 +15490,14 @@ var TimelineSection = memo(function TimelineSection2({
           stepKeys: trackRef.stepKeys
         };
         rows.push(
-          /* @__PURE__ */ jsxs44(
+          /* @__PURE__ */ jsxs46(
             "div",
             {
               className: "tweakers-timeline-row tweakers-timeline-track-row",
               "data-grouped": clip.group ? "" : void 0,
               children: [
-                /* @__PURE__ */ jsx49("div", { className: "tweakers-timeline-label", children: formatLabel(trackRef.prop) }),
-                /* @__PURE__ */ jsx49("div", { className: "tweakers-timeline-lane", children: /* @__PURE__ */ jsx49(
+                /* @__PURE__ */ jsx51("div", { className: "tweakers-timeline-label", children: formatLabel(trackRef.prop) }),
+                /* @__PURE__ */ jsx51("div", { className: "tweakers-timeline-lane", children: /* @__PURE__ */ jsx51(
                   TimelineClip,
                   {
                     timelineId: meta.id,
@@ -14784,10 +15526,10 @@ var TimelineSection = memo(function TimelineSection2({
       }
     }
   }
-  return /* @__PURE__ */ jsxs44("div", { className: "tweakers-timeline-section", children: [
-    /* @__PURE__ */ jsxs44("div", { className: "tweakers-timeline-header", "data-open": open || void 0, children: [
-      /* @__PURE__ */ jsx49("div", { className: "tweakers-timeline-identity", children: /* @__PURE__ */ jsx49("span", { className: "tweakers-timeline-title", children: meta.name }) }),
-      !open && /* @__PURE__ */ jsx49(
+  return /* @__PURE__ */ jsxs46("div", { className: "tweakers-timeline-section", children: [
+    /* @__PURE__ */ jsxs46("div", { className: "tweakers-timeline-header", "data-open": open || void 0, children: [
+      /* @__PURE__ */ jsx51("div", { className: "tweakers-timeline-identity", children: /* @__PURE__ */ jsx51("span", { className: "tweakers-timeline-title", children: meta.name }) }),
+      !open && /* @__PURE__ */ jsx51(
         TimelineOverview,
         {
           id: meta.id,
@@ -14797,8 +15539,8 @@ var TimelineSection = memo(function TimelineSection2({
           onNavigate: centerViewAt
         }
       ),
-      /* @__PURE__ */ jsxs44("div", { className: "tweakers-timeline-actions", children: [
-        /* @__PURE__ */ jsx49(
+      /* @__PURE__ */ jsxs46("div", { className: "tweakers-timeline-actions", children: [
+        /* @__PURE__ */ jsx51(
           motion12.button,
           {
             className: "tweakers-timeline-loop-toggle",
@@ -14810,12 +15552,12 @@ var TimelineSection = memo(function TimelineSection2({
             "aria-pressed": loopRegion ? true : false,
             whileTap: loopRegion ? { scale: 0.9 } : void 0,
             transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-            children: /* @__PURE__ */ jsx49("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true", children: ICON_LOOP.map((d, i) => /* @__PURE__ */ jsx49("path", { d }, i)) })
+            children: /* @__PURE__ */ jsx51("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true", children: ICON_LOOP.map((d, i) => /* @__PURE__ */ jsx51("path", { d }, i)) })
           }
         ),
-        /* @__PURE__ */ jsx49(PlayPauseButton, { id: meta.id }),
-        /* @__PURE__ */ jsx49(ReplayButton, { onReplay: handleReplay }),
-        /* @__PURE__ */ jsx49(
+        /* @__PURE__ */ jsx51(PlayPauseButton, { id: meta.id }),
+        /* @__PURE__ */ jsx51(ReplayButton, { onReplay: handleReplay }),
+        /* @__PURE__ */ jsx51(
           motion12.button,
           {
             className: "tweakers-toolbar-add",
@@ -14824,10 +15566,10 @@ var TimelineSection = memo(function TimelineSection2({
             "aria-label": "Add timeline version",
             whileTap: { scale: 0.9 },
             transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-            children: /* @__PURE__ */ jsx49("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true", children: ICON_ADD_PRESET.map((d, i) => /* @__PURE__ */ jsx49("path", { d }, i)) })
+            children: /* @__PURE__ */ jsx51("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true", children: ICON_ADD_PRESET.map((d, i) => /* @__PURE__ */ jsx51("path", { d }, i)) })
           }
         ),
-        /* @__PURE__ */ jsx49(
+        /* @__PURE__ */ jsx51(
           PresetManager,
           {
             panelId: meta.id,
@@ -14836,7 +15578,7 @@ var TimelineSection = memo(function TimelineSection2({
             onAdd: handleAddPreset
           }
         ),
-        /* @__PURE__ */ jsx49(
+        /* @__PURE__ */ jsx51(
           motion12.button,
           {
             className: "tweakers-toolbar-add",
@@ -14845,7 +15587,7 @@ var TimelineSection = memo(function TimelineSection2({
             "aria-label": copied ? "Copied parameters" : "Copy parameters",
             whileTap: { scale: 0.9 },
             transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-            children: /* @__PURE__ */ jsx49("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ jsx49(AnimatePresence8, { initial: false, mode: "wait", children: copied ? /* @__PURE__ */ jsx49(
+            children: /* @__PURE__ */ jsx51("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ jsx51(AnimatePresence8, { initial: false, mode: "wait", children: copied ? /* @__PURE__ */ jsx51(
               motion12.svg,
               {
                 viewBox: "0 0 24 24",
@@ -14860,10 +15602,10 @@ var TimelineSection = memo(function TimelineSection2({
                 animate: { scale: 1, opacity: 1 },
                 exit: { scale: 0.8, opacity: 0 },
                 transition: { duration: 0.08 },
-                children: /* @__PURE__ */ jsx49("path", { d: ICON_CHECK })
+                children: /* @__PURE__ */ jsx51("path", { d: ICON_CHECK })
               },
               "check"
-            ) : /* @__PURE__ */ jsxs44(
+            ) : /* @__PURE__ */ jsxs46(
               motion12.svg,
               {
                 viewBox: "0 0 24 24",
@@ -14875,16 +15617,16 @@ var TimelineSection = memo(function TimelineSection2({
                 exit: { scale: 0.8, opacity: 0 },
                 transition: { duration: 0.08 },
                 children: [
-                  /* @__PURE__ */ jsx49("path", { d: ICON_CLIPBOARD.board, stroke: "currentColor", strokeWidth: "2", strokeLinejoin: "round" }),
-                  /* @__PURE__ */ jsx49("path", { d: ICON_CLIPBOARD.sparkle, fill: "currentColor" }),
-                  /* @__PURE__ */ jsx49("path", { d: ICON_CLIPBOARD.body, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" })
+                  /* @__PURE__ */ jsx51("path", { d: ICON_CLIPBOARD.board, stroke: "currentColor", strokeWidth: "2", strokeLinejoin: "round" }),
+                  /* @__PURE__ */ jsx51("path", { d: ICON_CLIPBOARD.sparkle, fill: "currentColor" }),
+                  /* @__PURE__ */ jsx51("path", { d: ICON_CLIPBOARD.body, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" })
                 ]
               },
               "clipboard"
             ) }) })
           }
         ),
-        /* @__PURE__ */ jsx49(
+        /* @__PURE__ */ jsx51(
           "button",
           {
             className: "tweakers-timeline-chevron",
@@ -14892,12 +15634,12 @@ var TimelineSection = memo(function TimelineSection2({
             "aria-expanded": open,
             onClick: () => setOpen(!open),
             title: open ? "Collapse timeline" : "Expand timeline",
-            children: /* @__PURE__ */ jsx49("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsx49("path", { d: ICON_CHEVRON }) })
+            children: /* @__PURE__ */ jsx51("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsx51("path", { d: ICON_CHEVRON }) })
           }
         )
       ] })
     ] }),
-    open && /* @__PURE__ */ jsxs44(
+    open && /* @__PURE__ */ jsxs46(
       "div",
       {
         className: "tweakers-timeline-body",
@@ -14908,10 +15650,10 @@ var TimelineSection = memo(function TimelineSection2({
         onPointerCancel: finishTrackScrub,
         onLostPointerCapture: finishTrackScrub,
         children: [
-          /* @__PURE__ */ jsxs44("div", { className: "tweakers-timeline-grid", children: [
-            /* @__PURE__ */ jsxs44("div", { className: "tweakers-timeline-row tweakers-timeline-ruler-row", children: [
-              /* @__PURE__ */ jsx49("div", { className: "tweakers-timeline-label" }),
-              /* @__PURE__ */ jsxs44(
+          /* @__PURE__ */ jsxs46("div", { className: "tweakers-timeline-grid", children: [
+            /* @__PURE__ */ jsxs46("div", { className: "tweakers-timeline-row tweakers-timeline-ruler-row", children: [
+              /* @__PURE__ */ jsx51("div", { className: "tweakers-timeline-label" }),
+              /* @__PURE__ */ jsxs46(
                 "div",
                 {
                   ref: laneAreaRef,
@@ -14928,10 +15670,10 @@ var TimelineSection = memo(function TimelineSection2({
                       if (!activeLoop || pxPerSecond <= 0) return null;
                       const left = (activeLoop.start - safeViewStart) * pxPerSecond;
                       const width = Math.max(0, (activeLoop.end - activeLoop.start) * pxPerSecond);
-                      return /* @__PURE__ */ jsxs44(Fragment12, { children: [
-                        /* @__PURE__ */ jsx49("div", { className: "tweakers-timeline-loop-dim", style: { left: 0, width: Math.max(0, left) } }),
-                        /* @__PURE__ */ jsx49("div", { className: "tweakers-timeline-loop-dim", style: { left: left + width, right: 0 } }),
-                        /* @__PURE__ */ jsx49(
+                      return /* @__PURE__ */ jsxs46(Fragment12, { children: [
+                        /* @__PURE__ */ jsx51("div", { className: "tweakers-timeline-loop-dim", style: { left: 0, width: Math.max(0, left) } }),
+                        /* @__PURE__ */ jsx51("div", { className: "tweakers-timeline-loop-dim", style: { left: left + width, right: 0 } }),
+                        /* @__PURE__ */ jsx51(
                           "div",
                           {
                             className: "tweakers-timeline-loop-band",
@@ -14941,15 +15683,15 @@ var TimelineSection = memo(function TimelineSection2({
                         )
                       ] });
                     })(),
-                    fineTicks.map((t) => /* @__PURE__ */ jsx49("div", { className: "tweakers-timeline-tick tweakers-timeline-tick-fine", style: { left: (t - safeViewStart) * pxPerSecond } }, `fine:${t}`)),
-                    mediumTicks.map((t) => /* @__PURE__ */ jsx49("div", { className: "tweakers-timeline-tick tweakers-timeline-tick-medium", style: { left: (t - safeViewStart) * pxPerSecond } }, `medium:${t}`)),
-                    majorTicks.map((t) => /* @__PURE__ */ jsx49("div", { className: "tweakers-timeline-tick", style: { left: (t - safeViewStart) * pxPerSecond }, children: /* @__PURE__ */ jsx49("span", { className: "tweakers-timeline-tick-label", children: formatRulerSeconds(t, majorStep) }) }, t))
+                    fineTicks.map((t) => /* @__PURE__ */ jsx51("div", { className: "tweakers-timeline-tick tweakers-timeline-tick-fine", style: { left: (t - safeViewStart) * pxPerSecond } }, `fine:${t}`)),
+                    mediumTicks.map((t) => /* @__PURE__ */ jsx51("div", { className: "tweakers-timeline-tick tweakers-timeline-tick-medium", style: { left: (t - safeViewStart) * pxPerSecond } }, `medium:${t}`)),
+                    majorTicks.map((t) => /* @__PURE__ */ jsx51("div", { className: "tweakers-timeline-tick", style: { left: (t - safeViewStart) * pxPerSecond }, children: /* @__PURE__ */ jsx51("span", { className: "tweakers-timeline-tick-label", children: formatRulerSeconds(t, majorStep) }) }, t))
                   ]
                 }
               )
             ] }),
             rows,
-            pxPerSecond > 0 && /* @__PURE__ */ jsx49(
+            pxPerSecond > 0 && /* @__PURE__ */ jsx51(
               TimelinePlayheadFlag,
               {
                 id: meta.id,
@@ -14963,23 +15705,23 @@ var TimelineSection = memo(function TimelineSection2({
               }
             )
           ] }),
-          zoom > 1 && /* @__PURE__ */ jsxs44("div", { className: "tweakers-timeline-scroll-row", children: [
-            /* @__PURE__ */ jsx49("div", { className: "tweakers-timeline-label" }),
-            /* @__PURE__ */ jsx49(
+          zoom > 1 && /* @__PURE__ */ jsxs46("div", { className: "tweakers-timeline-scroll-row", children: [
+            /* @__PURE__ */ jsx51("div", { className: "tweakers-timeline-label" }),
+            /* @__PURE__ */ jsx51(
               "div",
               {
                 ref: horizontalScrollRef,
                 className: "tweakers-timeline-horizontal-scroll",
                 onScroll: handleHorizontalScroll,
                 "aria-label": "Timeline horizontal scroll",
-                children: /* @__PURE__ */ jsx49("div", { style: { width: laneWidth * zoom } })
+                children: /* @__PURE__ */ jsx51("div", { style: { width: laneWidth * zoom } })
               }
             )
           ] })
         ]
       }
     ),
-    popover && /* @__PURE__ */ jsx49(
+    popover && /* @__PURE__ */ jsx51(
       ClipPopover,
       {
         panelId: meta.id,
@@ -14998,9 +15740,9 @@ function ClipPopover({
   theme,
   onClose
 }) {
-  const ref = useRef35(null);
-  const [naturalHeight, setNaturalHeight] = useState29(0);
-  const [viewport, setViewport] = useState29(() => ({
+  const ref = useRef37(null);
+  const [naturalHeight, setNaturalHeight] = useState31(0);
+  const [viewport, setViewport] = useState31(() => ({
     width: window.visualViewport?.width ?? window.innerWidth,
     height: window.visualViewport?.height ?? window.innerHeight,
     offsetLeft: window.visualViewport?.offsetLeft ?? 0,
@@ -15016,7 +15758,7 @@ function ClipPopover({
     observer.observe(body ?? element);
     return () => observer.disconnect();
   }, [popover.clip.key, popover.stepKey]);
-  useEffect28(() => {
+  useEffect30(() => {
     const updateViewport = () => setViewport({
       width: window.visualViewport?.width ?? window.innerWidth,
       height: window.visualViewport?.height ?? window.innerHeight,
@@ -15032,7 +15774,7 @@ function ClipPopover({
       window.visualViewport?.removeEventListener("scroll", updateViewport);
     };
   }, []);
-  useEffect28(() => {
+  useEffect30(() => {
     const handlePointerDown = (e) => {
       const target = e.target;
       if (ref.current?.contains(target)) return;
@@ -15099,7 +15841,7 @@ function ClipPopover({
     Math.max(viewport.offsetTop + 12, viewportBottom - renderedHeight - 12)
   );
   return createPortal10(
-    /* @__PURE__ */ jsx49("div", { className: "tweakers-root", "data-theme": theme, children: /* @__PURE__ */ jsxs44(
+    /* @__PURE__ */ jsx51("div", { className: "tweakers-root", "data-theme": theme, children: /* @__PURE__ */ jsxs46(
       "div",
       {
         ref,
@@ -15115,11 +15857,11 @@ function ClipPopover({
         role: "dialog",
         "aria-label": `Edit ${title}`,
         children: [
-          /* @__PURE__ */ jsxs44("div", { className: "tweakers-timeline-popover-header", children: [
-            /* @__PURE__ */ jsx49("span", { className: "tweakers-timeline-popover-title", children: title }),
-            /* @__PURE__ */ jsx49("button", { className: "tweakers-timeline-popover-close", onClick: onClose, title: "Close editor", "aria-label": "Close editor", children: /* @__PURE__ */ jsx49("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", children: /* @__PURE__ */ jsx49("path", { d: "M6 6L18 18M18 6L6 18" }) }) })
+          /* @__PURE__ */ jsxs46("div", { className: "tweakers-timeline-popover-header", children: [
+            /* @__PURE__ */ jsx51("span", { className: "tweakers-timeline-popover-title", children: title }),
+            /* @__PURE__ */ jsx51("button", { className: "tweakers-timeline-popover-close", onClick: onClose, title: "Close editor", "aria-label": "Close editor", children: /* @__PURE__ */ jsx51("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", children: /* @__PURE__ */ jsx51("path", { d: "M6 6L18 18M18 6L6 18" }) }) })
           ] }),
-          /* @__PURE__ */ jsx49("div", { className: "tweakers-timeline-popover-body", children: /* @__PURE__ */ jsx49(
+          /* @__PURE__ */ jsx51("div", { className: "tweakers-timeline-popover-body", children: /* @__PURE__ */ jsx51(
             ControlRenderer,
             {
               panelId,
@@ -15173,10 +15915,10 @@ function TimelineClip({
   onClick,
   onDrag
 }) {
-  const dragRef = useRef35(null);
-  const [dragging, setDragging] = useState29(false);
+  const dragRef = useRef37(null);
+  const [dragging, setDragging] = useState31(false);
   const isSteps = Boolean(steps?.length);
-  const handlePointerDown = useCallback22(
+  const handlePointerDown = useCallback24(
     (e) => {
       if (e.shiftKey) return;
       e.stopPropagation();
@@ -15205,7 +15947,7 @@ function TimelineClip({
     },
     [at, duration, fixedDuration, steps]
   );
-  const handlePointerMove = useCallback22(
+  const handlePointerMove = useCallback24(
     (e) => {
       const drag = dragRef.current;
       if (!drag || pxPerSecond <= 0) return;
@@ -15259,7 +16001,7 @@ function TimelineClip({
     },
     [baseAt, clip.key, delayMode, onDrag, pxPerSecond, steps, timelineId, timelineDuration]
   );
-  const handlePointerUp = useCallback22(
+  const handlePointerUp = useCallback24(
     (e) => {
       const drag = dragRef.current;
       dragRef.current = null;
@@ -15272,7 +16014,7 @@ function TimelineClip({
     },
     [clip, onClick]
   );
-  const handlePointerCancel = useCallback22(() => {
+  const handlePointerCancel = useCallback24(() => {
     dragRef.current = null;
     setDragging(false);
   }, []);
@@ -15304,10 +16046,10 @@ function TimelineClip({
     }
   }
   const barTitle = composite ? `${clip.label} \u2014 composite of its property tracks${looping ? " \xB7 repeats through timeline" : ""} \xB7 click to expand` : `${clip.label} \u2014 ${formatSeconds(at)} for ${durationText}${fixedDuration ? " (duration set by spring physics)" : ""}${looping ? " \xB7 repeats through timeline" : ""}${delayMode ? " \xB7 drag to phase-shift" : ""}`;
-  return /* @__PURE__ */ jsxs44(Fragment12, { children: [
+  return /* @__PURE__ */ jsxs46(Fragment12, { children: [
     ghostCycles.map((cycle) => {
       const ghostWidth = Math.max(1, cycle.duration * pxPerSecond - 2);
-      return /* @__PURE__ */ jsx49(
+      return /* @__PURE__ */ jsx51(
         "div",
         {
           className: "tweakers-timeline-clip-ghost",
@@ -15318,7 +16060,7 @@ function TimelineClip({
             width: ghostWidth,
             background: clip.color
           },
-          children: steps?.map((step, stepIndex) => /* @__PURE__ */ jsx49(
+          children: steps?.map((step, stepIndex) => /* @__PURE__ */ jsx51(
             "span",
             {
               className: "tweakers-timeline-clip-ghost-segment",
@@ -15330,7 +16072,7 @@ function TimelineClip({
         `ghost:${cycle.index}`
       );
     }),
-    /* @__PURE__ */ jsx49(
+    /* @__PURE__ */ jsx51(
       "div",
       {
         className: "tweakers-timeline-clip",
@@ -15349,23 +16091,23 @@ function TimelineClip({
         onPointerCancel: handlePointerCancel,
         onLostPointerCapture: handlePointerCancel,
         title: barTitle,
-        children: composite ? /* @__PURE__ */ jsx49(Fragment12, { children: width > 56 && /* @__PURE__ */ jsx49("span", { className: "tweakers-timeline-clip-duration", children: durationText }) }) : isSteps ? /* @__PURE__ */ jsxs44(Fragment12, { children: [
+        children: composite ? /* @__PURE__ */ jsx51(Fragment12, { children: width > 56 && /* @__PURE__ */ jsx51("span", { className: "tweakers-timeline-clip-duration", children: durationText }) }) : isSteps ? /* @__PURE__ */ jsxs46(Fragment12, { children: [
           steps.map((step) => {
             const segmentWidth = step.duration * pxPerSecond;
-            return /* @__PURE__ */ jsx49(
+            return /* @__PURE__ */ jsx51(
               "div",
               {
                 className: "tweakers-timeline-clip-segment",
                 "data-step": step.key ?? void 0,
                 "data-selected": selectedStepKey === step.key || void 0,
                 style: { width: segmentWidth },
-                children: segmentWidth > 52 && /* @__PURE__ */ jsx49("span", { className: "tweakers-timeline-clip-duration", children: formatSeconds(step.duration) })
+                children: segmentWidth > 52 && /* @__PURE__ */ jsx51("span", { className: "tweakers-timeline-clip-duration", children: formatSeconds(step.duration) })
               },
               step.key ?? "step"
             );
           }),
           steps.map(
-            (step, index) => step.isPhysics ? null : /* @__PURE__ */ jsx49(
+            (step, index) => step.isPhysics ? null : /* @__PURE__ */ jsx51(
               "div",
               {
                 className: "tweakers-timeline-clip-handle",
@@ -15375,34 +16117,34 @@ function TimelineClip({
               `boundary:${step.key}`
             )
           ),
-          !steps[0].isPhysics && /* @__PURE__ */ jsx49("div", { className: "tweakers-timeline-clip-handle", "data-edge": "start" })
-        ] }) : /* @__PURE__ */ jsxs44(Fragment12, { children: [
-          resizable && /* @__PURE__ */ jsx49("div", { className: "tweakers-timeline-clip-handle", "data-edge": "start" }),
-          width > 56 && /* @__PURE__ */ jsx49("span", { className: "tweakers-timeline-clip-duration", children: durationText }),
-          resizable && /* @__PURE__ */ jsx49("div", { className: "tweakers-timeline-clip-handle", "data-edge": "end" })
+          !steps[0].isPhysics && /* @__PURE__ */ jsx51("div", { className: "tweakers-timeline-clip-handle", "data-edge": "start" })
+        ] }) : /* @__PURE__ */ jsxs46(Fragment12, { children: [
+          resizable && /* @__PURE__ */ jsx51("div", { className: "tweakers-timeline-clip-handle", "data-edge": "start" }),
+          width > 56 && /* @__PURE__ */ jsx51("span", { className: "tweakers-timeline-clip-duration", children: durationText }),
+          resizable && /* @__PURE__ */ jsx51("div", { className: "tweakers-timeline-clip-handle", "data-edge": "end" })
         ] })
       }
     ),
-    looping && /* @__PURE__ */ jsx49("span", { className: "tweakers-timeline-loop-infinity", "aria-hidden": "true", title: "Repeats indefinitely", children: "\u221E" })
+    looping && /* @__PURE__ */ jsx51("span", { className: "tweakers-timeline-loop-infinity", "aria-hidden": "true", title: "Repeats indefinitely", children: "\u221E" })
   ] });
 }
 
 // src/components/Module.tsx
-import { jsx as jsx50, jsxs as jsxs45 } from "react/jsx-runtime";
+import { jsx as jsx52, jsxs as jsxs47 } from "react/jsx-runtime";
 function Module({ title, enabled, onEnabledChange, children }) {
-  return /* @__PURE__ */ jsxs45("div", { className: "tweakers-module", children: [
-    /* @__PURE__ */ jsxs45("div", { className: "tweakers-module-header", children: [
-      /* @__PURE__ */ jsx50(Checkbox, { checked: enabled, onChange: onEnabledChange, label: title }),
-      /* @__PURE__ */ jsx50("span", { className: "tweakers-module-title", children: title })
+  return /* @__PURE__ */ jsxs47("div", { className: "tweakers-module", children: [
+    /* @__PURE__ */ jsxs47("div", { className: "tweakers-module-header", children: [
+      /* @__PURE__ */ jsx52(Checkbox, { checked: enabled, onChange: onEnabledChange, label: title }),
+      /* @__PURE__ */ jsx52("span", { className: "tweakers-module-title", children: title })
     ] }),
-    /* @__PURE__ */ jsx50("div", { className: "tweakers-module-collapse", "data-open": enabled, children: /* @__PURE__ */ jsx50("div", { className: "tweakers-module-collapse-clip", children: /* @__PURE__ */ jsx50("div", { className: "tweakers-module-inner", children }) }) })
+    /* @__PURE__ */ jsx52("div", { className: "tweakers-module-collapse", "data-open": enabled, children: /* @__PURE__ */ jsx52("div", { className: "tweakers-module-collapse-clip", children: /* @__PURE__ */ jsx52("div", { className: "tweakers-module-inner", children }) }) })
   ] });
 }
 
 // src/components/ButtonGroup.tsx
-import { jsx as jsx51 } from "react/jsx-runtime";
+import { jsx as jsx53 } from "react/jsx-runtime";
 function ButtonGroup({ buttons }) {
-  return /* @__PURE__ */ jsx51("div", { className: "tweakers-button-group", children: buttons.map((button, index) => /* @__PURE__ */ jsx51(
+  return /* @__PURE__ */ jsx53("div", { className: "tweakers-button-group", children: buttons.map((button, index) => /* @__PURE__ */ jsx53(
     "button",
     {
       className: "tweakers-button",
@@ -15414,10 +16156,10 @@ function ButtonGroup({ buttons }) {
 }
 
 // src/components/ShortcutsMenu.tsx
-import { useState as useState30, useRef as useRef36, useEffect as useEffect29, useCallback as useCallback23 } from "react";
+import { useState as useState32, useRef as useRef38, useEffect as useEffect31, useCallback as useCallback25 } from "react";
 import { createPortal as createPortal11 } from "react-dom";
 import { motion as motion13, AnimatePresence as AnimatePresence9 } from "motion/react";
-import { Fragment as Fragment13, jsx as jsx52, jsxs as jsxs46 } from "react/jsx-runtime";
+import { Fragment as Fragment13, jsx as jsx54, jsxs as jsxs48 } from "react/jsx-runtime";
 function formatShortcutKey(sc) {
   if (!sc.key) return "\u2014";
   const mod = sc.modifier === "alt" ? "\u2325" : sc.modifier === "shift" ? "\u21E7" : sc.modifier === "meta" ? "\u2318" : "";
@@ -15437,23 +16179,23 @@ function formatInteraction(sc) {
   }
 }
 function ShortcutsMenu({ panelId }) {
-  const [isOpen, setIsOpen] = useState30(false);
-  const triggerRef = useRef36(null);
-  const dropdownRef = useRef36(null);
-  const [pos, setPos] = useState30({ top: 0, right: 0 });
-  const open = useCallback23(() => {
+  const [isOpen, setIsOpen] = useState32(false);
+  const triggerRef = useRef38(null);
+  const dropdownRef = useRef38(null);
+  const [pos, setPos] = useState32({ top: 0, right: 0 });
+  const open = useCallback25(() => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
       setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
     }
     setIsOpen(true);
   }, []);
-  const close = useCallback23(() => setIsOpen(false), []);
-  const toggle2 = useCallback23(() => {
+  const close = useCallback25(() => setIsOpen(false), []);
+  const toggle2 = useCallback25(() => {
     if (isOpen) close();
     else open();
   }, [isOpen, open, close]);
-  useEffect29(() => {
+  useEffect31(() => {
     if (!isOpen) return;
     const handler = (e) => {
       const target = e.target;
@@ -15484,8 +16226,8 @@ function ShortcutsMenu({ panelId }) {
       label: findLabel(panel.controls)
     };
   });
-  return /* @__PURE__ */ jsxs46(Fragment13, { children: [
-    /* @__PURE__ */ jsx52(
+  return /* @__PURE__ */ jsxs48(Fragment13, { children: [
+    /* @__PURE__ */ jsx54(
       motion13.button,
       {
         ref: triggerRef,
@@ -15494,18 +16236,18 @@ function ShortcutsMenu({ panelId }) {
         title: "Keyboard shortcuts",
         whileTap: { scale: 0.9 },
         transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-        children: /* @__PURE__ */ jsxs46("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
-          /* @__PURE__ */ jsx52("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
-          /* @__PURE__ */ jsx52("path", { d: "M6 10H6.01" }),
-          /* @__PURE__ */ jsx52("path", { d: "M10 10H10.01" }),
-          /* @__PURE__ */ jsx52("path", { d: "M14 10H14.01" }),
-          /* @__PURE__ */ jsx52("path", { d: "M18 10H18.01" }),
-          /* @__PURE__ */ jsx52("path", { d: "M8 14H16" })
+        children: /* @__PURE__ */ jsxs48("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
+          /* @__PURE__ */ jsx54("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
+          /* @__PURE__ */ jsx54("path", { d: "M6 10H6.01" }),
+          /* @__PURE__ */ jsx54("path", { d: "M10 10H10.01" }),
+          /* @__PURE__ */ jsx54("path", { d: "M14 10H14.01" }),
+          /* @__PURE__ */ jsx54("path", { d: "M18 10H18.01" }),
+          /* @__PURE__ */ jsx54("path", { d: "M8 14H16" })
         ] })
       }
     ),
     createPortal11(
-      /* @__PURE__ */ jsx52(AnimatePresence9, { children: isOpen && /* @__PURE__ */ jsxs46(
+      /* @__PURE__ */ jsx54(AnimatePresence9, { children: isOpen && /* @__PURE__ */ jsxs48(
         PresenceMotionDiv,
         {
           divRef: dropdownRef,
@@ -15516,13 +16258,13 @@ function ShortcutsMenu({ panelId }) {
           exit: { opacity: 0, y: 4, scale: 0.97, pointerEvents: "none" },
           transition: { type: "spring", visualDuration: 0.15, bounce: 0 },
           children: [
-            /* @__PURE__ */ jsx52("div", { className: "tweakers-shortcuts-title", children: "Keyboard Shortcuts" }),
-            /* @__PURE__ */ jsx52("div", { className: "tweakers-shortcuts-list", children: rows.map((row) => /* @__PURE__ */ jsxs46("div", { className: "tweakers-shortcuts-row", children: [
-              /* @__PURE__ */ jsx52("span", { className: "tweakers-shortcuts-row-key", children: formatShortcutKey(row.shortcut) }),
-              /* @__PURE__ */ jsx52("span", { className: "tweakers-shortcuts-row-label", children: row.label }),
-              /* @__PURE__ */ jsx52("span", { className: "tweakers-shortcuts-row-mode", children: formatInteraction(row.shortcut) })
+            /* @__PURE__ */ jsx54("div", { className: "tweakers-shortcuts-title", children: "Keyboard Shortcuts" }),
+            /* @__PURE__ */ jsx54("div", { className: "tweakers-shortcuts-list", children: rows.map((row) => /* @__PURE__ */ jsxs48("div", { className: "tweakers-shortcuts-row", children: [
+              /* @__PURE__ */ jsx54("span", { className: "tweakers-shortcuts-row-key", children: formatShortcutKey(row.shortcut) }),
+              /* @__PURE__ */ jsx54("span", { className: "tweakers-shortcuts-row-label", children: row.label }),
+              /* @__PURE__ */ jsx54("span", { className: "tweakers-shortcuts-row-mode", children: formatInteraction(row.shortcut) })
             ] }, row.path)) }),
-            /* @__PURE__ */ jsx52("div", { className: "tweakers-shortcuts-hint", children: "See pill badges on controls for keys" })
+            /* @__PURE__ */ jsx54("div", { className: "tweakers-shortcuts-hint", children: "See pill badges on controls for keys" })
           ]
         }
       ) }),
@@ -15532,8 +16274,8 @@ function ShortcutsMenu({ panelId }) {
 }
 
 // src/components/AudioLevelMeter.tsx
-import { useEffect as useEffect30, useRef as useRef37, useState as useState31 } from "react";
-import { jsx as jsx53 } from "react/jsx-runtime";
+import { useEffect as useEffect32, useRef as useRef39, useState as useState33 } from "react";
+import { jsx as jsx55 } from "react/jsx-runtime";
 var DEFAULT_CELL_COUNT = 10;
 var MIN_CELL_COUNT = 8;
 var MAX_CELL_COUNT = 12;
@@ -15581,8 +16323,8 @@ function getCellColor(colors, indexFromBottom, cellCount) {
   return colors[colorIndex];
 }
 function usePrefersReducedMotion() {
-  const [reducedMotion, setReducedMotion] = useState31(false);
-  useEffect30(() => {
+  const [reducedMotion, setReducedMotion] = useState33(false);
+  useEffect32(() => {
     const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     const updatePreference = () => setReducedMotion(mediaQuery.matches);
     updatePreference();
@@ -15624,17 +16366,17 @@ function AudioLevelMeter(props) {
   const activeCellCounts = levels.map((level) => levelToCellCount(level, cellCount));
   const activeCellKey = activeCellCounts.join(":");
   const clippedBandKey = clippedBands.map(Number).join(":");
-  const currentTopCellsRef = useRef37(activeCellCounts.map((count) => count - 1));
-  const currentClippedBandsRef = useRef37(clippedBands);
-  const cellCountRef = useRef37(cellCount);
-  const peakStatesRef = useRef37([]);
-  const clipHoldUntilRef = useRef37(clippedBands.map(() => 0));
-  const animationFrameRef = useRef37(null);
+  const currentTopCellsRef = useRef39(activeCellCounts.map((count) => count - 1));
+  const currentClippedBandsRef = useRef39(clippedBands);
+  const cellCountRef = useRef39(cellCount);
+  const peakStatesRef = useRef39([]);
+  const clipHoldUntilRef = useRef39(clippedBands.map(() => 0));
+  const animationFrameRef = useRef39(null);
   const reducedMotion = usePrefersReducedMotion();
-  const [peakIndices, setPeakIndices] = useState31(
+  const [peakIndices, setPeakIndices] = useState33(
     () => activeCellCounts.map((count) => count - 1)
   );
-  const [heldClippedBands, setHeldClippedBands] = useState31(clippedBands.map(() => false));
+  const [heldClippedBands, setHeldClippedBands] = useState33(clippedBands.map(() => false));
   const displayedClippedBands = heldClippedBands.map(
     (isHeld, index) => isHeld || clippedBands[index]
   );
@@ -15644,7 +16386,7 @@ function AudioLevelMeter(props) {
   const colors = (props.colors ?? []).slice(0, 3).filter(
     (color) => typeof color === "string" && color.trim().length > 0
   );
-  useEffect30(() => {
+  useEffect32(() => {
     const timestamp = performance.now();
     const currentTopCells = activeCellKey.split(":").map(Number).map((count) => count - 1);
     const currentClippedBands = clippedBandKey.split(":").map((value) => value === "1");
@@ -15771,7 +16513,7 @@ function AudioLevelMeter(props) {
     };
     animationFrameRef.current = requestAnimationFrame(animatePeaks);
   }, [activeCellKey, cellCount, clippedBandKey, reducedMotion]);
-  useEffect30(
+  useEffect32(
     () => () => {
       if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
     },
@@ -15797,7 +16539,7 @@ function AudioLevelMeter(props) {
     "--tweak-meter-band-count": levels.length,
     "--tweak-meter-cell-count": cellCount
   };
-  return /* @__PURE__ */ jsx53(
+  return /* @__PURE__ */ jsx55(
     "div",
     {
       className: rootClassName,
@@ -15806,14 +16548,14 @@ function AudioLevelMeter(props) {
       "data-clipping": hasClipping || void 0,
       role: "img",
       "aria-label": accessibleSummary,
-      children: /* @__PURE__ */ jsx53("div", { className: "tweakers-audio-meter__bands", "aria-hidden": "true", children: activeCellCounts.map((activeCellCount, bandIndex) => /* @__PURE__ */ jsx53("div", { className: "tweakers-audio-meter__band", children: Array.from({ length: cellCount }, (_, visualIndex) => {
+      children: /* @__PURE__ */ jsx55("div", { className: "tweakers-audio-meter__bands", "aria-hidden": "true", children: activeCellCounts.map((activeCellCount, bandIndex) => /* @__PURE__ */ jsx55("div", { className: "tweakers-audio-meter__band", children: Array.from({ length: cellCount }, (_, visualIndex) => {
         const indexFromBottom = cellCount - visualIndex - 1;
         const isActive = indexFromBottom < activeCellCount;
         const isPeak = indexFromBottom === displayedPeakIndices[bandIndex];
         const isClipped = displayedClippedBands[bandIndex] && indexFromBottom === cellCount - 1;
         const color = getCellColor(colors, indexFromBottom, cellCount);
         const cellStyle = color ? { "--tweak-meter-cell-color": color } : void 0;
-        return /* @__PURE__ */ jsx53(
+        return /* @__PURE__ */ jsx55(
           "span",
           {
             className: "tweakers-audio-meter__cell",
@@ -15830,8 +16572,10 @@ function AudioLevelMeter(props) {
 }
 export {
   ADSR_DEF,
+  ANGLE_DEAD_ZONE_PX,
   AnalyserRow,
   AnalyserVisualization,
+  AngleDial,
   AudioLevelMeter,
   ButtonGroup,
   COLOR_FORMATS,
@@ -15855,6 +16599,7 @@ export {
   CurveComposer,
   CurvePreview,
   DEFAULT_GRADIENT,
+  DEFAULT_TRANSFER,
   DEFAULT_TRIGGER_STEPS,
   EasingVisualization,
   FILTER_DB_CEIL,
@@ -15919,9 +16664,12 @@ export {
   SpringVisualization,
   SwatchControl,
   TAB_PATH,
+  TRANSFER_MAX_POINTS,
+  TRANSFER_MIN_GAP,
   TextControl,
   TimelineStore,
   Toggle,
+  TransferCurve,
   TransitionControl,
   TweakRoot,
   TweakStore,
@@ -15933,8 +16681,11 @@ export {
   XY_DETENT_PX,
   addDriver,
   addStop,
+  angleFromPointer,
   applyDetentAxis,
   applyModulation,
+  arcPath,
+  bearingToValue,
   buildModMovePage,
   buildMovePages,
   buildSamplers,
@@ -15982,7 +16733,9 @@ export {
   hintDomId,
   hslToRgb,
   hsvToRgb,
+  insertPoint,
   invertY,
+  isIdentityTransfer,
   isOutsideSpan,
   isSpanContinuation,
   lfoSyncedHz,
@@ -15997,12 +16750,15 @@ export {
   moveNumericDrawing,
   movePadRows,
   movePlaybackMode,
+  movePoint,
   moveSlotKind,
   moveStop,
   moveVisualReading,
   defaultView as moveWaveformDefaultView,
   nearestHandle,
+  nearestPoint,
   normToValue,
+  normalizeAngle,
   normalizeCurveMarkers,
   normalizeDial,
   normalizeEnumDial,
@@ -16012,9 +16768,11 @@ export {
   normalizeHex,
   normalizeListItems,
   normalizeRangeDial,
+  normalizeTransfer,
   normalizeValue,
   normalizeXYDial,
   nudge,
+  nudgeAngle,
   oklchToRgb,
   opacityPercent,
   orderRange,
@@ -16024,10 +16782,12 @@ export {
   pickDragTarget,
   plotCurve,
   pointFromValue,
+  rampCss,
   readComposition,
   redistributeWeight,
   registerModType,
   removeDriver,
+  removePoint,
   removeSegment,
   removeStop,
   resolveAxis,
@@ -16035,6 +16795,7 @@ export {
   rgbToHsl,
   rgbToHsv,
   rgbToOklch,
+  sampleTransfer,
   scrubBy,
   setDriverAnticipate,
   setDriverCurvature,
@@ -16054,15 +16815,18 @@ export {
   setSegmentSteepness,
   setStopColor,
   shiftSpan,
+  snapAngle,
   snapToStep,
   splitSegment,
   springify,
   stepPosition,
+  transferLut,
   triggerLevels,
   triggersCrossed,
   useTweakTimeline,
   useTweakers,
   valueFromPoint,
+  valueToBearing,
   valueToNorm,
   valueToPercent,
   visibleColumns,

@@ -49,6 +49,11 @@ declare const MIN_STOPS = 2;
 declare const STOP_DETACH_PX = 24;
 declare const DEFAULT_GRADIENT: GradientValue;
 /** Ready CSS gradient string for any of the three types. #rrggbbaa is valid CSS. */
+/**
+ * The stops alone, read left to right — the ramp without the fill's geometry.
+ * What a stops strip shows, and what a Move slot draws.
+ */
+declare function rampCss(stops: GradientValue['stops']): string;
 declare function gradientToCss(value: GradientValue): string;
 /**
  * The CSS transform that rotates a radial gradient's ellipse — CSS radial
@@ -121,4 +126,4 @@ declare function setGradientSquash(value: GradientValue, squash: number): Gradie
 /** Set the radial ellipse tilt (degrees). Renders via gradientToTransform. */
 declare function setGradientRotation(value: GradientValue, rotation: number): GradientValue;
 
-export { DEFAULT_GRADIENT, type GradientFillBox, type GradientStop, type GradientTransform, type GradientType, type GradientValue, MIN_STOPS, STOP_DETACH_PX, addStop, colorAtPosition, gradientFillBox, gradientToCss, gradientToTransform, moveStop, normalizeGradient, removeStop, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setStopColor };
+export { DEFAULT_GRADIENT, type GradientFillBox, type GradientStop, type GradientTransform, type GradientType, type GradientValue, MIN_STOPS, STOP_DETACH_PX, addStop, colorAtPosition, gradientFillBox, gradientToCss, gradientToTransform, moveStop, normalizeGradient, rampCss, removeStop, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setStopColor };
