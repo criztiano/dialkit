@@ -1,5 +1,5 @@
-import { useTweakTimeline, TweakTimeline } from 'tweakers';
-import type { UseTweakTimelineOptions } from 'tweakers';
+import { useTweakTimeline, TweakTimeline } from 'dialkit';
+import type { UseTweakTimelineOptions } from 'dialkit';
 
 // Stable options identity (the hook keys effects off options), plus a stable
 // `id` and `persist` so the timing edits and any loop region survive a reload.

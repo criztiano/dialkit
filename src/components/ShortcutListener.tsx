@@ -1,5 +1,5 @@
 import { createContext, useEffect, useRef, useState, useCallback } from 'react';
-import { TweakStore } from '../store/TweakStore';
+import { TweakStore } from 'tweakers/store';
 import {
   getEffectiveStep,
   applySliderDelta,
@@ -7,7 +7,7 @@ import {
   getActiveModifier,
   findControl,
   DRAG_SENSITIVITY,
-} from '../shortcut-utils';
+} from 'tweakers/shortcut-utils';
 
 export const ShortcutContext = createContext<{
   activePanelId: string | null;

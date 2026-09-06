@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { createWaveformEngine, WAVEFORM_MAX_ZOOM } from '../../waveform-engine';
-  import type { WaveformRuntime, WaveformMode, WaveformLoop } from '../../waveform-engine';
+  import { createWaveformEngine, WAVEFORM_MAX_ZOOM } from 'tweakers/waveform-engine';
+  import type { WaveformRuntime, WaveformMode, WaveformLoop } from 'tweakers/waveform-engine';
 
   let {
     buffer = null,

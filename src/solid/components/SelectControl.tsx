@@ -1,7 +1,7 @@
 import { createSignal, createEffect, onMount, onCleanup, Show, For } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { animate } from 'motion';
-import { ICON_CHEVRON } from '../../icons';
+import { ICON_CHEVRON } from 'tweakers/icons';
 
 type SelectOption = string | { value: string; label: string };
 

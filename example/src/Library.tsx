@@ -25,14 +25,14 @@ import {
   gradientToCss,
   gradientFillBox,
   DEFAULT_GRADIENT,
-} from 'tweakers';
-import type { SpringConfig, TransitionConfig, EasingConfig, GalleryItem, GradientValue, RangeValue } from 'tweakers';
+} from 'dialkit';
+import type { SpringConfig, TransitionConfig, EasingConfig, GalleryItem, GradientValue, RangeValue } from 'dialkit';
 import { WaveformShowcase } from './WaveformShowcase';
 import { AnalyserShowcase } from './AnalyserShowcase';
 import { CurveComposerShowcase } from './CurveComposerShowcase';
 import { XYPadShowcase } from './XYPadShowcase';
 import { TimelineShowcase } from './TimelineShowcase';
-import 'tweakers/styles.css';
+import 'dialkit/styles.css';
 
 type Theme = 'dark' | 'light';
 

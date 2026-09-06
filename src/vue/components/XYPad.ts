@@ -1,6 +1,6 @@
 import { computed, defineComponent, h, ref, type PropType } from 'vue';
-import type { ShortcutConfig, XYAxis } from '../../store/TweakStore';
-import { formatSliderShortcut } from '../../shortcut-utils';
+import type { ShortcutConfig, XYAxis } from 'tweakers/store';
+import { formatSliderShortcut } from 'tweakers/shortcut-utils';
 import {
   resolveAxis,
   valueFromPoint,
@@ -11,7 +11,7 @@ import {
   normalizeValue,
   type XYValue,
   type AxisSpec,
-} from '../../xy-pad-core';
+} from 'tweakers/xy-pad-core';
 
 /** Default grid subdivisions when `grid` is left default/true: 5 columns × 5 rows. */
 const DEFAULT_GRID_X = 5;

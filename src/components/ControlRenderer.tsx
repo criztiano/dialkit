@@ -1,8 +1,8 @@
 import { useContext } from 'react';
-import { TweakStore, hintDomId, ControlMeta, TweakValue, SpringConfig, TransitionConfig, ListItemValue, XYValue } from '../store/TweakStore';
-import type { FilterValue } from '../filter-core';
-import type { RangeValue, TransferValue } from '../store/TweakStore';
-import type { GradientValue } from '../gradient-core';
+import { TweakStore, hintDomId, ControlMeta, TweakValue, SpringConfig, TransitionConfig, ListItemValue, XYValue } from 'tweakers/store';
+import type { FilterValue } from 'tweakers/filter-core';
+import type { RangeValue, TransferValue } from 'tweakers/store';
+import type { GradientValue } from 'tweakers/gradient-core';
 import { ShortcutContext } from './ShortcutListener';
 import { Folder } from './Folder';
 import { ModuleFolder } from './ModuleFolder';

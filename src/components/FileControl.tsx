@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { ICON_CLOSE, ICON_FILE } from '../icons';
+import { ICON_CLOSE, ICON_FILE } from 'tweakers/icons';
 
 interface FileControlProps {
   label: string;

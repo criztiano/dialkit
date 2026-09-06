@@ -1,6 +1,6 @@
 import { For } from 'solid-js';
-import { ICON_TIMELINE } from '../../../icons';
-import { TimelineUiStore } from '../../../store/TimelineUiStore';
+import { ICON_TIMELINE } from 'tweakers/icons';
+import { TimelineUiStore } from 'tweakers/timeline';
 import { fromStore } from '../../primitives';
 
 export function TimelineToggleButton() {

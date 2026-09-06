@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { XYPad, SegmentedControl } from 'tweakers';
-import type { XYValue } from 'tweakers';
+import { XYPad, SegmentedControl } from 'dialkit';
+import type { XYValue } from 'dialkit';
 
 type DemoId = 'hold' | 'bipolar' | 'joystick' | 'grid' | 'range' | 'disabled';
 

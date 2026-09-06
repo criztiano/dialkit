@@ -1,8 +1,8 @@
 import { defineComponent, h, ref, onMounted, onBeforeUnmount, type PropType } from 'vue';
-import { createWaveformEngine, WAVEFORM_MAX_ZOOM } from '../../waveform-engine';
-import type { WaveformRuntime, WaveformMode, WaveformLoop, WaveformEngine } from '../../waveform-engine';
+import { createWaveformEngine, WAVEFORM_MAX_ZOOM } from 'tweakers/waveform-engine';
+import type { WaveformRuntime, WaveformMode, WaveformLoop, WaveformEngine } from 'tweakers/waveform-engine';
 
-export type { WaveformMode, WaveformLoop } from '../../waveform-engine';
+export type { WaveformMode, WaveformLoop } from 'tweakers/waveform-engine';
 
 export const WaveformVisualization = defineComponent({
   name: 'TweakersWaveformVisualization',

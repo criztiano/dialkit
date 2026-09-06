@@ -1,6 +1,6 @@
 import { defineComponent, h, type PropType } from 'vue';
 import { XYPad } from './XYPad';
-import type { ShortcutConfig, XYAxis, XYValue } from '../../store/TweakStore';
+import type { ShortcutConfig, XYAxis, XYValue } from 'tweakers/store';
 
 /**
  * Config wrapper for the XY pad — the `{ type: 'xy' }` case. Reads the resolved

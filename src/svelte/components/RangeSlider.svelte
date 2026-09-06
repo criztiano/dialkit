@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { Spring } from 'svelte/motion';
-  import type { RangeValue } from '../../store/TweakStore';
+  import type { RangeValue } from 'tweakers/store';
   import {
     clampRange,
     setLow,
@@ -11,8 +11,8 @@
     pickDragTarget,
     isOutsideSpan,
     handleLeftStyles,
-  } from '../../range-slider-core';
-  import { decimalsForStep, roundValue } from '../../shortcut-utils';
+  } from 'tweakers/range-slider-core';
+  import { decimalsForStep, roundValue } from 'tweakers/shortcut-utils';
 
   let {
     label,

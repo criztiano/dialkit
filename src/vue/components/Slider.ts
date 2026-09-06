@@ -1,7 +1,7 @@
 import { defineComponent, h, computed, nextTick, onMounted, onUnmounted, ref, watch, type PropType } from 'vue';
 import { animate, motionValue } from 'motion-v';
-import type { ShortcutConfig } from '../../store/TweakStore';
-import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut } from '../../shortcut-utils';
+import type { ShortcutConfig } from 'tweakers/store';
+import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut } from 'tweakers/shortcut-utils';
 
 const CLICK_THRESHOLD = 3;
 const DEAD_ZONE = 32;

@@ -1,8 +1,8 @@
 import { createEffect, createMemo, createSignal, createUniqueId, onCleanup, onMount, type Accessor } from 'solid-js';
 import { isServer } from 'solid-js/web';
-import { TweakStore } from '../store/TweakStore';
-import { TimelineStore } from '../store/TimelineStore';
-import type { TimelineLoopRegion } from '../store/TimelineStore';
+import { TweakStore } from 'tweakers/store';
+import { TimelineStore } from 'tweakers/timeline';
+import type { TimelineLoopRegion } from 'tweakers/timeline';
 import {
   buildTimelineMeta,
   buildTimelineValues,
@@ -11,7 +11,7 @@ import {
   type TweakTimelineOptions,
   type TweakTimelineValues,
   type TimelineConfig,
-} from '../timeline';
+} from 'tweakers/timeline';
 
 export type CreateTweakTimelineOptions = TweakTimelineOptions;
 

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
-import { MovePanel, TweakRoot, TweakStore, useTweakers } from 'tweakers';
-import type { TweakConfig } from 'tweakers';
+import { TweakRoot, TweakStore, useTweakers } from 'dialkit';
+import { MovePanel } from 'tweakers';
+import type { TweakConfig } from 'dialkit';
 
 const PANEL = 'Specialized';
 const CONFIG = {

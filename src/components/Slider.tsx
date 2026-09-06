@@ -1,8 +1,8 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { motion, useMotionValue, useTransform, animate } from 'motion/react';
-import type { ShortcutConfig } from '../store/TweakStore';
-import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut, fineDragValue } from '../shortcut-utils';
+import type { ShortcutConfig } from 'tweakers/store';
+import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut, fineDragValue } from 'tweakers/shortcut-utils';
 
 interface SliderProps {
   label: string;

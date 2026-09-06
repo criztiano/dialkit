@@ -2,7 +2,7 @@
   import Portal from '../Portal.svelte';
   import { dropdownTransition } from './transitions';
   import ColorPickerPanel from './ColorPickerPanel.svelte';
-  import { parseHex, normalizeHexEdit, bareHex, opacityPercent } from '../../color-core';
+  import { parseHex, normalizeHexEdit, bareHex, opacityPercent } from 'tweakers/color-core';
 
   let { label, value, onChange, alpha = false, palette = false } = $props<{
     label: string;

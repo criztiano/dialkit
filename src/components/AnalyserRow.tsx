@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { TweakStore, ControlMeta } from '../store/TweakStore';
-import { clampCurveHeight } from '../curve-preview-core';
+import { TweakStore, ControlMeta } from 'tweakers/store';
+import { clampCurveHeight } from 'tweakers/curve-preview-core';
 import { AnalyserVisualization } from './AnalyserVisualization';
 
 interface AnalyserRowProps {

@@ -1,7 +1,7 @@
 import { Teleport, defineComponent, h, ref, watch, type PropType } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
-import { ICON_CHEVRON, ICON_TRASH } from '../../icons';
-import { TweakStore } from '../../store/TweakStore';
+import { ICON_CHEVRON, ICON_TRASH } from 'tweakers/icons';
+import { TweakStore } from 'tweakers/store';
 
 // Structural on purpose: stock Preset[] and provider-derived PresetItem[]
 // both fit. `deletable` defaults to true so stock callers stay unchanged.

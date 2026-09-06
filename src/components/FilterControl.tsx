@@ -1,7 +1,7 @@
 import { Slider } from './Slider';
-import type { ControlMeta } from '../store/TweakStore';
-import { filterShapePath } from '../move-layout';
-import { resolveFilterAxis, normalizeFilterValue, type FilterValue } from '../filter-core';
+import type { ControlMeta } from 'tweakers/store';
+import { filterShapePath } from 'tweakers/move-layout';
+import { resolveFilterAxis, normalizeFilterValue, type FilterValue } from 'tweakers/filter-core';
 
 interface FilterControlProps {
   control: ControlMeta;

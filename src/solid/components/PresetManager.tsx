@@ -1,8 +1,8 @@
 import { createSignal, createEffect, onMount, onCleanup, Show, For } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { animate } from 'motion';
-import { ICON_CHEVRON, ICON_TRASH } from '../../icons';
-import { TweakStore } from '../../store/TweakStore';
+import { ICON_CHEVRON, ICON_TRASH } from 'tweakers/icons';
+import { TweakStore } from 'tweakers/store';
 
 interface PresetManagerProps {
   panelId: string;

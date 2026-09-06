@@ -26,14 +26,14 @@
     DEFAULT_TRIGGER_STEPS,
     DRAG_THRESHOLD,
     EDGE_HIT,
-  } from '../../curve-composer-core';
+  } from 'tweakers/curve-composer-core';
   import type {
     CurveSegment,
     CurveDriver,
     CurveComposition,
     DriverDirection,
     Rect,
-  } from '../../curve-composer-core';
+  } from 'tweakers/curve-composer-core';
 
   let {
     segments,

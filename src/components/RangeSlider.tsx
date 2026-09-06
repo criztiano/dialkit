@@ -10,8 +10,8 @@ import {
   isOutsideSpan,
   handleLeftStyles,
   type RangeValue,
-} from '../range-slider-core';
-import { decimalsForStep, roundValue, fineDragValue } from '../shortcut-utils';
+} from 'tweakers/range-slider-core';
+import { decimalsForStep, roundValue, fineDragValue } from 'tweakers/shortcut-utils';
 
 export type { RangeValue };
 

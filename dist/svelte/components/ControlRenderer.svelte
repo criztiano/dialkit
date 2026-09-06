@@ -2,7 +2,7 @@
   import { getContext } from 'svelte';
   import { TweakStore, hintDomId } from 'tweakers/store';
   import type { ControlMeta, TweakValue, SpringConfig, TransitionConfig, ListItemValue, XYValue, RangeValue } from 'tweakers/store';
-  import type { GradientValue } from '../../gradient-core';
+  import type { GradientValue } from 'tweakers/gradient-core';
   import Slider from './Slider.svelte';
   import NumberControl from './NumberControl.svelte';
   import RangeSlider from './RangeSlider.svelte';

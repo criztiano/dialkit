@@ -1,4 +1,4 @@
-import type { RangeValue } from '../../store/TweakStore';
+import type { RangeValue } from 'tweakers/store';
 type $$ComponentProps = {
     label: string;
     value: RangeValue;

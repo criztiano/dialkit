@@ -4,7 +4,7 @@ import type { ReactTestRenderer, ReactTestInstance } from 'react-test-renderer';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { ControlRenderer } from './components/ControlRenderer';
-import { TweakStore } from './store/TweakStore';
+import { TweakStore } from 'tweakers/store';
 
 // Folder measures window height and Slider binds pointer handlers; node:test has
 // no DOM.

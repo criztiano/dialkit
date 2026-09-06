@@ -1,7 +1,7 @@
 import { defineComponent, h, type PropType } from 'vue';
 import { Checkbox } from './Checkbox';
-import type { ShortcutConfig } from '../../store/TweakStore';
-import { formatToggleShortcut } from '../../shortcut-utils';
+import type { ShortcutConfig } from 'tweakers/store';
+import { formatToggleShortcut } from 'tweakers/shortcut-utils';
 
 export const Toggle = defineComponent({
   name: 'TweakersToggle',

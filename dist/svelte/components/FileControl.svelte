@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ICON_CLOSE, ICON_FILE } from '../../icons';
+  import { ICON_CLOSE, ICON_FILE } from 'tweakers/icons';
 
   let { label, value, accept, multiple = false, onChange, onPick } = $props<{
     label: string;

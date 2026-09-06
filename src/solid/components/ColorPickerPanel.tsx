@@ -18,8 +18,8 @@ import {
   type HSVA,
   type ChannelSpec,
   type PaletteSlots,
-} from '../../color-core';
-import { loadPalette, savePalette, subscribePalette } from '../../color-palette-store';
+} from 'tweakers/color-core';
+import { loadPalette, savePalette, subscribePalette } from 'tweakers/color-palette-store';
 
 interface ColorPickerPanelProps {
   value: string;

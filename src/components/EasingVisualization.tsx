@@ -1,4 +1,4 @@
-import { EasingConfig } from '../store/TweakStore';
+import { EasingConfig } from 'tweakers/store';
 
 interface EasingVisualizationProps {
   easing: EasingConfig;

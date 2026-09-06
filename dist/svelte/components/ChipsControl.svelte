@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ICON_CLOSE } from '../../icons';
+  import { ICON_CLOSE } from 'tweakers/icons';
   import type { ChipOption } from 'tweakers/store';
 
   let { label, value, options, onChange, onRemove } = $props<{

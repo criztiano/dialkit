@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { TweakStore, PanelConfig } from '../store/TweakStore';
-import { TimelineStore } from '../store/TimelineStore';
-import { isDevDefault } from '../env';
+import { TweakStore, PanelConfig } from 'tweakers/store';
+import { TimelineStore } from 'tweakers/timeline';
+import { isDevDefault } from 'tweakers/env';
 import { Folder } from './Folder';
 import { Panel } from './Panel';
 import { ShortcutListener } from './ShortcutListener';

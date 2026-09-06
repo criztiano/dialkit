@@ -2,8 +2,8 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { PresenceMotionDiv } from './PresenceMotionDiv';
-import { TweakStore } from '../store/TweakStore';
-import { ICON_CHEVRON, ICON_TRASH, ICON_PENCIL } from '../icons';
+import { TweakStore } from 'tweakers/store';
+import { ICON_CHEVRON, ICON_TRASH, ICON_PENCIL } from 'tweakers/icons';
 
 interface PresetManagerProps {
   panelId: string;

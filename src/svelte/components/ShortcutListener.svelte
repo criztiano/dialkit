@@ -18,7 +18,7 @@
     DRAG_SENSITIVITY,
     isInputFocused,
     getActiveModifier,
-  } from '../../shortcut-utils';
+  } from 'tweakers/shortcut-utils';
 
   let { children } = $props<{ children?: Snippet }>();
 

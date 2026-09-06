@@ -1,6 +1,6 @@
 import { useCallback, useSyncExternalStore } from 'react';
-import { TweakStore, ControlMeta } from '../store/TweakStore';
-import { plotCurve, curvePathData, curveY, clampCurveHeight, normalizeCurveMarkers } from '../curve-preview-core';
+import { TweakStore, ControlMeta } from 'tweakers/store';
+import { plotCurve, curvePathData, curveY, clampCurveHeight, normalizeCurveMarkers } from 'tweakers/curve-preview-core';
 
 interface CurvePreviewProps {
   panelId: string;

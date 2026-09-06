@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { decimalsForStep, roundValue } from '../../shortcut-utils';
+  import { decimalsForStep, roundValue } from 'tweakers/shortcut-utils';
 
   /**
    * Numeric readout card. Drag anywhere on the card to scrub the value

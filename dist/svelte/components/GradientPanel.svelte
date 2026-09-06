@@ -3,7 +3,7 @@
   import SegmentedControl from './SegmentedControl.svelte';
   import ColorPickerPanel from './ColorPickerPanel.svelte';
   import GradientTransformPad from './GradientTransformPad.svelte';
-  import { ICON_GRIP } from '../../icons';
+  import { ICON_GRIP } from 'tweakers/icons';
   import {
     gradientToCss,
     addStop,
@@ -17,7 +17,7 @@
     PALETTE_DRAG_CANCEL_PX,
     type GradientValue,
     type GradientType,
-  } from '../../gradient-core';
+  } from 'tweakers/gradient-core';
 
   let { value, onChange, onDrag } = $props<{
     value: GradientValue;

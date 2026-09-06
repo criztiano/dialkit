@@ -2,11 +2,11 @@ import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyn
 import type { CSSProperties, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { TweakStore, formatLabel } from '../../store/TweakStore';
-import type { ControlMeta, TweakValue } from '../../store/TweakStore';
-import { TimelineStore } from '../../store/TimelineStore';
-import type { TimelineClipMeta, TimelineLoopRegion, TimelineMeta } from '../../store/TimelineStore';
-import { TimelineUiStore } from '../../store/TimelineUiStore';
+import { TweakStore, formatLabel } from 'tweakers/store';
+import type { ControlMeta, TweakValue } from 'tweakers/store';
+import { TimelineStore } from 'tweakers/timeline';
+import type { TimelineClipMeta, TimelineLoopRegion, TimelineMeta } from 'tweakers/timeline';
+import { TimelineUiStore } from 'tweakers/timeline';
 import {
   clampClipMove,
   clampClipResizeEnd,
@@ -20,13 +20,13 @@ import {
   normalizeTimelineValuesForCopy,
   TIMELINE_MIN_CLIP_DURATION,
   timelinePopoverDisplayValues,
-} from '../../timeline-core';
-import type { TimelineClipLoop, TimelineStepStatic } from '../../timeline-core';
-import { clamp } from '../../transition-math';
-import { buildCopyInstruction } from '../../copy-instruction';
-import { isDevDefault } from '../../env';
-import { ICON_ADD_PRESET, ICON_CHEVRON, ICON_CHECK, ICON_CLIPBOARD, ICON_LOOP, ICON_PAUSE, ICON_PLAY, ICON_REPLAY } from '../../icons';
-import { findControl } from '../../shortcut-utils';
+} from 'tweakers/timeline';
+import type { TimelineClipLoop, TimelineStepStatic } from 'tweakers/timeline';
+import { clamp } from 'tweakers/transition-math';
+import { buildCopyInstruction } from 'tweakers/copy-instruction';
+import { isDevDefault } from 'tweakers/env';
+import { ICON_ADD_PRESET, ICON_CHEVRON, ICON_CHECK, ICON_CLIPBOARD, ICON_LOOP, ICON_PAUSE, ICON_PLAY, ICON_REPLAY } from 'tweakers/icons';
+import { findControl } from 'tweakers/shortcut-utils';
 import { ControlRenderer } from '../ControlRenderer';
 import { PresetManager } from '../PresetManager';
 import type { TweakTheme } from '../TweakRoot';

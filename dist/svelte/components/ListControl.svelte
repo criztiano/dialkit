@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ICON_GRIP, ICON_PLUS, ICON_TRASH } from '../../icons';
+  import { ICON_GRIP, ICON_PLUS, ICON_TRASH } from 'tweakers/icons';
   import { parseListItemSchema, groupListFields, defaultListItemParams, hintDomId } from 'tweakers/store';
   import type { ListItemValue, ListItemType, ListField, TweakEvent } from 'tweakers/store';
   import Folder from './Folder.svelte';

@@ -1,5 +1,5 @@
 import { TweakStore, normalizeListItems } from 'tweakers/store';
-import { normalizeGradient, DEFAULT_GRADIENT } from '../gradient-core';
+import { normalizeGradient, DEFAULT_GRADIENT } from 'tweakers/gradient-core';
 let tweakKitInstance = 0;
 export function createTweakers(name, config, options) {
     const hasStableId = options?.id !== undefined;

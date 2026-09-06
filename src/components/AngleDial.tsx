@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import {
   ANGLE_DEAD_ZONE_PX, angleFromPointer, arcPath, nudgeAngle, snapAngle, valueToBearing,
-} from '../angle-core';
+} from 'tweakers/angle-core';
 
 interface AngleDialProps {
   label: string;

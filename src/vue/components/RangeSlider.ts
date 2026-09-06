@@ -9,9 +9,9 @@ import {
   pickDragTarget,
   isOutsideSpan,
   handleLeftStyles,
-} from '../../range-slider-core';
-import type { RangeValue } from '../../store/TweakStore';
-import { decimalsForStep, roundValue } from '../../shortcut-utils';
+} from 'tweakers/range-slider-core';
+import type { RangeValue } from 'tweakers/store';
+import { decimalsForStep, roundValue } from 'tweakers/shortcut-utils';
 
 // Shared with the single Slider: 3px of travel separates a click from a drag.
 const CLICK_THRESHOLD = 3;

@@ -1,4 +1,4 @@
-import type { ControlMeta, TweakValue } from './store/TweakStore';
+import type { ControlMeta, TweakValue } from 'tweakers/store';
 
 /**
  * How a tabbed panel divides its controls. A `_tabs` root promotes every

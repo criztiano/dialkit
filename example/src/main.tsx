@@ -1,7 +1,9 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { TweakRoot, TweakStore, MovePanel, MoveFunctions, ModulationStore } from 'tweakers';
+import { TweakRoot, TweakStore, ModulationStore } from 'dialkit';
+import { MovePanel, MoveFunctions } from 'tweakers';
+import 'dialkit/styles.css';
 import 'tweakers/styles.css';
 import { PhotoStack } from './PhotoStack';
 import { Release } from './Release';

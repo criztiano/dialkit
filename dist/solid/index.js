@@ -1,1946 +1,7 @@
 // src/solid/createTweakers.ts
 import { createSignal, createMemo, createEffect, onMount, onCleanup, createUniqueId } from "solid-js";
-
-// src/color-core.ts
-var LONG_PRESS_MS = 500;
-var PALETTE_DRAG_CANCEL_PX = 3;
-var HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
-var clamp = (n, min, max) => Math.min(max, Math.max(min, n));
-var clamp01 = (n) => clamp(n, 0, 1);
-var byte = (n) => clamp(Math.round(n), 0, 255);
-function parseHex(input) {
-  if (typeof input !== "string") return null;
-  let s = input.trim();
-  if (!s.startsWith("#")) s = `#${s}`;
-  if (!HEX_COLOR_REGEX.test(s)) return null;
-  let h = s.slice(1);
-  if (h.length <= 4) h = h.split("").map((c) => c + c).join("");
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  const a = h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1;
-  return { r, g, b, a };
-}
-function formatHex(rgba, alphaEnabled) {
-  const hx = (n) => byte(n).toString(16).padStart(2, "0");
-  const base = `#${hx(rgba.r)}${hx(rgba.g)}${hx(rgba.b)}`;
-  return alphaEnabled ? `${base}${hx(clamp01(rgba.a) * 255)}` : base;
-}
-function normalizeHex(input, alphaEnabled) {
-  const rgba = parseHex(input);
-  return rgba ? formatHex(rgba, alphaEnabled) : null;
-}
-function displayHex(value) {
-  const rgba = parseHex(value);
-  if (!rgba) return (value ?? "").toUpperCase();
-  return formatHex(rgba, false).toUpperCase();
-}
-function bareHex(value) {
-  return displayHex(value).replace(/^#/, "");
-}
-function normalizeHexEdit(input, alphaEnabled, currentAlpha) {
-  const rgba = parseHex(input);
-  if (!rgba) return null;
-  const digits = input.trim().replace(/^#/, "").length;
-  if (alphaEnabled && (digits === 3 || digits === 6)) rgba.a = clamp01(currentAlpha);
-  return formatHex(rgba, alphaEnabled);
-}
-function opacityPercent(rgba) {
-  return Math.round(clamp01(rgba.a) * 100);
-}
-function rgbToHsv(rgba) {
-  const r = rgba.r / 255, g = rgba.g / 255, b = rgba.b / 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  const d = max - min;
-  let h = 0;
-  if (d !== 0) {
-    if (max === r) h = (g - b) / d % 6;
-    else if (max === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    h *= 60;
-    if (h < 0) h += 360;
-  }
-  return { h, s: max === 0 ? 0 : d / max, v: max, a: rgba.a };
-}
-function hsvToRgb(hsva) {
-  const h = (hsva.h % 360 + 360) % 360;
-  const s = clamp01(hsva.s), v = clamp01(hsva.v);
-  const c = v * s;
-  const x = c * (1 - Math.abs(h / 60 % 2 - 1));
-  const m = v - c;
-  let r = 0, g = 0, b = 0;
-  if (h < 60) [r, g, b] = [c, x, 0];
-  else if (h < 120) [r, g, b] = [x, c, 0];
-  else if (h < 180) [r, g, b] = [0, c, x];
-  else if (h < 240) [r, g, b] = [0, x, c];
-  else if (h < 300) [r, g, b] = [x, 0, c];
-  else [r, g, b] = [c, 0, x];
-  return { r: byte((r + m) * 255), g: byte((g + m) * 255), b: byte((b + m) * 255), a: hsva.a };
-}
-function rgbToHsl(rgba) {
-  const { h, s, v, a } = rgbToHsv(rgba);
-  const l = v * (1 - s / 2);
-  const sl = l === 0 || l === 1 ? 0 : (v - l) / Math.min(l, 1 - l);
-  return { h, s: sl, l, a };
-}
-function hslToRgb(hsla) {
-  const l = clamp01(hsla.l), s = clamp01(hsla.s);
-  const v = l + s * Math.min(l, 1 - l);
-  const sv = v === 0 ? 0 : 2 * (1 - l / v);
-  return hsvToRgb({ h: hsla.h, s: sv, v, a: hsla.a });
-}
-var srgbToLinear = (c) => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-var linearToSrgb = (c) => c <= 31308e-7 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
-function rgbToOklab(rgba) {
-  const r = srgbToLinear(rgba.r / 255);
-  const g = srgbToLinear(rgba.g / 255);
-  const b = srgbToLinear(rgba.b / 255);
-  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
-  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
-  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
-  return {
-    L: 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
-    A: 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
-    B: 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s
-  };
-}
-function oklabToLinearRgb(L, A, B) {
-  const l = (L + 0.3963377774 * A + 0.2158037573 * B) ** 3;
-  const m = (L - 0.1055613458 * A - 0.0638541728 * B) ** 3;
-  const s = (L - 0.0894841775 * A - 1.291485548 * B) ** 3;
-  return {
-    r: 4.0767416621 * l - 3.3077115913 * m + 0.2307590544 * s,
-    g: -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
-    b: -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s
-  };
-}
-function rgbToOklch(rgba) {
-  const { L, A, B } = rgbToOklab(rgba);
-  const c = Math.sqrt(A * A + B * B);
-  let h = Math.atan2(B, A) * 180 / Math.PI;
-  if (h < 0) h += 360;
-  return { l: L, c, h: c < 1e-6 ? 0 : h, a: rgba.a };
-}
-var GAMUT_EPS = 1e-4;
-function inSrgbGamut(l, c, h) {
-  const rad = h * Math.PI / 180;
-  const { r, g, b } = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
-  return r >= -GAMUT_EPS && r <= 1 + GAMUT_EPS && g >= -GAMUT_EPS && g <= 1 + GAMUT_EPS && b >= -GAMUT_EPS && b <= 1 + GAMUT_EPS;
-}
-function clampOklchToSrgb(oklch) {
-  const l = clamp01(oklch.l);
-  const h = (oklch.h % 360 + 360) % 360;
-  const c = Math.max(0, oklch.c);
-  if (inSrgbGamut(l, c, h)) return { l, c, h, a: clamp01(oklch.a) };
-  let lo = 0, hi = c;
-  for (let i = 0; i < 24; i++) {
-    const mid = (lo + hi) / 2;
-    if (inSrgbGamut(l, mid, h)) lo = mid;
-    else hi = mid;
-  }
-  return { l, c: lo, h, a: clamp01(oklch.a) };
-}
-function oklchToRgb(oklch) {
-  const { l, c, h, a } = clampOklchToSrgb(oklch);
-  const rad = h * Math.PI / 180;
-  const lin = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
-  return {
-    r: byte(linearToSrgb(clamp01(lin.r)) * 255),
-    g: byte(linearToSrgb(clamp01(lin.g)) * 255),
-    b: byte(linearToSrgb(clamp01(lin.b)) * 255),
-    a: clamp01(a)
-  };
-}
-var ALPHA_CHANNEL = { key: "a", label: "A", min: 0, max: 100, step: 1, precision: 0 };
-var CHANNELS = {
-  rgb: [
-    { key: "r", label: "R", min: 0, max: 255, step: 1, precision: 0 },
-    { key: "g", label: "G", min: 0, max: 255, step: 1, precision: 0 },
-    { key: "b", label: "B", min: 0, max: 255, step: 1, precision: 0 }
-  ],
-  hsl: [
-    { key: "h", label: "H", min: 0, max: 360, step: 1, precision: 0 },
-    { key: "s", label: "S", min: 0, max: 100, step: 1, precision: 0 },
-    { key: "l", label: "L", min: 0, max: 100, step: 1, precision: 0 }
-  ],
-  oklch: [
-    { key: "l", label: "L", min: 0, max: 1, step: 0.01, precision: 2 },
-    { key: "c", label: "C", min: 0, max: 0.4, step: 5e-3, precision: 3 },
-    { key: "h", label: "H", min: 0, max: 360, step: 1, precision: 0 }
-  ]
-};
-function getChannels(format, alphaEnabled) {
-  return alphaEnabled ? [...CHANNELS[format], ALPHA_CHANNEL] : CHANNELS[format];
-}
-var round = (n, precision) => {
-  const f = 10 ** precision;
-  return Math.round(n * f) / f;
-};
-function rgbaToChannels(rgba, format, alphaEnabled) {
-  let values;
-  if (format === "rgb") {
-    values = [rgba.r, rgba.g, rgba.b];
-  } else if (format === "hsl") {
-    const { h, s, l } = rgbToHsl(rgba);
-    values = [round(h, 0), round(s * 100, 0), round(l * 100, 0)];
-  } else {
-    const { l, c, h } = rgbToOklch(rgba);
-    values = [round(l, 2), round(c, 3), round(h, 0)];
-  }
-  if (alphaEnabled) values.push(opacityPercent(rgba));
-  return values;
-}
-function channelsToRgba(values, format, alphaEnabled) {
-  const specs = getChannels(format, alphaEnabled);
-  const v = specs.map((spec, i) => {
-    const n = Number(values[i]);
-    const fallback = spec.key === "a" ? spec.max : spec.min;
-    return clamp(Number.isFinite(n) ? n : fallback, spec.min, spec.max);
-  });
-  const a = alphaEnabled ? v[3] / 100 : 1;
-  if (format === "rgb") return { r: byte(v[0]), g: byte(v[1]), b: byte(v[2]), a };
-  if (format === "hsl") return hslToRgb({ h: v[0], s: v[1] / 100, l: v[2] / 100, a });
-  return oklchToRgb({ l: v[0], c: v[1], h: v[2], a });
-}
-var PALETTE_SIZE = 8;
-var PALETTE_STORAGE_KEY = "tweakers:color-palette";
-function emptyPalette() {
-  return Array(PALETTE_SIZE).fill(null);
-}
-function serializePalette(slots) {
-  return JSON.stringify(slots.slice(0, PALETTE_SIZE));
-}
-function deserializePalette(raw) {
-  const slots = emptyPalette();
-  if (!raw) return slots;
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return slots;
-  }
-  if (!Array.isArray(parsed)) return slots;
-  for (let i = 0; i < PALETTE_SIZE; i++) {
-    const entry = parsed[i];
-    if (typeof entry === "string" && HEX_COLOR_REGEX.test(entry)) slots[i] = entry;
-  }
-  return slots;
-}
-
-// src/gradient-core.ts
-var MIN_STOPS = 2;
-var STOP_DETACH_PX = 24;
-var DEFAULT_GRADIENT = {
-  type: "linear",
-  angle: 90,
-  stops: [
-    { color: "#6366f1ff", position: 0 },
-    { color: "#ec4899ff", position: 1 }
-  ]
-};
-var clamp012 = (n) => Math.min(1, Math.max(0, n));
-var clampPct = (n) => Math.min(100, Math.max(0, n));
-var clampScale = (n) => Math.min(200, Math.max(10, n));
-var clampSquash = (n) => Math.min(200, Math.max(1, n));
-var wrapAngle = (a) => (a % 360 + 360) % 360;
-var round2 = (n, p) => {
-  const f = 10 ** p;
-  return Math.round(n * f) / f;
-};
-var cloneDefaultStops = () => DEFAULT_GRADIENT.stops.map((s) => ({ ...s }));
-var cloneDefault = () => ({
-  type: DEFAULT_GRADIENT.type,
-  angle: DEFAULT_GRADIENT.angle,
-  stops: cloneDefaultStops()
-});
-var sortedStops = (stops) => [...stops].sort((a, b) => a.position - b.position);
-var stopString = (stops) => sortedStops(stops).map((s) => `${s.color} ${round2(clamp012(s.position) * 100, 2)}%`).join(", ");
-var normColor = (color) => {
-  const rgba = parseHex(color);
-  return rgba ? formatHex(rgba, true) : "#000000ff";
-};
-function gradientToCss(value) {
-  const stopStr = stopString(value.stops);
-  const angle = round2(wrapAngle(value.angle), 2);
-  const cx = round2(clampPct(value.centerX ?? 50), 2);
-  const cy = round2(clampPct(value.centerY ?? 50), 2);
-  switch (value.type) {
-    case "radial": {
-      const rx = clampScale(value.scale ?? 100);
-      const ry = value.squash === void 0 ? rx : clampSquash(value.squash);
-      if (rx === 100 && ry === 100) {
-        return `radial-gradient(circle at ${cx}% ${cy}%, ${stopStr})`;
-      }
-      return `radial-gradient(${round2(rx, 2)}% ${round2(ry, 2)}% at ${cx}% ${cy}%, ${stopStr})`;
-    }
-    case "conic":
-      return `conic-gradient(from ${angle}deg at ${cx}% ${cy}%, ${stopStr})`;
-    case "linear":
-    default:
-      return `linear-gradient(${angle}deg, ${stopStr})`;
-  }
-}
-function gradientFillBox(value, boxW, boxH) {
-  if (value.type !== "radial" || boxW <= 0 || boxH <= 0) {
-    return {
-      background: gradientToCss(value),
-      transform: "none",
-      transformOrigin: "50% 50%",
-      left: 0,
-      top: 0,
-      width: boxW,
-      height: boxH
-    };
-  }
-  const cxPx = clampPct(value.centerX ?? 50) / 100 * boxW;
-  const cyPx = clampPct(value.centerY ?? 50) / 100 * boxH;
-  const scaleX = clampScale(value.scale ?? 100) / 100;
-  const scaleY = (value.squash === void 0 ? clampScale(value.scale ?? 100) : clampSquash(value.squash)) / 100;
-  const rx = round2(scaleX * boxW, 2);
-  const ry = round2(scaleY * boxH, 2);
-  const side = round2(2 * Math.hypot(boxW, boxH), 2);
-  const rotation = wrapAngle(value.rotation ?? 0);
-  return {
-    background: `radial-gradient(${rx}px ${ry}px at 50% 50%, ${stopString(value.stops)})`,
-    transform: rotation === 0 ? "none" : `rotate(${round2(rotation, 2)}deg)`,
-    transformOrigin: "50% 50%",
-    left: round2(cxPx - side / 2, 2),
-    top: round2(cyPx - side / 2, 2),
-    width: side,
-    height: side
-  };
-}
-function lerpPremult(a, b, t) {
-  const pa = a.a + (b.a - a.a) * t;
-  if (pa === 0) return { r: 0, g: 0, b: 0, a: 0 };
-  const mix = (ca, aa, cb, ba) => (ca * aa + (cb * ba - ca * aa) * t) / pa;
-  return {
-    r: mix(a.r, a.a, b.r, b.a),
-    g: mix(a.g, a.a, b.g, b.a),
-    b: mix(a.b, a.a, b.b, b.a),
-    a: pa
-  };
-}
-function colorAtPosition(value, position) {
-  const stops = sortedStops(value.stops);
-  if (stops.length === 0) return "#000000ff";
-  const p = clamp012(position);
-  if (p <= stops[0].position) return normColor(stops[0].color);
-  const last = stops[stops.length - 1];
-  if (p >= last.position) return normColor(last.color);
-  let i = 0;
-  while (i < stops.length - 1 && stops[i + 1].position <= p) i++;
-  const a = stops[i];
-  const b = stops[i + 1];
-  const span = b.position - a.position;
-  const t = span === 0 ? 0 : (p - a.position) / span;
-  const ca = parseHex(a.color) ?? { r: 0, g: 0, b: 0, a: 1 };
-  const cb = parseHex(b.color) ?? { r: 0, g: 0, b: 0, a: 1 };
-  return formatHex(lerpPremult(ca, cb, t), true);
-}
-function normalizeGradient(input) {
-  if (!input || typeof input !== "object") return cloneDefault();
-  const obj = input;
-  if (!Array.isArray(obj.stops)) return cloneDefault();
-  const type = obj.type === "radial" || obj.type === "conic" ? obj.type : "linear";
-  const rawAngle = Number(obj.angle);
-  const angle = Number.isFinite(rawAngle) ? wrapAngle(rawAngle) : DEFAULT_GRADIENT.angle;
-  const extras = {};
-  const cx = Number(obj.centerX);
-  if (Number.isFinite(cx)) extras.centerX = clampPct(cx);
-  const cy = Number(obj.centerY);
-  if (Number.isFinite(cy)) extras.centerY = clampPct(cy);
-  const scale = Number(obj.scale);
-  if (Number.isFinite(scale)) extras.scale = clampScale(scale);
-  const squash = Number(obj.squash);
-  if (Number.isFinite(squash)) extras.squash = clampSquash(squash);
-  const rotation = Number(obj.rotation);
-  if (Number.isFinite(rotation)) extras.rotation = wrapAngle(rotation);
-  const stops = [];
-  for (const raw of obj.stops) {
-    if (!raw || typeof raw !== "object") continue;
-    const s = raw;
-    const rgba = typeof s.color === "string" ? parseHex(s.color) : null;
-    const pos = Number(s.position);
-    if (!rgba || !Number.isFinite(pos)) continue;
-    stops.push({ color: formatHex(rgba, true), position: clamp012(pos) });
-  }
-  if (stops.length < MIN_STOPS) return { type, angle, stops: cloneDefaultStops(), ...extras };
-  stops.sort((a, b) => a.position - b.position);
-  return { type, angle, stops, ...extras };
-}
-function addStop(value, position) {
-  const stop = { color: colorAtPosition(value, position), position: clamp012(position) };
-  const stops = [...value.stops, stop].sort((a, b) => a.position - b.position);
-  return { value: { ...value, stops }, index: stops.indexOf(stop) };
-}
-function moveStop(value, index, position) {
-  if (index < 0 || index >= value.stops.length) return { value, index };
-  const moved = { ...value.stops[index], position: clamp012(position) };
-  const stops = value.stops.map((s, i) => i === index ? moved : s);
-  stops.sort((a, b) => a.position - b.position);
-  return { value: { ...value, stops }, index: stops.indexOf(moved) };
-}
-function removeStop(value, index) {
-  if (value.stops.length <= MIN_STOPS || index < 0 || index >= value.stops.length) return value;
-  return { ...value, stops: value.stops.filter((_, i) => i !== index) };
-}
-function setStopColor(value, index, hex) {
-  if (index < 0 || index >= value.stops.length) return value;
-  const rgba = parseHex(hex);
-  if (!rgba) return value;
-  const color = formatHex(rgba, true);
-  return { ...value, stops: value.stops.map((s, i) => i === index ? { ...s, color } : s) };
-}
-function setGradientType(value, type) {
-  return { ...value, type };
-}
-function setGradientAngle(value, angle) {
-  return { ...value, angle: wrapAngle(angle) };
-}
-function setGradientCenter(value, centerX, centerY) {
-  return { ...value, centerX: clampPct(centerX), centerY: clampPct(centerY) };
-}
-function setGradientScale(value, scale) {
-  return { ...value, scale: clampScale(scale) };
-}
-function setGradientSquash(value, squash) {
-  return { ...value, squash: clampSquash(squash) };
-}
-function setGradientRotation(value, rotation) {
-  return { ...value, rotation: wrapAngle(rotation) };
-}
-
-// src/xy-pad-core.ts
-var XY_DETENT_PX = 6;
-var XY_DEFAULT_STEP = 0.01;
-function decimalsForStep(step) {
-  const s = step.toString();
-  const dot = s.indexOf(".");
-  return dot === -1 ? 0 : s.length - dot - 1;
-}
-function roundToStep(val, step) {
-  return parseFloat(val.toFixed(decimalsForStep(step)));
-}
-function resolveAxis(axis) {
-  const min = axis?.min ?? 0;
-  const max = axis?.max ?? 1;
-  const step = axis?.step ?? XY_DEFAULT_STEP;
-  const bipolar = axis?.bipolar ?? false;
-  const origin = axis?.origin ?? (bipolar ? (min + max) / 2 : min);
-  return { min, max, step, origin, bipolar };
-}
-function clamp2(v, min, max) {
-  return Math.min(max, Math.max(min, v));
-}
-function snapToStep(v, step, min) {
-  if (step <= 0) return v;
-  const snapped = min + Math.round((v - min) / step) * step;
-  return roundToStep(snapped, step);
-}
-function valueToNorm(v, axis) {
-  if (axis.max === axis.min) return 0;
-  return clamp2((v - axis.min) / (axis.max - axis.min), 0, 1);
-}
-function normToValue(n, axis) {
-  const t = clamp2(n, 0, 1);
-  return axis.min + t * (axis.max - axis.min);
-}
-function invertY(n) {
-  return 1 - n;
-}
-function valueFromPoint(point, xAxis, yAxis, snap2 = false) {
-  let x = clamp2(normToValue(point.x, xAxis), xAxis.min, xAxis.max);
-  let y = clamp2(normToValue(invertY(point.y), yAxis), yAxis.min, yAxis.max);
-  if (snap2) {
-    x = snapToStep(x, xAxis.step, xAxis.min);
-    y = snapToStep(y, yAxis.step, yAxis.min);
-  }
-  return { x, y };
-}
-function pointFromValue(value, xAxis, yAxis) {
-  return {
-    x: valueToNorm(value.x, xAxis),
-    y: invertY(valueToNorm(value.y, yAxis))
-  };
-}
-function applyDetentAxis(value, axis, pxFromOrigin) {
-  if (axis.bipolar && pxFromOrigin <= XY_DETENT_PX) return axis.origin;
-  return value;
-}
-function effectiveStep(axis, mode) {
-  const range = axis.max - axis.min;
-  if (mode === "fine") return range * 0.01;
-  if (mode === "coarse") return range * 0.1;
-  return axis.step;
-}
-function nudge(value, axis, direction, xAxis, yAxis, mode = "normal") {
-  const spec = axis === "x" ? xAxis : yAxis;
-  const step = effectiveStep(spec, mode);
-  const next = roundToStep(clamp2(value[axis] + direction * step, spec.min, spec.max), step);
-  return axis === "x" ? { x: next, y: value.y } : { x: value.x, y: next };
-}
-function centerValue(xAxis, yAxis) {
-  return { x: xAxis.origin, y: yAxis.origin };
-}
-function coerceComponent(v, axis) {
-  return typeof v === "number" && Number.isFinite(v) ? v : axis.origin;
-}
-function normalizeValue(value, xAxis, yAxis, snap2 = false) {
-  const resolve = (raw, axis) => {
-    let v = clamp2(coerceComponent(raw, axis), axis.min, axis.max);
-    if (snap2) v = snapToStep(v, axis.step, axis.min);
-    return v + 0;
-  };
-  return {
-    x: resolve(value?.x, xAxis),
-    y: resolve(value?.y, yAxis)
-  };
-}
-
-// src/range-slider-core.ts
-function clamp3(v, lo, hi) {
-  return Math.min(hi, Math.max(lo, v));
-}
-function orderRange(v) {
-  return v.min <= v.max ? v : { min: v.max, max: v.min };
-}
-function clampRange(v, min, max) {
-  return orderRange({ min: clamp3(v.min, min, max), max: clamp3(v.max, min, max) });
-}
-function setLow(nextLow, current, min) {
-  return { min: clamp3(nextLow, min, current.max), max: current.max };
-}
-function setHigh(nextHigh, current, max) {
-  return { min: current.min, max: clamp3(nextHigh, current.min, max) };
-}
-function shiftSpan(deltaValue, current, min, max) {
-  const width = current.max - current.min;
-  const desiredMin = clamp3(current.min + deltaValue, min, max - width);
-  return { min: desiredMin, max: desiredMin + width };
-}
-function nearestHandle(atValue, current) {
-  const dMin = Math.abs(atValue - current.min);
-  const dMax = Math.abs(atValue - current.max);
-  if (dMin < dMax) return "min";
-  if (dMax < dMin) return "max";
-  return atValue < current.min ? "min" : "max";
-}
-function pickDragTarget(atValue, current, hitValue) {
-  const nearLow = Math.abs(atValue - current.min) <= hitValue;
-  const nearHigh = Math.abs(atValue - current.max) <= hitValue;
-  if (nearLow && nearHigh) return nearestHandle(atValue, current);
-  if (nearLow) return "min";
-  if (nearHigh) return "max";
-  if (atValue > current.min && atValue < current.max) return "span";
-  return nearestHandle(atValue, current);
-}
-function isOutsideSpan(atValue, current) {
-  return atValue <= current.min || atValue >= current.max;
-}
-function handleLeftStyles(lowPercent, highPercent) {
-  const gap = `(${highPercent}% - ${lowPercent}%)`;
-  const ramp = `clamp(0px, calc(6px - ${gap}), 2px)`;
-  return {
-    low: `max(0px, min(calc(100% - 2px), calc(${lowPercent}% - 1px - ${ramp})))`,
-    high: `min(calc(100% - 2px), max(0px, calc(${highPercent}% - 1px + ${ramp})))`
-  };
-}
-
-// src/transfer-core.ts
-var DEFAULT_TRANSFER = { points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] };
-var TRANSFER_MIN_GAP = 0.02;
-var TRANSFER_MAX_POINTS = 12;
-var clamp013 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
-var finite = (v, fallback) => typeof v === "number" && Number.isFinite(v) ? v : fallback;
-function normalizeTransfer(value) {
-  const raw = value?.points;
-  if (!Array.isArray(raw) || raw.length < 2) return { points: DEFAULT_TRANSFER.points.map((p) => ({ ...p })) };
-  const points = raw.map((p) => ({ x: clamp013(finite(p?.x, 0)), y: clamp013(finite(p?.y, 0)) })).sort((a, b) => a.x - b.x);
-  points[0].x = 0;
-  points[points.length - 1].x = 1;
-  const out = [points[0]];
-  for (let i = 1; i < points.length - 1; i++) {
-    if (points[i].x - out[out.length - 1].x < TRANSFER_MIN_GAP) continue;
-    if (1 - points[i].x < TRANSFER_MIN_GAP) continue;
-    out.push(points[i]);
-  }
-  out.push(points[points.length - 1]);
-  return { points: out.slice(0, TRANSFER_MAX_POINTS) };
-}
-
-// src/filter-core.ts
-var FILTER_AXIS_DEFAULTS = {
-  cutoff: { min: 0, max: 1, step: 0, label: "Freq" },
-  resonance: { min: 0, max: 1, step: 0, label: "Res" }
-};
-function resolveFilterAxis(axis, hand) {
-  const base = FILTER_AXIS_DEFAULTS[hand];
-  return {
-    min: axis?.min ?? base.min,
-    max: axis?.max ?? base.max,
-    step: axis?.step ?? base.step,
-    label: axis?.label ?? base.label,
-    formatValue: axis?.formatValue
-  };
-}
-var clamp4 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-var snap = (v, axis) => {
-  let out = clamp4(Number.isFinite(v) ? v : axis.min, axis.min, axis.max);
-  if (axis.step > 0) out = clamp4(axis.min + Math.round((out - axis.min) / axis.step) * axis.step, axis.min, axis.max);
-  return Number(out.toFixed(6));
-};
-function normalizeFilterValue(value, cutoffAxis, resonanceAxis) {
-  const v = typeof value === "object" && value !== null ? value : {};
-  return {
-    cutoff: snap(typeof v.cutoff === "number" ? v.cutoff : cutoffAxis.max, cutoffAxis),
-    resonance: snap(typeof v.resonance === "number" ? v.resonance : resonanceAxis.min, resonanceAxis)
-  };
-}
-
-// src/store/persist.ts
-var STORAGE_VERSION = "v1";
-function resolvePersistTarget(kind, id, persist) {
-  if (!persist) return null;
-  const config = persist === true ? {} : persist;
-  const base = config.key ?? id;
-  if (!base) return null;
-  return {
-    key: `tweakers:${STORAGE_VERSION}:${kind}:${base}`,
-    storage: config.storage ?? "localStorage"
-  };
-}
-function getStorage(name) {
-  try {
-    if (typeof window === "undefined") return null;
-    return name === "sessionStorage" ? window.sessionStorage : window.localStorage;
-  } catch {
-    return null;
-  }
-}
-function loadPersisted(target) {
-  if (!target) return null;
-  try {
-    const storage = getStorage(target.storage);
-    if (!storage) return null;
-    const raw = storage.getItem(target.key);
-    if (raw == null) return null;
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-function savePersisted(target, value) {
-  if (!target) return;
-  try {
-    const storage = getStorage(target.storage);
-    if (!storage) return;
-    storage.setItem(target.key, JSON.stringify(value));
-  } catch {
-  }
-}
-function clearPersisted(target) {
-  if (!target) return;
-  try {
-    const storage = getStorage(target.storage);
-    if (!storage) return;
-    storage.removeItem(target.key);
-  } catch {
-  }
-}
-
-// src/store/TweakStore.ts
-var TAB_PATH = "_tab";
-var EMPTY_VALUES = Object.freeze({});
-function formatLabel(key) {
-  return key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()).trim();
-}
-function hintDomId(scope, path) {
-  return `tweakers-hint-${scope}-${path}`.replace(/\s+/g, "-");
-}
-function inferStep(min, max) {
-  const range = max - min;
-  if (range <= 1) return 0.01;
-  if (range <= 10) return 0.1;
-  if (range <= 100) return 1;
-  return 10;
-}
-function isHexColor(value) {
-  return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(value);
-}
-function sameMarkers(a, b) {
-  if (a === b) return true;
-  if (!a || !b || a.length !== b.length) return false;
-  return a.every((m, i) => Object.is(m, b[i]));
-}
-function resolveValueHasType(value, type) {
-  return typeof value === "object" && value !== null && "type" in value && value.type === type;
-}
-function isSpringConfigValue(value) {
-  return resolveValueHasType(value, "spring");
-}
-function isEasingConfigValue(value) {
-  return resolveValueHasType(value, "easing");
-}
-function resolveTweakValues(config, flatValues) {
-  return resolveConfigValues(config, flatValues, "");
-}
-function resolveConfigValues(config, flatValues, prefix) {
-  const result = {};
-  for (const [key, configValue] of Object.entries(config)) {
-    if (key === "_collapsed" || key === "_collapsible" || key === "_tabs") continue;
-    const path = prefix ? `${prefix}.${key}` : key;
-    if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === "number") {
-      result[key] = flatValues[path] ?? configValue[0];
-    } else if (typeof configValue === "number" || typeof configValue === "boolean" || typeof configValue === "string") {
-      result[key] = flatValues[path] ?? configValue;
-    } else if (resolveValueHasType(configValue, "spring") || resolveValueHasType(configValue, "easing")) {
-      result[key] = flatValues[path] ?? configValue;
-    } else if (resolveValueHasType(configValue, "action")) {
-      result[key] = flatValues[path] ?? configValue;
-    } else if (resolveValueHasType(configValue, "select") && Array.isArray(configValue.options)) {
-      const select = configValue;
-      const defaultValue = select.default ?? (typeof select.options[0] === "string" ? select.options[0] : select.options[0]?.value);
-      result[key] = flatValues[path] ?? defaultValue;
-    } else if (resolveValueHasType(configValue, "color")) {
-      result[key] = flatValues[path] ?? configValue.default ?? "#000000";
-    } else if (resolveValueHasType(configValue, "text")) {
-      result[key] = flatValues[path] ?? configValue.default ?? "";
-    } else if (resolveValueHasType(configValue, "curve") || resolveValueHasType(configValue, "analyser")) {
-    } else if (typeof configValue === "object" && configValue !== null) {
-      result[key] = resolveConfigValues(configValue, flatValues, path);
-    }
-  }
-  return result;
-}
-var TweakStoreClass = class {
-  constructor() {
-    this.panels = /* @__PURE__ */ new Map();
-    this.listeners = /* @__PURE__ */ new Map();
-    this.globalListeners = /* @__PURE__ */ new Set();
-    this.snapshots = /* @__PURE__ */ new Map();
-    this.actionListeners = /* @__PURE__ */ new Map();
-    this.eventListeners = /* @__PURE__ */ new Map();
-    // Affordance status and disabled state are app-pushed presentation, not
-    // control values: they stay out of `values` so they are never persisted, saved
-    // into a preset, or diffed against the config. One listener set covers both, so
-    // a control's shell needs a single subscription.
-    this.affordanceStatus = /* @__PURE__ */ new Map();
-    this.disabledPaths = /* @__PURE__ */ new Map();
-    this.controlStateListeners = /* @__PURE__ */ new Map();
-    this.presets = /* @__PURE__ */ new Map();
-    this.activePreset = /* @__PURE__ */ new Map();
-    // Host-owned preset providers. The serialized form (functions drop out of
-    // JSON, leaving list + activeId) decides whether a swap is visible: adapters
-    // replace the object on every host render so callbacks never go stale, and
-    // only a data change should notify.
-    this.presetProviders = /* @__PURE__ */ new Map();
-    /** Panels whose header carries no preset toolbar (see setPresetsHidden). */
-    this.presetsHidden = /* @__PURE__ */ new Set();
-    this.baseValues = /* @__PURE__ */ new Map();
-    // Resolved storage target per panel (null = persistence off). Absent = not
-    // yet registered.
-    this.persistTargets = /* @__PURE__ */ new Map();
-  }
-  registerPanel(id, name, config, shortcuts, options = {}) {
-    const existingPanel = this.panels.get(id);
-    if (existingPanel && existingPanel.kind !== options.kind) {
-      console.warn(
-        `[tweakers] Panel id "${id}" cannot be shared by a timeline and a standard panel; the most recent registration controls where it renders.`
-      );
-    }
-    const target = resolvePersistTarget("panel", id, options.persist);
-    this.persistTargets.set(id, target);
-    const controls = this.parseConfig(config, "", shortcuts);
-    this.applyControlExtras(controls, options.hints, options.affordances, options.labels);
-    const values = this.flattenValues(config, "");
-    this.initTabValue(controls, values);
-    this.initTransitionModes(config, "", values);
-    this.overlayPersistedValues(target, values);
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, module: "_enabled" in config ? true : void 0, kind: options.kind });
-    this.snapshots.set(id, { ...values });
-    this.baseValues.set(id, { ...values });
-    this.notifyGlobal();
-  }
-  updatePanel(id, name, config, shortcuts, options = {}) {
-    const existing = this.panels.get(id);
-    if (!existing) {
-      this.registerPanel(id, name, config, shortcuts, options);
-      return;
-    }
-    const hints = options.hints ?? existing.hints;
-    const affordances = options.affordances ?? existing.affordances;
-    const labels = options.labels ?? existing.labels;
-    const movePads = options.movePads ?? existing.movePads;
-    const controls = this.parseConfig(config, "", shortcuts);
-    this.applyControlExtras(controls, hints, affordances, labels);
-    const controlsByPath = this.mapControlsByPath(controls);
-    const defaultValues = this.flattenValues(config, "");
-    this.initTabValue(controls, defaultValues);
-    const nextValues = {};
-    for (const [path, defaultValue] of Object.entries(defaultValues)) {
-      nextValues[path] = this.normalizePreservedValue(
-        existing.values[path],
-        defaultValue,
-        controlsByPath.get(path)
-      );
-    }
-    this.initTransitionModes(config, "", nextValues);
-    for (const [path, mode] of Object.entries(existing.values)) {
-      if (!path.endsWith(".__mode")) {
-        continue;
-      }
-      const transitionPath = path.slice(0, -"__mode".length - 1);
-      const transitionControl = controlsByPath.get(transitionPath);
-      if (transitionControl?.type === "transition") {
-        nextValues[path] = mode;
-      }
-    }
-    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, module: "_enabled" in config ? true : void 0, kind: options.kind ?? existing.kind };
-    this.panels.set(id, nextPanel);
-    this.snapshots.set(id, { ...nextValues });
-    const previousBaseValues = this.baseValues.get(id) ?? {};
-    const nextBaseValues = {};
-    for (const [path, defaultValue] of Object.entries(defaultValues)) {
-      nextBaseValues[path] = this.normalizePreservedValue(
-        previousBaseValues[path],
-        defaultValue,
-        controlsByPath.get(path)
-      );
-    }
-    for (const [path, value] of Object.entries(nextValues)) {
-      if (path.endsWith(".__mode")) {
-        nextBaseValues[path] = value;
-      }
-    }
-    this.baseValues.set(id, nextBaseValues);
-    this.savePanelValues(id);
-    this.notify(id);
-    this.notifyGlobal();
-  }
-  unregisterPanel(id) {
-    this.panels.delete(id);
-    if (this.listeners.get(id)?.size === 0) this.listeners.delete(id);
-    if (this.actionListeners.get(id)?.size === 0) this.actionListeners.delete(id);
-    if (this.eventListeners.get(id)?.size === 0) this.eventListeners.delete(id);
-    if (this.controlStateListeners.get(id)?.size === 0) this.controlStateListeners.delete(id);
-    this.affordanceStatus.delete(id);
-    this.disabledPaths.delete(id);
-    this.snapshots.delete(id);
-    this.baseValues.delete(id);
-    this.persistTargets.delete(id);
-    this.presetProviders.delete(id);
-    this.presetsHidden.delete(id);
-    this.notifyGlobal();
-  }
-  // Overlay saved values onto freshly-computed defaults, in place. Only keys
-  // that still exist in `values` (i.e. the current config) are restored.
-  overlayPersistedValues(target, values) {
-    const persisted = loadPersisted(target);
-    if (!persisted) return;
-    for (const key of Object.keys(values)) {
-      if (Object.prototype.hasOwnProperty.call(persisted, key)) {
-        values[key] = persisted[key];
-      }
-    }
-  }
-  // Save the panel's current flat values (fail-soft, no-op when persistence is
-  // off). Called after every edit so timing/values survive a reload.
-  savePanelValues(panelId) {
-    const target = this.persistTargets.get(panelId);
-    if (!target) return;
-    const panel = this.panels.get(panelId);
-    if (panel) savePersisted(target, panel.values);
-  }
-  updateValue(panelId, path, value) {
-    const panel = this.panels.get(panelId);
-    if (!panel) return;
-    panel.values[path] = value;
-    const activeId = this.activePreset.get(panelId);
-    if (activeId) {
-      const presets = this.presets.get(panelId) ?? [];
-      const preset = presets.find((p) => p.id === activeId);
-      if (preset) preset.values[path] = value;
-    } else {
-      const base = this.baseValues.get(panelId);
-      if (base) base[path] = value;
-    }
-    this.snapshots.set(panelId, { ...panel.values });
-    this.savePanelValues(panelId);
-    this.notify(panelId);
-  }
-  // Apply several path/value edits atomically — one snapshot + one notify.
-  // The timeline uses this when a single gesture trades time between fields
-  // (e.g. resizing a clip's start edge shifts both its position and duration),
-  // where an intermediate single-field state would be invalid.
-  updateValues(panelId, updates) {
-    const panel = this.panels.get(panelId);
-    if (!panel) return;
-    const activeId = this.activePreset.get(panelId);
-    const preset = activeId ? (this.presets.get(panelId) ?? []).find((p) => p.id === activeId) : void 0;
-    const base = this.baseValues.get(panelId);
-    for (const [path, value] of Object.entries(updates)) {
-      panel.values[path] = value;
-      if (preset) preset.values[path] = value;
-      else if (base) base[path] = value;
-    }
-    this.snapshots.set(panelId, { ...panel.values });
-    this.savePanelValues(panelId);
-    this.notify(panelId);
-  }
-  updateSpringMode(panelId, path, mode) {
-    this.updateTransitionMode(panelId, path, mode);
-  }
-  getSpringMode(panelId, path) {
-    const mode = this.getTransitionMode(panelId, path);
-    if (mode === "easing") return "simple";
-    return mode;
-  }
-  updateTransitionMode(panelId, path, mode) {
-    const panel = this.panels.get(panelId);
-    if (!panel) return;
-    panel.values[`${path}.__mode`] = mode;
-    this.snapshots.set(panelId, { ...panel.values });
-    this.notify(panelId);
-  }
-  getTransitionMode(panelId, path) {
-    const panel = this.panels.get(panelId);
-    if (!panel) return "simple";
-    return panel.values[`${path}.__mode`] || "simple";
-  }
-  getValue(panelId, path) {
-    const panel = this.panels.get(panelId);
-    return panel?.values[path];
-  }
-  getValues(panelId) {
-    return this.snapshots.get(panelId) ?? EMPTY_VALUES;
-  }
-  getPanels(kind) {
-    const all = Array.from(this.panels.values());
-    if (kind === "panel") return all.filter((panel) => panel.kind === void 0);
-    if (kind === "timeline") return all.filter((panel) => panel.kind === "timeline");
-    return all;
-  }
-  /**
-   * The settings panels a root should draw, given its optional `panels` filter.
-   * `undefined` means every panel — the single-surface default. A list means
-   * exactly those names, in the order named, so two roots never fight over the
-   * same panel and a panel that has not registered yet leaves a gap that fills
-   * when it does.
-   */
-  selectPanels(only) {
-    const registered = this.getPanels("panel");
-    if (only === void 0) return registered;
-    const names = typeof only === "string" ? [only] : only;
-    return names.map((name) => registered.find((panel) => panel.name === name)).filter((panel) => panel !== void 0);
-  }
-  getPanel(id) {
-    return this.panels.get(id);
-  }
-  subscribe(panelId, listener) {
-    if (!this.listeners.has(panelId)) {
-      this.listeners.set(panelId, /* @__PURE__ */ new Set());
-    }
-    this.listeners.get(panelId).add(listener);
-    return () => {
-      const listeners2 = this.listeners.get(panelId);
-      listeners2?.delete(listener);
-      if (listeners2?.size === 0 && !this.panels.has(panelId)) {
-        this.listeners.delete(panelId);
-      }
-    };
-  }
-  subscribeGlobal(listener) {
-    this.globalListeners.add(listener);
-    return () => this.globalListeners.delete(listener);
-  }
-  subscribeActions(panelId, listener) {
-    if (!this.actionListeners.has(panelId)) {
-      this.actionListeners.set(panelId, /* @__PURE__ */ new Set());
-    }
-    this.actionListeners.get(panelId).add(listener);
-    return () => {
-      const listeners2 = this.actionListeners.get(panelId);
-      listeners2?.delete(listener);
-      if (listeners2?.size === 0 && !this.panels.has(panelId)) {
-        this.actionListeners.delete(panelId);
-      }
-    };
-  }
-  triggerAction(panelId, path) {
-    this.actionListeners.get(panelId)?.forEach((fn) => fn(path));
-  }
-  // Generic non-value event channel (file picked, chip removed, list mutated).
-  subscribeEvents(panelId, listener) {
-    if (!this.eventListeners.has(panelId)) {
-      this.eventListeners.set(panelId, /* @__PURE__ */ new Set());
-    }
-    this.eventListeners.get(panelId).add(listener);
-    return () => {
-      const listeners2 = this.eventListeners.get(panelId);
-      listeners2?.delete(listener);
-      if (listeners2?.size === 0 && !this.panels.has(panelId)) {
-        this.eventListeners.delete(panelId);
-      }
-    };
-  }
-  emitEvent(panelId, path, event) {
-    this.eventListeners.get(panelId)?.forEach((fn) => fn(path, event));
-  }
-  /**
-   * How lit a control's affordance dot is. Callers may push this as often as
-   * they like — an unchanged status is dropped without notifying, so driving it
-   * from an audio callback costs nothing.
-   */
-  setAffordanceStatus(panelId, path, status) {
-    let byPath = this.affordanceStatus.get(panelId);
-    if (status === "off") {
-      if (!byPath?.delete(path)) return;
-    } else {
-      if (byPath?.get(path) === status) return;
-      if (!byPath) {
-        byPath = /* @__PURE__ */ new Map();
-        this.affordanceStatus.set(panelId, byPath);
-      }
-      byPath.set(path, status);
-    }
-    this.notifyControlState(panelId);
-  }
-  getAffordanceStatus(panelId, path) {
-    return this.affordanceStatus.get(panelId)?.get(path) ?? "off";
-  }
-  /**
-   * Greys a control out and stops it responding. Runtime-only by design: a
-   * config default plus a runtime override would be two sources of truth, and
-   * calling this once covers the static case.
-   */
-  setDisabled(panelId, path, disabled) {
-    let paths = this.disabledPaths.get(panelId);
-    if (disabled) {
-      if (paths?.has(path)) return;
-      if (!paths) {
-        paths = /* @__PURE__ */ new Set();
-        this.disabledPaths.set(panelId, paths);
-      }
-      paths.add(path);
-    } else if (!paths?.delete(path)) {
-      return;
-    }
-    this.notifyControlState(panelId);
-  }
-  isDisabled(panelId, path) {
-    return this.disabledPaths.get(panelId)?.has(path) ?? false;
-  }
-  /** One channel for every app-pushed presentation change on a panel. */
-  subscribeControlState(panelId, listener) {
-    if (!this.controlStateListeners.has(panelId)) {
-      this.controlStateListeners.set(panelId, /* @__PURE__ */ new Set());
-    }
-    this.controlStateListeners.get(panelId).add(listener);
-    return () => {
-      const listeners2 = this.controlStateListeners.get(panelId);
-      listeners2?.delete(listener);
-      if (listeners2?.size === 0 && !this.panels.has(panelId)) {
-        this.controlStateListeners.delete(panelId);
-      }
-    };
-  }
-  notifyControlState(panelId) {
-    this.controlStateListeners.get(panelId)?.forEach((fn) => fn());
-  }
-  /**
-   * Refresh curve rows' host-supplied presentation (sample function + markers)
-   * in place. Functions drop out of the serialized config diff (the
-   * `formatValue` precedent), so a host that rebuilds its config per render
-   * would otherwise leave the preview drawing a stale closure; markers ride the
-   * same sync so the whole curve row stays one coherent refresh. Adapters call
-   * this after every render — the same contract as setPresetProvider — and only
-   * an actual change (function identity, marker values) notifies, on the
-   * control-state channel: curve rows are presentation, and the value snapshot
-   * must not churn (a new snapshot would re-render the host, whose rebuilt
-   * closure would notify again, forever). Markers are compared by value, not
-   * identity, because a per-render rebuild remakes the array every time.
-   */
-  syncCurveConfigs(panelId, config) {
-    const panel = this.panels.get(panelId);
-    if (!panel) return;
-    let changed = false;
-    const visit = (cfg, prefix) => {
-      for (const [key, value] of Object.entries(cfg)) {
-        if (key === "_collapsed" || key === "_collapsible" || key === "_tabs") continue;
-        const path = prefix ? `${prefix}.${key}` : key;
-        if (this.isCurveConfig(value)) {
-          const control = this.findControlByPath(panel.controls, path);
-          if (control?.type === "curve") {
-            if (control.sample !== value.sample) {
-              control.sample = value.sample;
-              changed = true;
-            }
-            if (!sameMarkers(control.markers, value.markers)) {
-              control.markers = value.markers;
-              changed = true;
-            }
-          }
-        } else if (this.isAnalyserConfig(value)) {
-          const control = this.findControlByPath(panel.controls, path);
-          if (control?.type === "analyser" && control.analyserRow !== void 0) {
-            const prev = control.analyserRow;
-            const sameRange = prev.rangeHz === value.rangeHz || !!prev.rangeHz && !!value.rangeHz && prev.rangeHz[0] === value.rangeHz[0] && prev.rangeHz[1] === value.rangeHz[1];
-            const sameScalars = prev.source === value.source && prev.variant === value.variant && prev.mode === value.mode && prev.pixelSize === value.pixelSize && prev.scale === value.scale && prev.height === value.height && sameRange;
-            if (prev.analyser !== value.analyser || prev.marker !== value.marker || !sameScalars) {
-              control.analyserRow = value;
-              changed = true;
-            }
-          }
-        } else if (this.isFilterConfig(value) && value.response) {
-          const control = this.findControlByPath(panel.controls, path);
-          if (control?.type === "filter" && control.response !== value.response) {
-            control.response = value.response;
-            changed = true;
-          }
-        } else if (this.isSelectConfig(value) && value.preview) {
-          const control = this.findControlByPath(panel.controls, path);
-          if (control?.type === "select" && control.preview !== value.preview) {
-            control.preview = value.preview;
-            changed = true;
-          }
-        } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
-          visit(value, path);
-        }
-      }
-    };
-    visit(config, "");
-    if (changed) this.notifyControlState(panelId);
-  }
-  savePreset(panelId, name) {
-    const panel = this.panels.get(panelId);
-    if (!panel) throw new Error(`Panel ${panelId} not found`);
-    const id = `preset-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    const preset = {
-      id,
-      name,
-      values: { ...panel.values }
-    };
-    const existing = this.presets.get(panelId) ?? [];
-    this.presets.set(panelId, [...existing, preset]);
-    this.activePreset.set(panelId, id);
-    this.snapshots.set(panelId, { ...panel.values });
-    this.notify(panelId);
-    return id;
-  }
-  loadPreset(panelId, presetId) {
-    const panel = this.panels.get(panelId);
-    if (!panel) return;
-    const presets = this.presets.get(panelId) ?? [];
-    const preset = presets.find((p) => p.id === presetId);
-    if (!preset) return;
-    this.replaceValues(panel, preset.values);
-    this.snapshots.set(panelId, { ...panel.values });
-    this.activePreset.set(panelId, presetId);
-    this.savePanelValues(panelId);
-    this.notify(panelId);
-  }
-  deletePreset(panelId, presetId) {
-    const presets = this.presets.get(panelId) ?? [];
-    this.presets.set(panelId, presets.filter((p) => p.id !== presetId));
-    if (this.activePreset.get(panelId) === presetId) {
-      this.activePreset.set(panelId, null);
-    }
-    const panel = this.panels.get(panelId);
-    if (panel) {
-      this.snapshots.set(panelId, { ...panel.values });
-    }
-    this.notify(panelId);
-  }
-  getPresets(panelId) {
-    return this.presets.get(panelId) ?? [];
-  }
-  getActivePresetId(panelId) {
-    const provider = this.getPresetProvider(panelId);
-    if (provider) return provider.activeId ?? null;
-    return this.activePreset.get(panelId) ?? null;
-  }
-  clearActivePreset(panelId) {
-    const panel = this.panels.get(panelId);
-    const base = this.baseValues.get(panelId);
-    if (panel && base) {
-      this.replaceValues(panel, base);
-      this.snapshots.set(panelId, { ...panel.values });
-    }
-    this.activePreset.set(panelId, null);
-    this.notify(panelId);
-  }
-  /**
-   * Install (or clear) a host-owned preset provider. Safe to call on every
-   * host render: the object is always swapped so `onSelect`/`onCreate`/
-   * `onDelete` never close over stale host state, but listeners are only
-   * notified when the visible data (list, active id) actually changed.
-   */
-  setPresetProvider(panelId, provider) {
-    const entry = this.presetProviders.get(panelId);
-    if (!provider) {
-      if (!entry) return;
-      this.presetProviders.delete(panelId);
-    } else {
-      const serialized = JSON.stringify(provider);
-      this.presetProviders.set(panelId, { provider, serialized });
-      if (entry?.serialized === serialized) return;
-    }
-    const panel = this.panels.get(panelId);
-    if (panel) {
-      this.snapshots.set(panelId, { ...panel.values });
-    }
-    this.notify(panelId);
-  }
-  getPresetProvider(panelId) {
-    return this.presetProviders.get(panelId)?.provider ?? null;
-  }
-  /**
-   * Hide (or restore) a panel's preset toolbar. For the secondary panels of a
-   * multi-panel app — a rack of per-voice columns, say — where a snapshot
-   * means the whole instrument and so belongs to one panel only. Hiding the
-   * toolbar hides its add and copy buttons with it: the header of a panel that
-   * does not own presets is bare.
-   */
-  setPresetsHidden(panelId, hidden) {
-    const had = this.presetsHidden.has(panelId);
-    if (hidden === had) return;
-    if (hidden) this.presetsHidden.add(panelId);
-    else this.presetsHidden.delete(panelId);
-    this.notify(panelId);
-  }
-  arePresetsHidden(panelId) {
-    return this.presetsHidden.has(panelId);
-  }
-  /** Provider mode hides the implicit "Version 1" base row — the host owns the whole list. */
-  hasPresetProvider(panelId) {
-    return this.presetProviders.has(panelId);
-  }
-  /** The dropdown rows in host order, from the provider when one is set. */
-  getPresetItems(panelId) {
-    const provider = this.getPresetProvider(panelId);
-    if (provider) {
-      return provider.presets.map((p) => ({
-        id: p.id,
-        name: p.label,
-        deletable: !!provider.onDelete && !p.readonly,
-        renamable: !!provider.onRename && !p.readonly
-      }));
-    }
-    return this.getPresets(panelId).map((p) => ({ id: p.id, name: p.name, deletable: true, renamable: true }));
-  }
-  /**
-   * Row clicked. Stock mode loads the snapshot (null = back to base values);
-   * provider mode hands the id to the host, which applies values itself.
-   */
-  selectPreset(panelId, presetId) {
-    const provider = this.getPresetProvider(panelId);
-    if (provider) {
-      if (presetId) void provider.onSelect(presetId);
-      return;
-    }
-    if (presetId) this.loadPreset(panelId, presetId);
-    else this.clearActivePreset(panelId);
-  }
-  /**
-   * "+" pressed. Stock mode snapshots into "Version N" (N counts the implicit
-   * base as version 1); provider mode suggests the matching "Preset N" label.
-   */
-  createPreset(panelId) {
-    const provider = this.getPresetProvider(panelId);
-    if (provider) {
-      void provider.onCreate(`Preset ${provider.presets.length + 1}`);
-      return;
-    }
-    this.savePreset(panelId, `Version ${this.getPresets(panelId).length + 2}`);
-  }
-  /** Trash icon pressed on a row (only rendered when the item is deletable). */
-  removePreset(panelId, presetId) {
-    const provider = this.getPresetProvider(panelId);
-    if (provider) {
-      void provider.onDelete?.(presetId);
-      return;
-    }
-    this.deletePreset(panelId, presetId);
-  }
-  /** Rename a preset (toolbar inline edit). Provider mode hands the new name
-   * to the host; stock mode edits the store's own snapshot list. */
-  renamePreset(panelId, presetId, name) {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    const provider = this.getPresetProvider(panelId);
-    if (provider) {
-      void provider.onRename?.(presetId, trimmed);
-      return;
-    }
-    const preset = (this.presets.get(panelId) ?? []).find((p) => p.id === presetId);
-    if (!preset) return;
-    preset.name = trimmed;
-    const panel = this.panels.get(panelId);
-    if (panel) this.snapshots.set(panelId, { ...panel.values });
-    this.notify(panelId);
-  }
-  resolveShortcutTarget(key, modifier) {
-    for (const panel of this.panels.values()) {
-      for (const [path, shortcut] of Object.entries(panel.shortcuts)) {
-        if (!shortcut.key) continue;
-        if (shortcut.key.toLowerCase() !== key.toLowerCase()) continue;
-        const scMod = shortcut.modifier ?? void 0;
-        if (scMod !== modifier) continue;
-        const control = this.findControlByPath(panel.controls, path);
-        if (control) {
-          return { panelId: panel.id, path, control };
-        }
-      }
-    }
-    return null;
-  }
-  resolveScrollOnlyTargets() {
-    const results = [];
-    for (const panel of this.panels.values()) {
-      for (const [path, shortcut] of Object.entries(panel.shortcuts)) {
-        if ((shortcut.interaction ?? "scroll") !== "scroll-only") continue;
-        const control = this.findControlByPath(panel.controls, path);
-        if (control) {
-          results.push({ panelId: panel.id, path, control, shortcut });
-        }
-      }
-    }
-    return results;
-  }
-  findControlByPath(controls, path) {
-    for (const control of controls) {
-      if (control.path === path) return control;
-      if (control.type === "folder" && control.children) {
-        const found = this.findControlByPath(control.children, path);
-        if (found) return found;
-      }
-    }
-    return null;
-  }
-  notify(panelId) {
-    this.listeners.get(panelId)?.forEach((fn) => fn());
-  }
-  notifyGlobal() {
-    this.globalListeners.forEach((fn) => fn());
-  }
-  initTransitionModes(config, prefix, values) {
-    for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed" || key === "_collapsible" || key === "_tabs") continue;
-      const path = prefix ? `${prefix}.${key}` : key;
-      if (this.isEasingConfig(value)) {
-        values[`${path}.__mode`] = "easing";
-      } else if (this.isSpringConfig(value)) {
-        const hasPhysics = value.stiffness !== void 0 || value.damping !== void 0 || value.mass !== void 0;
-        const hasTime = value.visualDuration !== void 0 || value.bounce !== void 0;
-        values[`${path}.__mode`] = hasPhysics && !hasTime ? "advanced" : "simple";
-      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isCurveConfig(value)) {
-        this.initTransitionModes(value, path, values);
-      }
-    }
-  }
-  parseConfig(config, prefix, shortcuts) {
-    const controls = [];
-    for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed" || key === "_collapsible" || key === "_tabs" || key === "_enabled") continue;
-      const path = prefix ? `${prefix}.${key}` : key;
-      const label = this.formatLabel(key);
-      const shortcut = shortcuts?.[path];
-      if (Array.isArray(value) && value.length <= 4 && typeof value[0] === "number") {
-        const tuple = value;
-        controls.push({
-          type: "slider",
-          path,
-          label,
-          min: tuple[1],
-          max: tuple[2],
-          step: tuple[3] ?? this.inferStep(tuple[1], tuple[2]),
-          shortcut
-        });
-      } else if (typeof value === "number") {
-        const { min, max, step } = this.inferRange(value);
-        controls.push({ type: "slider", path, label, min, max, step, shortcut });
-      } else if (this.isSliderConfig(value)) {
-        controls.push({
-          type: "slider",
-          path,
-          label,
-          min: value.min,
-          max: value.max,
-          moveVisual: value.moveVisual,
-          step: value.step ?? this.inferStep(value.min, value.max),
-          unit: value.unit,
-          formatValue: value.formatValue,
-          origin: value.origin,
-          bipolar: value.bipolar,
-          orientation: value.orientation,
-          display: value.display,
-          wrap: value.wrap,
-          shortcut
-        });
-      } else if (this.isNumberConfig(value)) {
-        controls.push({
-          type: "number",
-          path,
-          label,
-          min: value.min,
-          max: value.max,
-          step: value.step ?? this.inferRange(value.default).step,
-          unit: value.unit,
-          formatValue: value.formatValue,
-          orientation: value.orientation,
-          shortcut
-        });
-      } else if (typeof value === "boolean") {
-        controls.push({ type: "toggle", path, label, shortcut });
-      } else if (this.isSpringConfig(value) || this.isEasingConfig(value)) {
-        controls.push({ type: "transition", path, label });
-      } else if (this.isActionConfig(value)) {
-        controls.push({ type: "action", path, label: value.label || label, caption: value.caption });
-      } else if (this.isSelectConfig(value)) {
-        controls.push({ type: "select", path, label, options: value.options, display: value.display, preview: value.preview, moveVisual: value.moveVisual });
-      } else if (this.isColorConfig(value)) {
-        controls.push({ type: "color", path, label, alpha: value.alpha, palette: value.palette });
-      } else if (this.isGradientConfig(value)) {
-        controls.push({ type: "gradient", path, label, gradientForm: value.form });
-      } else if (this.isXYConfig(value)) {
-        controls.push({ type: "xy", path, label, xAxis: value.x, yAxis: value.y, grid: value.grid, density: value.density, snap: value.snap, returnToCenter: value.returnToCenter, showValues: value.showValues });
-      } else if (this.isFilterConfig(value)) {
-        controls.push({ type: "filter", path, label, cutoffAxis: value.cutoff, resonanceAxis: value.resonance, response: value.response, filterEnabled: value.enabled });
-      } else if (this.isTextConfig(value)) {
-        controls.push({ type: "text", path, label, placeholder: value.placeholder });
-      } else if (this.isTransferConfig(value)) {
-        controls.push({
-          type: "transfer",
-          path,
-          label,
-          curveHeight: value.height,
-          gridDivisions: value.grid,
-          axisLabels: value.axisLabels
-        });
-      } else if (this.isRangeConfig(value)) {
-        controls.push({
-          type: "range",
-          path,
-          label,
-          min: value.min,
-          max: value.max,
-          step: value.step ?? this.inferStep(value.min, value.max),
-          rangeDefault: value.default ?? { min: value.min, max: value.max }
-        });
-      } else if (this.isGalleryConfig(value)) {
-        controls.push({ type: "gallery", path, label, items: value.items, columns: value.columns });
-      } else if (this.isFileConfig(value)) {
-        controls.push({ type: "file", path, label, accept: value.accept, multiple: value.multiple });
-      } else if (this.isSwatchConfig(value)) {
-        controls.push({ type: "swatch", path, label, swatchOptions: value.options });
-      } else if (this.isChipsConfig(value)) {
-        controls.push({ type: "chips", path, label, chipOptions: value.options });
-      } else if (this.isMultiSelectConfig(value)) {
-        controls.push({ type: "multiselect", path, label, multiSelectOptions: value.options });
-      } else if (this.isListConfig(value)) {
-        controls.push({ type: "list", path, label, itemTypes: value.itemTypes, addLabel: value.addLabel, maxItems: value.max });
-      } else if (this.isCurveConfig(value)) {
-        controls.push({
-          type: "curve",
-          path,
-          label: typeof value.label === "string" ? value.label : label,
-          hideLabel: value.label === false || void 0,
-          sample: value.sample,
-          domain: value.domain,
-          markers: value.markers,
-          height: value.height,
-          aspect: value.aspect
-        });
-      } else if (this.isAnalyserConfig(value)) {
-        controls.push({
-          type: "analyser",
-          path,
-          label: typeof value.label === "string" ? value.label : label,
-          hideLabel: value.label === false || void 0,
-          height: value.height,
-          analyserRow: value
-        });
-      } else if (typeof value === "string") {
-        if (this.isHexColor(value)) {
-          const hasAlpha = value.length === 5 || value.length === 9;
-          controls.push({ type: "color", path, label, alpha: hasAlpha || void 0 });
-        } else {
-          controls.push({ type: "text", path, label });
-        }
-      } else if (typeof value === "object" && value !== null) {
-        const folderConfig = value;
-        const module = "_enabled" in folderConfig ? true : void 0;
-        const collapsible = !module && folderConfig._collapsible === false ? false : void 0;
-        const defaultOpen = collapsible === false ? true : "_collapsed" in folderConfig ? !folderConfig._collapsed : true;
-        controls.push({
-          type: "folder",
-          path,
-          label,
-          defaultOpen,
-          collapsible,
-          module,
-          children: this.parseConfig(folderConfig, path, shortcuts)
-        });
-      }
-    }
-    if (prefix === "" && config._tabs === true) {
-      const isFolder = (control) => control.type === "folder";
-      const tabs = controls.filter((control) => isFolder(control) && (control.children?.length ?? 0) > 0);
-      if (tabs.length > 0) {
-        for (const tab of tabs) tab.tab = true;
-        return [
-          {
-            type: "select",
-            path: TAB_PATH,
-            label: "Tab",
-            display: "segmented",
-            tabBar: true,
-            options: tabs.map((tab) => tab.path)
-          },
-          ...controls.filter((control) => !isFolder(control)),
-          ...tabs
-        ];
-      }
-    }
-    return controls;
-  }
-  /**
-   * Swaps a panel's whole value map, keeping the open tab. Which tab you are
-   * reading is a place, not a parameter: a preset should change the sound, not
-   * move you to another page of the panel.
-   */
-  replaceValues(panel, values) {
-    const openTab = panel.values[TAB_PATH];
-    panel.values = { ...values };
-    if (openTab !== void 0) panel.values[TAB_PATH] = openTab;
-  }
-  /**
-   * Seeds the active tab. It is a real value, not component state, so a config
-   * rebuild preserves the reader's place — and `normalizePreservedValue` resets
-   * it through the select's options when the tab it named is gone.
-   */
-  initTabValue(controls, values) {
-    const tabBar = controls.find((control) => control.tabBar);
-    if (!tabBar) return;
-    values[TAB_PATH] = tabBar.options?.[0] ?? "";
-  }
-  flattenValues(config, prefix) {
-    const values = {};
-    for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed" || key === "_collapsible" || key === "_tabs") continue;
-      const path = prefix ? `${prefix}.${key}` : key;
-      if (Array.isArray(value) && value.length <= 4 && typeof value[0] === "number") {
-        values[path] = value[0];
-      } else if (this.isSliderConfig(value) || this.isNumberConfig(value)) {
-        values[path] = value.default;
-      } else if (typeof value === "number" || typeof value === "boolean" || typeof value === "string") {
-        values[path] = value;
-      } else if (this.isSpringConfig(value) || this.isEasingConfig(value)) {
-        values[path] = value;
-      } else if (this.isActionConfig(value)) {
-        values[path] = value;
-      } else if (this.isSelectConfig(value)) {
-        const firstOption = value.options[0];
-        const firstValue = typeof firstOption === "string" ? firstOption : firstOption.value;
-        values[path] = value.default ?? firstValue;
-      } else if (this.isColorConfig(value)) {
-        values[path] = value.default ?? "#000000";
-      } else if (this.isGradientConfig(value)) {
-        values[path] = normalizeGradient(value.default ?? DEFAULT_GRADIENT);
-      } else if (this.isXYConfig(value)) {
-        const xAxis = resolveAxis(value.x);
-        const yAxis = resolveAxis(value.y);
-        values[path] = normalizeValue(value.default, xAxis, yAxis, value.snap ?? false);
-      } else if (this.isTextConfig(value)) {
-        values[path] = value.default ?? "";
-      } else if (this.isTransferConfig(value)) {
-        values[path] = normalizeTransfer(value.default ?? DEFAULT_TRANSFER);
-      } else if (this.isRangeConfig(value)) {
-        values[path] = value.default ?? { min: value.min, max: value.max };
-      } else if (this.isFilterConfig(value)) {
-        values[path] = normalizeFilterValue(
-          value.default,
-          resolveFilterAxis(value.cutoff, "cutoff"),
-          resolveFilterAxis(value.resonance, "resonance")
-        );
-      } else if (this.isGalleryConfig(value)) {
-        values[path] = value.default ?? value.items[0]?.id ?? "";
-      } else if (this.isFileConfig(value)) {
-        values[path] = "";
-      } else if (this.isSwatchConfig(value)) {
-        values[path] = value.default ?? value.options[0]?.value ?? "";
-      } else if (this.isChipsConfig(value)) {
-        values[path] = value.default ?? value.options[0]?.value ?? "";
-      } else if (this.isMultiSelectConfig(value)) {
-        values[path] = value.default ?? [];
-      } else if (this.isListConfig(value)) {
-        values[path] = normalizeListItems(value);
-      } else if (this.isCurveConfig(value)) {
-      } else if (typeof value === "object" && value !== null) {
-        Object.assign(values, this.flattenValues(value, path));
-      }
-    }
-    return values;
-  }
-  isSpringConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "spring";
-  }
-  isEasingConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "easing";
-  }
-  isActionConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "action";
-  }
-  isSelectConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "select" && "options" in value && Array.isArray(value.options);
-  }
-  isColorConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "color";
-  }
-  isGradientConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "gradient";
-  }
-  // Explicit { type: 'xy' } only — a bare { x, y } object would collide with the
-  // "nested object → folder" fallback, so the shorthand is deliberately unsupported.
-  isXYConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "xy";
-  }
-  isFilterConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "filter";
-  }
-  isTransferConfig(value) {
-    return typeof value === "object" && value !== null && !Array.isArray(value) && value.type === "transfer";
-  }
-  isRangeConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "range";
-  }
-  // A stored range VALUE ({min,max} numbers), as opposed to a range config.
-  // Used to preserve the leaf value by identity across a panel update.
-  isRangeValue(value) {
-    return typeof value === "object" && value !== null && typeof value.min === "number" && typeof value.max === "number";
-  }
-  isTextConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "text";
-  }
-  isGalleryConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "gallery" && "items" in value && Array.isArray(value.items);
-  }
-  isFileConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "file";
-  }
-  isSwatchConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "swatch" && "options" in value && Array.isArray(value.options);
-  }
-  isChipsConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "chips" && "options" in value && Array.isArray(value.options);
-  }
-  isMultiSelectConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "multiselect" && "options" in value && Array.isArray(value.options);
-  }
-  isSliderConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "slider" && typeof value.min === "number" && typeof value.max === "number";
-  }
-  isNumberConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "number" && typeof value.default === "number";
-  }
-  isAnalyserConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "analyser" && typeof value.analyser === "function";
-  }
-  isCurveConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "curve" && typeof value.sample === "function";
-  }
-  isListConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "list" && "itemTypes" in value && typeof value.itemTypes === "object";
-  }
-  isHexColor(value) {
-    return HEX_COLOR_REGEX.test(value);
-  }
-  formatLabel(key) {
-    return key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()).trim();
-  }
-  inferRange(value) {
-    if (value >= 0 && value <= 1) {
-      return { min: 0, max: 1, step: 0.01 };
-    } else if (value >= 0 && value <= 10) {
-      return { min: 0, max: value * 3 || 10, step: 0.1 };
-    } else if (value >= 0 && value <= 100) {
-      return { min: 0, max: value * 3 || 100, step: 1 };
-    } else if (value >= 0) {
-      return { min: 0, max: value * 3 || 1e3, step: 10 };
-    } else {
-      return { min: value * 3, max: -value * 3, step: 1 };
-    }
-  }
-  inferStep(min, max) {
-    const range = max - min;
-    if (range <= 1) return 0.01;
-    if (range <= 10) return 0.1;
-    if (range <= 100) return 1;
-    return 10;
-  }
-  normalizePreservedValue(existingValue, defaultValue, control) {
-    if (existingValue === void 0 || !control) {
-      return defaultValue;
-    }
-    switch (control.type) {
-      case "slider":
-      case "number": {
-        if (typeof existingValue !== "number" || typeof defaultValue !== "number") {
-          return defaultValue;
-        }
-        const min = control.min ?? Number.NEGATIVE_INFINITY;
-        const max = control.max ?? Number.POSITIVE_INFINITY;
-        const clamped = Math.min(max, Math.max(min, existingValue));
-        if (typeof control.step !== "number" || control.step <= 0) {
-          return clamped;
-        }
-        return this.roundToStep(clamped, min, max, control.step);
-      }
-      case "toggle":
-        return typeof existingValue === "boolean" ? existingValue : defaultValue;
-      case "select": {
-        if (typeof existingValue !== "string") {
-          return defaultValue;
-        }
-        const options = control.options ?? [];
-        const validValues = new Set(options.map((option) => typeof option === "string" ? option : option.value));
-        return validValues.has(existingValue) ? existingValue : defaultValue;
-      }
-      case "swatch": {
-        if (typeof existingValue !== "string") {
-          return defaultValue;
-        }
-        const validValues = new Set((control.swatchOptions ?? []).map((option) => option.value));
-        return validValues.has(existingValue) ? existingValue : defaultValue;
-      }
-      case "chips": {
-        if (typeof existingValue !== "string") {
-          return defaultValue;
-        }
-        const validValues = new Set((control.chipOptions ?? []).map((option) => option.value));
-        return validValues.has(existingValue) ? existingValue : defaultValue;
-      }
-      case "multiselect": {
-        if (!Array.isArray(existingValue) || existingValue.some((v) => typeof v !== "string")) {
-          return defaultValue;
-        }
-        const validValues = new Set((control.multiSelectOptions ?? []).map((option) => option.value));
-        return existingValue.filter((v) => validValues.has(v));
-      }
-      case "color": {
-        if (typeof existingValue !== "string" || !this.isHexColor(existingValue)) {
-          return defaultValue;
-        }
-        if (!control.alpha && (existingValue.length === 5 || existingValue.length === 9)) {
-          return existingValue.length === 9 ? existingValue.slice(0, 7) : existingValue.slice(0, 4);
-        }
-        if (control.alpha && (existingValue.length === 4 || existingValue.length === 7)) {
-          return existingValue + (existingValue.length === 7 ? "ff" : "f");
-        }
-        return existingValue;
-      }
-      case "gradient": {
-        if (typeof existingValue !== "object" || existingValue === null || !Array.isArray(existingValue.stops)) {
-          return defaultValue;
-        }
-        return normalizeGradient(existingValue);
-      }
-      case "xy": {
-        if (typeof existingValue !== "object" || existingValue === null || Array.isArray(existingValue)) {
-          return defaultValue;
-        }
-        const candidate = existingValue;
-        if (typeof candidate.x !== "number" || typeof candidate.y !== "number") {
-          return defaultValue;
-        }
-        const xAxis = resolveAxis(control.xAxis);
-        const yAxis = resolveAxis(control.yAxis);
-        return normalizeValue(candidate, xAxis, yAxis, false);
-      }
-      case "filter": {
-        if (typeof existingValue !== "object" || existingValue === null || Array.isArray(existingValue)) {
-          return defaultValue;
-        }
-        const candidate = existingValue;
-        if (typeof candidate.cutoff !== "number" || typeof candidate.resonance !== "number") {
-          return defaultValue;
-        }
-        return normalizeFilterValue(
-          candidate,
-          resolveFilterAxis(control.cutoffAxis, "cutoff"),
-          resolveFilterAxis(control.resonanceAxis, "resonance")
-        );
-      }
-      case "text":
-      case "file":
-        return typeof existingValue === "string" ? existingValue : defaultValue;
-      case "list":
-        return Array.isArray(existingValue) ? existingValue : defaultValue;
-      case "transfer":
-        return typeof existingValue === "object" && existingValue !== null && !Array.isArray(existingValue) ? normalizeTransfer(existingValue) : defaultValue;
-      case "range": {
-        if (!this.isRangeValue(existingValue)) {
-          return defaultValue;
-        }
-        const lo = control.min ?? Number.NEGATIVE_INFINITY;
-        const hi = control.max ?? Number.POSITIVE_INFINITY;
-        return clampRange(existingValue, lo, hi);
-      }
-      case "gallery": {
-        if (typeof existingValue !== "string") {
-          return defaultValue;
-        }
-        const validIds = new Set((control.items ?? []).map((item) => item.id));
-        return validIds.has(existingValue) ? existingValue : defaultValue;
-      }
-      case "transition":
-        if (this.isSpringConfig(defaultValue)) {
-          return this.isSpringConfig(existingValue) ? existingValue : defaultValue;
-        }
-        if (this.isEasingConfig(defaultValue)) {
-          return this.isEasingConfig(existingValue) ? existingValue : defaultValue;
-        }
-        return defaultValue;
-      case "action":
-        return defaultValue;
-      default:
-        return defaultValue;
-    }
-  }
-  roundToStep(value, min, max, step) {
-    const snapped = min + Math.round((value - min) / step) * step;
-    const clamped = Math.min(max, Math.max(min, snapped));
-    const precision = this.stepPrecision(step);
-    return Number(clamped.toFixed(precision));
-  }
-  stepPrecision(step) {
-    const text = String(step);
-    const decimalIndex = text.indexOf(".");
-    return decimalIndex === -1 ? 0 : text.length - decimalIndex - 1;
-  }
-  // Stamp path-keyed extras onto the parsed tree. A post-pass rather than
-  // parseConfig parameters: these are cross-cutting metadata like shortcuts, and
-  // every control — including folders and bare-shorthand sliders — is reachable
-  // by path once the tree exists.
-  applyControlExtras(controls, hints, affordances, labels) {
-    if (!hints && !affordances && !labels) return;
-    for (const control of controls) {
-      const hint = hints?.[control.path];
-      if (hint) control.hint = hint;
-      const affordance = affordances?.[control.path];
-      if (affordance) control.affordance = affordance;
-      const label = labels?.[control.path];
-      if (label) control.label = label;
-      if (control.children) this.applyControlExtras(control.children, hints, affordances, labels);
-    }
-  }
-  mapControlsByPath(controls) {
-    const map = /* @__PURE__ */ new Map();
-    const visit = (nodes) => {
-      for (const node of nodes) {
-        if (node.type === "folder" && node.children) {
-          if (node.module) {
-            const enabledPath = `${node.path}._enabled`;
-            map.set(enabledPath, { type: "toggle", path: enabledPath, label: "Enabled" });
-          }
-          visit(node.children);
-          continue;
-        }
-        map.set(node.path, node);
-      }
-    };
-    visit(controls);
-    return map;
-  }
-};
-function listHasType(value, type) {
-  return typeof value === "object" && value !== null && "type" in value && value.type === type;
-}
-function listFormatLabel(key) {
-  return key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()).trim();
-}
-function listIsHexColor(value) {
-  return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(value);
-}
-function listInferStep(min, max) {
-  const range = max - min;
-  if (range <= 1) return 0.01;
-  if (range <= 10) return 0.1;
-  if (range <= 100) return 1;
-  return 10;
-}
-function listInferRange(value) {
-  if (value >= 0 && value <= 1) return { min: 0, max: 1, step: 0.01 };
-  if (value >= 0 && value <= 10) return { min: 0, max: value * 3 || 10, step: 0.1 };
-  if (value >= 0 && value <= 100) return { min: 0, max: value * 3 || 100, step: 1 };
-  if (value >= 0) return { min: 0, max: value * 3 || 1e3, step: 10 };
-  return { min: value * 3, max: -value * 3, step: 1 };
-}
-function parseListItemSchema(schema, hints, groups) {
-  const fields = [];
-  for (const [key, def] of Object.entries(schema)) {
-    const label = listFormatLabel(key);
-    const hint = hints?.[key];
-    const group = groups?.[key];
-    if (Array.isArray(def) && def.length <= 4 && typeof def[0] === "number") {
-      const [d, min, max, step] = def;
-      fields.push({ key, label, hint, group, kind: "slider", min, max, step: step ?? listInferStep(min, max), defaultValue: d });
-    } else if (typeof def === "number") {
-      const { min, max, step } = listInferRange(def);
-      fields.push({ key, label, hint, group, kind: "slider", min, max, step, defaultValue: def });
-    } else if (typeof def === "boolean") {
-      fields.push({ key, label, hint, group, kind: "toggle", defaultValue: def });
-    } else if (listHasType(def, "select") && Array.isArray(def.options)) {
-      const select = def;
-      const first = select.options[0];
-      const firstValue = typeof first === "string" ? first : first?.value ?? "";
-      fields.push({ key, label, hint, group, kind: "select", options: select.options, defaultValue: select.default ?? firstValue });
-    } else if (listHasType(def, "color")) {
-      const color = def;
-      fields.push({ key, label, hint, group, kind: "color", palette: color.palette, defaultValue: color.default ?? "#000000" });
-    } else if (listHasType(def, "swatch") && Array.isArray(def.options)) {
-      const swatch = def;
-      fields.push({
-        key,
-        label,
-        hint,
-        group,
-        kind: "swatch",
-        swatchOptions: swatch.options,
-        defaultValue: swatch.default ?? swatch.options[0]?.value ?? ""
-      });
-    } else if (listHasType(def, "text")) {
-      const text = def;
-      fields.push({ key, label, hint, group, kind: "text", placeholder: text.placeholder, defaultValue: text.default ?? "" });
-    } else if (typeof def === "string") {
-      fields.push({ key, label, hint, group, kind: listIsHexColor(def) ? "color" : "text", defaultValue: def });
-    }
-  }
-  return fields;
-}
-function defaultListItemParams(schema) {
-  const params = {};
-  for (const field of parseListItemSchema(schema)) {
-    params[field.key] = field.defaultValue;
-  }
-  return params;
-}
-function normalizeListItems(config) {
-  const items = config.default ?? [];
-  return items.filter((item) => item && typeof item.type === "string" && config.itemTypes[item.type]).map((item) => {
-    const row = {
-      type: item.type,
-      params: { ...defaultListItemParams(config.itemTypes[item.type].schema), ...item.params ?? {} }
-    };
-    const title = typeof item.title === "string" ? item.title.trim() : "";
-    if (title) row.title = title;
-    return row;
-  });
-}
-var TweakStore = new TweakStoreClass();
-
-// src/solid/createTweakers.ts
+import { TweakStore } from "tweakers/store";
+import { normalizeGradient, DEFAULT_GRADIENT } from "tweakers/gradient-core";
 function createTweakers(name, config, options) {
   const id = createUniqueId();
   const panelId = `${name}-${id}`;
@@ -2030,1283 +91,20 @@ function getFirstOptionValue(options) {
 // src/solid/createTweakTimeline.ts
 import { createEffect as createEffect2, createMemo as createMemo2, createSignal as createSignal2, createUniqueId as createUniqueId2, onCleanup as onCleanup2, onMount as onMount2 } from "solid-js";
 import { isServer } from "solid-js/web";
-
-// src/store/TimelineStore.ts
-var MIN_LOOP_REGION = 0.02;
-function loopSpan(duration, loopStart, loopEnd) {
-  if (!Number.isFinite(duration) || duration <= 0) return 0;
-  if (!Number.isFinite(loopStart)) loopStart = 0;
-  const end = Number.isFinite(loopEnd) ? Math.min(Math.max(0, loopEnd), duration) : duration;
-  const start = Math.min(Math.max(0, loopStart), duration);
-  const span = end - start;
-  return span > 0 ? span : duration;
-}
-function foldLoopTime(time, duration, loopStart = 0, loopEnd) {
-  if (!Number.isFinite(time) || !Number.isFinite(duration) || duration <= 0) {
-    return { time: 0, wraps: 0 };
-  }
-  const end = Number.isFinite(loopEnd) ? Math.min(Math.max(0, loopEnd), duration) : duration;
-  if (time < end) return { time, wraps: 0 };
-  const span = loopSpan(duration, loopStart, end);
-  const base = end - span;
-  const over = time - base;
-  return { time: base + over % span, wraps: Math.floor(over / span) };
-}
-var TIMELINE_CLIP_COLORS = [
-  "#E8E8E8"
-  // neutral white — slightly off-white so the pure-white selection ring still reads
-];
-var EMPTY_TRANSPORT = Object.freeze({ time: 0, playing: false, duration: 0, wraps: 0 });
-var TimelineStoreClass = class {
-  constructor() {
-    this.timelines = /* @__PURE__ */ new Map();
-    this.transports = /* @__PURE__ */ new Map();
-    this.listeners = /* @__PURE__ */ new Map();
-    this.globalListeners = /* @__PURE__ */ new Set();
-    this.registrationCounts = /* @__PURE__ */ new Map();
-    // User-defined loop windows. Absent = loop the whole timeline. The stored
-    // object reference is stable until set/clear so useSyncExternalStore readers
-    // don't churn.
-    this.loopRegions = /* @__PURE__ */ new Map();
-    this.persistTargets = /* @__PURE__ */ new Map();
-    this.listCache = null;
-    this.rafId = null;
-    this.lastTick = 0;
-    this.tick = (now) => {
-      const dt = Math.max(0, (now - this.lastTick) / 1e3);
-      this.lastTick = now;
-      let anyPlaying = false;
-      for (const [id, transport] of this.transports) {
-        if (!transport.playing) continue;
-        const meta = this.timelines.get(id);
-        const duration = meta?.duration ?? transport.duration;
-        if (!Number.isFinite(duration) || duration <= 0) {
-          this.transports.set(id, { time: 0, playing: false, duration: 0, wraps: 0 });
-          this.notify(id);
-          continue;
-        }
-        let time = transport.time + dt;
-        let wraps = transport.wraps;
-        const region = this.effectiveRegion(id, duration);
-        if (time >= region.end) {
-          const folded = foldLoopTime(time, duration, region.start, region.end);
-          time = folded.time;
-          wraps += folded.wraps;
-        }
-        this.transports.set(id, { time, playing: true, duration, wraps });
-        anyPlaying = true;
-        this.notify(id);
-      }
-      this.rafId = anyPlaying ? window.requestAnimationFrame(this.tick) : null;
-    };
-  }
-  register(meta, options) {
-    const existing = this.timelines.get(meta.id);
-    if (existing && existing.name !== meta.name) {
-      console.warn(
-        `[tweakers] Timeline id "${meta.id}" is already registered by "${existing.name}"; "${meta.name}" will share and overwrite that transport.`
-      );
-    }
-    const firstRegistration = !this.registrationCounts.has(meta.id);
-    this.registrationCounts.set(meta.id, (this.registrationCounts.get(meta.id) ?? 0) + 1);
-    if (firstRegistration) {
-      this.persistTargets.set(meta.id, resolvePersistTarget("timeline-loop", meta.id, options.persist));
-      this.hydrateLoopRegion(meta);
-    }
-    this.applyMeta(meta, options.autoplay);
-  }
-  update(meta) {
-    if (!this.timelines.has(meta.id)) return;
-    this.applyMeta(meta, false);
-  }
-  unregister(id) {
-    const nextCount = (this.registrationCounts.get(id) ?? 1) - 1;
-    if (nextCount > 0) {
-      this.registrationCounts.set(id, nextCount);
-      return;
-    }
-    this.registrationCounts.delete(id);
-    this.timelines.delete(id);
-    this.transports.delete(id);
-    this.loopRegions.delete(id);
-    this.persistTargets.delete(id);
-    if (this.listeners.get(id)?.size === 0) this.listeners.delete(id);
-    this.listCache = null;
-    this.notifyGlobal();
-  }
-  /** Restore a persisted loop region, or seed one from a code-defined
-   * `options.loop`. No region at all = loop the whole timeline (the default). */
-  hydrateLoopRegion(meta) {
-    const duration = Number.isFinite(meta.duration) ? Math.max(0, meta.duration) : 0;
-    const persisted = loadPersisted(this.persistTargets.get(meta.id) ?? null);
-    if (persisted && Number.isFinite(persisted.start) && Number.isFinite(persisted.end)) {
-      const region = this.normalizeRegion(persisted.start, persisted.end, duration);
-      if (region) this.loopRegions.set(meta.id, region);
-      return;
-    }
-    if (meta.loop) {
-      const region = this.normalizeRegion(meta.loopStart, duration, duration);
-      if (region) this.loopRegions.set(meta.id, region);
-    }
-  }
-  /** Clamp to [0,duration], order min/max, and reject degenerate widths. */
-  normalizeRegion(start, end, duration) {
-    if (!Number.isFinite(start) || !Number.isFinite(end) || duration <= 0) return null;
-    const lo = Math.min(Math.max(0, Math.min(start, end)), duration);
-    const hi = Math.min(Math.max(0, Math.max(start, end)), duration);
-    if (hi - lo < MIN_LOOP_REGION) return null;
-    return { start: lo, end: hi };
-  }
-  setLoopRegion(id, start, end) {
-    const transport = this.transports.get(id);
-    const duration = transport?.duration ?? this.timelines.get(id)?.duration ?? 0;
-    const region = this.normalizeRegion(start, end, duration);
-    if (!region) return;
-    this.loopRegions.set(id, region);
-    savePersisted(this.persistTargets.get(id) ?? null, region);
-    this.notify(id);
-  }
-  clearLoopRegion(id) {
-    if (!this.loopRegions.has(id)) return;
-    this.loopRegions.delete(id);
-    clearPersisted(this.persistTargets.get(id) ?? null);
-    this.notify(id);
-  }
-  /** The raw user/code region, or undefined when looping the whole timeline.
-   * The reference is stable between changes (safe for useSyncExternalStore). */
-  getLoopRegion(id) {
-    return this.loopRegions.get(id);
-  }
-  /** The region the clock actually loops within: the user/code region, or the
-   * whole timeline `[0, duration]` when none is set. Playback always wraps. */
-  effectiveRegion(id, duration) {
-    const region = this.loopRegions.get(id);
-    if (region) return region;
-    return { start: 0, end: Math.max(0, duration) };
-  }
-  play(id) {
-    const transport = this.transports.get(id);
-    if (!transport || transport.duration <= 0 || transport.playing) return;
-    const region = this.effectiveRegion(id, transport.duration);
-    const restart = transport.time >= region.end;
-    this.transports.set(id, {
-      ...transport,
-      time: restart ? region.start : transport.time,
-      wraps: restart ? 0 : transport.wraps,
-      playing: true
-    });
-    this.notify(id);
-    this.ensureLoop();
-  }
-  pause(id) {
-    const transport = this.transports.get(id);
-    if (!transport || !transport.playing) return;
-    this.transports.set(id, { ...transport, playing: false });
-    this.notify(id);
-  }
-  replay(id) {
-    const transport = this.transports.get(id);
-    if (!transport || transport.duration <= 0) return;
-    const region = this.effectiveRegion(id, transport.duration);
-    this.transports.set(id, { ...transport, time: region.start, wraps: 0, playing: true });
-    this.notify(id);
-    this.ensureLoop();
-  }
-  seek(id, time) {
-    const transport = this.transports.get(id);
-    if (!transport || !Number.isFinite(time)) return;
-    const clamped = Math.min(transport.duration, Math.max(0, time));
-    this.transports.set(id, { ...transport, time: clamped, wraps: 0 });
-    this.notify(id);
-  }
-  getTransport(id) {
-    return this.transports.get(id) ?? EMPTY_TRANSPORT;
-  }
-  getTimeline(id) {
-    return this.timelines.get(id);
-  }
-  getTimelines() {
-    if (!this.listCache) {
-      this.listCache = Array.from(this.timelines.values());
-    }
-    return this.listCache;
-  }
-  subscribe(id, listener) {
-    if (!this.listeners.has(id)) {
-      this.listeners.set(id, /* @__PURE__ */ new Set());
-    }
-    this.listeners.get(id).add(listener);
-    return () => {
-      const listeners2 = this.listeners.get(id);
-      listeners2?.delete(listener);
-      if (listeners2?.size === 0 && !this.timelines.has(id)) {
-        this.listeners.delete(id);
-      }
-    };
-  }
-  subscribeGlobal(listener) {
-    this.globalListeners.add(listener);
-    return () => {
-      this.globalListeners.delete(listener);
-    };
-  }
-  applyMeta(meta, autoplay) {
-    const duration = Number.isFinite(meta.duration) ? Math.max(0, meta.duration) : 0;
-    const loopStart = Number.isFinite(meta.loopStart) ? Math.min(duration, Math.max(0, meta.loopStart)) : 0;
-    const safeMeta = { ...meta, duration, loopStart };
-    this.timelines.set(meta.id, safeMeta);
-    const region = this.loopRegions.get(meta.id);
-    if (region) {
-      const reclamped = this.normalizeRegion(region.start, region.end, duration);
-      if (reclamped) this.loopRegions.set(meta.id, reclamped);
-      else this.loopRegions.delete(meta.id);
-    }
-    const existing = this.transports.get(meta.id);
-    if (existing) {
-      this.transports.set(meta.id, {
-        time: Math.min(existing.time, duration),
-        playing: duration > 0 && existing.playing,
-        duration,
-        wraps: existing.wraps
-      });
-    } else {
-      const playing = duration > 0 && autoplay;
-      this.transports.set(meta.id, { time: 0, playing, duration, wraps: 0 });
-      if (playing) this.ensureLoop();
-    }
-    this.listCache = null;
-    this.notify(meta.id);
-    this.notifyGlobal();
-  }
-  ensureLoop() {
-    if (this.rafId !== null || typeof window === "undefined") return;
-    this.lastTick = performance.now();
-    this.rafId = window.requestAnimationFrame(this.tick);
-  }
-  notify(id) {
-    this.listeners.get(id)?.forEach((fn) => fn());
-  }
-  notifyGlobal() {
-    this.globalListeners.forEach((fn) => fn());
-  }
-};
-var TimelineStore = /* @__PURE__ */ new TimelineStoreClass();
-
-// src/transition-math.ts
-function round22(value) {
-  return Math.round(value * 100) / 100;
-}
-function clamp5(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-function isTransitionConfig(value) {
-  return isSpringConfigValue(value) || isEasingConfigValue(value);
-}
-function isPhysicsSpring(transition) {
-  return transition.type === "spring" && (transition.stiffness !== void 0 || transition.damping !== void 0 || transition.mass !== void 0);
-}
-function springParams(spring) {
-  if (isPhysicsSpring(spring)) {
-    return { stiffness: spring.stiffness ?? 200, damping: spring.damping ?? 25, mass: spring.mass ?? 1 };
-  }
-  const visualDuration = Math.max(0.05, spring.visualDuration ?? 0.3);
-  const bounce = spring.bounce ?? 0.3;
-  const root = 2 * Math.PI / (visualDuration * 1.2);
-  const stiffness = root * root;
-  const damping = 2 * Math.min(1, Math.max(0.05, 1 - bounce)) * Math.sqrt(stiffness);
-  return { stiffness, damping, mass: 1 };
-}
-function springProgress(t, { stiffness, damping, mass }) {
-  if (t <= 0) return 0;
-  const w0 = Math.sqrt(stiffness / mass);
-  const zeta = damping / (2 * Math.sqrt(stiffness * mass));
-  if (zeta < 0.9999) {
-    const wd2 = w0 * Math.sqrt(1 - zeta * zeta);
-    return 1 - Math.exp(-zeta * w0 * t) * (Math.cos(wd2 * t) + zeta * w0 / wd2 * Math.sin(wd2 * t));
-  }
-  if (zeta < 1.0001) {
-    return 1 - Math.exp(-w0 * t) * (1 + w0 * t);
-  }
-  const wd = w0 * Math.sqrt(zeta * zeta - 1);
-  const r1 = -zeta * w0 + wd;
-  const r2 = -zeta * w0 - wd;
-  return 1 + (r2 * Math.exp(r1 * t) - r1 * Math.exp(r2 * t)) / (r1 - r2);
-}
-function springSettleDuration(params) {
-  const w0 = Math.sqrt(params.stiffness / params.mass);
-  const zeta = params.damping / (2 * Math.sqrt(params.stiffness * params.mass));
-  const decay = zeta >= 1 ? zeta * w0 - w0 * Math.sqrt(Math.max(0, zeta * zeta - 1)) : zeta * w0;
-  const duration = Math.log(200) / Math.max(decay, 1e-6);
-  return round22(clamp5(duration, 0.05, 10));
-}
-function cubicBezierProgress(p, [x1, y1, x2, y2]) {
-  if (p <= 0) return 0;
-  if (p >= 1) return 1;
-  const sampleX = (t2) => bezierAxis(t2, x1, x2);
-  const sampleY = (t2) => bezierAxis(t2, y1, y2);
-  let t = p;
-  for (let i = 0; i < 8; i++) {
-    const x = sampleX(t) - p;
-    if (Math.abs(x) < 1e-5) return sampleY(t);
-    const dx = bezierAxisDerivative(t, x1, x2);
-    if (Math.abs(dx) < 1e-6) break;
-    t -= x / dx;
-  }
-  let lo = 0;
-  let hi = 1;
-  t = p;
-  while (hi - lo > 1e-5) {
-    if (sampleX(t) < p) lo = t;
-    else hi = t;
-    t = (lo + hi) / 2;
-  }
-  return sampleY(t);
-}
-function bezierAxis(t, a1, a2) {
-  return (1 - 3 * a2 + 3 * a1) * t * t * t + (3 * a2 - 6 * a1) * t * t + 3 * a1 * t;
-}
-function bezierAxisDerivative(t, a1, a2) {
-  return 3 * (1 - 3 * a2 + 3 * a1) * t * t + 2 * (3 * a2 - 6 * a1) * t + 3 * a1;
-}
-function resolveClipTransition(raw, clipDuration) {
-  const safeDuration = Math.max(0.05, clipDuration);
-  if (raw.type === "easing") {
-    return {
-      transition: { ...raw, duration: safeDuration },
-      duration: safeDuration,
-      isPhysics: false
-    };
-  }
-  if (isPhysicsSpring(raw)) {
-    return {
-      transition: raw,
-      duration: springSettleDuration(springParams(raw)),
-      isPhysics: true
-    };
-  }
-  return {
-    transition: { type: "spring", bounce: raw.bounce ?? 0.2, visualDuration: safeDuration },
-    duration: safeDuration,
-    isPhysics: false
-  };
-}
-
-// src/timeline-core.ts
-var CLIP_VALUE_STEP = 0.01;
-var TIMELINE_MIN_CLIP_DURATION = 0.05;
-var DEFAULT_STEP_DURATION = 0.3;
-var DEFAULT_CLIP_TRANSITION = { type: "spring", bounce: 0.2 };
-var RESERVED_KEYS = /* @__PURE__ */ new Set(["time", "playing", "duration", "play", "pause", "replay", "seek"]);
-function isClipConfig(value) {
-  return isPlainObject(value) && Number.isFinite(value.at);
-}
-function isGroupConfig(value) {
-  if (!isPlainObject(value) || "at" in value) return false;
-  const entries = Object.values(value);
-  return entries.length > 0 && entries.some(isClipConfig);
-}
-function isPlainObject(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function nonNegativeFinite(value, fallback = 0) {
-  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : fallback;
-}
-function animatedDuration(value, fallback = DEFAULT_STEP_DURATION) {
-  return Math.max(TIMELINE_MIN_CLIP_DURATION, nonNegativeFinite(value, fallback));
-}
-function transitionDefaultDuration(transition) {
-  if (transition.type === "easing") return animatedDuration(transition.duration);
-  if (isPhysicsSpring(transition)) {
-    return animatedDuration(springSettleDuration(springParams(transition)));
-  }
-  if (transition.visualDuration !== void 0) return animatedDuration(transition.visualDuration);
-  return animatedDuration(springSettleDuration(springParams(transition)));
-}
-function defaultStepDuration(step, inheritedTransition) {
-  const curve = step.transition ?? inheritedTransition;
-  if (curve && isPhysicsSpring(curve)) return transitionDefaultDuration(curve);
-  if (step.duration !== void 0) return animatedDuration(step.duration);
-  if (step.transition) return transitionDefaultDuration(step.transition);
-  return DEFAULT_STEP_DURATION;
-}
-function defaultTrackDuration(track, inheritedTransition) {
-  const curve = track.transition ?? inheritedTransition;
-  if (track.steps?.length) {
-    return track.steps.reduce((sum, step) => sum + defaultStepDuration(step, curve), 0);
-  }
-  if (curve && isPhysicsSpring(curve)) return transitionDefaultDuration(curve);
-  if (track.duration !== void 0) return animatedDuration(track.duration);
-  if (track.transition) return transitionDefaultDuration(track.transition);
-  return DEFAULT_STEP_DURATION;
-}
-function defaultClipDuration(clip) {
-  const defaultCurve = isTransitionConfig(clip.transition) ? clip.transition : DEFAULT_CLIP_TRANSITION;
-  if (clip.props) {
-    return Object.values(clip.props).reduce(
-      (max, track) => Math.max(
-        max,
-        nonNegativeFinite(track.delay) + defaultTrackDuration(track, defaultCurve)
-      ),
-      0
-    );
-  }
-  if (clip.steps?.length) {
-    return clip.steps.reduce((sum, step) => sum + defaultStepDuration(step, defaultCurve), 0);
-  }
-  const animating = Boolean(clip.transition || clip.from || clip.to);
-  if (!animating) return nonNegativeFinite(clip.duration);
-  if (isPhysicsSpring(defaultCurve)) return transitionDefaultDuration(defaultCurve);
-  if (clip.duration !== void 0) return animatedDuration(clip.duration);
-  if (isTransitionConfig(clip.transition)) return transitionDefaultDuration(clip.transition);
-  return clip.from || clip.to ? transitionDefaultDuration(DEFAULT_CLIP_TRANSITION) : 0;
-}
-function normalizeLoopMode(value) {
-  if (value === true || value === "mirror" || value === "repeat") return "repeat";
-  return "off";
-}
-function normalizeStoredTransition(transition, clipDuration) {
-  if (transition.type === "easing") {
-    return { ...transition, duration: clipDuration };
-  }
-  if (isPhysicsSpring(transition)) {
-    return transition;
-  }
-  return { type: "spring", bounce: transition.bounce ?? 0.2 };
-}
-function collectClipEntries(config) {
-  const entries = [];
-  for (const [key, value] of Object.entries(config)) {
-    if (key === "duration") continue;
-    if (RESERVED_KEYS.has(key)) {
-      console.warn(`[tweakers] Timeline key "${key}" collides with a reserved key and was skipped.`);
-      continue;
-    }
-    if (isClipConfig(value)) {
-      entries.push({ path: key, childKey: key, clip: value });
-    } else if (isGroupConfig(value)) {
-      for (const [childKey, childClip] of Object.entries(value)) {
-        if (isClipConfig(childClip)) {
-          entries.push({ path: `${key}.${childKey}`, childKey, group: key, clip: childClip });
-        } else {
-          console.warn(
-            `[tweakers] Timeline clip "${key}.${childKey}" is missing a numeric "at" and was skipped.`
-          );
-        }
-      }
-    } else {
-      console.warn(
-        `[tweakers] Timeline entry "${key}" is neither a clip (needs a numeric "at") nor a group of clips and was skipped.`
-      );
-    }
-  }
-  return entries;
-}
-function definedValues(values) {
-  if (!values) return void 0;
-  const result = {};
-  for (const [key, value] of Object.entries(values)) {
-    if (value !== void 0) result[key] = value;
-  }
-  return result;
-}
-function setTweakPath(tweakConfig, path, value) {
-  const segments = path.split(".");
-  let node = tweakConfig;
-  for (const segment of segments.slice(0, -1)) {
-    node = node[segment] ?? (node[segment] = {});
-  }
-  node[segments[segments.length - 1]] = value;
-}
-function parseTimelineConfig(config) {
-  const entries = collectClipEntries(config);
-  let maxEnd = 0;
-  for (const { clip } of entries) {
-    maxEnd = Math.max(maxEnd, nonNegativeFinite(clip.at) + defaultClipDuration(clip));
-  }
-  const duration = typeof config.duration === "number" && Number.isFinite(config.duration) && config.duration > 0 ? config.duration : maxEnd > 0 ? Math.ceil(maxEnd * 100 - 1e-4) / 100 : 1;
-  const tweakConfig = {};
-  const clips = [];
-  entries.forEach(({ path, childKey, group, clip }, index) => {
-    const raw = clip;
-    if (raw.props && (raw.steps?.length || raw.from || raw.to)) {
-      console.warn(
-        `[tweakers] Timeline clip "${path}": "props" is mutually exclusive with from/to/steps \u2014 using "props".`
-      );
-    } else if (raw.steps?.length && raw.to) {
-      console.warn(
-        `[tweakers] Timeline clip "${path}": "to" is ignored when "steps" is present \u2014 each leg's "to" defines its targets.`
-      );
-    }
-    const hasSteps = Boolean(clip.steps?.length) && !clip.props;
-    const hasProps = Boolean(clip.props);
-    const single = isTransitionConfig(clip.transition) ? clip.transition : void 0;
-    const total = defaultClipDuration(clip);
-    const defaultCurve = single ?? DEFAULT_CLIP_TRANSITION;
-    const clipAt = nonNegativeFinite(clip.at);
-    const clipTweak = {
-      at: [clipAt, 0, duration, CLIP_VALUE_STEP]
-    };
-    if (!hasSteps && !hasProps) {
-      clipTweak.duration = [total, 0, duration, CLIP_VALUE_STEP];
-    }
-    if (!hasSteps && !hasProps && (clip.transition || clip.from || clip.to)) {
-      clipTweak.transition = normalizeStoredTransition(defaultCurve, total);
-    }
-    let tracks;
-    if (clip.props) {
-      tracks = [];
-      for (const [prop, track] of Object.entries(clip.props)) {
-        if (TRACK_RESERVED.has(prop) || /^step\d+$/.test(prop)) {
-          console.warn(`[tweakers] Timeline property "${prop}" collides with a clip field and was skipped.`);
-          continue;
-        }
-        const trackDuration = defaultTrackDuration(track, defaultCurve);
-        const trackCurve = track.transition ?? defaultCurve;
-        const hasTrackSteps = Boolean(track.steps?.length);
-        const trackTweak = {
-          delay: [nonNegativeFinite(track.delay), 0, duration, CLIP_VALUE_STEP]
-        };
-        if (!hasTrackSteps) {
-          trackTweak.duration = [trackDuration, 0, duration, CLIP_VALUE_STEP];
-          trackTweak.transition = normalizeStoredTransition(trackCurve, trackDuration);
-        }
-        const fromValue = track.from ?? (hasTrackSteps ? void 0 : track.to);
-        if (hasTrackSteps && fromValue === void 0) {
-          console.warn(
-            `[tweakers] Timeline clip "${path}": track "${prop}" has steps but no "from" \u2014 declare its starting value.`
-          );
-        }
-        if (fromValue !== void 0) {
-          trackTweak.from = scalarTweak(prop, fromValue, hasTrackSteps ? track.steps[0]?.to : track.to);
-        }
-        if (!hasTrackSteps && track.to !== void 0) {
-          trackTweak.to = scalarTweak(prop, track.to, fromValue);
-        }
-        let trackStepKeys;
-        if (hasTrackSteps) {
-          trackStepKeys = [];
-          let previous = fromValue;
-          track.steps.forEach((step, stepIndex) => {
-            const stepKey = `step${stepIndex + 1}`;
-            trackStepKeys.push(stepKey);
-            const stepDuration = defaultStepDuration(step, trackCurve);
-            const stepTweak = {
-              duration: [stepDuration, 0, duration, CLIP_VALUE_STEP],
-              transition: normalizeStoredTransition(step.transition ?? trackCurve, stepDuration)
-            };
-            if (step.to !== void 0) {
-              stepTweak.to = scalarTweak(prop, step.to, previous);
-              previous = step.to;
-            }
-            trackTweak[stepKey] = stepTweak;
-          });
-        }
-        clipTweak[prop] = trackTweak;
-        tracks.push({ prop, stepKeys: trackStepKeys });
-      }
-    }
-    if (clip.from && !hasProps) {
-      clipTweak.from = withFromToRanges(
-        clip.from,
-        hasSteps ? definedValues(clip.steps[0]?.to) : clip.to
-      );
-    }
-    if (!hasSteps && !hasProps && clip.to) {
-      clipTweak.to = withFromToRanges(clip.to, clip.from);
-    }
-    let stepKeys;
-    if (hasSteps) {
-      stepKeys = [];
-      let running = clip.from;
-      clip.steps.forEach((step, stepIndex) => {
-        const stepKey = `step${stepIndex + 1}`;
-        stepKeys.push(stepKey);
-        const stepDuration = defaultStepDuration(step, defaultCurve);
-        const stepTweak = {
-          duration: [stepDuration, 0, duration, CLIP_VALUE_STEP],
-          transition: normalizeStoredTransition(step.transition ?? defaultCurve, stepDuration)
-        };
-        const stepTo = definedValues(step.to);
-        if (stepTo) {
-          for (const prop of Object.keys(stepTo)) {
-            if (!running || !(prop in running)) {
-              console.warn(
-                `[tweakers] Timeline clip "${path}": property "${prop}" first animates in step ${stepIndex + 1} with no starting value \u2014 declare it in "from".`
-              );
-            }
-          }
-          stepTweak.to = withFromToRanges(stepTo, running);
-        }
-        clipTweak[stepKey] = stepTweak;
-        running = { ...running ?? {}, ...stepTo ?? {} };
-      });
-    }
-    setTweakPath(tweakConfig, path, clipTweak);
-    clips.push({
-      key: path,
-      label: formatLabel(childKey),
-      color: TIMELINE_CLIP_COLORS[index % TIMELINE_CLIP_COLORS.length],
-      loop: normalizeLoopMode(clip.loop),
-      group,
-      stepKeys,
-      tracks
-    });
-  });
-  return { duration, tweakConfig, clips };
-}
-var TRACK_RESERVED = /* @__PURE__ */ new Set(["at", "duration", "loop", "from", "to", "transition", "delay"]);
-function scalarTweak(prop, value, counterpart) {
-  const record = withFromToRanges(
-    { [prop]: value },
-    counterpart === void 0 ? void 0 : { [prop]: counterpart }
-  );
-  return record[prop];
-}
-var FROM_TO_RANGE_PRESETS = [
-  [/^(x|y|z|tx|ty|offsetx|offsety|translatex|translatey)$/i, { min: -100, max: 100, step: 1 }],
-  [/rotat|angle|skew/i, { min: -180, max: 180, step: 1 }],
-  [/^scale/i, { min: 0, max: 2, step: 0.01 }],
-  [/opacity|alpha/i, { min: 0, max: 1, step: 0.01 }],
-  [/blur|radius|spread/i, { min: 0, max: 100, step: 1 }]
-];
-function inferFromToRange(key, value, counterpart) {
-  const lo = Math.min(value, counterpart ?? value);
-  const hi = Math.max(value, counterpart ?? value);
-  const preset = FROM_TO_RANGE_PRESETS.find(([pattern]) => pattern.test(key))?.[1];
-  if (preset) {
-    return [value, Math.min(preset.min, lo), Math.max(preset.max, hi), preset.step];
-  }
-  if (lo >= 0 && hi <= 1) {
-    return [value, 0, 1, 0.01];
-  }
-  const extent = Math.max(Math.abs(lo), Math.abs(hi), 1);
-  const min = lo < 0 ? -extent * 2 : 0;
-  const max = Math.max(extent * 2, hi);
-  return [value, min, max, inferStep(min, max)];
-}
-function withFromToRanges(config, counterpart) {
-  const result = {};
-  for (const [key, value] of Object.entries(config)) {
-    const other = counterpart?.[key];
-    if (typeof value === "number") {
-      result[key] = inferFromToRange(key, value, typeof other === "number" ? other : void 0);
-    } else if (isPlainObject(value) && !("type" in value)) {
-      result[key] = withFromToRanges(
-        value,
-        isPlainObject(other) && !("type" in other) ? other : void 0
-      );
-    } else {
-      result[key] = value;
-    }
-  }
-  return result;
-}
-function curveStatic(transition, duration) {
-  if (!transition) return { duration };
-  if (transition.type === "easing") return { duration, ease: transition.ease };
-  const spring = springParams(transition);
-  return { duration, spring, settle: springSettleDuration(spring) };
-}
-function sampleCurve(curve, elapsed) {
-  if (elapsed <= 0) return 0;
-  if (curve.spring) {
-    if (curve.settle !== void 0 && elapsed >= curve.settle) return 1;
-    return springProgress(elapsed, curve.spring);
-  }
-  if (curve.ease) {
-    return cubicBezierProgress(clamp5(curve.duration > 0 ? elapsed / curve.duration : 1, 0, 1), curve.ease);
-  }
-  return curve.duration > 0 ? Math.min(1, elapsed / curve.duration) : 1;
-}
-function resolvedAtPath(resolved, path) {
-  let node = resolved;
-  for (const segment of path.split(".")) {
-    node = isPlainObject(node) ? node[segment] : void 0;
-  }
-  return isPlainObject(node) ? node : {};
-}
-function computeStaticClips(parsed, flatValues) {
-  const resolved = resolveTweakValues(parsed.tweakConfig, flatValues);
-  return parsed.clips.map(
-    (clip) => buildClipStatic(resolvedAtPath(resolved, clip.key), clip, parsed.duration)
-  );
-}
-function computeStaticTimeline(parsed, flatValues) {
-  let clips = computeStaticClips(parsed, flatValues);
-  const maxEnd = clips.reduce(
-    (end, clip) => Math.max(end, clip.at + clip.duration),
-    parsed.duration
-  );
-  const duration = maxEnd > parsed.duration ? Math.ceil(maxEnd * 100 - 1e-4) / 100 : parsed.duration;
-  if (duration !== parsed.duration) {
-    clips = clips.map(
-      (clip) => clip.loop === "repeat" ? { ...clip, end: duration } : clip
-    );
-  }
-  return { duration, clips };
-}
-function computeClipStaticFromValues(values, clip, timelineDuration) {
-  return buildClipStatic(unflattenClipValues(values, clip.key), clip, timelineDuration);
-}
-function buildClipStatic(clipResolved, clip, timelineDuration) {
-  {
-    const at = typeof clipResolved.at === "number" ? clipResolved.at : 0;
-    const from2 = isPlainObject(clipResolved.from) ? clipResolved.from : void 0;
-    const single = isTransitionConfig(clipResolved.transition) ? clipResolved.transition : void 0;
-    const staticClip = {
-      key: clip.key,
-      childKey: clip.group ? clip.key.slice(clip.group.length + 1) : clip.key,
-      group: clip.group,
-      at,
-      duration: 0,
-      loop: "off",
-      end: 0,
-      isPhysics: false,
-      from: from2,
-      tracks: [],
-      explicitSteps: Boolean(clip.stepKeys?.length)
-    };
-    if (clip.tracks?.length) {
-      const tracks = clip.tracks.map(({ prop, stepKeys }) => {
-        const trackResolved = isPlainObject(clipResolved[prop]) ? clipResolved[prop] : {};
-        const delay = typeof trackResolved.delay === "number" ? trackResolved.delay : 0;
-        const fromValue = trackResolved.from;
-        let steps;
-        let trackDuration = 0;
-        if (stepKeys?.length) {
-          let running = fromValue;
-          steps = stepKeys.map((stepKey) => {
-            const stepResolved = isPlainObject(trackResolved[stepKey]) ? trackResolved[stepKey] : {};
-            const storedDuration = typeof stepResolved.duration === "number" ? stepResolved.duration : 0;
-            const raw = isTransitionConfig(stepResolved.transition) ? stepResolved.transition : void 0;
-            const effective = raw ? resolveClipTransition(raw, storedDuration) : { transition: void 0, duration: storedDuration, isPhysics: false };
-            const toValue = stepResolved.to;
-            const step = {
-              key: stepKey,
-              offset: trackDuration,
-              duration: effective.duration,
-              isPhysics: effective.isPhysics,
-              start: running === void 0 ? {} : { [prop]: running },
-              to: toValue === void 0 ? {} : { [prop]: toValue },
-              curve: curveStatic(effective.transition, effective.duration)
-            };
-            if (toValue !== void 0) running = toValue;
-            trackDuration += effective.duration;
-            return step;
-          });
-        } else {
-          const storedDuration = typeof trackResolved.duration === "number" ? trackResolved.duration : 0;
-          const raw = isTransitionConfig(trackResolved.transition) ? trackResolved.transition : void 0;
-          const effective = raw ? resolveClipTransition(raw, storedDuration) : { transition: void 0, duration: storedDuration, isPhysics: false };
-          const toValue = trackResolved.to;
-          trackDuration = effective.duration;
-          steps = [
-            {
-              key: null,
-              offset: 0,
-              duration: effective.duration,
-              isPhysics: effective.isPhysics,
-              start: fromValue === void 0 ? {} : { [prop]: fromValue },
-              to: toValue === void 0 ? {} : { [prop]: toValue },
-              curve: curveStatic(effective.transition, effective.duration)
-            }
-          ];
-        }
-        return { prop, delay, duration: trackDuration, steps };
-      });
-      staticClip.tracks = tracks;
-      staticClip.props = tracks.map((track) => track.prop);
-      staticClip.duration = tracks.reduce((max, track) => Math.max(max, track.delay + track.duration), 0);
-      staticClip.from = Object.fromEntries(
-        tracks.map((track) => [track.prop, track.steps[0].start[track.prop]])
-      );
-      staticClip.to = Object.fromEntries(
-        tracks.map((track) => {
-          const last = track.steps[track.steps.length - 1];
-          return [track.prop, last.to[track.prop] ?? last.start[track.prop]];
-        })
-      );
-      staticClip.loop = staticClip.duration > 0 ? clip.loop : "off";
-      staticClip.end = staticClip.loop === "off" ? staticClip.at + staticClip.duration : timelineDuration;
-      return staticClip;
-    }
-    if (clip.stepKeys?.length) {
-      let running = { ...from2 ?? {} };
-      let offset = 0;
-      const steps = clip.stepKeys.map((stepKey) => {
-        const stepResolved = isPlainObject(clipResolved[stepKey]) ? clipResolved[stepKey] : {};
-        const storedDuration = typeof stepResolved.duration === "number" ? stepResolved.duration : 0;
-        const raw = isTransitionConfig(stepResolved.transition) ? stepResolved.transition : void 0;
-        const effective = raw ? resolveClipTransition(raw, storedDuration) : { transition: void 0, duration: storedDuration, isPhysics: false };
-        const to = isPlainObject(stepResolved.to) ? stepResolved.to : {};
-        const step = {
-          key: stepKey,
-          offset,
-          duration: effective.duration,
-          isPhysics: effective.isPhysics,
-          start: running,
-          to,
-          curve: curveStatic(effective.transition, effective.duration)
-        };
-        running = { ...running, ...to };
-        offset += effective.duration;
-        return step;
-      });
-      staticClip.tracks = [{ delay: 0, duration: offset, steps }];
-      staticClip.duration = offset;
-      staticClip.to = running;
-    } else {
-      const storedDuration = typeof clipResolved.duration === "number" ? clipResolved.duration : 0;
-      const to = isPlainObject(clipResolved.to) ? clipResolved.to : void 0;
-      if (single) {
-        const effective = resolveClipTransition(single, storedDuration);
-        staticClip.duration = effective.duration;
-        staticClip.isPhysics = effective.isPhysics;
-        staticClip.transition = effective.transition;
-        staticClip.css = transitionToCss(effective.transition);
-        staticClip.to = to;
-        if (from2 && to) {
-          staticClip.tracks = [
-            {
-              delay: 0,
-              duration: effective.duration,
-              steps: [
-                {
-                  key: null,
-                  offset: 0,
-                  duration: effective.duration,
-                  isPhysics: effective.isPhysics,
-                  start: from2,
-                  to,
-                  curve: curveStatic(effective.transition, effective.duration)
-                }
-              ]
-            }
-          ];
-        }
-      } else {
-        staticClip.duration = storedDuration;
-        staticClip.to = to;
-        if (from2 && to) {
-          const base = resolveClipTransition(DEFAULT_CLIP_TRANSITION, storedDuration);
-          staticClip.duration = base.duration;
-          staticClip.tracks = [
-            {
-              delay: 0,
-              duration: base.duration,
-              steps: [
-                {
-                  key: null,
-                  offset: 0,
-                  duration: base.duration,
-                  isPhysics: false,
-                  start: from2,
-                  to,
-                  curve: curveStatic(base.transition, base.duration)
-                }
-              ]
-            }
-          ];
-        }
-      }
-    }
-    if (staticClip.tracks.length) {
-      const props = new Set(Object.keys(from2 ?? {}));
-      for (const track of staticClip.tracks) {
-        for (const step of track.steps) {
-          for (const prop of Object.keys(step.to)) props.add(prop);
-        }
-      }
-      staticClip.props = Array.from(props);
-    }
-    staticClip.loop = staticClip.duration > 0 ? clip.loop : "off";
-    staticClip.end = staticClip.loop === "off" ? staticClip.at + staticClip.duration : timelineDuration;
-    return staticClip;
-  }
-}
-function stepAtPosition(steps, pos) {
-  for (const step of steps) {
-    if (pos < step.offset + step.duration) return step;
-  }
-  return steps[steps.length - 1];
-}
-function evalPropAtPos(steps, prop, pos) {
-  const step = stepAtPosition(steps, pos);
-  const within = Math.max(0, pos - step.offset);
-  if (prop in step.to) {
-    const eased = sampleCurve(step.curve, within);
-    return interpolateResolved(step.start[prop], step.to[prop], eased);
-  }
-  return step.start[prop];
-}
-function computeClipState(clip, time, cycleTime = time) {
-  const total = clip.duration;
-  const looping = clip.loop === "repeat" && total > 0;
-  const started = time >= clip.at || looping && cycleTime > time;
-  const done = time >= clip.end;
-  const elapsed = time - clip.at;
-  const phaseElapsed = looping ? cycleTime - clip.at : elapsed;
-  const fold = (e) => looping ? e % total : e;
-  const basePos = started ? fold(Math.max(0, phaseElapsed)) : 0;
-  const progress = total > 0 ? clamp5(basePos / total, 0, 1) : started ? 1 : 0;
-  let current;
-  let stepIndex = 0;
-  if (clip.tracks.length && clip.props?.length) {
-    current = {};
-    for (const track of clip.tracks) {
-      const props = track.prop !== void 0 ? [track.prop] : clip.props;
-      for (const prop of props) {
-        const startValue = track.steps[0]?.start[prop];
-        if (!started) {
-          if (startValue !== void 0) current[prop] = startValue;
-          continue;
-        }
-        const phase = phaseElapsed - track.delay;
-        if (phase <= 0) {
-          if (startValue !== void 0) current[prop] = startValue;
-          continue;
-        }
-        const pos = looping && track.duration > 0 ? phase % track.duration : phase;
-        const value = evalPropAtPos(track.steps, prop, pos);
-        if (value !== void 0) current[prop] = value;
-      }
-    }
-    const shared = clip.tracks[0];
-    if (started && clip.explicitSteps && shared.prop === void 0) {
-      stepIndex = shared.steps.indexOf(stepAtPosition(shared.steps, basePos));
-    }
-  }
-  return {
-    at: clip.at,
-    duration: clip.duration,
-    loop: clip.loop,
-    started,
-    active: started && !done,
-    done,
-    progress,
-    step: clip.explicitSteps ? stepIndex : void 0,
-    from: clip.from,
-    to: clip.to,
-    animate: started ? clip.to : clip.from,
-    transition: clip.transition,
-    css: clip.css,
-    current
-  };
-}
-function interpolateResolved(from2, to, p) {
-  if (typeof from2 === "number" && typeof to === "number") {
-    return from2 + (to - from2) * p;
-  }
-  if (typeof from2 === "string" && typeof to === "string") {
-    const mixed = mixHexColors(from2, to, p);
-    if (mixed) return mixed;
-  }
-  if (isPlainObject(from2) && isPlainObject(to)) {
-    const result = {};
-    for (const key of Object.keys(from2)) {
-      result[key] = key in to ? interpolateResolved(from2[key], to[key], p) : from2[key];
-    }
-    for (const key of Object.keys(to)) {
-      if (!(key in from2)) result[key] = to[key];
-    }
-    return result;
-  }
-  return p < 0.5 ? from2 : to;
-}
-function parseHex2(hex) {
-  if (!isHexColor(hex)) return null;
-  let h = hex.slice(1);
-  if (h.length === 3) h = h.split("").map((c) => c + c).join("");
-  return [
-    parseInt(h.slice(0, 2), 16),
-    parseInt(h.slice(2, 4), 16),
-    parseInt(h.slice(4, 6), 16),
-    h.length === 8 ? parseInt(h.slice(6, 8), 16) : 255
-  ];
-}
-function mixHexColors(a, b, p) {
-  const ca = parseHex2(a);
-  const cb = parseHex2(b);
-  if (!ca || !cb) return null;
-  const t = clamp5(p, 0, 1);
-  const mixed = ca.map((v, i) => Math.round(v + (cb[i] - v) * t));
-  const hex = (n) => n.toString(16).padStart(2, "0");
-  const rgb = `#${hex(mixed[0])}${hex(mixed[1])}${hex(mixed[2])}`;
-  return mixed[3] === 255 ? rgb : `${rgb}${hex(mixed[3])}`;
-}
-function transitionToCss(transition) {
-  if (!transition) return void 0;
-  if (transition.type === "easing") {
-    return {
-      transitionDuration: `${round22(transition.duration)}s`,
-      transitionTimingFunction: `cubic-bezier(${transition.ease.map((v) => round22(v)).join(", ")})`
-    };
-  }
-  const params = springParams(transition);
-  const dampingRatio = params.damping / (2 * Math.sqrt(params.stiffness * params.mass));
-  const duration = transition.visualDuration ?? springSettleDuration(params);
-  const bounce = transition.bounce ?? Math.max(0, round22(1 - dampingRatio));
-  return {
-    transitionDuration: `${round22(duration)}s`,
-    transitionTimingFunction: bounce > 0.05 ? `cubic-bezier(0.34, ${round22(1.2 + bounce)}, 0.64, 1)` : "cubic-bezier(0.25, 0.6, 0.35, 1)"
-  };
-}
-function timelinePopoverDisplayValues(values, clipKey, stepKeys, stepKey) {
-  const display = { ...values };
-  const swap = (path, duration) => {
-    const raw = display[path];
-    if (isTransitionConfig(raw)) display[path] = resolveClipTransition(raw, duration).transition;
-  };
-  if (stepKey) {
-    swap(`${clipKey}.${stepKey}.transition`, numberValue(values[`${clipKey}.${stepKey}.duration`]));
-    return display;
-  }
-  const cycle = stepKeys?.length ? stepKeys.reduce((sum, sk) => sum + numberValue(values[`${clipKey}.${sk}.duration`]), 0) : numberValue(values[`${clipKey}.duration`]);
-  swap(`${clipKey}.transition`, cycle);
-  return display;
-}
-function numberValue(value) {
-  return typeof value === "number" ? value : 0;
-}
-function unflattenClipValues(values, clipKey) {
-  const prefix = `${clipKey}.`;
-  const result = {};
-  const entries = Object.entries(values).filter(([path]) => path.startsWith(prefix)).map(([path, value]) => ({ segments: path.slice(prefix.length).split("."), value })).sort((a, b) => a.segments.length - b.segments.length);
-  for (const { segments, value } of entries) {
-    let node = result;
-    for (let i = 0; i < segments.length - 1; i++) {
-      const existing = node[segments[i]];
-      node = isPlainObject(existing) ? existing : node[segments[i]] = {};
-    }
-    node[segments[segments.length - 1]] = cloneTimelineValue(value);
-  }
-  return result;
-}
-function cloneTimelineValue(value) {
-  if (Array.isArray(value)) return value.map(cloneTimelineValue);
-  if (!isPlainObject(value)) return value;
-  return Object.fromEntries(
-    Object.entries(value).map(([key, nested]) => [key, cloneTimelineValue(nested)])
-  );
-}
-function clampTrackDelay(delay, at, trackDuration, timelineDuration) {
-  return clamp5(round22(delay), 0, Math.max(0, round22(timelineDuration - at - trackDuration)));
-}
-function clampClipMove(at, duration, timelineDuration) {
-  return clamp5(round22(at), 0, Math.max(0, timelineDuration - duration));
-}
-function clampClipResizeEnd(duration, at, timelineDuration) {
-  return clamp5(round22(duration), TIMELINE_MIN_CLIP_DURATION, timelineDuration - at);
-}
-function clampClipResizeStart(newAt, at, duration) {
-  const clampedAt = clamp5(round22(newAt), 0, at + duration - TIMELINE_MIN_CLIP_DURATION);
-  return { at: clampedAt, duration: round22(at + duration - clampedAt) };
-}
-function clampStepResize(duration, at, otherStepsTotal, timelineDuration) {
-  const max = Math.max(TIMELINE_MIN_CLIP_DURATION, timelineDuration - at - otherStepsTotal);
-  return clamp5(round22(duration), TIMELINE_MIN_CLIP_DURATION, max);
-}
-function normalizeTimelineValuesForCopy(values, clips) {
-  const normalized = { ...values };
-  for (const path of Object.keys(normalized)) {
-    if (path.endsWith(".__mode")) delete normalized[path];
-  }
-  const normalizeTransitionAt = (transitionPath, durationPath) => {
-    const raw = normalized[transitionPath];
-    if (!isTransitionConfig(raw)) return;
-    if (isPhysicsSpring(raw)) {
-      normalized[durationPath] = transitionDefaultDuration(raw);
-    }
-    normalized[transitionPath] = normalizeStoredTransition(
-      raw,
-      numberValue(normalized[durationPath])
-    );
-  };
-  for (const clip of clips) {
-    for (const stepKey of clip.stepKeys ?? []) {
-      normalizeTransitionAt(
-        `${clip.key}.${stepKey}.transition`,
-        `${clip.key}.${stepKey}.duration`
-      );
-    }
-    normalizeTransitionAt(`${clip.key}.transition`, `${clip.key}.duration`);
-    for (const track of clip.tracks ?? []) {
-      const trackKey = `${clip.key}.${track.prop}`;
-      for (const stepKey of track.stepKeys ?? []) {
-        normalizeTransitionAt(
-          `${trackKey}.${stepKey}.transition`,
-          `${trackKey}.${stepKey}.duration`
-        );
-      }
-      normalizeTransitionAt(`${trackKey}.transition`, `${trackKey}.duration`);
-      if (normalized[`${trackKey}.delay`] === 0) {
-        delete normalized[`${trackKey}.delay`];
-      }
-    }
-    delete normalized[`${clip.key}.loop`];
-  }
-  return normalized;
-}
-function formatClock(time, tenths = false) {
-  const safe = Math.max(0, time);
-  const minutes = Math.floor(safe / 60);
-  const seconds = safe - minutes * 60;
-  const secondsText = tenths ? seconds.toFixed(1).padStart(4, "0") : String(Math.floor(seconds)).padStart(2, "0");
-  return `${String(minutes).padStart(2, "0")}:${secondsText}`;
-}
-function formatSeconds(value) {
-  return `${round22(value)}s`;
-}
-function formatStepLabel(stepKey) {
-  const match = /^step(\d+)$/.exec(stepKey);
-  return match ? `Step ${match[1]}` : formatLabel(stepKey);
-}
-
-// src/timeline/adapter.ts
-function resolveTimelineLoop(loop) {
-  if (typeof loop === "object" && loop !== null) {
-    return {
-      enabled: true,
-      start: Number.isFinite(loop.from) ? Math.max(0, loop.from) : 0
-    };
-  }
-  return { enabled: Boolean(loop), start: 0 };
-}
-function buildTimelineMeta(id, name, duration, parsed, loop) {
-  const resolvedLoop = resolveTimelineLoop(loop);
-  return {
-    id,
-    name,
-    duration,
-    loop: resolvedLoop.enabled,
-    loopStart: resolvedLoop.start,
-    clips: parsed.clips
-  };
-}
-function buildTimelineValues(staticClips, transport, timelineDuration, loopStart, loopEnd, actions) {
-  var _a;
-  const result = {
-    time: transport.time,
-    playing: transport.playing,
-    duration: timelineDuration,
-    ...actions
-  };
-  const span = loopSpan(transport.duration, loopStart, loopEnd);
-  const cycleTime = (span > 0 ? transport.wraps * span : 0) + transport.time;
-  for (const clip of staticClips) {
-    const state = computeClipState(clip, transport.time, cycleTime);
-    if (clip.group) {
-      const bucket = result[_a = clip.group] ?? (result[_a] = {});
-      bucket[clip.childKey] = state;
-    } else {
-      result[clip.key] = state;
-    }
-  }
-  return result;
-}
-
-// src/store/TimelineUiStore.ts
-var TimelineUiStoreClass = class {
-  constructor() {
-    this.visible = true;
-    this.initialized = false;
-    this.controllers = /* @__PURE__ */ new Map();
-    this.listeners = /* @__PURE__ */ new Set();
-  }
-  getVisible() {
-    for (const controller of this.controllers.values()) {
-      if (controller.visible !== void 0) return controller.visible;
-    }
-    return this.visible;
-  }
-  registerController(id, controller) {
-    const previous = this.getVisible();
-    if (!this.initialized) {
-      this.visible = controller.defaultVisible;
-      this.initialized = true;
-    }
-    this.controllers.set(id, controller);
-    if (previous !== this.getVisible()) this.notify();
-    return () => {
-      const before = this.getVisible();
-      this.controllers.delete(id);
-      if (this.controllers.size === 0) this.initialized = false;
-      if (before !== this.getVisible()) this.notify();
-    };
-  }
-  updateController(id, controller) {
-    if (!this.controllers.has(id)) return;
-    const previous = this.getVisible();
-    this.controllers.set(id, controller);
-    if (previous !== this.getVisible()) this.notify();
-  }
-  requestVisible(visible) {
-    const current = this.getVisible();
-    if (current === visible) return;
-    const controlled = Array.from(this.controllers.values()).filter(
-      (controller) => controller.visible !== void 0
-    );
-    if (controlled.length > 0) {
-      controlled.forEach((controller) => controller.onVisibilityChange?.(visible));
-      return;
-    }
-    this.visible = visible;
-    this.controllers.forEach((controller) => controller.onVisibilityChange?.(visible));
-    this.notify();
-  }
-  toggle() {
-    this.requestVisible(!this.getVisible());
-  }
-  subscribe(listener) {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-  notify() {
-    this.listeners.forEach((listener) => listener());
-  }
-};
-var TimelineUiStore = /* @__PURE__ */ new TimelineUiStoreClass();
-
-// src/copy-instruction.ts
-function buildCopyInstruction(hookName, panelName, values) {
-  const { [TAB_PATH]: _activeTab, ...parameters } = values;
-  const jsonStr = JSON.stringify(parameters, null, 2);
-  if (hookName === "useTweakTimeline" || hookName === "createTweakTimeline") {
-    return `Update the ${hookName} configuration for "${panelName}" with these values:
-
-\`\`\`json
-${jsonStr}
-\`\`\`
-
-Apply these values as the new defaults in the ${hookName} call. Keep the existing \`clip.current\` bindings while this timeline is being authored; do not convert the animation or remove Tweakers yet.
-
-Add this comment immediately above the ${hookName} call as a production handoff note:
-
-\`\`\`tsx
-// TODO(production): Tweakers's clip.current values are the scrubbable authoring preview.
-// Replace them with equivalent real Motion animations using the tuned timeline
-// timings and transitions, then remove ${hookName} and <TweakTimeline />.
-\`\`\``;
-  }
-  return `Update the ${hookName} configuration for "${panelName}" with these values:
-
-\`\`\`json
-${jsonStr}
-\`\`\`
-
-Apply these values as the new defaults in the ${hookName} call.`;
-}
-
-// src/env.ts
-var isDevDefault = typeof process !== "undefined" && process?.env?.NODE_ENV ? process.env.NODE_ENV !== "production" : typeof import.meta !== "undefined" && import.meta.env?.MODE ? import.meta.env.MODE !== "production" : true;
-
-// src/solid/createTweakTimeline.ts
+import { TweakStore as TweakStore2 } from "tweakers/store";
+import { TimelineStore } from "tweakers/timeline";
+import {
+  buildTimelineMeta,
+  buildTimelineValues,
+  computeStaticTimeline,
+  parseTimelineConfig
+} from "tweakers/timeline";
 function createTweakTimeline(name, config, options) {
   const instanceId = createUniqueId2();
   const hasStableId = options?.id !== void 0;
   const panelId = options?.id ?? `${name}-${instanceId}`;
   const parsed = createMemo2(() => parseTimelineConfig(config));
-  const [flatValues, setFlatValues] = createSignal2(TweakStore.getValues(panelId));
+  const [flatValues, setFlatValues] = createSignal2(TweakStore2.getValues(panelId));
   const [transport, setTransport] = createSignal2(TimelineStore.getTransport(panelId));
   const [loopRegion, setLoopRegion] = createSignal2(
     TimelineStore.getLoopRegion(panelId)
@@ -3318,8 +116,8 @@ function createTweakTimeline(name, config, options) {
   const replay = () => TimelineStore.replay(panelId);
   const seek = (time) => TimelineStore.seek(panelId, time);
   if (!isServer) {
-    const unsubscribeValues = TweakStore.subscribe(panelId, () => {
-      setFlatValues(TweakStore.getValues(panelId));
+    const unsubscribeValues = TweakStore2.subscribe(panelId, () => {
+      setFlatValues(TweakStore2.getValues(panelId));
     });
     const unsubscribeTransport = TimelineStore.subscribe(panelId, () => {
       setTransport(TimelineStore.getTransport(panelId));
@@ -3331,12 +129,12 @@ function createTweakTimeline(name, config, options) {
     });
   }
   onMount2(() => {
-    TweakStore.registerPanel(panelId, name, parsed().tweakConfig, void 0, {
+    TweakStore2.registerPanel(panelId, name, parsed().tweakConfig, void 0, {
       retainOnUnmount: hasStableId,
       persist: options?.persist,
       kind: "timeline"
     });
-    setFlatValues(TweakStore.getValues(panelId));
+    setFlatValues(TweakStore2.getValues(panelId));
     const currentStatic = staticTimeline();
     TimelineStore.register(
       buildTimelineMeta(panelId, name, currentStatic.duration, parsed(), options?.loop),
@@ -3348,7 +146,7 @@ function createTweakTimeline(name, config, options) {
     onCleanup2(() => {
       mounted = false;
       TimelineStore.unregister(panelId);
-      TweakStore.unregisterPanel(panelId);
+      TweakStore2.unregisterPanel(panelId);
     });
   });
   createEffect2(() => {
@@ -3384,97 +182,14 @@ import { insert as _$insert24 } from "solid-js/web";
 import { createComponent as _$createComponent23 } from "solid-js/web";
 import { createSignal as createSignal23, onMount as onMount13, onCleanup as onCleanup18, Show as Show17, For as For8 } from "solid-js";
 import { Portal as Portal6 } from "solid-js/web";
+import { TweakStore as TweakStore10 } from "tweakers/store";
+import { TimelineStore as TimelineStore2 } from "tweakers/timeline";
 
 // src/solid/components/ShortcutListener.tsx
 import { createComponent as _$createComponent } from "solid-js/web";
 import { createContext, useContext, createSignal as createSignal3, onMount as onMount3, onCleanup as onCleanup3 } from "solid-js";
-
-// src/shortcut-utils.ts
-function decimalsForStep2(step) {
-  const s = step.toString();
-  const dot = s.indexOf(".");
-  return dot === -1 ? 0 : s.length - dot - 1;
-}
-function roundValue(val, step) {
-  const raw = Math.round(val / step) * step;
-  return parseFloat(raw.toFixed(decimalsForStep2(step)));
-}
-function getEffectiveStep(control, shortcut) {
-  const min = control.min ?? 0;
-  const max = control.max ?? 1;
-  const range = max - min;
-  const mode = shortcut.mode ?? "normal";
-  return mode === "fine" ? range * 0.01 : mode === "coarse" ? range * 0.1 : control.step ?? 1;
-}
-function applySliderDelta(panelId, path, control, effectiveStep2, direction) {
-  const currentValue = TweakStore.getValue(panelId, path);
-  const min = control.min ?? 0;
-  const max = control.max ?? 1;
-  const newValue = Math.max(min, Math.min(max, currentValue + direction * effectiveStep2));
-  TweakStore.updateValue(panelId, path, roundValue(newValue, effectiveStep2));
-}
-function snapToDecile(rawValue, min, max) {
-  const normalized = (rawValue - min) / (max - min);
-  const nearest = Math.round(normalized * 10) / 10;
-  if (Math.abs(normalized - nearest) <= 0.03125) {
-    return min + nearest * (max - min);
-  }
-  return rawValue;
-}
-function isInputFocused() {
-  const el = document.activeElement;
-  if (!el) return false;
-  const tag = el.tagName;
-  if (tag === "INPUT" || tag === "TEXTAREA") return true;
-  if (el.contentEditable === "true") return true;
-  return false;
-}
-function getActiveModifier(e) {
-  if (e.altKey) return "alt";
-  if (e.shiftKey) return "shift";
-  if (e.metaKey) return "meta";
-  return void 0;
-}
-function findControl(controls, path) {
-  for (const control of controls) {
-    if (control.path === path) return control;
-    if (control.type === "folder" && control.children) {
-      const found = findControl(control.children, path);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-var DRAG_SENSITIVITY = 4;
-function formatInteractionLabel(interaction) {
-  switch (interaction) {
-    case "drag":
-      return "Drag";
-    case "move":
-      return "Move";
-    case "scroll-only":
-      return "Scroll";
-    default:
-      return "Scroll";
-  }
-}
-function formatSliderShortcut(sc) {
-  const interaction = sc.interaction ?? "scroll";
-  const actionLabel = formatInteractionLabel(interaction);
-  if (!sc.key) return actionLabel;
-  const mod = formatModifier(sc.modifier);
-  return `${mod}${sc.key.toUpperCase()}+${actionLabel}`;
-}
-function formatToggleShortcut(sc) {
-  if (!sc.key) return "Press";
-  const mod = formatModifier(sc.modifier);
-  return `${mod}${sc.key.toUpperCase()}`;
-}
-function formatModifier(modifier) {
-  return modifier === "alt" ? "\u2325" : modifier === "shift" ? "\u21E7" : modifier === "meta" ? "\u2318" : "";
-}
-
-// src/solid/components/ShortcutListener.tsx
+import { TweakStore as TweakStore3 } from "tweakers/store";
+import { getEffectiveStep, applySliderDelta, DRAG_SENSITIVITY, findControl, isInputFocused, getActiveModifier } from "tweakers/shortcut-utils";
 var defaultState = {
   activePanelId: null,
   activePath: null
@@ -3491,13 +206,13 @@ function ShortcutListener(props) {
   let dragAccumulator = 0;
   const resolveActiveTarget = (interaction) => {
     for (const key of activeKeys) {
-      const panels = TweakStore.getPanels();
+      const panels = TweakStore3.getPanels();
       for (const panel of panels) {
         for (const [path, shortcut] of Object.entries(panel.shortcuts)) {
           if (!shortcut.key) continue;
           if (shortcut.key.toLowerCase() !== key) continue;
           if ((shortcut.interaction ?? "scroll") !== interaction) continue;
-          const control = TweakStore.getPanel(panel.id)?.controls ? findControl(panel.controls, path) : null;
+          const control = TweakStore3.getPanel(panel.id)?.controls ? findControl(panel.controls, path) : null;
           if (control && control.type === "slider") {
             return {
               panelId: panel.id,
@@ -3521,8 +236,8 @@ function ShortcutListener(props) {
           if (target2 && target2.control.type === "slider") {
             e.preventDefault();
             const direction = key === "arrowright" || key === "arrowup" ? 1 : -1;
-            const effectiveStep2 = getEffectiveStep(target2.control, target2.shortcut);
-            applySliderDelta(target2.panelId, target2.path, target2.control, effectiveStep2, direction);
+            const effectiveStep = getEffectiveStep(target2.control, target2.shortcut);
+            applySliderDelta(target2.panelId, target2.path, target2.control, effectiveStep, direction);
             return;
           }
         }
@@ -3530,15 +245,15 @@ function ShortcutListener(props) {
       const wasAlreadyHeld = activeKeys.has(key);
       activeKeys.add(key);
       const modifier = getActiveModifier(e);
-      const target = TweakStore.resolveShortcutTarget(key, modifier);
+      const target = TweakStore3.resolveShortcutTarget(key, modifier);
       if (target) {
         setActiveShortcut({
           activePanelId: target.panelId,
           activePath: target.path
         });
         if (!wasAlreadyHeld && target.control.type === "toggle") {
-          const currentValue = TweakStore.getValue(target.panelId, target.path);
-          TweakStore.updateValue(target.panelId, target.path, !currentValue);
+          const currentValue = TweakStore3.getValue(target.panelId, target.path);
+          TweakStore3.updateValue(target.panelId, target.path, !currentValue);
         }
       }
       if (!wasAlreadyHeld) {
@@ -3561,7 +276,7 @@ function ShortcutListener(props) {
         let found = false;
         for (const remainingKey of activeKeys) {
           const modifier = getActiveModifier(e);
-          const target = TweakStore.resolveShortcutTarget(remainingKey, modifier);
+          const target = TweakStore3.resolveShortcutTarget(remainingKey, modifier);
           if (target) {
             setActiveShortcut({
               activePanelId: target.panelId,
@@ -3584,7 +299,7 @@ function ShortcutListener(props) {
       const modifier = getActiveModifier(e);
       if (activeKeys.size > 0) {
         for (const key of activeKeys) {
-          const target = TweakStore.resolveShortcutTarget(key, modifier);
+          const target = TweakStore3.resolveShortcutTarget(key, modifier);
           if (!target) continue;
           const {
             panelId,
@@ -3594,13 +309,13 @@ function ShortcutListener(props) {
           const interaction = control.shortcut?.interaction ?? "scroll";
           if (interaction !== "scroll" || control.type !== "slider") continue;
           e.preventDefault();
-          const effectiveStep2 = getEffectiveStep(control, control.shortcut);
+          const effectiveStep = getEffectiveStep(control, control.shortcut);
           const direction = e.deltaY > 0 ? 1 : -1;
-          applySliderDelta(panelId, path, control, effectiveStep2, direction);
+          applySliderDelta(panelId, path, control, effectiveStep, direction);
           return;
         }
       }
-      const scrollOnlyTargets = TweakStore.resolveScrollOnlyTargets();
+      const scrollOnlyTargets = TweakStore3.resolveScrollOnlyTargets();
       for (const {
         panelId,
         path,
@@ -3609,9 +324,9 @@ function ShortcutListener(props) {
       } of scrollOnlyTargets) {
         if (control.type !== "slider") continue;
         e.preventDefault();
-        const effectiveStep2 = getEffectiveStep(control, shortcut);
+        const effectiveStep = getEffectiveStep(control, shortcut);
         const direction = e.deltaY > 0 ? 1 : -1;
-        applySliderDelta(panelId, path, control, effectiveStep2, direction);
+        applySliderDelta(panelId, path, control, effectiveStep, direction);
         return;
       }
     };
@@ -3640,11 +355,11 @@ function ShortcutListener(props) {
           const deltaX = e.clientX - lastMouseX;
           lastMouseX = e.clientX;
           dragAccumulator += deltaX;
-          const effectiveStep2 = getEffectiveStep(target.control, target.shortcut);
+          const effectiveStep = getEffectiveStep(target.control, target.shortcut);
           const steps = Math.trunc(dragAccumulator / DRAG_SENSITIVITY);
           if (steps !== 0) {
             dragAccumulator -= steps * DRAG_SENSITIVITY;
-            applySliderDelta(target.panelId, target.path, target.control, effectiveStep2, steps);
+            applySliderDelta(target.panelId, target.path, target.control, effectiveStep, steps);
           }
         }
         return;
@@ -3658,11 +373,11 @@ function ShortcutListener(props) {
         const deltaX = e.clientX - lastMouseX;
         lastMouseX = e.clientX;
         dragAccumulator += deltaX;
-        const effectiveStep2 = getEffectiveStep(moveTarget.control, moveTarget.shortcut);
+        const effectiveStep = getEffectiveStep(moveTarget.control, moveTarget.shortcut);
         const steps = Math.trunc(dragAccumulator / DRAG_SENSITIVITY);
         if (steps !== 0) {
           dragAccumulator -= steps * DRAG_SENSITIVITY;
-          applySliderDelta(moveTarget.panelId, moveTarget.path, moveTarget.control, effectiveStep2, steps);
+          applySliderDelta(moveTarget.panelId, moveTarget.path, moveTarget.control, effectiveStep, steps);
         }
       }
     };
@@ -3714,65 +429,8 @@ import { use as _$use15 } from "solid-js/web";
 import { createComponent as _$createComponent21 } from "solid-js/web";
 import { createSignal as createSignal22, createEffect as createEffect15, onMount as onMount12, onCleanup as onCleanup17 } from "solid-js";
 import { animate as animate8 } from "motion";
-
-// src/icons.ts
-var ICON_CHEVRON = "M6 9.5L12 15.5L18 9.5";
-var ICON_CHECK = "M5 12.75L10 19L19 5";
-var ICON_PAUSE = [
-  "M6.75 3C5.23122 3 4 4.23122 4 5.75V18.25C4 19.7688 5.23122 21 6.75 21H7.25C8.76878 21 10 19.7688 10 18.25V5.75C10 4.23122 8.76878 3 7.25 3H6.75Z",
-  "M16.75 3C15.2312 3 14 4.23122 14 5.75V18.25C14 19.7688 15.2312 21 16.75 21H17.25C18.7688 21 20 19.7688 20 18.25V5.75C20 4.23122 18.7688 3 17.25 3H16.75Z"
-];
-var ICON_PLAY = "M9.24394 2.36758C7.41419 1.18362 5 2.49701 5 4.67639V19.3238C5 21.5032 7.41419 22.8166 9.24394 21.6326L20.5624 14.3089C22.2371 13.2253 22.2372 10.775 20.5624 9.69129L9.24394 2.36758Z";
-var ICON_REPLAY = [
-  "M12 2.5C17.2466 2.50016 21.5 6.7534 21.5 12C21.5 17.2466 17.2466 21.4998 12 21.5C7.52191 21.5 3.76987 18.4025 2.76465 14.2344C2.63517 13.6975 2.96508 13.1578 3.50195 13.0283C4.03883 12.8988 4.57851 13.2288 4.70801 13.7656C5.5016 17.0563 8.46701 19.5 12 19.5C16.142 19.4998 19.5 16.142 19.5 12C19.5 7.85796 16.142 4.50016 12 4.5C9.32981 4.5 6.98389 5.89541 5.6543 8H7.5C8.05228 8 8.5 8.44772 8.5 9C8.5 9.55228 8.05228 10 7.5 10H3.5C2.94772 10 2.5 9.55228 2.5 9V5C2.5 4.44772 2.94772 4 3.5 4C4.05228 4 4.5 4.44772 4.5 5V6.16797C6.2376 3.93677 8.95063 2.5 12 2.5Z",
-  "M10 9.94043C10 9.33379 10.6826 8.97849 11.1797 9.32617L14.1221 11.3857C14.5486 11.6843 14.5486 12.3157 14.1221 12.6143L11.1797 14.6738C10.6826 15.0215 10 14.6662 10 14.0596V9.94043Z"
-];
-var ICON_LOOP = [
-  "M17 2L21 6L17 10",
-  "M3 11V9C3 7.34315 4.34315 6 6 6H21",
-  "M7 22L3 18L7 14",
-  "M21 13V15C21 16.6569 19.6569 18 18 18H3"
-];
-var ICON_TIMELINE = [
-  "M18.868 10C20.8517 10.0003 22.2886 11.8914 21.7577 13.8027L20.369 18.8027C20.0083 20.1012 18.826 20.9999 17.4784 21H6.51941C5.17179 21 3.98948 20.1012 3.62878 18.8027L2.24011 13.8027C1.7092 11.8913 3.14603 10.0003 5.12976 10H18.868Z",
-  "M18.9989 6.5C19.5511 6.50007 19.9989 6.94776 19.9989 7.5C19.9989 8.05224 19.5511 8.49993 18.9989 8.5H4.9989C4.44661 8.5 3.9989 8.05228 3.9989 7.5C3.9989 6.94772 4.44661 6.5 4.9989 6.5H18.9989Z",
-  "M16.9989 3C17.5511 3.00007 17.9989 3.44776 17.9989 4C17.9989 4.55224 17.5511 4.99993 16.9989 5H6.9989C6.44661 5 5.9989 4.55228 5.9989 4C5.9989 3.44772 6.44661 3 6.9989 3H16.9989Z"
-];
-var ICON_GRIP = [
-  { cx: "9", cy: "6" },
-  { cx: "9", cy: "12" },
-  { cx: "9", cy: "18" },
-  { cx: "15", cy: "6" },
-  { cx: "15", cy: "12" },
-  { cx: "15", cy: "18" }
-];
-var ICON_CLIPBOARD = {
-  board: "M8 6C8 4.34315 9.34315 3 11 3H13C14.6569 3 16 4.34315 16 6V7H8V6Z",
-  sparkle: "M19.2405 16.1852L18.5436 14.3733C18.4571 14.1484 18.241 14 18 14C17.759 14 17.5429 14.1484 17.4564 14.3733L16.7595 16.1852C16.658 16.4493 16.4493 16.658 16.1852 16.7595L14.3733 17.4564C14.1484 17.5429 14 17.759 14 18C14 18.241 14.1484 18.4571 14.3733 18.5436L16.1852 19.2405C16.4493 19.342 16.658 19.5507 16.7595 19.8148L17.4564 21.6267C17.5429 21.8516 17.759 22 18 22C18.241 22 18.4571 21.8516 18.5436 21.6267L19.2405 19.8148C19.342 19.5507 19.5507 19.342 19.8148 19.2405L21.6267 18.5436C21.8516 18.4571 22 18.241 22 18C22 17.759 21.8516 17.5429 21.6267 17.4564L19.8148 16.7595C19.5507 16.658 19.342 16.4493 19.2405 16.1852Z",
-  body: "M16 5H17C18.6569 5 20 6.34315 20 8V11M8 5H7C5.34315 5 4 6.34315 4 8V18C4 19.6569 5.34315 21 7 21H12"
-};
-var ICON_ADD_PRESET = [
-  "M4 6H20",
-  "M4 12H10",
-  "M15 15L21 15",
-  "M18 12V18",
-  "M4 18H10"
-];
-var ICON_TRASH = [
-  "M5 6.5L5.80734 18.2064C5.91582 19.7794 7.22348 21 8.80023 21H15.1998C16.7765 21 18.0842 19.7794 18.1927 18.2064L19 6.5",
-  "M10 11V16",
-  "M14 11V16",
-  "M3.5 6H20.5",
-  "M8.07092 5.74621C8.42348 3.89745 10.0485 2.5 12 2.5C13.9515 2.5 15.5765 3.89745 15.9291 5.74621"
-];
-var ICON_PANEL = {
-  path: "M6.84766 11.75C6.78583 11.9899 6.75 12.2408 6.75 12.5C6.75 12.7592 6.78583 13.0101 6.84766 13.25H2C1.58579 13.25 1.25 12.9142 1.25 12.5C1.25 12.0858 1.58579 11.75 2 11.75H6.84766ZM14 11.75C14.4142 11.75 14.75 12.0858 14.75 12.5C14.75 12.9142 14.4142 13.25 14 13.25H12.6523C12.7142 13.0101 12.75 12.7592 12.75 12.5C12.75 12.2408 12.7142 11.9899 12.6523 11.75H14ZM3.09766 7.25C3.03583 7.48994 3 7.74075 3 8C3 8.25925 3.03583 8.51006 3.09766 8.75H2C1.58579 8.75 1.25 8.41421 1.25 8C1.25 7.58579 1.58579 7.25 2 7.25H3.09766ZM14 7.25C14.4142 7.25 14.75 7.58579 14.75 8C14.75 8.41421 14.4142 8.75 14 8.75H8.90234C8.96417 8.51006 9 8.25925 9 8C9 7.74075 8.96417 7.48994 8.90234 7.25H14ZM7.59766 2.75C7.53583 2.98994 7.5 3.24075 7.5 3.5C7.5 3.75925 7.53583 4.01006 7.59766 4.25H2C1.58579 4.25 1.25 3.91421 1.25 3.5C1.25 3.08579 1.58579 2.75 2 2.75H7.59766ZM14 2.75C14.4142 2.75 14.75 3.08579 14.75 3.5C14.75 3.91421 14.4142 4.25 14 4.25H13.4023C13.4642 4.01006 13.5 3.75925 13.5 3.5C13.5 3.24075 13.4642 2.98994 13.4023 2.75H14Z",
-  circles: [
-    { cx: "6", cy: "8", r: "0.998596" },
-    { cx: "10.4999", cy: "3.5", r: "0.998657" },
-    { cx: "9.75015", cy: "12.5", r: "0.997986" }
-  ]
-};
+import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from "tweakers/icons";
+import { TweakStore as TweakStore9 } from "tweakers/store";
 
 // src/solid/components/Folder.tsx
 import { template as _$template2 } from "solid-js/web";
@@ -3788,6 +446,7 @@ import { addEventListener as _$addEventListener } from "solid-js/web";
 import { use as _$use } from "solid-js/web";
 import { createSignal as createSignal4, createEffect as createEffect3, onCleanup as onCleanup4, Show } from "solid-js";
 import { animate } from "motion";
+import { ICON_PANEL, ICON_CHEVRON } from "tweakers/icons";
 
 // src/solid/components/Checkbox.tsx
 import { template as _$template } from "solid-js/web";
@@ -4223,6 +882,7 @@ import { insert as _$insert20 } from "solid-js/web";
 import { memo as _$memo12 } from "solid-js/web";
 import { createComponent as _$createComponent19 } from "solid-js/web";
 import { For as For5 } from "solid-js";
+import { TweakStore as TweakStore7, hintDomId } from "tweakers/store";
 
 // src/solid/components/ModuleFolder.tsx
 import { template as _$template3 } from "solid-js/web";
@@ -4298,24 +958,8 @@ import { effect as _$effect4 } from "solid-js/web";
 import { insert as _$insert3 } from "solid-js/web";
 import { createEffect as createEffect4, createSignal as createSignal6, onCleanup as onCleanup5, Show as Show3 } from "solid-js";
 import { Dynamic, Portal } from "solid-js/web";
-
-// src/affordance-core.ts
-var AFFORDANCE_POPOVER_WIDTH = 200;
-var GAP = 6;
-var EDGE = 8;
-function placePopover(anchor, popoverHeight, viewportHeight, width = AFFORDANCE_POPOVER_WIDTH) {
-  const below = anchor.bottom + GAP;
-  const overflowsBelow = popoverHeight > 0 && below + popoverHeight > viewportHeight - EDGE;
-  const above = anchor.top - GAP - popoverHeight;
-  return {
-    // Only flip when there is actually more room above, or a short viewport
-    // would trade one clipped edge for the other.
-    top: overflowsBelow && above >= EDGE ? above : below,
-    left: Math.max(EDGE, anchor.right - width)
-  };
-}
-
-// src/solid/components/ControlShell.tsx
+import { TweakStore as TweakStore4 } from "tweakers/store";
+import { AFFORDANCE_POPOVER_WIDTH, placePopover } from "tweakers/affordance-core";
 var _tmpl$11 = /* @__PURE__ */ _$template4(`<span class=tweakers-hint role=tooltip>`);
 var _tmpl$24 = /* @__PURE__ */ _$template4(`<button type=button class=tweakers-affordance-dot>`);
 var _tmpl$32 = /* @__PURE__ */ _$template4(`<div class=tweakers-control-tip>`);
@@ -4335,11 +979,11 @@ function ControlShell(props) {
     const path = props.path;
     if (!panelId || !path) return;
     const read = () => {
-      setStatus(TweakStore.getAffordanceStatus(panelId, path));
-      setDisabled(TweakStore.isDisabled(panelId, path));
+      setStatus(TweakStore4.getAffordanceStatus(panelId, path));
+      setDisabled(TweakStore4.isDisabled(panelId, path));
     };
     read();
-    onCleanup5(TweakStore.subscribeControlState(panelId, read));
+    onCleanup5(TweakStore4.subscribeControlState(panelId, read));
   });
   createEffect4(() => {
     if (!dotEl) return;
@@ -4390,7 +1034,7 @@ function ControlShell(props) {
     panelId: props.panelId,
     path: props.path,
     status: status(),
-    setStatus: (next) => TweakStore.setAffordanceStatus(props.panelId, props.path, next)
+    setStatus: (next) => TweakStore4.setAffordanceStatus(props.panelId, props.path, next)
   });
   return [(() => {
     var _el$ = _tmpl$32();
@@ -4507,6 +1151,7 @@ import { insert as _$insert4 } from "solid-js/web";
 import { setStyleProperty as _$setStyleProperty2 } from "solid-js/web";
 import { createSignal as createSignal7, createEffect as createEffect5, onMount as onMount4, onCleanup as onCleanup6, Show as Show4 } from "solid-js";
 import { animate as animate2, motionValue } from "motion";
+import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut } from "tweakers/shortcut-utils";
 var _tmpl$12 = /* @__PURE__ */ _$template5(`<div class=tweakers-slider-hashmark>`);
 var _tmpl$25 = /* @__PURE__ */ _$template5(`<span>`);
 var _tmpl$33 = /* @__PURE__ */ _$template5(`<div class=tweakers-slider-fill-area><div class=tweakers-slider-fill-vertical>`);
@@ -4819,7 +1464,7 @@ function Slider(props) {
       e.stopPropagation();
       e.preventDefault();
       setShowInput(true);
-      setInputValue(props.value.toFixed(decimalsForStep2(step())));
+      setInputValue(props.value.toFixed(decimalsForStep(step())));
     }
   };
   const handleInputKeyDown = (e) => {
@@ -4829,7 +1474,7 @@ function Slider(props) {
       setIsValueHovered(false);
     }
   };
-  const displayValue = () => props.formatValue ? props.formatValue(props.value) : props.value.toFixed(decimalsForStep2(step()));
+  const displayValue = () => props.formatValue ? props.formatValue(props.value) : props.value.toFixed(decimalsForStep(step()));
   const discreteSteps = () => (max() - min()) / step();
   const hashMarks = () => {
     const ds = discreteSteps();
@@ -5045,6 +1690,7 @@ import { effect as _$effect6 } from "solid-js/web";
 import { memo as _$memo4 } from "solid-js/web";
 import { insert as _$insert5 } from "solid-js/web";
 import { createSignal as createSignal8, createEffect as createEffect6 } from "solid-js";
+import { decimalsForStep as decimalsForStep2, roundValue as roundValue2 } from "tweakers/shortcut-utils";
 var _tmpl$13 = /* @__PURE__ */ _$template6(`<div><span class=tweakers-number-label>`);
 var _tmpl$26 = /* @__PURE__ */ _$template6(`<input type=text class=tweakers-number-input>`);
 var _tmpl$34 = /* @__PURE__ */ _$template6(`<span class=tweakers-number-value>`);
@@ -5061,7 +1707,7 @@ function NumberControl(props) {
   let isClickFlag = true;
   let scrubStartValue = 0;
   let isPointerHeld = false;
-  const clamp7 = (v) => {
+  const clamp4 = (v) => {
     let out = v;
     if (props.min != null) out = Math.max(props.min, out);
     if (props.max != null) out = Math.min(props.max, out);
@@ -5092,8 +1738,8 @@ function NumberControl(props) {
     if (!isClickFlag) {
       const travel = isVertical() ? -dy : dx;
       const perPixel = step() * (e.shiftKey ? 10 : e.altKey ? 0.1 : 1);
-      const next = clamp7(scrubStartValue + travel * perPixel);
-      props.onChange(roundValue(next, step()));
+      const next = clamp4(scrubStartValue + travel * perPixel);
+      props.onChange(roundValue2(next, step()));
     }
   };
   const handlePointerUp = () => {
@@ -5115,7 +1761,7 @@ function NumberControl(props) {
   const handleInputSubmit = () => {
     const parsed = parseFloat(inputValue());
     if (!isNaN(parsed)) {
-      props.onChange(roundValue(clamp7(parsed), step()));
+      props.onChange(roundValue2(clamp4(parsed), step()));
     }
     setShowInput(false);
   };
@@ -5178,6 +1824,8 @@ import { insert as _$insert6 } from "solid-js/web";
 import { use as _$use5 } from "solid-js/web";
 import { createSignal as createSignal9, createEffect as createEffect7, onMount as onMount5, onCleanup as onCleanup7, Show as Show5 } from "solid-js";
 import { animate as animate3, motionValue as motionValue2 } from "motion";
+import { clampRange, setLow, setHigh, shiftSpan, nearestHandle, pickDragTarget, isOutsideSpan, handleLeftStyles } from "tweakers/range-slider-core";
+import { decimalsForStep as decimalsForStep3, roundValue as roundValue3 } from "tweakers/shortcut-utils";
 var _tmpl$14 = /* @__PURE__ */ _$template7(`<input type=text class=tweakers-range-slider-input>`);
 var _tmpl$27 = /* @__PURE__ */ _$template7(`<div class=tweakers-range-slider-wrapper><div><div class=tweakers-range-slider-fill></div><div class=tweakers-range-slider-handle style=transform:translateY(-50%);opacity:0.35></div><div class=tweakers-range-slider-handle style=transform:translateY(-50%);opacity:0.35></div><span class=tweakers-range-slider-label>`);
 var _tmpl$35 = /* @__PURE__ */ _$template7(`<span class=tweakers-range-slider-value><span class=tweakers-range-slider-bound></span><span class=tweakers-range-slider-dash>\u2013</span><span class=tweakers-range-slider-bound>`);
@@ -5288,12 +1936,12 @@ function RangeSlider(props) {
       setIsDragging(true);
     }
     if (isClickFlag) return;
-    const raw = roundValue(positionToValue(e.clientX), step());
+    const raw = roundValue3(positionToValue(e.clientX), step());
     const target = dragTarget();
     const current = value();
     let next;
     if (target === "span") {
-      const delta = raw - roundValue(dragStartValueAt, step());
+      const delta = raw - roundValue3(dragStartValueAt, step());
       next = shiftSpan(delta, dragStartValue, min(), max());
     } else if (target === "min") {
       next = setLow(raw, current, min());
@@ -5307,7 +1955,7 @@ function RangeSlider(props) {
   const handlePointerUp = (e) => {
     if (!isInteracting()) return;
     if (isClickFlag && clickMoves) {
-      const raw = roundValue(positionToValue(e.clientX), step());
+      const raw = roundValue3(positionToValue(e.clientX), step());
       const current = value();
       const which = dragTarget() ?? nearestHandle(raw, current);
       const next = which === "min" ? setLow(raw, current, min()) : setHigh(raw, current, max());
@@ -5417,7 +2065,7 @@ function RangeSlider(props) {
       inputRef.select();
     }
   });
-  const decimals = () => decimalsForStep2(step());
+  const decimals = () => decimalsForStep3(step());
   const openEditor = (which) => {
     setEditing(which);
     setInputValue((which === "min" ? value().min : value().max).toFixed(decimals()));
@@ -5427,7 +2075,7 @@ function RangeSlider(props) {
     if (!which) return;
     const parsed = parseFloat(inputValue());
     if (!isNaN(parsed)) {
-      const rounded = roundValue(parsed, step());
+      const rounded = roundValue3(parsed, step());
       const current = value();
       const next = which === "min" ? setLow(rounded, current, min()) : setHigh(rounded, current, max());
       props.onChange(next);
@@ -5522,6 +2170,7 @@ import { effect as _$effect8 } from "solid-js/web";
 import { insert as _$insert7 } from "solid-js/web";
 import { createComponent as _$createComponent7 } from "solid-js/web";
 import { Show as Show6 } from "solid-js";
+import { formatToggleShortcut } from "tweakers/shortcut-utils";
 var _tmpl$15 = /* @__PURE__ */ _$template8(`<span>`);
 var _tmpl$28 = /* @__PURE__ */ _$template8(`<div class="tweakers-labeled-control tweakers-labeled-control-check"><span class=tweakers-labeled-control-label>`);
 function Toggle(props) {
@@ -5560,6 +2209,7 @@ import { memo as _$memo5 } from "solid-js/web";
 import { insert as _$insert10 } from "solid-js/web";
 import { createComponent as _$createComponent9 } from "solid-js/web";
 import { createSignal as createSignal11, onMount as onMount6, onCleanup as onCleanup8 } from "solid-js";
+import { TweakStore as TweakStore5 } from "tweakers/store";
 
 // src/solid/components/SegmentedControl.tsx
 import { template as _$template9 } from "solid-js/web";
@@ -5730,15 +2380,15 @@ function SpringVisualization(props) {
 // src/solid/components/SpringControl.tsx
 var _tmpl$18 = /* @__PURE__ */ _$template11(`<div style=display:flex;flex-direction:column;gap:6px><div class=tweakers-labeled-control><span class=tweakers-labeled-control-label>Type`);
 function SpringControl(props) {
-  const [mode, setMode] = createSignal11(TweakStore.getSpringMode(props.panelId, props.path));
+  const [mode, setMode] = createSignal11(TweakStore5.getSpringMode(props.panelId, props.path));
   onMount6(() => {
-    const unsub = TweakStore.subscribe(props.panelId, () => {
-      setMode(TweakStore.getSpringMode(props.panelId, props.path));
+    const unsub = TweakStore5.subscribe(props.panelId, () => {
+      setMode(TweakStore5.getSpringMode(props.panelId, props.path));
     });
     onCleanup8(unsub);
   });
   const isSimpleMode = () => mode() === "simple";
-  const cache2 = {
+  const cache = {
     simple: props.spring.visualDuration !== void 0 ? props.spring : {
       type: "spring",
       visualDuration: 0.3,
@@ -5753,15 +2403,15 @@ function SpringControl(props) {
   };
   const handleModeChange = (newMode) => {
     if (isSimpleMode()) {
-      cache2.simple = props.spring;
+      cache.simple = props.spring;
     } else {
-      cache2.advanced = props.spring;
+      cache.advanced = props.spring;
     }
-    TweakStore.updateSpringMode(props.panelId, props.path, newMode);
+    TweakStore5.updateSpringMode(props.panelId, props.path, newMode);
     if (newMode === "simple") {
-      props.onChange(cache2.simple);
+      props.onChange(cache.simple);
     } else {
-      props.onChange(cache2.advanced);
+      props.onChange(cache.advanced);
     }
   };
   const handleUpdate = (key, value) => {
@@ -5880,6 +2530,7 @@ import { insert as _$insert11 } from "solid-js/web";
 import { createComponent as _$createComponent10 } from "solid-js/web";
 import { memo as _$memo6 } from "solid-js/web";
 import { createSignal as createSignal13, Show as Show8 } from "solid-js";
+import { TweakStore as TweakStore6 } from "tweakers/store";
 
 // src/solid/primitives.ts
 import { createEffect as createEffect9, createSignal as createSignal12, from, onCleanup as onCleanup9 } from "solid-js";
@@ -5939,10 +2590,10 @@ function EasingVisualization(props) {
 var _tmpl$20 = /* @__PURE__ */ _$template13(`<div class=tweakers-labeled-control><span class=tweakers-labeled-control-label>Ease</span><input type=text class=tweakers-text-input>`);
 var _tmpl$211 = /* @__PURE__ */ _$template13(`<div style=display:flex;flex-direction:column;gap:6px><div class=tweakers-labeled-control><span class=tweakers-labeled-control-label>Type`);
 function TransitionControl(props) {
-  const mode = fromStore(() => TweakStore.getTransitionMode(props.panelId, props.path), (notify2) => TweakStore.subscribe(props.panelId, notify2));
+  const mode = fromStore(() => TweakStore6.getTransitionMode(props.panelId, props.path), (notify) => TweakStore6.subscribe(props.panelId, notify));
   const [editingEase, setEditingEase] = createSignal13(false);
   const [easeDraft, setEaseDraft] = createSignal13("");
-  const cache2 = {
+  const cache = {
     easing: props.value.type === "easing" ? props.value : {
       type: "easing",
       duration: 0.3,
@@ -5964,22 +2615,22 @@ function TransitionControl(props) {
   const isSimple = () => mode() === "simple";
   const spring = () => {
     if (props.value.type === "spring") {
-      if (isSimple()) cache2.simple = props.value;
-      else if (mode() === "advanced") cache2.advanced = props.value;
+      if (isSimple()) cache.simple = props.value;
+      else if (mode() === "advanced") cache.advanced = props.value;
       return props.value;
     }
-    return cache2.simple;
+    return cache.simple;
   };
   const easing = () => {
     if (props.value.type === "easing") {
-      cache2.easing = props.value;
+      cache.easing = props.value;
       return props.value;
     }
-    return cache2.easing;
+    return cache.easing;
   };
   const handleModeChange = (next) => {
-    TweakStore.updateTransitionMode(props.panelId, props.path, next);
-    props.onChange(next === "easing" ? cache2.easing : next === "simple" ? cache2.simple : cache2.advanced);
+    TweakStore6.updateTransitionMode(props.panelId, props.path, next);
+    props.onChange(next === "easing" ? cache.easing : next === "simple" ? cache.simple : cache.advanced);
   };
   const handleSpringUpdate = (key, value) => {
     const current = spring();
@@ -6253,6 +2904,7 @@ import { use as _$use7 } from "solid-js/web";
 import { createSignal as createSignal14, createEffect as createEffect10, onMount as onMount7, onCleanup as onCleanup10, Show as Show9, For as For2 } from "solid-js";
 import { Portal as Portal2 } from "solid-js/web";
 import { animate as animate4 } from "motion";
+import { ICON_CHEVRON as ICON_CHEVRON2 } from "tweakers/icons";
 var _tmpl$30 = /* @__PURE__ */ _$template15(`<div class=tweakers-select-dropdown>`);
 var _tmpl$212 = /* @__PURE__ */ _$template15(`<div class=tweakers-select-row><button class=tweakers-select-trigger><span class=tweakers-select-label></span><div class=tweakers-select-right><span class=tweakers-select-value></span><svg class=tweakers-select-chevron viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
 var _tmpl$38 = /* @__PURE__ */ _$template15(`<button class=tweakers-select-option>`);
@@ -6386,7 +3038,7 @@ function SelectControl(props) {
     _$insert13(_el$5, () => selectedOption()?.label ?? props.value);
     var _ref$2 = chevronRef;
     typeof _ref$2 === "function" ? _$use7(_ref$2, _el$6) : chevronRef = _el$6;
-    _$setAttribute11(_el$7, "d", ICON_CHEVRON);
+    _$setAttribute11(_el$7, "d", ICON_CHEVRON2);
     _$insert13(_el$, _$createComponent11(Show9, {
       get when() {
         return !!portalTarget();
@@ -6473,58 +3125,8 @@ import { setAttribute as _$setAttribute12 } from "solid-js/web";
 import { insert as _$insert14 } from "solid-js/web";
 import { effect as _$effect15 } from "solid-js/web";
 import { createSignal as createSignal15, createEffect as createEffect11, onCleanup as onCleanup11, Show as Show10, For as For3 } from "solid-js";
-
-// src/color-palette-store.ts
-var cache = null;
-var listeners = /* @__PURE__ */ new Set();
-var storageListenerAttached = false;
-function readStorage() {
-  try {
-    if (typeof window === "undefined") return emptyPalette();
-    return deserializePalette(window.localStorage.getItem(PALETTE_STORAGE_KEY));
-  } catch {
-    return emptyPalette();
-  }
-}
-function notify() {
-  const slots = cache ?? emptyPalette();
-  listeners.forEach((cb) => cb(slots));
-}
-function onStorageEvent(e) {
-  if (e.key !== PALETTE_STORAGE_KEY) return;
-  cache = deserializePalette(e.newValue);
-  notify();
-}
-function loadPalette() {
-  if (cache === null) cache = readStorage();
-  return cache;
-}
-function savePalette(slots) {
-  cache = slots;
-  try {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(PALETTE_STORAGE_KEY, serializePalette(slots));
-    }
-  } catch {
-  }
-  notify();
-}
-function subscribePalette(cb) {
-  listeners.add(cb);
-  if (!storageListenerAttached && typeof window !== "undefined") {
-    window.addEventListener("storage", onStorageEvent);
-    storageListenerAttached = true;
-  }
-  return () => {
-    listeners.delete(cb);
-    if (listeners.size === 0 && storageListenerAttached && typeof window !== "undefined") {
-      window.removeEventListener("storage", onStorageEvent);
-      storageListenerAttached = false;
-    }
-  };
-}
-
-// src/solid/components/ColorPickerPanel.tsx
+import { parseHex, formatHex, normalizeHex, rgbToHsv, hsvToRgb, getChannels, rgbaToChannels, channelsToRgba, opacityPercent, emptyPalette, LONG_PRESS_MS, PALETTE_DRAG_CANCEL_PX, PALETTE_SIZE } from "tweakers/color-core";
+import { loadPalette, savePalette, subscribePalette } from "tweakers/color-palette-store";
 var _tmpl$31 = /* @__PURE__ */ _$template16(`<label class=tweakers-color-field><input type=text inputmode=decimal><span class=tweakers-color-field-label>`);
 var _tmpl$213 = /* @__PURE__ */ _$template16(`<label class="tweakers-color-field tweakers-color-field-hex"><input type=text><span class=tweakers-color-field-label>HEX`);
 var _tmpl$39 = /* @__PURE__ */ _$template16(`<button class=tweakers-color-palette-slot>`);
@@ -6931,6 +3533,7 @@ function ColorPickerPanel(props) {
 _$delegateEvents12(["input", "keydown", "contextmenu", "pointerdown", "pointermove", "pointerup", "click"]);
 
 // src/solid/components/ColorControl.tsx
+import { parseHex as parseHex2, normalizeHexEdit, bareHex, opacityPercent as opacityPercent2 } from "tweakers/color-core";
 var _tmpl$40 = /* @__PURE__ */ _$template17(`<input type=text class=tweakers-color-hex-input>`);
 var _tmpl$214 = /* @__PURE__ */ _$template17(`<div class=tweakers-color-picker-popover>`);
 var _tmpl$310 = /* @__PURE__ */ _$template17(`<div class=tweakers-color-control><span class=tweakers-color-label></span><div class=tweakers-color-inputs><span class=tweakers-color-hex-wrap><span class=tweakers-color-hash aria-hidden=true>#</span></span><button class=tweakers-color-swatch title="Pick color">`);
@@ -6953,7 +3556,7 @@ function ColorControl(props) {
   let swatchRef;
   let pickerRef;
   let closeAnim = null;
-  const rgba = () => parseHex(props.value);
+  const rgba = () => parseHex2(props.value);
   createEffect12(() => {
     const value = props.value;
     if (!isEditing()) {
@@ -7116,7 +3719,7 @@ function ColorControl(props) {
       },
       children: (r) => [_tmpl$54(), (() => {
         var _el$1 = _tmpl$64(), _el$10 = _el$1.firstChild;
-        _$insert15(_el$1, () => opacityPercent(r()), _el$10);
+        _$insert15(_el$1, () => opacityPercent2(r()), _el$10);
         return _el$1;
       })()]
     }), _el$7);
@@ -7227,13 +3830,14 @@ import { setStyleProperty as _$setStyleProperty7 } from "solid-js/web";
 import { effect as _$effect17 } from "solid-js/web";
 import { use as _$use10 } from "solid-js/web";
 import { createSignal as createSignal17, onCleanup as onCleanup13, onMount as onMount9, Show as Show12 } from "solid-js";
+import { gradientFillBox, setGradientAngle, setGradientCenter, setGradientScale, setGradientSquash, setGradientRotation } from "tweakers/gradient-core";
 var _tmpl$41 = /* @__PURE__ */ _$template18(`<div class=tweakers-gradient-pad-line>`);
 var _tmpl$215 = /* @__PURE__ */ _$template18(`<button type=button class=tweakers-gradient-pad-handle data-kind=major aria-label="Gradient size and rotation">`);
 var _tmpl$311 = /* @__PURE__ */ _$template18(`<button type=button class=tweakers-gradient-pad-handle data-kind=minor aria-label="Gradient squash">`);
 var _tmpl$47 = /* @__PURE__ */ _$template18(`<button type=button class=tweakers-gradient-pad-handle data-kind=angle aria-label="Gradient angle">`);
 var _tmpl$55 = /* @__PURE__ */ _$template18(`<button type=button class=tweakers-gradient-pad-handle data-kind=center aria-label="Gradient center">`);
 var _tmpl$65 = /* @__PURE__ */ _$template18(`<div class="tweakers-gradient-pad tweakers-checker"><div class=tweakers-gradient-pad-fill>`);
-var clamp6 = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+var clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 var wrap360 = (deg) => (deg % 360 + 360) % 360;
 var RAD = Math.PI / 180;
 var vectorToAngle = (dx, dy) => wrap360(Math.atan2(dx, -dy) / RAD);
@@ -7266,8 +3870,8 @@ function GradientTransformPad(props) {
   const ryPx = () => Math.max(10, (props.value.squash ?? scale()) / 100 * size().h);
   const theta = () => rotation() * RAD;
   const pin = (x, y) => ({
-    x: clamp6(x, 5, size().w - 5),
-    y: clamp6(y, 5, size().h - 5)
+    x: clamp(x, 5, size().w - 5),
+    y: clamp(y, 5, size().h - 5)
   });
   const major = () => pin(cxPx() + Math.cos(theta()) * rxPx(), cyPx() + Math.sin(theta()) * rxPx());
   const minor = () => pin(cxPx() - Math.sin(theta()) * ryPx(), cyPx() + Math.cos(theta()) * ryPx());
@@ -7443,7 +4047,7 @@ function GradientTransformPad(props) {
         _el$8.$$pointermove = onHandleMove;
         _$addEventListener3(_el$8, "pointerdown", onHandleDown("center"), true);
         _$effect17((_p$) => {
-          var _v$13 = `${clamp6(cxPx(), 5, size().w - 5)}px`, _v$14 = `${clamp6(cyPx(), 5, size().h - 5)}px`;
+          var _v$13 = `${clamp(cxPx(), 5, size().w - 5)}px`, _v$14 = `${clamp(cyPx(), 5, size().h - 5)}px`;
           _v$13 !== _p$.e && _$setStyleProperty7(_el$8, "left", _p$.e = _v$13);
           _v$14 !== _p$.t && _$setStyleProperty7(_el$8, "top", _p$.t = _v$14);
           return _p$;
@@ -7479,6 +4083,8 @@ function GradientTransformPad(props) {
 _$delegateEvents14(["pointerdown", "pointermove", "pointerup"]);
 
 // src/solid/components/GradientPanel.tsx
+import { ICON_GRIP } from "tweakers/icons";
+import { gradientToCss, addStop, moveStop, removeStop, setStopColor, setGradientType, MIN_STOPS, STOP_DETACH_PX, LONG_PRESS_MS as LONG_PRESS_MS2, PALETTE_DRAG_CANCEL_PX as PALETTE_DRAG_CANCEL_PX2 } from "tweakers/gradient-core";
 var _tmpl$48 = /* @__PURE__ */ _$template19(`<div class=tweakers-gradient-panel><div class=tweakers-gradient-toolbar><button type=button class=tweakers-gradient-grip aria-label="Drag to move"title="Drag to move"><svg viewBox="0 0 24 24"fill=currentColor aria-hidden=true></svg></button></div><div class=tweakers-gradient-strip></div><span class=tweakers-gradient-divider aria-hidden=true>`);
 var _tmpl$216 = /* @__PURE__ */ _$template19(`<svg><circle r=1.5></svg>`, false, true, false);
 var _tmpl$312 = /* @__PURE__ */ _$template19(`<button type=button class=tweakers-gradient-stop>`);
@@ -7586,7 +4192,7 @@ function GradientPanel(props) {
           const next2 = removeStop(props.value, index2);
           props.onChange(next2);
           setSelectedIndex(Math.min(index2, next2.stops.length - 1));
-        }, LONG_PRESS_MS);
+        }, LONG_PRESS_MS2);
       }
       return;
     }
@@ -7608,7 +4214,7 @@ function GradientPanel(props) {
       return;
     }
     if (drag.mode === "pending") {
-      if (Math.hypot(e.clientX - drag.originX, e.clientY - drag.originY) <= PALETTE_DRAG_CANCEL_PX) return;
+      if (Math.hypot(e.clientX - drag.originX, e.clientY - drag.originY) <= PALETTE_DRAG_CANCEL_PX2) return;
       clearTimer();
       setHoldingIndex(-1);
       drag.mode = "dragging";
@@ -7758,6 +4364,7 @@ function GradientPanel(props) {
 _$delegateEvents15(["pointerdown", "pointermove", "pointerup"]);
 
 // src/solid/components/GradientControl.tsx
+import { gradientToCss as gradientToCss2 } from "tweakers/gradient-core";
 var _tmpl$49 = /* @__PURE__ */ _$template20(`<div class=tweakers-gradient-popover>`);
 var _tmpl$217 = /* @__PURE__ */ _$template20(`<div class=tweakers-gradient-control><span class=tweakers-gradient-label></span><button class="tweakers-gradient-preview tweakers-checker"title="Edit gradient">`);
 var PANEL_WIDTH = 240;
@@ -7953,7 +4560,7 @@ function GradientControl(props) {
       }
     }), null);
     _$effect19((_p$) => {
-      var _v$ = gradientToCss(props.value), _v$2 = String(isOpen()), _v$3 = `Edit gradient for ${props.label}`, _v$4 = isOpen();
+      var _v$ = gradientToCss2(props.value), _v$2 = String(isOpen()), _v$3 = `Edit gradient for ${props.label}`, _v$4 = isOpen();
       _v$ !== _p$.e && _$setStyleProperty9(_el$3, "--gradient-preview", _p$.e = _v$);
       _v$2 !== _p$.t && _$setAttribute15(_el$3, "data-open", _p$.t = _v$2);
       _v$3 !== _p$.a && _$setAttribute15(_el$3, "aria-label", _p$.a = _v$3);
@@ -7985,23 +4592,25 @@ import { className as _$className6 } from "solid-js/web";
 import { effect as _$effect20 } from "solid-js/web";
 import { insert as _$insert19 } from "solid-js/web";
 import { createSignal as createSignal20, Show as Show15 } from "solid-js";
+import { formatSliderShortcut as formatSliderShortcut2 } from "tweakers/shortcut-utils";
+import { resolveAxis, valueFromPoint, pointFromValue, applyDetentAxis, nudge, centerValue, normalizeValue } from "tweakers/xy-pad-core";
 var _tmpl$50 = /* @__PURE__ */ _$template21(`<span>`);
 var _tmpl$218 = /* @__PURE__ */ _$template21(`<div class=tweakers-xy-grid aria-hidden=true>`);
 var _tmpl$313 = /* @__PURE__ */ _$template21(`<div class=tweakers-xy><div class=tweakers-xy-header><span class=tweakers-xy-label></span></div><div class=tweakers-xy-area role=application aria-roledescription="2D pad"><div class="tweakers-xy-axis tweakers-xy-axis-x"aria-hidden=true></div><div class="tweakers-xy-axis tweakers-xy-axis-y"aria-hidden=true></div><div class="tweakers-xy-guide tweakers-xy-guide-v"aria-hidden=true></div><div class="tweakers-xy-guide tweakers-xy-guide-h"aria-hidden=true></div><div class=tweakers-xy-thumb aria-hidden=true>`);
 var DEFAULT_GRID_X = 5;
 var DEFAULT_GRID_Y = 5;
 var FINE_DRAG = 0.15;
-function decimalsForStep3(step) {
+function decimalsForStep4(step) {
   const s = step.toString();
   const dot = s.indexOf(".");
   return dot === -1 ? 0 : s.length - dot - 1;
 }
 function formatComponent(v, axis) {
-  return (v + 0).toFixed(decimalsForStep3(axis.step));
+  return (v + 0).toFixed(decimalsForStep4(axis.step));
 }
 function XYPad(props) {
   const size = () => props.size ?? 160;
-  const snap2 = () => props.snap ?? false;
+  const snap = () => props.snap ?? false;
   const disabled = () => props.disabled ?? false;
   const returnToCenter = () => props.returnToCenter ?? false;
   const showValues = () => props.showValues ?? false;
@@ -8030,7 +4639,7 @@ function XYPad(props) {
     const next = valueFromPoint({
       x: px,
       y: py
-    }, xs, ys, snap2());
+    }, xs, ys, snap());
     const originPoint = pointFromValue({
       x: xs.origin,
       y: ys.origin
@@ -8079,7 +4688,7 @@ function XYPad(props) {
     const el = areaRef;
     const stillActive = (el?.matches(":hover") ?? false) || el === (el?.ownerDocument ?? document).activeElement;
     if (!stillActive) setActive(false);
-    if (returnToCenter()) emit(normalizeValue(centerValue(xAxis(), yAxis()), xAxis(), yAxis(), snap2()));
+    if (returnToCenter()) emit(normalizeValue(centerValue(xAxis(), yAxis()), xAxis(), yAxis(), snap()));
   };
   const handleKeyDown = (e) => {
     if (disabled()) return;
@@ -8134,7 +4743,7 @@ function XYPad(props) {
   };
   const reset = () => {
     if (disabled()) return;
-    emit(normalizeValue(centerValue(xAxis(), yAxis()), xAxis(), yAxis(), snap2()));
+    emit(normalizeValue(centerValue(xAxis(), yAxis()), xAxis(), yAxis(), snap()));
   };
   const xLabel = () => props.x?.label ?? "X";
   const yLabel = () => props.y?.label ?? "Y";
@@ -8161,7 +4770,7 @@ function XYPad(props) {
       },
       get children() {
         var _el$4 = _tmpl$50();
-        _$insert19(_el$4, () => formatSliderShortcut(props.shortcut));
+        _$insert19(_el$4, () => formatSliderShortcut2(props.shortcut));
         _$effect20(() => _$className6(_el$4, `tweakers-shortcut-pill${props.shortcutActive ? " tweakers-shortcut-pill-active" : ""}`));
         return _el$4;
       }
@@ -8301,7 +4910,7 @@ function ControlRenderer(props) {
           get value() {
             return value();
           },
-          onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next),
+          onChange: (next) => TweakStore7.updateValue(props.panelId, control.path, next),
           get min() {
             return control.min;
           },
@@ -8341,7 +4950,7 @@ function ControlRenderer(props) {
           get value() {
             return value();
           },
-          onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next),
+          onChange: (next) => TweakStore7.updateValue(props.panelId, control.path, next),
           get min() {
             return control.min;
           },
@@ -8381,7 +4990,7 @@ function ControlRenderer(props) {
           get defaultValue() {
             return control.rangeDefault;
           },
-          onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next)
+          onChange: (next) => TweakStore7.updateValue(props.panelId, control.path, next)
         });
       case "toggle":
         return _$createComponent19(Toggle, {
@@ -8391,7 +5000,7 @@ function ControlRenderer(props) {
           get checked() {
             return value();
           },
-          onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next),
+          onChange: (next) => TweakStore7.updateValue(props.panelId, control.path, next),
           get shortcut() {
             return control.shortcut;
           },
@@ -8413,7 +5022,7 @@ function ControlRenderer(props) {
           get spring() {
             return value();
           },
-          onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next)
+          onChange: (next) => TweakStore7.updateValue(props.panelId, control.path, next)
         });
       case "transition":
         return _$createComponent19(TransitionControl, {
@@ -8429,7 +5038,7 @@ function ControlRenderer(props) {
           get value() {
             return value();
           },
-          onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next),
+          onChange: (next) => TweakStore7.updateValue(props.panelId, control.path, next),
           get durationControl() {
             return props.transitionDuration;
           }
@@ -8444,7 +5053,7 @@ function ControlRenderer(props) {
             get enabled() {
               return props.values[enabledPath];
             },
-            onEnabledChange: (next) => TweakStore.updateValue(props.panelId, enabledPath, next),
+            onEnabledChange: (next) => TweakStore7.updateValue(props.panelId, enabledPath, next),
             get defaultOpen() {
               return control.defaultOpen ?? true;
             },
@@ -8497,7 +5106,7 @@ function ControlRenderer(props) {
           get value() {
             return value();
           },
-          onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next),
+          onChange: (next) => TweakStore7.updateValue(props.panelId, control.path, next),
           get placeholder() {
             return control.placeholder;
           }
@@ -8513,7 +5122,7 @@ function ControlRenderer(props) {
           get options() {
             return control.options ?? [];
           },
-          onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next)
+          onChange: (next) => TweakStore7.updateValue(props.panelId, control.path, next)
         });
       case "color":
         return _$createComponent19(ColorControl, {
@@ -8523,7 +5132,7 @@ function ControlRenderer(props) {
           get value() {
             return value();
           },
-          onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next),
+          onChange: (next) => TweakStore7.updateValue(props.panelId, control.path, next),
           get alpha() {
             return control.alpha;
           },
@@ -8539,7 +5148,7 @@ function ControlRenderer(props) {
           get value() {
             return value();
           },
-          onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next)
+          onChange: (next) => TweakStore7.updateValue(props.panelId, control.path, next)
         });
       case "xy":
         return _$createComponent19(XYControl, {
@@ -8549,7 +5158,7 @@ function ControlRenderer(props) {
           get value() {
             return value();
           },
-          onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next),
+          onChange: (next) => TweakStore7.updateValue(props.panelId, control.path, next),
           get x() {
             return control.xAxis;
           },
@@ -8581,9 +5190,9 @@ function ControlRenderer(props) {
       case "action":
         return (() => {
           var _el$ = _tmpl$51();
-          _el$.$$click = () => TweakStore.triggerAction(props.panelId, control.path);
+          _el$.$$click = () => TweakStore7.triggerAction(props.panelId, control.path);
           _$insert20(_el$, () => control.label);
-          _$effect21(() => _el$.disabled = TweakStore.isDisabled(props.panelId, control.path));
+          _$effect21(() => _el$.disabled = TweakStore7.isDisabled(props.panelId, control.path));
           return _el$;
         })();
       default:
@@ -8637,6 +5246,8 @@ import { use as _$use14 } from "solid-js/web";
 import { createSignal as createSignal21, createEffect as createEffect14, onMount as onMount11, onCleanup as onCleanup16, Show as Show16, For as For6 } from "solid-js";
 import { Portal as Portal5 } from "solid-js/web";
 import { animate as animate7 } from "motion";
+import { ICON_CHEVRON as ICON_CHEVRON3, ICON_TRASH } from "tweakers/icons";
+import { TweakStore as TweakStore8 } from "tweakers/store";
 var _tmpl$56 = /* @__PURE__ */ _$template23(`<div class=tweakers-preset-item><span class=tweakers-preset-name>Version 1`);
 var _tmpl$219 = /* @__PURE__ */ _$template23(`<div class="tweakers-root tweakers-preset-dropdown"style=position:fixed>`);
 var _tmpl$314 = /* @__PURE__ */ _$template23(`<div class=tweakers-preset-manager><button class=tweakers-preset-trigger><span class=tweakers-preset-label></span><svg class=tweakers-select-chevron viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
@@ -8745,12 +5356,12 @@ function PresetManager(props) {
     });
   });
   const handleSelect = (presetId) => {
-    TweakStore.selectPreset(props.panelId, presetId);
+    TweakStore8.selectPreset(props.panelId, presetId);
     closeDropdown();
   };
   const handleDelete = (e, presetId) => {
     e.stopPropagation();
-    TweakStore.removePreset(props.panelId, presetId);
+    TweakStore8.removePreset(props.panelId, presetId);
   };
   return (() => {
     var _el$ = _tmpl$314(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild;
@@ -8763,7 +5374,7 @@ function PresetManager(props) {
     })());
     var _ref$2 = chevronRef;
     typeof _ref$2 === "function" ? _$use14(_ref$2, _el$4) : chevronRef = _el$4;
-    _$setAttribute17(_el$5, "d", ICON_CHEVRON);
+    _$setAttribute17(_el$5, "d", ICON_CHEVRON3);
     _$insert21(_el$, _$createComponent20(Show16, {
       get when() {
         return !!portalTarget();
@@ -8881,10 +5492,10 @@ var _tmpl$315 = /* @__PURE__ */ _$template24(`<div class=tweakers-panel-wrapper>
 function Panel(props) {
   const [copied, setCopied] = createSignal22(false);
   const [, setIsPanelOpen] = createSignal22(props.defaultOpen ?? true);
-  const [values, setValues] = createSignal22(TweakStore.getValues(props.panel.id));
-  const [presets, setPresets] = createSignal22(TweakStore.getPresetItems(props.panel.id));
-  const [activePresetId, setActivePresetId] = createSignal22(TweakStore.getActivePresetId(props.panel.id));
-  const [providerMode, setProviderMode] = createSignal22(TweakStore.hasPresetProvider(props.panel.id));
+  const [values, setValues] = createSignal22(TweakStore9.getValues(props.panel.id));
+  const [presets, setPresets] = createSignal22(TweakStore9.getPresetItems(props.panel.id));
+  const [activePresetId, setActivePresetId] = createSignal22(TweakStore9.getActivePresetId(props.panel.id));
+  const [providerMode, setProviderMode] = createSignal22(TweakStore9.hasPresetProvider(props.panel.id));
   let addButtonRef;
   let copyButtonRef;
   let copyClipboardIconRef;
@@ -8900,11 +5511,11 @@ function Panel(props) {
     bounce: 0.3
   };
   onMount12(() => {
-    const unsub = TweakStore.subscribe(props.panel.id, () => {
-      setValues(TweakStore.getValues(props.panel.id));
-      setPresets(TweakStore.getPresetItems(props.panel.id));
-      setActivePresetId(TweakStore.getActivePresetId(props.panel.id));
-      setProviderMode(TweakStore.hasPresetProvider(props.panel.id));
+    const unsub = TweakStore9.subscribe(props.panel.id, () => {
+      setValues(TweakStore9.getValues(props.panel.id));
+      setPresets(TweakStore9.getPresetItems(props.panel.id));
+      setActivePresetId(TweakStore9.getActivePresetId(props.panel.id));
+      setProviderMode(TweakStore9.hasPresetProvider(props.panel.id));
     });
     if (copyClipboardIconRef && copyCheckIconRef) {
       copyClipboardIconRef.style.transformOrigin = "50% 50%";
@@ -8919,7 +5530,7 @@ function Panel(props) {
     }
     onCleanup17(unsub);
   });
-  const handleAddPreset = () => TweakStore.createPreset(props.panel.id);
+  const handleAddPreset = () => TweakStore9.createPreset(props.panel.id);
   const handleCopy = () => {
     const jsonStr = JSON.stringify(values(), null, 2);
     const instruction = `Update the createTweakers configuration for "${props.panel.name}" with these values:
@@ -9000,7 +5611,7 @@ Apply these values as the new defaults in the createTweakers call.`;
       return values();
     }
   });
-  const presetsHidden = () => TweakStore.arePresetsHidden(props.panel.id);
+  const presetsHidden = () => TweakStore9.arePresetsHidden(props.panel.id);
   const toolbar = presetsHidden() ? props.toolbarExtra : [(() => {
     var _el$ = _tmpl$58(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.nextSibling, _el$6 = _el$5.nextSibling, _el$7 = _el$6.nextSibling;
     _el$.addEventListener("pointerleave", handleAddTapEnd);
@@ -9086,7 +5697,7 @@ Apply these values as the new defaults in the createTweakers call.`;
         return _$memo14(() => !!props.panel.module)() ? values()["_enabled"] : void 0;
       },
       get onEnabledChange() {
-        return props.panel.module ? (v) => TweakStore.updateValue(props.panel.id, "_enabled", v) : void 0;
+        return props.panel.module ? (v) => TweakStore9.updateValue(props.panel.id, "_enabled", v) : void 0;
       },
       get children() {
         return renderControls();
@@ -9105,10 +5716,12 @@ import { effect as _$effect24 } from "solid-js/web";
 import { insert as _$insert23 } from "solid-js/web";
 import { createComponent as _$createComponent22 } from "solid-js/web";
 import { For as For7 } from "solid-js";
+import { ICON_TIMELINE } from "tweakers/icons";
+import { TimelineUiStore } from "tweakers/timeline";
 var _tmpl$59 = /* @__PURE__ */ _$template25(`<button class="tweakers-toolbar-add tweakers-timeline-toolbar-toggle"><svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
 var _tmpl$221 = /* @__PURE__ */ _$template25(`<svg><path fill=currentColor></svg>`, false, true, false);
 function TimelineToggleButton() {
-  const visible = fromStore(() => TimelineUiStore.getVisible(), (notify2) => TimelineUiStore.subscribe(notify2));
+  const visible = fromStore(() => TimelineUiStore.getVisible(), (notify) => TimelineUiStore.subscribe(notify));
   const label = () => visible() ? "Hide timeline" : "Show timeline";
   return (() => {
     var _el$ = _tmpl$59(), _el$2 = _el$.firstChild;
@@ -9143,23 +5756,23 @@ _$delegateEvents21(["click"]);
 var _tmpl$60 = /* @__PURE__ */ _$template26(`<div class=tweakers-root><div class=tweakers-panel>`);
 var _tmpl$222 = /* @__PURE__ */ _$template26(`<div class=tweakers-timeline-toolkit-only>Timeline`);
 var _tmpl$316 = /* @__PURE__ */ _$template26(`<div class=tweakers-panel-wrapper>`);
-var isDevDefault2 = typeof process !== "undefined" && process?.env?.NODE_ENV ? process.env.NODE_ENV !== "production" : typeof import.meta !== "undefined" && import.meta.env?.MODE ? import.meta.env.MODE !== "production" : true;
+var isDevDefault = typeof process !== "undefined" && process?.env?.NODE_ENV ? process.env.NODE_ENV !== "production" : typeof import.meta !== "undefined" && import.meta.env?.MODE ? import.meta.env.MODE !== "production" : true;
 function TweakRoot(props) {
-  if ((props.productionEnabled ?? isDevDefault2) === false) return null;
+  if ((props.productionEnabled ?? isDevDefault) === false) return null;
   const [panels, setPanels] = createSignal23([]);
   const [timelineCount, setTimelineCount] = createSignal23(0);
   const [mounted, setMounted] = createSignal23(false);
   const inline = () => (props.mode ?? "popover") === "inline";
-  const read = () => TweakStore.selectPanels(props.panels);
+  const read = () => TweakStore10.selectPanels(props.panels);
   onMount13(() => {
     setMounted(true);
     setPanels(read());
-    setTimelineCount(TimelineStore.getTimelines().length);
-    const unsubPanels = TweakStore.subscribeGlobal(() => {
+    setTimelineCount(TimelineStore2.getTimelines().length);
+    const unsubPanels = TweakStore10.subscribeGlobal(() => {
       setPanels(read());
     });
-    const unsubTimelines = TimelineStore.subscribeGlobal(() => {
-      setTimelineCount(TimelineStore.getTimelines().length);
+    const unsubTimelines = TimelineStore2.subscribeGlobal(() => {
+      setTimelineCount(TimelineStore2.getTimelines().length);
     });
     onCleanup18(() => {
       unsubPanels();
@@ -9275,6 +5888,15 @@ import { memo as _$memo16 } from "solid-js/web";
 import { createComponent as _$createComponent24 } from "solid-js/web";
 import { For as For9, Show as Show18, createEffect as createEffect16, createMemo as createMemo3, createSignal as createSignal24, onCleanup as onCleanup19, onMount as onMount14 } from "solid-js";
 import { Portal as Portal7 } from "solid-js/web";
+import { TweakStore as TweakStore11, formatLabel } from "tweakers/store";
+import { TimelineStore as TimelineStore3 } from "tweakers/timeline";
+import { TimelineUiStore as TimelineUiStore2 } from "tweakers/timeline";
+import { TIMELINE_MIN_CLIP_DURATION, clampClipMove, clampClipResizeEnd, clampClipResizeStart, clampStepResize, clampTrackDelay, computeClipStaticFromValues, formatClock, formatSeconds, formatStepLabel, normalizeTimelineValuesForCopy, timelinePopoverDisplayValues } from "tweakers/timeline";
+import { clamp as clamp2 } from "tweakers/transition-math";
+import { buildCopyInstruction } from "tweakers/copy-instruction";
+import { isDevDefault as isDevDefault2 } from "tweakers/env";
+import { ICON_ADD_PRESET as ICON_ADD_PRESET2, ICON_CHEVRON as ICON_CHEVRON4, ICON_CHECK as ICON_CHECK2, ICON_CLIPBOARD as ICON_CLIPBOARD2, ICON_LOOP, ICON_PAUSE, ICON_PLAY, ICON_REPLAY } from "tweakers/icons";
+import { findControl as findControl2 } from "tweakers/shortcut-utils";
 var _tmpl$61 = /* @__PURE__ */ _$template27(`<div class="tweakers-root tweakers-timeline"><div class=tweakers-timeline-resize-handle role=separator aria-label="Resize timeline height"aria-orientation=horizontal title="Drag to resize timeline"></div><div class=tweakers-timeline-dock>`);
 var _tmpl$223 = /* @__PURE__ */ _$template27(`<svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
 var _tmpl$317 = /* @__PURE__ */ _$template27(`<button class=tweakers-toolbar-add><span style=position:relative;width:16px;height:16px>`);
@@ -9323,7 +5945,7 @@ var ZOOM_DRAG_DISTANCE = 180;
 var DEFAULT_DOCK_MAX_HEIGHT = 400;
 var MIN_DOCK_MAX_HEIGHT = 120;
 function TweakTimeline(props) {
-  const enabled = () => (props.productionEnabled ?? isDevDefault) !== false;
+  const enabled = () => (props.productionEnabled ?? isDevDefault2) !== false;
   return _$createComponent24(Show18, {
     get when() {
       return enabled();
@@ -9334,8 +5956,8 @@ function TweakTimeline(props) {
   });
 }
 function TweakTimelineDock(props) {
-  const timelines = fromStore(() => TimelineStore.getTimelines(), (notify2) => TimelineStore.subscribeGlobal(notify2));
-  const visible = fromStore(() => TimelineUiStore.getVisible(), (notify2) => TimelineUiStore.subscribe(notify2));
+  const timelines = fromStore(() => TimelineStore3.getTimelines(), (notify) => TimelineStore3.subscribeGlobal(notify));
+  const visible = fromStore(() => TimelineUiStore2.getVisible(), (notify) => TimelineUiStore2.subscribe(notify));
   const [mounted, setMounted] = createSignal24(false);
   const [dockMaxHeight, setDockMaxHeight] = createSignal24(DEFAULT_DOCK_MAX_HEIGHT);
   const controllerId = /* @__PURE__ */ Symbol("tweakers-timeline-visibility");
@@ -9343,7 +5965,7 @@ function TweakTimelineDock(props) {
   let resizeCleanup = null;
   onMount14(() => {
     setMounted(true);
-    const unregister = TimelineUiStore.registerController(controllerId, {
+    const unregister = TimelineUiStore2.registerController(controllerId, {
       visible: props.visible,
       defaultVisible: props.defaultVisible ?? true,
       onVisibilityChange: props.onVisibilityChange
@@ -9351,7 +5973,7 @@ function TweakTimelineDock(props) {
     onCleanup19(unregister);
   });
   createEffect16(() => {
-    TimelineUiStore.updateController(controllerId, {
+    TimelineUiStore2.updateController(controllerId, {
       visible: props.visible,
       defaultVisible: props.defaultVisible ?? true,
       onVisibilityChange: props.onVisibilityChange
@@ -9368,7 +5990,7 @@ function TweakTimelineDock(props) {
     const move = (next) => {
       next.preventDefault();
       const viewportMax = Math.max(MIN_DOCK_MAX_HEIGHT, window.innerHeight - 24);
-      setDockMaxHeight(clamp5(startHeight + pointerY - next.clientY, MIN_DOCK_MAX_HEIGHT, viewportMax));
+      setDockMaxHeight(clamp2(startHeight + pointerY - next.clientY, MIN_DOCK_MAX_HEIGHT, viewportMax));
     };
     const finish = () => {
       window.removeEventListener("pointermove", move);
@@ -9432,11 +6054,11 @@ function TweakTimelineDock(props) {
   });
 }
 function PlayPauseButton(props) {
-  const playing = fromStore(() => TimelineStore.getTransport(props.id).playing, (notify2) => TimelineStore.subscribe(props.id, notify2));
+  const playing = fromStore(() => TimelineStore3.getTransport(props.id).playing, (notify) => TimelineStore3.subscribe(props.id, notify));
   const label = () => playing() ? "Pause" : "Play";
   return (() => {
     var _el$4 = _tmpl$317(), _el$5 = _el$4.firstChild;
-    _el$4.$$click = () => playing() ? TimelineStore.pause(props.id) : TimelineStore.play(props.id);
+    _el$4.$$click = () => playing() ? TimelineStore3.pause(props.id) : TimelineStore3.play(props.id);
     _$insert25(_el$5, _$createComponent24(Show18, {
       get when() {
         return playing();
@@ -9498,16 +6120,16 @@ var iconStyle = {
   color: "var(--tweak-text-label)"
 };
 function TimelineOverview(props) {
-  const time = fromStore(() => TimelineStore.getTransport(props.id).time, (notify2) => TimelineStore.subscribe(props.id, notify2));
+  const time = fromStore(() => TimelineStore3.getTransport(props.id).time, (notify) => TimelineStore3.subscribe(props.id, notify));
   let scrub = null;
   const seekFromClientX = (clientX) => {
     if (!scrub || scrub.rect.width <= 0 || props.duration <= 0) return;
-    const next = clamp5((clientX - scrub.rect.left) / scrub.rect.width * props.duration, 0, props.duration);
-    TimelineStore.seek(props.id, next);
+    const next = clamp2((clientX - scrub.rect.left) / scrub.rect.width * props.duration, 0, props.duration);
+    TimelineStore3.seek(props.id, next);
     props.onNavigate(next);
   };
   const finish = () => {
-    if (scrub?.wasPlaying) TimelineStore.play(props.id);
+    if (scrub?.wasPlaying) TimelineStore3.play(props.id);
     scrub = null;
   };
   return (() => {
@@ -9520,10 +6142,10 @@ function TimelineOverview(props) {
       event.preventDefault();
       event.currentTarget.setPointerCapture(event.pointerId);
       scrub = {
-        wasPlaying: TimelineStore.getTransport(props.id).playing,
+        wasPlaying: TimelineStore3.getTransport(props.id).playing,
         rect: event.currentTarget.getBoundingClientRect()
       };
-      TimelineStore.pause(props.id);
+      TimelineStore3.pause(props.id);
       seekFromClientX(event.clientX);
     };
     _$effect26((_p$) => {
@@ -9545,16 +6167,16 @@ function TimelineOverview(props) {
   })();
 }
 function TimelinePlayheadFlag(props) {
-  const time = fromStore(() => TimelineStore.getTransport(props.id).time, (notify2) => TimelineStore.subscribe(props.id, notify2));
+  const time = fromStore(() => TimelineStore3.getTransport(props.id).time, (notify) => TimelineStore3.subscribe(props.id, notify));
   let scrub = null;
   let cleanup = null;
   const seek = (clientX) => {
     if (!scrub || scrub.rect.width <= 0) return;
-    TimelineStore.seek(props.id, clamp5(scrub.viewStart + (clientX - scrub.rect.left) / scrub.rect.width * (scrub.viewEnd - scrub.viewStart), scrub.viewStart, scrub.viewEnd));
+    TimelineStore3.seek(props.id, clamp2(scrub.viewStart + (clientX - scrub.rect.left) / scrub.rect.width * (scrub.viewEnd - scrub.viewStart), scrub.viewStart, scrub.viewEnd));
   };
   onCleanup19(() => cleanup?.());
-  const x = () => clamp5((time() - props.viewStart) * props.pxPerSecond, 0, props.laneWidth);
-  const flagCenter = () => clamp5(x(), PLAYHEAD_FLAG_WIDTH / 2 - PLAYHEAD_FLAG_EDGE_OVERHANG, props.laneWidth - PLAYHEAD_FLAG_WIDTH / 2 + PLAYHEAD_FLAG_EDGE_OVERHANG);
+  const x = () => clamp2((time() - props.viewStart) * props.pxPerSecond, 0, props.laneWidth);
+  const flagCenter = () => clamp2(x(), PLAYHEAD_FLAG_WIDTH / 2 - PLAYHEAD_FLAG_EDGE_OVERHANG, props.laneWidth - PLAYHEAD_FLAG_WIDTH / 2 + PLAYHEAD_FLAG_EDGE_OVERHANG);
   const flagOffset = () => flagCenter() - x();
   const edge = () => flagOffset() > 0.5 ? "start" : flagOffset() < -0.5 ? "end" : "center";
   return _$createComponent24(Show18, {
@@ -9571,13 +6193,13 @@ function TimelinePlayheadFlag(props) {
         cleanup?.();
         const reset = event.shiftKey;
         scrub = {
-          wasPlaying: TimelineStore.getTransport(props.id).playing,
+          wasPlaying: TimelineStore3.getTransport(props.id).playing,
           rect,
           viewStart: reset ? 0 : props.viewStart,
           viewEnd: reset ? props.duration : props.viewEnd
         };
         if (reset) props.onResetView();
-        TimelineStore.pause(props.id);
+        TimelineStore3.pause(props.id);
         seek(event.clientX);
         const move = (next) => {
           next.preventDefault();
@@ -9587,7 +6209,7 @@ function TimelinePlayheadFlag(props) {
           window.removeEventListener("pointermove", move);
           window.removeEventListener("pointerup", finish);
           window.removeEventListener("pointercancel", finish);
-          if (scrub?.wasPlaying) TimelineStore.play(props.id);
+          if (scrub?.wasPlaying) TimelineStore3.play(props.id);
           scrub = null;
           cleanup = null;
         };
@@ -9619,7 +6241,7 @@ function TimelinePlayheadFlag(props) {
   });
 }
 function clampViewStart(start, duration, visibleDuration) {
-  return clamp5(start, 0, Math.max(0, duration - visibleDuration));
+  return clamp2(start, 0, Math.max(0, duration - visibleDuration));
 }
 function formatRulerSeconds(time, step) {
   if (step >= 1 && Number.isInteger(time)) return formatClock(time);
@@ -9634,16 +6256,16 @@ function TimelineSection(props) {
   const [expandedTracks, setExpandedTracks] = createSignal24(/* @__PURE__ */ new Set());
   const [zoom, setZoom] = createSignal24(1);
   const [viewStart, setViewStart] = createSignal24(0);
-  const values = fromStore(() => TweakStore.getValues(props.meta.id), (notify2) => TweakStore.subscribe(props.meta.id, notify2));
+  const values = fromStore(() => TweakStore11.getValues(props.meta.id), (notify) => TweakStore11.subscribe(props.meta.id, notify));
   const presets = () => {
     values();
-    return TweakStore.getPresets(props.meta.id);
+    return TweakStore11.getPresets(props.meta.id);
   };
   const activePresetId = () => {
     values();
-    return TweakStore.getActivePresetId(props.meta.id);
+    return TweakStore11.getActivePresetId(props.meta.id);
   };
-  const loopRegion = fromStore(() => TimelineStore.getLoopRegion(props.meta.id), (notify2) => TimelineStore.subscribe(props.meta.id, notify2));
+  const loopRegion = fromStore(() => TimelineStore3.getLoopRegion(props.meta.id), (notify) => TimelineStore3.subscribe(props.meta.id, notify));
   const [loopDrag, setLoopDrag] = createSignal24(null);
   let laneAreaRef;
   let horizontalScrollRef;
@@ -9663,7 +6285,7 @@ function TimelineSection(props) {
   const viewEnd = () => safeViewStart() + visibleDuration();
   const pxPerSecond = () => visibleDuration() > 0 && laneWidth() > 0 ? laneWidth() / visibleDuration() : 0;
   const maxZoom = () => Math.max(MIN_TIMELINE_MAX_ZOOM, laneWidth() > 0 && props.meta.duration > 0 ? MAJOR_TICK_TARGET_PX * props.meta.duration / (MILLISECOND_STEP * 10 * laneWidth()) : MIN_TIMELINE_MAX_ZOOM);
-  createEffect16(() => setZoom((current) => clamp5(current, 1, maxZoom())));
+  createEffect16(() => setZoom((current) => clamp2(current, 1, maxZoom())));
   createEffect16(() => setViewStart((current) => clampViewStart(current, props.meta.duration, props.meta.duration / zoom())));
   createEffect16(() => {
     const scroller = horizontalScrollRef;
@@ -9685,9 +6307,9 @@ function TimelineSection(props) {
   };
   const handleReplay = () => {
     setViewStart(0);
-    TimelineStore.replay(props.meta.id);
+    TimelineStore3.replay(props.meta.id);
   };
-  const handleClearLoopRegion = () => TimelineStore.clearLoopRegion(props.meta.id);
+  const handleClearLoopRegion = () => TimelineStore3.clearLoopRegion(props.meta.id);
   const handleHorizontalScroll = (event) => {
     if (pxPerSecond() <= 0) return;
     setViewStart(clampViewStart(event.currentTarget.scrollLeft / pxPerSecond(), props.meta.duration, visibleDuration()));
@@ -9702,10 +6324,10 @@ function TimelineSection(props) {
   let zoomDrag = null;
   let rulerGesture = null;
   let trackScrub = null;
-  const rulerTimeFromClientX = (clientX, rect, viewStartAt, visibleAt) => clamp5(viewStartAt + (clientX - rect.left) / rect.width * visibleAt, viewStartAt, viewStartAt + visibleAt);
+  const rulerTimeFromClientX = (clientX, rect, viewStartAt, visibleAt) => clamp2(viewStartAt + (clientX - rect.left) / rect.width * visibleAt, viewStartAt, viewStartAt + visibleAt);
   const seekTrack = (clientX) => {
     if (!trackScrub || trackScrub.rect.width <= 0) return;
-    TimelineStore.seek(props.meta.id, clamp5(trackScrub.viewStart + (clientX - trackScrub.rect.left) / trackScrub.rect.width * trackScrub.visibleDuration, trackScrub.viewStart, trackScrub.viewStart + trackScrub.visibleDuration));
+    TimelineStore3.seek(props.meta.id, clamp2(trackScrub.viewStart + (clientX - trackScrub.rect.left) / trackScrub.rect.width * trackScrub.visibleDuration, trackScrub.viewStart, trackScrub.viewStart + trackScrub.visibleDuration));
   };
   const handleRulerPointerDown = (event) => {
     event.preventDefault();
@@ -9728,7 +6350,7 @@ function TimelineSection(props) {
       };
       return;
     }
-    const ratio = clamp5((event.clientX - rect.left) / rect.width, 0, 1);
+    const ratio = clamp2((event.clientX - rect.left) / rect.width, 0, 1);
     zoomDrag = {
       pointerX: event.clientX,
       rect,
@@ -9755,7 +6377,7 @@ function TimelineSection(props) {
     const dx = event.clientX - zoomDrag.pointerX;
     if (!zoomDrag.moved && Math.abs(dx) <= DRAG_THRESHOLD_PX) return;
     zoomDrag.moved = true;
-    const nextZoom = clamp5(zoomDrag.zoom * Math.exp(dx / ZOOM_DRAG_DISTANCE), 1, maxZoom());
+    const nextZoom = clamp2(zoomDrag.zoom * Math.exp(dx / ZOOM_DRAG_DISTANCE), 1, maxZoom());
     const nextDuration = props.meta.duration / nextZoom;
     setZoom(nextZoom);
     setViewStart(clampViewStart(zoomDrag.anchorTime - zoomDrag.anchorRatio * nextDuration, props.meta.duration, nextDuration));
@@ -9767,9 +6389,9 @@ function TimelineSection(props) {
     if (!gesture) return;
     const drag = loopDrag();
     if (gesture.moved && drag) {
-      TimelineStore.setLoopRegion(props.meta.id, drag.start, drag.end);
+      TimelineStore3.setLoopRegion(props.meta.id, drag.start, drag.end);
     } else {
-      TimelineStore.seek(props.meta.id, gesture.downTime);
+      TimelineStore3.seek(props.meta.id, gesture.downTime);
     }
     setLoopDrag(null);
   };
@@ -9788,28 +6410,28 @@ function TimelineSection(props) {
     event.currentTarget.setPointerCapture(event.pointerId);
     const reset = event.shiftKey;
     trackScrub = {
-      wasPlaying: TimelineStore.getTransport(props.meta.id).playing,
+      wasPlaying: TimelineStore3.getTransport(props.meta.id).playing,
       rect,
       viewStart: reset ? 0 : safeViewStart(),
       visibleDuration: reset ? props.meta.duration : visibleDuration()
     };
     if (reset) resetView();
     setPopover(null);
-    TimelineStore.pause(props.meta.id);
+    TimelineStore3.pause(props.meta.id);
     seekTrack(event.clientX);
   };
   const finishTrack = () => {
-    if (trackScrub?.wasPlaying) TimelineStore.play(props.meta.id);
+    if (trackScrub?.wasPlaying) TimelineStore3.play(props.meta.id);
     trackScrub = null;
   };
   const handleCopy = () => {
-    const normalized = normalizeTimelineValuesForCopy(TweakStore.getValues(props.meta.id), props.meta.clips);
+    const normalized = normalizeTimelineValuesForCopy(TweakStore11.getValues(props.meta.id), props.meta.clips);
     void navigator.clipboard.writeText(buildCopyInstruction("createTweakTimeline", props.meta.name, normalized));
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1500);
   };
   const handleAddPreset = () => {
-    TweakStore.savePreset(props.meta.id, `Version ${presets().length + 2}`);
+    TweakStore11.savePreset(props.meta.id, `Version ${presets().length + 2}`);
   };
   const closePopover = () => setPopover(null);
   const openClipPopover = (clip, rect, stepKey) => {
@@ -10060,7 +6682,7 @@ function TimelineSection(props) {
     }), _el$37);
     _el$37.$$click = handleAddPreset;
     _$insert25(_el$38, _$createComponent24(For9, {
-      each: ICON_ADD_PRESET,
+      each: ICON_ADD_PRESET2,
       children: (path) => (() => {
         var _el$54 = _tmpl$152();
         _$setAttribute21(_el$54, "d", path);
@@ -10088,7 +6710,7 @@ function TimelineSection(props) {
         return (() => {
           var _el$55 = _tmpl$162(), _el$56 = _el$55.firstChild, _el$57 = _el$56.nextSibling, _el$58 = _el$57.nextSibling;
           _$effect26((_p$) => {
-            var _v$24 = iconStyle, _v$25 = ICON_CLIPBOARD.board, _v$26 = ICON_CLIPBOARD.sparkle, _v$27 = ICON_CLIPBOARD.body;
+            var _v$24 = iconStyle, _v$25 = ICON_CLIPBOARD2.board, _v$26 = ICON_CLIPBOARD2.sparkle, _v$27 = ICON_CLIPBOARD2.body;
             _p$.e = _$style7(_el$55, _v$24, _p$.e);
             _v$25 !== _p$.t && _$setAttribute21(_el$56, "d", _p$.t = _v$25);
             _v$26 !== _p$.a && _$setAttribute21(_el$57, "d", _p$.a = _v$26);
@@ -10105,7 +6727,7 @@ function TimelineSection(props) {
       },
       get children() {
         var _el$41 = _tmpl$112(), _el$42 = _el$41.firstChild;
-        _$setAttribute21(_el$42, "d", ICON_CHECK);
+        _$setAttribute21(_el$42, "d", ICON_CHECK2);
         _$effect26((_$p) => _$style7(_el$41, iconStyle, _$p));
         return _el$41;
       }
@@ -10291,7 +6913,7 @@ function TimelineSection(props) {
 function ChevronIcon() {
   return (() => {
     var _el$66 = _tmpl$232(), _el$67 = _el$66.firstChild;
-    _$setAttribute21(_el$67, "d", ICON_CHEVRON);
+    _$setAttribute21(_el$67, "d", ICON_CHEVRON4);
     return _el$66;
   })();
 }
@@ -10354,7 +6976,7 @@ function ClipPopover(props) {
     const durationValue = durationMeta ? props.values[durationMeta.path] : void 0;
     const transitionDuration = durationMeta?.type === "slider" && typeof durationValue === "number" ? {
       value: durationValue,
-      onChange: (next) => TweakStore.updateValue(props.panelId, durationMeta.path, next),
+      onChange: (next) => TweakStore11.updateValue(props.panelId, durationMeta.path, next),
       min: Math.max(TIMELINE_MIN_CLIP_DURATION, durationMeta.min ?? 0),
       max: durationMeta.max,
       step: durationMeta.step
@@ -10371,7 +6993,7 @@ function ClipPopover(props) {
     const right = current.offsetLeft + current.width;
     const bottom = current.offsetTop + current.height;
     const width = Math.min(POPOVER_WIDTH, Math.max(220, current.width - 24));
-    const left = clamp5(props.popover.anchor.left + props.popover.anchor.width / 2 - width / 2, current.offsetLeft + 12, Math.max(current.offsetLeft + 12, right - width - 12));
+    const left = clamp2(props.popover.anchor.left + props.popover.anchor.width / 2 - width / 2, current.offsetLeft + 12, Math.max(current.offsetLeft + 12, right - width - 12));
     const above = Math.max(0, props.popover.anchor.top - current.offsetTop - 22);
     const below = Math.max(0, bottom - props.popover.anchor.bottom - 22);
     const placeAbove = naturalHeight() === 0 ? above >= below : naturalHeight() <= above || naturalHeight() > below && above >= below;
@@ -10381,7 +7003,7 @@ function ClipPopover(props) {
     return {
       width,
       left,
-      top: clamp5(rawTop, current.offsetTop + 12, Math.max(current.offsetTop + 12, bottom - renderedHeight - 12)),
+      top: clamp2(rawTop, current.offsetTop + 12, Math.max(current.offsetTop + 12, bottom - renderedHeight - 12)),
       availableHeight,
       placeAbove
     };
@@ -10454,8 +7076,8 @@ function clipPopoverExclusions(clip) {
   return /* @__PURE__ */ new Set([...clip.stepKeys ?? [], ...clip.tracks?.map((track) => track.prop) ?? []]);
 }
 function getClipControls(panelId, path, exclusions) {
-  const panel = TweakStore.getPanel(panelId);
-  const folder = panel ? findControl(panel.controls, path) : null;
+  const panel = TweakStore11.getPanel(panelId);
+  const folder = panel ? findControl2(panel.controls, path) : null;
   if (!folder?.children) return [];
   return folder.children.filter((control) => {
     const key = control.path.slice(path.length + 1);
@@ -10463,8 +7085,8 @@ function getClipControls(panelId, path, exclusions) {
   });
 }
 function getControlAt(panelId, path) {
-  const panel = TweakStore.getPanel(panelId);
-  return panel ? findControl(panel.controls, path) : null;
+  const panel = TweakStore11.getPanel(panelId);
+  return panel ? findControl2(panel.controls, path) : null;
 }
 function TimelineClip(props) {
   let drag = null;
@@ -10509,24 +7131,24 @@ function TimelineClip(props) {
     if (drag.mode === "boundary" && props.steps && drag.stepDurations) {
       const index = drag.boundaryIndex ?? 0;
       const others = drag.stepDurations.reduce((sum, duration, stepIndex) => stepIndex === index ? sum : sum + duration, 0);
-      TweakStore.updateValue(props.timelineId, `${props.clip.key}.${props.steps[index].key ?? ""}.duration`, clampStepResize(drag.stepDurations[index] + dt, drag.at, others, props.timelineDuration));
+      TweakStore11.updateValue(props.timelineId, `${props.clip.key}.${props.steps[index].key ?? ""}.duration`, clampStepResize(drag.stepDurations[index] + dt, drag.at, others, props.timelineDuration));
     } else if (drag.mode === "move") {
       if (props.delayMode) {
-        TweakStore.updateValue(props.timelineId, `${props.clip.key}.delay`, clampTrackDelay(drag.at + dt - baseAt, baseAt, drag.duration, props.timelineDuration));
+        TweakStore11.updateValue(props.timelineId, `${props.clip.key}.delay`, clampTrackDelay(drag.at + dt - baseAt, baseAt, drag.duration, props.timelineDuration));
       } else {
-        TweakStore.updateValue(props.timelineId, `${props.clip.key}.at`, clampClipMove(drag.at + dt, drag.duration, props.timelineDuration));
+        TweakStore11.updateValue(props.timelineId, `${props.clip.key}.at`, clampClipMove(drag.at + dt, drag.duration, props.timelineDuration));
       }
     } else if (drag.mode === "end") {
-      TweakStore.updateValue(props.timelineId, `${props.clip.key}.duration`, clampClipResizeEnd(drag.duration + dt, drag.at, props.timelineDuration));
+      TweakStore11.updateValue(props.timelineId, `${props.clip.key}.duration`, clampClipResizeEnd(drag.duration + dt, drag.at, props.timelineDuration));
     } else if (props.steps && drag.stepDurations) {
       const next = clampClipResizeStart(Math.max(drag.at + dt, Math.max(baseAt, 0)), drag.at, drag.stepDurations[0]);
-      TweakStore.updateValues(props.timelineId, {
+      TweakStore11.updateValues(props.timelineId, {
         [props.delayMode ? `${props.clip.key}.delay` : `${props.clip.key}.at`]: props.delayMode ? Math.max(0, next.at - baseAt) : next.at,
         [`${props.clip.key}.${props.steps[0].key ?? ""}.duration`]: next.duration
       });
     } else {
       const next = clampClipResizeStart(Math.max(drag.at + dt, Math.max(baseAt, 0)), drag.at, drag.duration);
-      TweakStore.updateValues(props.timelineId, {
+      TweakStore11.updateValues(props.timelineId, {
         [props.delayMode ? `${props.clip.key}.delay` : `${props.clip.key}.at`]: props.delayMode ? Math.max(0, next.at - baseAt) : next.at,
         [`${props.clip.key}.duration`]: next.duration
       });
@@ -10816,398 +7438,7 @@ import { insert as _$insert28 } from "solid-js/web";
 import { createComponent as _$createComponent27 } from "solid-js/web";
 import { use as _$use17 } from "solid-js/web";
 import { createSignal as createSignal25, mergeProps, onCleanup as onCleanup20, onMount as onMount15, Show as Show19 } from "solid-js";
-
-// src/waveform-dsp.ts
-function mixToMono(buffer) {
-  if (buffer.numberOfChannels === 1) return buffer.getChannelData(0);
-  const len = buffer.length;
-  const out = new Float32Array(len);
-  for (let c = 0; c < buffer.numberOfChannels; c++) {
-    const data = buffer.getChannelData(c);
-    for (let i = 0; i < len; i++) out[i] += data[i] / buffer.numberOfChannels;
-  }
-  return out;
-}
-function fillPeaks(data, cols, min, max) {
-  const step = data.length / cols;
-  for (let x = 0; x < cols; x++) {
-    const start = Math.floor(x * step);
-    const end = Math.max(start + 1, Math.min(data.length, Math.floor((x + 1) * step)));
-    let mn = 1;
-    let mx = -1;
-    for (let i = start; i < end; i++) {
-      const v = data[i];
-      if (v < mn) mn = v;
-      if (v > mx) mx = v;
-    }
-    min[x] = mn;
-    max[x] = mx;
-  }
-}
-function envelope(p, cols, n) {
-  const out = new Array(n);
-  const seg = cols / n;
-  for (let k = 0; k < n; k++) {
-    const start = Math.floor(k * seg);
-    const end = Math.max(start + 1, Math.min(cols, Math.floor((k + 1) * seg)));
-    let a = 0;
-    for (let x = start; x < end; x++) {
-      const m = Math.max(Math.abs(p.min[x]), Math.abs(p.max[x]));
-      if (m > a) a = m;
-    }
-    out[k] = a;
-  }
-  return out;
-}
-
-// src/waveform-engine.ts
-var WAVEFORM_MAX_ZOOM = 8;
-var BANDS = [
-  { type: "lowpass", freq: 250 },
-  { type: "bandpass", freq: 1100, q: 0.6 },
-  { type: "highpass", freq: 4200 }
-];
-var BAND_COLORS = ["#a855f7", "#22d3ee", "#a3e635"];
-var SIMPLE_POINTS = 46;
-var BORDER_FILL_ALPHA = 0.2;
-var DRAG_THRESHOLD = 3;
-var EDGE_HIT = 6;
-var MIN_LOOP = 1e-3;
-function smoothThrough(ctx, pts) {
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[i - 1] || pts[i];
-    const p1 = pts[i];
-    const p2 = pts[i + 1];
-    const p3 = pts[i + 2] || p2;
-    ctx.bezierCurveTo(
-      p1.x + (p2.x - p0.x) / 6,
-      p1.y + (p2.y - p0.y) / 6,
-      p2.x - (p3.x - p1.x) / 6,
-      p2.y - (p3.y - p1.y) / 6,
-      p2.x,
-      p2.y
-    );
-  }
-}
-async function filterBuffer(buffer, band) {
-  const off = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
-  const src = off.createBufferSource();
-  src.buffer = buffer;
-  const filter = off.createBiquadFilter();
-  filter.type = band.type;
-  filter.frequency.value = band.freq;
-  if (band.q != null) filter.Q.value = band.q;
-  src.connect(filter);
-  filter.connect(off.destination);
-  src.start();
-  return off.startRendering();
-}
-function createWaveformEngine(canvas, get) {
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return { destroy() {
-  } };
-  const readDpr = () => Math.min(Math.max(window.devicePixelRatio || 1, 1), 3);
-  let dpr = readDpr();
-  let W = 0;
-  let H = 0;
-  let cy = 0;
-  let amp = 0;
-  let pk = { min: new Float32Array(1), max: new Float32Array(1) };
-  const syncSize = (width, height) => {
-    dpr = readDpr();
-    const nw = Math.round(width * dpr);
-    const nh = Math.round(height * dpr);
-    if (nw === W && nh === H) return;
-    W = canvas.width = nw;
-    H = canvas.height = nh;
-    cy = H / 2;
-    amp = H * 0.42;
-    pk = { min: new Float32Array(W), max: new Float32Array(W) };
-  };
-  let monos = [];
-  let monoToken = 0;
-  let lastBuffer;
-  let lastBands = false;
-  const syncMonos = (buffer, bands) => {
-    if (buffer === lastBuffer && bands === lastBands) return;
-    lastBuffer = buffer;
-    lastBands = bands;
-    const token = ++monoToken;
-    if (!buffer) {
-      monos = [];
-      return;
-    }
-    if (!bands) {
-      monos = [mixToMono(buffer)];
-      return;
-    }
-    (async () => {
-      try {
-        const bufs = await Promise.all(BANDS.map((b) => filterBuffer(buffer, b)));
-        if (token !== monoToken) return;
-        monos = bufs.map((b) => mixToMono(b));
-      } catch {
-      }
-    })();
-  };
-  const columnWidth2 = (pixelSize) => Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSize)));
-  const windowState = { start: 0, win: 1 };
-  let drag = null;
-  const drawColumns = (p, color, pixelSize) => {
-    const colW = columnWidth2(pixelSize);
-    ctx.fillStyle = color;
-    ctx.globalAlpha = 1;
-    for (let x = 0; x < W; x += colW) {
-      let mn = 1;
-      let mx = -1;
-      for (let i = x; i < x + colW && i < W; i++) {
-        if (p.min[i] < mn) mn = p.min[i];
-        if (p.max[i] > mx) mx = p.max[i];
-      }
-      const yTop = Math.round(cy - mx * amp);
-      const yBot = Math.round(cy - mn * amp);
-      ctx.fillRect(x, yTop, colW, Math.max(1, yBot - yTop));
-    }
-  };
-  const drawSimplified = (env, color, outline) => {
-    const n = env.length;
-    if (n < 2) return;
-    const px = (k) => k / (n - 1) * W;
-    const top = env.map((a, k) => ({ x: px(k), y: cy - a * amp }));
-    const bot = [];
-    for (let k = n - 1; k >= 0; k--) bot.push({ x: px(k), y: cy + env[k] * amp });
-    ctx.beginPath();
-    ctx.moveTo(top[0].x, top[0].y);
-    smoothThrough(ctx, top);
-    ctx.lineTo(bot[0].x, bot[0].y);
-    smoothThrough(ctx, bot);
-    ctx.closePath();
-    ctx.fillStyle = color;
-    if (outline) {
-      ctx.globalAlpha = BORDER_FILL_ALPHA;
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1.6 * dpr;
-      ctx.lineJoin = "round";
-      ctx.stroke();
-    } else {
-      ctx.globalAlpha = 1;
-      ctx.fill();
-    }
-  };
-  const drawGrid = (base, subs) => {
-    const n = Math.max(1, Math.round(subs));
-    ctx.strokeStyle = base;
-    ctx.globalAlpha = 0.1;
-    ctx.lineWidth = dpr;
-    ctx.beginPath();
-    for (let i = 1; i < n; i++) {
-      const x = Math.round(i / n * W) + 0.5;
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, H);
-    }
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  };
-  const drawRegion = (a, b, start, win, color) => {
-    const x0 = (a - start) / win * W;
-    const x1 = (b - start) / win * W;
-    const cx0 = Math.max(0, x0);
-    const cx1 = Math.min(W, x1);
-    if (cx1 <= cx0) return;
-    ctx.fillStyle = color;
-    ctx.globalAlpha = 0.14;
-    ctx.fillRect(cx0, 0, cx1 - cx0, H);
-    ctx.globalAlpha = 0.55;
-    ctx.lineWidth = dpr;
-    ctx.strokeStyle = color;
-    ctx.beginPath();
-    if (x0 >= 0 && x0 <= W) {
-      const xe = Math.round(x0) + 0.5;
-      ctx.moveTo(xe, 0);
-      ctx.lineTo(xe, H);
-    }
-    if (x1 >= 0 && x1 <= W) {
-      const xe = Math.round(x1) + 0.5;
-      ctx.moveTo(xe, 0);
-      ctx.lineTo(xe, H);
-    }
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  };
-  let raf = 0;
-  const frame = () => {
-    raf = requestAnimationFrame(frame);
-    const rt = get();
-    syncSize(rt.width, rt.height);
-    syncMonos(rt.buffer, rt.bands);
-    const base = getComputedStyle(canvas).color || "rgb(255,255,255)";
-    ctx.globalAlpha = 1;
-    ctx.clearRect(0, 0, W, H);
-    ctx.imageSmoothingEnabled = rt.mode === "smooth";
-    if (rt.grid) drawGrid(base, rt.gridSubdivisions);
-    ctx.strokeStyle = base;
-    ctx.globalAlpha = 0.15;
-    ctx.lineWidth = dpr;
-    ctx.beginPath();
-    ctx.moveTo(0, Math.round(cy) + 0.5);
-    ctx.lineTo(W, Math.round(cy) + 0.5);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-    const wave = rt.waveColor || base;
-    const ph = rt.playheadColor || base;
-    const prog = Math.max(0, Math.min(1, (rt.getProgress ? rt.getProgress() : rt.progress) || 0));
-    let win;
-    let start;
-    const activeLoop = rt.autoZoomOnLoop ? rt.loop : null;
-    if (activeLoop) {
-      const span = Math.max(1e-4, activeLoop.end - activeLoop.start);
-      win = Math.min(1, Math.max(1 / WAVEFORM_MAX_ZOOM, span * 1.2));
-      start = (activeLoop.start + activeLoop.end) / 2 - win / 2;
-    } else {
-      win = 1 / Math.max(1, rt.zoom);
-      start = prog - win / 2;
-    }
-    if (start < 0) start = 0;
-    else if (start > 1 - win) start = 1 - win;
-    const end = start + win;
-    windowState.start = start;
-    windowState.win = win;
-    const count = monos.length;
-    if (count) {
-      for (let i = 0; i < count; i++) {
-        const mono = monos[i];
-        const s0 = Math.max(0, Math.floor(start * mono.length));
-        const s1 = Math.min(mono.length, Math.ceil(end * mono.length));
-        const slice = s1 > s0 ? mono.subarray(s0, s1) : mono;
-        fillPeaks(slice, W, pk.min, pk.max);
-        const color = count === 3 ? BAND_COLORS[i] : wave;
-        if (rt.mode === "pixelated") drawColumns(pk, color, rt.pixelSize);
-        else drawSimplified(envelope(pk, W, SIMPLE_POINTS), color, rt.border);
-      }
-    }
-    if (drag && drag.moved) {
-      drawRegion(Math.min(drag.anchor, drag.curProg), Math.max(drag.anchor, drag.curProg), start, win, ph);
-    } else if (rt.loop) {
-      drawRegion(rt.loop.start, rt.loop.end, start, win, ph);
-    }
-    if (count) {
-      const playX = (prog - start) / win * W;
-      ctx.globalAlpha = 1;
-      ctx.strokeStyle = ph;
-      ctx.lineWidth = 1.5 * dpr;
-      const cxp = Math.round(Math.max(0, Math.min(W, playX))) + 0.5;
-      ctx.beginPath();
-      ctx.moveTo(cxp, 0);
-      ctx.lineTo(cxp, H);
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-  };
-  const xToProgress = (clientX) => {
-    const rect = canvas.getBoundingClientRect();
-    const fx = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    const { start, win } = windowState;
-    return Math.min(1, Math.max(0, start + fx * win));
-  };
-  const edgeAt = (clientX) => {
-    const rt = get();
-    const loop = rt.loop;
-    if (!loop || !rt.onLoopChange) return null;
-    const rect = canvas.getBoundingClientRect();
-    const { start, win } = windowState;
-    const xOf = (t) => (t - start) / win * rect.width;
-    const px = clientX - rect.left;
-    const sx = xOf(loop.start);
-    const ex = xOf(loop.end);
-    const dS = Math.abs(px - sx);
-    const dE = Math.abs(px - ex);
-    if (dS <= EDGE_HIT && dS <= dE && sx >= 0 && sx <= rect.width) return "start";
-    if (dE <= EDGE_HIT && ex >= 0 && ex <= rect.width) return "end";
-    return null;
-  };
-  const setCursor = (c) => {
-    canvas.style.cursor = c;
-  };
-  const onPointerDown = (e) => {
-    const rt = get();
-    if (!rt.onSeek && !rt.onLoopChange) return;
-    try {
-      canvas.setPointerCapture(e.pointerId);
-    } catch {
-    }
-    const p = xToProgress(e.clientX);
-    const edge = edgeAt(e.clientX);
-    if (edge && rt.loop) {
-      const anchor = edge === "start" ? rt.loop.end : rt.loop.start;
-      drag = { mode: "resize", anchor, curProg: p, startX: e.clientX, moved: false };
-      setCursor("ew-resize");
-    } else {
-      drag = { mode: "create", anchor: p, curProg: p, startX: e.clientX, moved: false };
-    }
-  };
-  const onPointerMove = (e) => {
-    if (drag) {
-      drag.curProg = xToProgress(e.clientX);
-      if (Math.abs(e.clientX - drag.startX) > DRAG_THRESHOLD) drag.moved = true;
-      return;
-    }
-    const rt = get();
-    if (!rt.onSeek && !rt.onLoopChange) return;
-    setCursor(edgeAt(e.clientX) ? "ew-resize" : "crosshair");
-  };
-  const onPointerUp = (e) => {
-    const d = drag;
-    drag = null;
-    if (!d) return;
-    try {
-      if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
-    } catch {
-    }
-    setCursor("crosshair");
-    const rt = get();
-    const a = Math.min(d.anchor, d.curProg);
-    const b = Math.max(d.anchor, d.curProg);
-    const wide = b - a >= MIN_LOOP;
-    if (d.mode === "resize") {
-      if (d.moved && wide) rt.onLoopChange?.({ start: a, end: b });
-    } else if (d.moved && wide) {
-      if (rt.onLoopChange) rt.onLoopChange({ start: a, end: b });
-      else rt.onSeek?.(d.curProg);
-    } else {
-      rt.onSeek?.(d.anchor);
-      if (rt.loop && rt.onLoopChange) rt.onLoopChange(null);
-    }
-  };
-  const onPointerCancel = () => {
-    drag = null;
-  };
-  canvas.addEventListener("pointerdown", onPointerDown);
-  canvas.addEventListener("pointermove", onPointerMove);
-  canvas.addEventListener("pointerup", onPointerUp);
-  canvas.addEventListener("pointercancel", onPointerCancel);
-  canvas.addEventListener("lostpointercapture", onPointerCancel);
-  const rt0 = get();
-  if (rt0.onSeek || rt0.onLoopChange) {
-    canvas.style.cursor = "crosshair";
-    canvas.style.touchAction = "none";
-  }
-  frame();
-  return {
-    destroy() {
-      cancelAnimationFrame(raf);
-      monoToken++;
-      canvas.removeEventListener("pointerdown", onPointerDown);
-      canvas.removeEventListener("pointermove", onPointerMove);
-      canvas.removeEventListener("pointerup", onPointerUp);
-      canvas.removeEventListener("pointercancel", onPointerCancel);
-      canvas.removeEventListener("lostpointercapture", onPointerCancel);
-    }
-  };
-}
-
-// src/solid/components/WaveformVisualization.tsx
+import { createWaveformEngine, WAVEFORM_MAX_ZOOM } from "tweakers/waveform-engine";
 var _tmpl$69 = /* @__PURE__ */ _$template30(`<button type=button aria-label="Zoom out"><svg viewBox="0 0 16 16"fill=none><path d="M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
 var _tmpl$226 = /* @__PURE__ */ _$template30(`<div class=tweakers-waveform-zoom><button type=button aria-label="Zoom in"><svg viewBox="0 0 16 16"fill=none><path d="M8 3.5v9M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
 var _tmpl$319 = /* @__PURE__ */ _$template30(`<div class=tweakers-waveform-viz-wrap><canvas class=tweakers-waveform-viz>`);
@@ -11305,629 +7536,7 @@ import { effect as _$effect29 } from "solid-js/web";
 import { memo as _$memo17 } from "solid-js/web";
 import { use as _$use18 } from "solid-js/web";
 import { mergeProps as mergeProps2, onCleanup as onCleanup21, onMount as onMount16, Show as Show20 } from "solid-js";
-
-// src/analyser-core.ts
-function byteFreqToUnit(v) {
-  return v / 255;
-}
-function byteTimeToUnit(v) {
-  return (v - 128) / 128;
-}
-function binRange(point, points, bins, scale, loBin = 1, hiBin = bins) {
-  if (bins <= 2) return { start: Math.max(0, bins - 1), end: Math.max(1, bins) };
-  const lo = Math.max(1, Math.min(bins - 1, loBin));
-  const hi = Math.max(lo + 1, Math.min(bins, hiBin));
-  const at = (t) => scale === "log" ? lo * Math.pow(hi / lo, t) : lo + (hi - lo) * t;
-  let start = Math.floor(at(point / points));
-  start = Math.max(lo, Math.min(hi - 1, start));
-  const end = Math.max(start + 1, Math.min(hi, Math.floor(at((point + 1) / points))));
-  return { start, end };
-}
-function hzWindowToBins(rangeHz, nyquistHz, bins) {
-  const [loHz, hiHz] = rangeHz;
-  if (!Number.isFinite(loHz) || !Number.isFinite(hiHz) || !(nyquistHz > 0) || bins <= 2) return null;
-  if (!(hiHz > loHz) || hiHz <= 0) return null;
-  const toBin = (hz) => hz / nyquistHz * bins;
-  const loBin = Math.max(1, Math.min(bins - 1, toBin(Math.max(0, loHz))));
-  const hiBin = Math.max(loBin + 1, Math.min(bins, toBin(hiHz)));
-  return { loBin, hiBin };
-}
-function markerT(bin, scale, loBin, hiBin) {
-  if (!Number.isFinite(bin) || !(hiBin > loBin) || loBin <= 0) return null;
-  const t = scale === "log" ? Math.log(bin / loBin) / Math.log(hiBin / loBin) : (bin - loBin) / (hiBin - loBin);
-  return t >= 0 && t <= 1 && Number.isFinite(t) ? t : null;
-}
-function fillFrequencyTargets(data, out, scale, loBin = 1, hiBin = data.length) {
-  const points = out.length;
-  for (let i = 0; i < points; i++) {
-    const { start, end } = binRange(i, points, data.length, scale, loBin, hiBin);
-    let mx = 0;
-    for (let b = start; b < end; b++) {
-      if (data[b] > mx) mx = data[b];
-    }
-    out[i] = byteFreqToUnit(mx);
-  }
-}
-function fillWaveformMinMax(data, cols, min, max) {
-  const step = data.length / cols;
-  for (let x = 0; x < cols; x++) {
-    const start = Math.floor(x * step);
-    const end = Math.max(start + 1, Math.min(data.length, Math.floor((x + 1) * step)));
-    let mn = 1;
-    let mx = -1;
-    for (let i = start; i < end; i++) {
-      const v = byteTimeToUnit(data[i]);
-      if (v < mn) mn = v;
-      if (v > mx) mx = v;
-    }
-    min[x] = mn;
-    max[x] = mx;
-  }
-}
-function resampleWaveform(data, out) {
-  const n = out.length;
-  if (!n) return;
-  if (!data.length) {
-    out.fill(0);
-    return;
-  }
-  if (n === 1 || data.length === 1) {
-    out.fill(byteTimeToUnit(data[0]));
-    return;
-  }
-  const step = (data.length - 1) / (n - 1);
-  for (let i = 0; i < n; i++) {
-    const x = i * step;
-    const j = Math.floor(x);
-    const a = byteTimeToUnit(data[j]);
-    const b = byteTimeToUnit(data[Math.min(data.length - 1, j + 1)]);
-    out[i] = a + (b - a) * (x - j);
-  }
-}
-function risingZeroCross(data) {
-  for (let i = 1; i < data.length; i++) {
-    if (data[i - 1] < 128 && data[i] >= 128) return i;
-  }
-  return 0;
-}
-function peakLevel(data) {
-  let mx = 0;
-  for (let i = 0; i < data.length; i++) {
-    const v = Math.abs(byteTimeToUnit(data[i]));
-    if (v > mx) mx = v;
-  }
-  return mx;
-}
-function advanceSweep(history, head, prevLevel, level, dtCols) {
-  const n = history.length;
-  if (!n) return 0;
-  const d = Math.min(dtCols, n);
-  const next = head + d;
-  for (let c = Math.floor(head) + 1; c <= Math.floor(next); c++) {
-    const t = d > 0 ? (c - head) / d : 1;
-    history[(c % n + n) % n] = prevLevel + (level - prevLevel) * t;
-  }
-  return (next % n + n) % n;
-}
-var SPRING_MAX_STEP = 1 / 240;
-function stepSprings(pos, vel, targets, stiffness, damping, dt) {
-  let remaining = dt;
-  while (remaining > 0) {
-    const h = Math.min(remaining, SPRING_MAX_STEP);
-    remaining -= h;
-    for (let i = 0; i < pos.length; i++) {
-      const accel = -stiffness * (pos[i] - targets[i]) - damping * vel[i];
-      vel[i] += accel * h;
-      pos[i] += vel[i] * h;
-    }
-  }
-}
-var SPRING_DEFAULT_STIFFNESS = 120;
-var SPRING_DEFAULT_DAMPING = 14;
-function normalizeSpring(spring) {
-  if (!spring) return null;
-  const raw = spring === true ? {} : spring;
-  return {
-    stiffness: Math.min(1e3, Math.max(1, raw.stiffness ?? SPRING_DEFAULT_STIFFNESS)),
-    damping: Math.min(100, Math.max(1, raw.damping ?? SPRING_DEFAULT_DAMPING))
-  };
-}
-function columnWidth(dpr, pixelSize) {
-  return Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSize)));
-}
-function quantizeToGrid(v, colW) {
-  return Math.round(v / colW) * colW;
-}
-
-// src/analyser-engine.ts
-var SMOOTH_POINTS = 64;
-var AREA_FILL_ALPHA = 0.2;
-var MUTED_ALPHA = 0.35;
-var FREQ_AMP = 0.92;
-var WAVE_AMP = 0.42;
-var MAX_DT = 0.05;
-var EKG_SCROLL_SECONDS = 2.5;
-var EKG_AMP = 0.85;
-var TRANSFER_AMP = 0.85;
-var SCATTER_ALPHA = 0.35;
-var OVERLAY_BACK_ALPHA = 0.45;
-var OVERLAY_MIN_WINDOW = 32;
-function smoothThrough2(ctx, pts) {
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[i - 1] || pts[i];
-    const p1 = pts[i];
-    const p2 = pts[i + 1];
-    const p3 = pts[i + 2] || p2;
-    ctx.bezierCurveTo(
-      p1.x + (p2.x - p0.x) / 6,
-      p1.y + (p2.y - p0.y) / 6,
-      p2.x - (p3.x - p1.x) / 6,
-      p2.y - (p3.y - p1.y) / 6,
-      p2.x,
-      p2.y
-    );
-  }
-}
-function createAnalyserEngine(canvas, get) {
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return { destroy() {
-  } };
-  const readDpr = () => Math.min(Math.max(window.devicePixelRatio || 1, 1), 3);
-  let dpr = readDpr();
-  let W = 0;
-  let H = 0;
-  let cy = 0;
-  const syncSize = (width, height) => {
-    dpr = readDpr();
-    const nw = Math.round(width * dpr);
-    const nh = Math.round(height * dpr);
-    if (nw === W && nh === H) return;
-    W = canvas.width = nw;
-    H = canvas.height = nh;
-    cy = H / 2;
-  };
-  const columnWidth2 = (pixelSize) => columnWidth(dpr, pixelSize);
-  let bytes = new Uint8Array(0);
-  let targetsA = new Float32Array(0);
-  let targetsB = new Float32Array(0);
-  let posA = new Float32Array(0);
-  let posB = new Float32Array(0);
-  let velA = new Float32Array(0);
-  let velB = new Float32Array(0);
-  let springSeeded = false;
-  const syncPoints = (n) => {
-    if (targetsA.length === n) return;
-    targetsA = new Float32Array(n);
-    targetsB = new Float32Array(n);
-    posA = new Float32Array(n);
-    posB = new Float32Array(n);
-    velA = new Float32Array(n);
-    velB = new Float32Array(n);
-    springSeeded = false;
-  };
-  const drawGrid = (base, subs) => {
-    const n = Math.max(1, Math.round(subs));
-    ctx.strokeStyle = base;
-    ctx.globalAlpha = 0.1;
-    ctx.lineWidth = dpr;
-    ctx.beginPath();
-    for (let i = 1; i < n; i++) {
-      const x = Math.round(i / n * W) + 0.5;
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, H);
-    }
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  };
-  const baselineY = (source) => source === "frequency" ? H - Math.round(dpr) : source === "ekg" ? H - Math.round(3 * dpr) : cy;
-  const drawBaseline = (base, source, alpha) => {
-    ctx.strokeStyle = base;
-    ctx.globalAlpha = 0.15 * alpha;
-    ctx.lineWidth = dpr;
-    ctx.beginPath();
-    const y = Math.round(baselineY(source)) + 0.5;
-    ctx.moveTo(0, y);
-    ctx.lineTo(W, y);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  };
-  const drawBand = (top, bottom, wave, fill, alpha) => {
-    const n = top.length;
-    if (n < 2) return;
-    const px = (k) => k / (n - 1) * W;
-    const toY = (v) => cy - v * (H * WAVE_AMP);
-    const topPts = new Array(n);
-    for (let k = 0; k < n; k++) topPts[k] = { x: px(k), y: toY(top[k]) };
-    const botPts = new Array(n);
-    for (let k = 0; k < n; k++) botPts[k] = { x: px(n - 1 - k), y: toY(bottom[n - 1 - k]) };
-    ctx.beginPath();
-    ctx.moveTo(topPts[0].x, topPts[0].y);
-    smoothThrough2(ctx, topPts);
-    ctx.lineTo(botPts[0].x, botPts[0].y);
-    smoothThrough2(ctx, botPts);
-    ctx.closePath();
-    ctx.fillStyle = fill;
-    ctx.globalAlpha = AREA_FILL_ALPHA * alpha;
-    ctx.fill();
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = wave;
-    ctx.lineWidth = 1.6 * dpr;
-    ctx.lineJoin = "round";
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  };
-  const drawSmooth = (values, toY, baseY, area, wave, fill, alpha) => {
-    const n = values.length;
-    if (n < 2) return;
-    const pts = new Array(n);
-    for (let k = 0; k < n; k++) pts[k] = { x: k / (n - 1) * W, y: toY(values[k]) };
-    if (area) {
-      ctx.beginPath();
-      ctx.moveTo(pts[0].x, pts[0].y);
-      smoothThrough2(ctx, pts);
-      ctx.lineTo(W, baseY);
-      ctx.lineTo(0, baseY);
-      ctx.closePath();
-      ctx.fillStyle = fill;
-      ctx.globalAlpha = AREA_FILL_ALPHA * alpha;
-      ctx.fill();
-    }
-    ctx.beginPath();
-    ctx.moveTo(pts[0].x, pts[0].y);
-    smoothThrough2(ctx, pts);
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = wave;
-    ctx.lineWidth = 1.6 * dpr;
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  };
-  const drawColumns = (source, variant, pixelSize, wave, alpha) => {
-    const colW = columnWidth2(pixelSize);
-    ctx.fillStyle = wave;
-    ctx.globalAlpha = alpha;
-    const n = targetsA.length;
-    const src = springActive ? posA : targetsA;
-    const srcB = springActive ? posB : targetsB;
-    for (let k = 0; k < n; k++) {
-      const x = k * colW;
-      if (x >= W) break;
-      if (source === "frequency") {
-        const yTop = Math.max(0, Math.min(H - colW, quantizeToGrid(H - src[k] * (H * FREQ_AMP), colW)));
-        if (variant === "area") ctx.fillRect(x, yTop, colW, H - yTop);
-        else ctx.fillRect(x, yTop, colW, colW);
-      } else {
-        const yTop = Math.round(cy - src[k] * (H * WAVE_AMP));
-        const yBot = Math.round(cy - srcB[k] * (H * WAVE_AMP));
-        if (variant === "area") {
-          const t = Math.max(0, Math.min(H - 1, yTop));
-          ctx.fillRect(x, t, colW, Math.max(1, yBot - t));
-        } else {
-          const block = (yEdge) => {
-            const y = Math.max(0, Math.min(H - colW, quantizeToGrid(yEdge - colW / 2, colW)));
-            ctx.fillRect(x, y, colW, colW);
-          };
-          block(yTop);
-          block(yBot);
-        }
-      }
-    }
-    ctx.globalAlpha = 1;
-  };
-  let ekgHistory = new Float32Array(0);
-  let ekgHead = 0;
-  let ekgPrevLevel = 0;
-  const ekgPos = new Float32Array(1);
-  const ekgVel = new Float32Array(1);
-  const ekgTarget = new Float32Array(1);
-  let ekgSeeded = false;
-  const syncEkg = (n) => {
-    if (ekgHistory.length === n) return;
-    ekgHistory = new Float32Array(n);
-    ekgHead = 0;
-    ekgSeeded = false;
-  };
-  const drawEkg = (rt, dt, base, alpha) => {
-    const pixelated = rt.mode === "pixelated";
-    const colW = columnWidth2(pixelated ? rt.pixelSize : 1);
-    const n = Math.max(2, Math.floor(W / colW));
-    syncEkg(n);
-    const raw = peakLevel(bytes);
-    const spring = normalizeSpring(rt.spring);
-    let level = raw;
-    if (spring) {
-      if (!ekgSeeded) {
-        ekgPos[0] = raw;
-        ekgVel[0] = 0;
-        ekgSeeded = true;
-      }
-      ekgTarget[0] = raw;
-      stepSprings(ekgPos, ekgVel, ekgTarget, spring.stiffness, spring.damping, dt);
-      level = ekgPos[0];
-    } else {
-      ekgSeeded = false;
-    }
-    ekgHead = advanceSweep(ekgHistory, ekgHead, ekgPrevLevel, level, dt / EKG_SCROLL_SECONDS * n);
-    ekgPrevLevel = level;
-    const baseY = baselineY("ekg");
-    const toY = (v) => Math.max(0, Math.min(H, baseY - v * (H * EKG_AMP)));
-    const headCol = Math.floor(ekgHead);
-    const colBehind = (k) => ((headCol - k) % n + n) % n;
-    const wave = rt.waveColor || base;
-    const fill = rt.fillColor || wave;
-    if (pixelated) {
-      const penX2 = (n - 1) * colW;
-      const blockY = (v) => Math.max(0, Math.min(H - colW, quantizeToGrid(toY(v) - colW / 2, colW)));
-      ctx.fillStyle = wave;
-      ctx.globalAlpha = alpha;
-      for (let k = 1; k < n; k++) {
-        const x = penX2 - k * colW;
-        const y = blockY(ekgHistory[colBehind(k)]);
-        if (rt.variant === "area") ctx.fillRect(x, y, colW, Math.max(colW, baseY - y));
-        else ctx.fillRect(x, y, colW, colW);
-      }
-      ctx.fillRect(penX2, blockY(level), colW, colW);
-      ctx.globalAlpha = 1;
-      return;
-    }
-    const penX = W - Math.round(3 * dpr);
-    const frac = ekgHead - headCol;
-    const pts = [{ x: penX, y: toY(level) }];
-    for (let k = 0; k < n; k++) {
-      const x = penX - (k + frac) * colW;
-      pts.push({ x, y: toY(ekgHistory[colBehind(k)]) });
-      if (x <= 0) break;
-    }
-    if (rt.variant === "area") {
-      ctx.beginPath();
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-      ctx.lineTo(pts[pts.length - 1].x, baseY);
-      ctx.lineTo(penX, baseY);
-      ctx.closePath();
-      ctx.fillStyle = fill;
-      ctx.globalAlpha = AREA_FILL_ALPHA * alpha;
-      ctx.fill();
-    }
-    ctx.beginPath();
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = wave;
-    ctx.lineWidth = 1.6 * dpr;
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-    ctx.stroke();
-    ctx.fillStyle = wave;
-    ctx.globalAlpha = alpha;
-    ctx.beginPath();
-    ctx.arc(penX, toY(level), 2.6 * dpr, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-  };
-  let bytesB = new Uint8Array(0);
-  const readB = (anB) => {
-    if (bytesB.length !== anB.fftSize) bytesB = new Uint8Array(anB.fftSize);
-    anB.getByteTimeDomainData(bytesB);
-  };
-  const drawTransfer = (rt, base, alpha) => {
-    const anB = rt.analyserB;
-    if (anB) readB(anB);
-    const yBytes = anB ? bytesB : bytes;
-    const m = Math.min(bytes.length, yBytes.length);
-    if (m < 2) return;
-    const half = Math.min(W, H) / 2;
-    const cx = W / 2;
-    const toX = (v) => cx + v * half * TRANSFER_AMP;
-    const toY = (v) => cy - v * half * TRANSFER_AMP;
-    ctx.strokeStyle = base;
-    ctx.globalAlpha = 0.15 * alpha;
-    ctx.lineWidth = dpr;
-    ctx.beginPath();
-    ctx.moveTo(Math.round(cx) + 0.5, Math.round(cy - half));
-    ctx.lineTo(Math.round(cx) + 0.5, Math.round(cy + half));
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-    const wave = rt.waveColor || base;
-    const pixelated = rt.mode === "pixelated";
-    const scatter = rt.transferDraw === "scatter";
-    if (scatter || pixelated) {
-      ctx.fillStyle = wave;
-      ctx.globalAlpha = (pixelated ? 0.8 : SCATTER_ALPHA) * alpha;
-      const colW = columnWidth2(rt.pixelSize);
-      for (let i = 0; i < m; i++) {
-        const x = toX(byteTimeToUnit(bytes[i]));
-        const y = toY(byteTimeToUnit(yBytes[i]));
-        if (pixelated) {
-          ctx.fillRect(quantizeToGrid(x - colW / 2, colW), quantizeToGrid(y - colW / 2, colW), colW, colW);
-        } else {
-          ctx.beginPath();
-          ctx.arc(x, y, 1.4 * dpr, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-      ctx.globalAlpha = 1;
-      return;
-    }
-    ctx.beginPath();
-    ctx.moveTo(toX(byteTimeToUnit(bytes[0])), toY(byteTimeToUnit(yBytes[0])));
-    for (let i = 1; i < m; i++) {
-      ctx.lineTo(toX(byteTimeToUnit(bytes[i])), toY(byteTimeToUnit(yBytes[i])));
-    }
-    ctx.globalAlpha = 0.9 * alpha;
-    ctx.strokeStyle = wave;
-    ctx.lineWidth = 1.6 * dpr;
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  };
-  const drawBlockTrace = (values, pixelSize, color, alpha) => {
-    const colW = columnWidth2(pixelSize);
-    ctx.fillStyle = color;
-    ctx.globalAlpha = alpha;
-    for (let k = 0; k < values.length; k++) {
-      const x = k * colW;
-      if (x >= W) break;
-      const y = Math.max(0, Math.min(H - colW, quantizeToGrid(cy - values[k] * (H * WAVE_AMP) - colW / 2, colW)));
-      ctx.fillRect(x, y, colW, colW);
-    }
-    ctx.globalAlpha = 1;
-  };
-  const drawOverlay = (rt, dt, base, alpha) => {
-    const anB = rt.analyserB;
-    if (anB) readB(anB);
-    const syncSrc = anB ? bytesB : bytes;
-    const winLen = Math.max(
-      OVERLAY_MIN_WINDOW,
-      Math.min(bytes.length, Math.round(rt.windowSize ?? bytes.length))
-    );
-    let off = risingZeroCross(syncSrc);
-    if (off + winLen > syncSrc.length) off = Math.max(0, syncSrc.length - winLen);
-    const pixelated = rt.mode === "pixelated";
-    const n = pixelated ? Math.max(2, Math.ceil(W / columnWidth2(rt.pixelSize))) : SMOOTH_POINTS;
-    syncPoints(n);
-    const sliceAt = (src) => {
-      const start = Math.min(off, Math.max(0, src.length - winLen));
-      return src.subarray(start, Math.min(src.length, start + winLen));
-    };
-    resampleWaveform(sliceAt(bytes), targetsA);
-    if (anB) resampleWaveform(sliceAt(bytesB), targetsB);
-    else targetsB.set(targetsA);
-    const spring = normalizeSpring(rt.spring);
-    springActive = !!spring;
-    if (spring) {
-      if (!springSeeded) {
-        posA.set(targetsA);
-        posB.set(targetsB);
-        velA.fill(0);
-        velB.fill(0);
-        springSeeded = true;
-      }
-      stepSprings(posA, velA, targetsA, spring.stiffness, spring.damping, dt);
-      stepSprings(posB, velB, targetsB, spring.stiffness, spring.damping, dt);
-    } else {
-      springSeeded = false;
-    }
-    const wave = rt.waveColor || base;
-    const front = rt.waveColorB || wave;
-    const backA = springActive ? posA : targetsA;
-    const frontB = springActive ? posB : targetsB;
-    const toY = (v) => cy - v * (H * WAVE_AMP);
-    if (pixelated) {
-      drawBlockTrace(backA, rt.pixelSize, wave, OVERLAY_BACK_ALPHA * alpha);
-      if (anB) drawBlockTrace(frontB, rt.pixelSize, front, alpha);
-    } else {
-      drawSmooth(backA, toY, cy, false, wave, wave, (anB ? OVERLAY_BACK_ALPHA : 1) * alpha);
-      if (anB) drawSmooth(frontB, toY, cy, false, front, front, alpha);
-    }
-  };
-  let springActive = false;
-  let prevNow = null;
-  let raf = 0;
-  const frame = (now) => {
-    raf = requestAnimationFrame(frame);
-    const rt = get();
-    syncSize(rt.width, rt.height);
-    const dt = prevNow == null ? 0 : Math.min((now - prevNow) / 1e3, MAX_DT);
-    prevNow = now;
-    const base = getComputedStyle(canvas).color || "rgb(255,255,255)";
-    const alpha = rt.muted ? MUTED_ALPHA : 1;
-    ctx.globalAlpha = 1;
-    ctx.clearRect(0, 0, W, H);
-    ctx.imageSmoothingEnabled = rt.mode === "smooth";
-    if (rt.grid) drawGrid(base, rt.gridSubdivisions);
-    drawBaseline(base, rt.source, alpha);
-    const an = rt.analyser;
-    if (!an) return;
-    const needed = rt.source === "frequency" ? an.frequencyBinCount : an.fftSize;
-    if (bytes.length !== needed) bytes = new Uint8Array(needed);
-    if (rt.source === "frequency") an.getByteFrequencyData(bytes);
-    else an.getByteTimeDomainData(bytes);
-    if (rt.source === "ekg") {
-      drawEkg(rt, dt, base, alpha);
-      return;
-    }
-    if (rt.source === "transfer") {
-      drawTransfer(rt, base, alpha);
-      return;
-    }
-    if (rt.source === "overlay") {
-      drawOverlay(rt, dt, base, alpha);
-      return;
-    }
-    const pixelated = rt.mode === "pixelated";
-    const n = pixelated ? Math.max(2, Math.ceil(W / columnWidth2(rt.pixelSize))) : SMOOTH_POINTS;
-    syncPoints(n);
-    const win = rt.source === "frequency" && rt.rangeHz ? hzWindowToBins(rt.rangeHz, an.context.sampleRate / 2, bytes.length) : null;
-    const twoSeries = rt.source === "waveform" && (pixelated || rt.variant === "area");
-    if (rt.source === "frequency") {
-      fillFrequencyTargets(bytes, targetsA, rt.scale, win?.loBin ?? 1, win?.hiBin ?? bytes.length);
-    } else if (twoSeries) {
-      fillWaveformMinMax(bytes, n, targetsB, targetsA);
-    } else {
-      resampleWaveform(bytes, targetsA);
-    }
-    const spring = normalizeSpring(rt.spring);
-    springActive = !!spring;
-    if (spring) {
-      if (!springSeeded) {
-        posA.set(targetsA);
-        posB.set(targetsB);
-        velA.fill(0);
-        velB.fill(0);
-        springSeeded = true;
-      }
-      stepSprings(posA, velA, targetsA, spring.stiffness, spring.damping, dt);
-      if (twoSeries) stepSprings(posB, velB, targetsB, spring.stiffness, spring.damping, dt);
-    } else {
-      springSeeded = false;
-    }
-    const wave = rt.waveColor || base;
-    const fill = rt.fillColor || wave;
-    if (pixelated) {
-      drawColumns(rt.source, rt.variant, rt.pixelSize, wave, alpha);
-    } else {
-      const values = springActive ? posA : targetsA;
-      if (rt.source === "frequency") {
-        drawSmooth(values, (v) => H - v * (H * FREQ_AMP), baselineY("frequency"), rt.variant === "area", wave, fill, alpha);
-      } else if (rt.variant === "area") {
-        drawBand(values, springActive ? posB : targetsB, wave, fill, alpha);
-      } else {
-        drawSmooth(values, (v) => cy - v * (H * WAVE_AMP), cy, false, wave, fill, alpha);
-      }
-    }
-    if (rt.source === "frequency" && rt.marker) {
-      const hz = rt.marker();
-      if (hz != null && Number.isFinite(hz)) {
-        const bins = bytes.length;
-        const bin = hz / (an.context.sampleRate / 2) * bins;
-        const t = markerT(bin, rt.scale, win?.loBin ?? 1, win?.hiBin ?? bins);
-        if (t !== null) {
-          let x = t * W;
-          if (pixelated) x = quantizeToGrid(x, columnWidth2(rt.pixelSize));
-          ctx.strokeStyle = wave;
-          ctx.globalAlpha = 0.4 * alpha;
-          ctx.lineWidth = dpr;
-          ctx.beginPath();
-          ctx.moveTo(Math.round(x) + 0.5, 0);
-          ctx.lineTo(Math.round(x) + 0.5, H);
-          ctx.stroke();
-          ctx.globalAlpha = 1;
-        }
-      }
-    }
-  };
-  raf = requestAnimationFrame(frame);
-  return {
-    destroy() {
-      cancelAnimationFrame(raf);
-    }
-  };
-}
-
-// src/solid/components/AnalyserVisualization.tsx
+import { createAnalyserEngine } from "tweakers/analyser-engine";
 var _tmpl$70 = /* @__PURE__ */ _$template31(`<button type=button aria-label=Mute>M`);
 var _tmpl$227 = /* @__PURE__ */ _$template31(`<button type=button aria-label=Solo>S`);
 var _tmpl$320 = /* @__PURE__ */ _$template31(`<div class=tweakers-analyser-actions>`);
@@ -12031,482 +7640,7 @@ import { memo as _$memo18 } from "solid-js/web";
 import { createComponent as _$createComponent29 } from "solid-js/web";
 import { use as _$use19 } from "solid-js/web";
 import { createMemo as createMemo4, createSignal as createSignal26, For as For11, mergeProps as mergeProps3, onCleanup as onCleanup22, onMount as onMount17, Show as Show21 } from "solid-js";
-
-// src/curve-composer-core.ts
-var CURVE_CYCLE = ["linear", "easeIn", "easeOut", "easeInOut", "spring"];
-var easingPresets = {
-  linear: [0, 0, 1, 1],
-  easeIn: [0.42, 0, 1, 1],
-  easeOut: [0, 0, 0.58, 1],
-  easeInOut: [0.42, 0, 0.58, 1]
-};
-var DRAG_THRESHOLD2 = 3;
-var EDGE_HIT2 = 6;
-var CURVE_MIN_WEIGHT_FRAC = 0.06;
-var lerp = (a, b, t) => a + (b - a) * t;
-var clamp014 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
-var clampBipolar = (v) => v < -1 ? -1 : v > 1 ? 1 : v;
-var SKEW_MAX = 0.45;
-var BACK_MAX = 0.8;
-var easingExtremes = {
-  linear: [0, 0, 1, 1],
-  easeIn: [0.7, 0, 0.84, 0],
-  easeOut: [0.16, 1, 0.3, 1],
-  easeInOut: [0.87, 0, 0.13, 1]
-};
-var lerp4 = (a, b, t) => [
-  lerp(a[0], b[0], t),
-  lerp(a[1], b[1], t),
-  lerp(a[2], b[2], t),
-  lerp(a[3], b[3], t)
-];
-function deriveEase(type, curvature, steepness = 0, overshoot = 0, anticipate = 0) {
-  const key = type === "spring" ? "linear" : type;
-  const base = easingPresets[key];
-  const s = clampBipolar(steepness);
-  const pts = s >= 0 ? lerp4(base, easingExtremes[key], s) : lerp4(easingPresets.linear, base, s + 1);
-  let [x1, y1, x2, y2] = pts;
-  const shift = clampBipolar(curvature) * SKEW_MAX;
-  x1 = clamp014(x1 + shift);
-  x2 = clamp014(x2 + shift);
-  y2 += clamp014(overshoot) * BACK_MAX;
-  y1 -= clamp014(anticipate) * BACK_MAX;
-  return [x1, y1, x2, y2];
-}
-function bezierAxis2(p1, p2, s) {
-  const u = 1 - s;
-  return 3 * u * u * s * p1 + 3 * u * s * s * p2 + s * s * s;
-}
-function bezierAxisDeriv(p1, p2, s) {
-  const u = 1 - s;
-  return 3 * u * u * p1 + 6 * u * s * (p2 - p1) + 3 * s * s * (1 - p2);
-}
-function bezierY(ease, x) {
-  const tx = clamp014(x);
-  let s = tx;
-  for (let i = 0; i < 6; i++) {
-    const xs = bezierAxis2(ease[0], ease[2], s) - tx;
-    if (Math.abs(xs) < 1e-5) break;
-    const d = bezierAxisDeriv(ease[0], ease[2], s);
-    if (Math.abs(d) < 1e-6) break;
-    s = clamp014(s - xs / d);
-  }
-  return bezierAxis2(ease[1], ease[3], s);
-}
-var SPRING_SAMPLES = 72;
-function sampleSpringTargets(sample, steps) {
-  const targets = [];
-  let target = sample(0);
-  if (!Number.isFinite(target)) target = 0;
-  targets.push(target);
-  for (let i = 1; i <= steps; i++) {
-    const nextTarget = sample(i / steps);
-    if (Number.isFinite(nextTarget)) target = nextTarget;
-    targets.push(target);
-  }
-  return targets;
-}
-function integrateSpringTrace(targets, stiffness, damping, mass, initial, collect = true) {
-  const points = collect ? [initial.position] : [];
-  const steps = Math.max(1, targets.length - 1);
-  const dt = 1 / steps;
-  let { position, velocity } = initial;
-  for (let i = 1; i <= steps; i++) {
-    const target = targets[i] ?? targets[targets.length - 1] ?? 0;
-    const acceleration = (-stiffness * (position - target) - damping * velocity) / mass;
-    velocity += acceleration * dt;
-    position += velocity * dt;
-    if (collect) points.push(position);
-  }
-  return { points, state: { position, velocity } };
-}
-function springPoints(curvature, steepness = 0) {
-  const visualDuration = 1;
-  const bounce = clamp014((clampBipolar(curvature) + 1) / 2) * 0.6;
-  const mass = 1;
-  let stiffness = 2 * Math.PI / visualDuration;
-  stiffness = stiffness * stiffness;
-  stiffness *= Math.max(0.2, 1 + clampBipolar(steepness) * 0.9);
-  const dampingRatio = 1 - bounce;
-  const damping = 2 * dampingRatio * Math.sqrt(stiffness * mass);
-  return integrateSpringTrace(new Array(SPRING_SAMPLES + 1).fill(1), stiffness, damping, mass, {
-    position: 0,
-    velocity: 0
-  }).points;
-}
-function interp(points, t) {
-  const x = clamp014(t) * (points.length - 1);
-  const i = Math.floor(x);
-  if (i >= points.length - 1) return points[points.length - 1];
-  return lerp(points[i], points[i + 1], x - i);
-}
-var SPRINGIFY_DEFAULTS = { stiffness: 100, damping: 10, mass: 1 };
-var SPRINGIFY_SAMPLES = 1200;
-function finiteInRange(value, fallback, min, max) {
-  return value !== void 0 && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
-}
-function periodicSpringState(targets, stiffness, damping, mass) {
-  const advance = (initial) => integrateSpringTrace(targets, stiffness, damping, mass, initial, false).state;
-  const offset = advance({ position: 0, velocity: 0 });
-  const fromPosition = advance({ position: 1, velocity: 0 });
-  const fromVelocity = advance({ position: 0, velocity: 1 });
-  const a00 = fromPosition.position - offset.position;
-  const a10 = fromPosition.velocity - offset.velocity;
-  const a01 = fromVelocity.position - offset.position;
-  const a11 = fromVelocity.velocity - offset.velocity;
-  const m00 = 1 - a00;
-  const m01 = -a01;
-  const m10 = -a10;
-  const m11 = 1 - a11;
-  const determinant = m00 * m11 - m01 * m10;
-  if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-9) return null;
-  return {
-    position: (offset.position * m11 - m01 * offset.velocity) / determinant,
-    velocity: (m00 * offset.velocity - offset.position * m10) / determinant
-  };
-}
-function normalizeFollowerTrace(points) {
-  let min = points[0] ?? 0;
-  let max = min;
-  for (const value of points) {
-    min = Math.min(min, value);
-    max = Math.max(max, value);
-  }
-  if (min >= 0 && max <= 1) return points;
-  const range = max - min;
-  if (range <= Number.EPSILON) return points.map(() => 0);
-  return points.map((value) => (value - min) / range);
-}
-function springify(sample, options = {}) {
-  const stiffness = finiteInRange(options.stiffness, SPRINGIFY_DEFAULTS.stiffness, 1, 1e3);
-  const damping = finiteInRange(options.damping, SPRINGIFY_DEFAULTS.damping, 0, 100);
-  const mass = finiteInRange(options.mass, SPRINGIFY_DEFAULTS.mass, 0.1, 10);
-  const targets = sampleSpringTargets(sample, SPRINGIFY_SAMPLES);
-  const atRest = { position: targets[0], velocity: 0 };
-  const initial = options.loop ? periodicSpringState(targets, stiffness, damping, mass) ?? atRest : atRest;
-  const raw = integrateSpringTrace(
-    targets,
-    stiffness,
-    damping,
-    mass,
-    initial
-  ).points;
-  const points = options.normalize ? normalizeFollowerTrace(raw) : raw;
-  return (t) => interp(points, t);
-}
-function buildSampler(curve) {
-  let base;
-  if (curve.type === "spring") {
-    const pts = springPoints(curve.curvature, curve.steepness);
-    base = (t) => interp(pts, t);
-  } else {
-    const ease = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot, curve.anticipate);
-    base = (t) => bezierY(ease, t);
-  }
-  const { flipX, flipY } = curve;
-  if (!flipX && !flipY) return base;
-  return (t) => {
-    const v = base(flipX ? 1 - t : t);
-    return flipY ? 1 - v : v;
-  };
-}
-function totalWeight(segments) {
-  let t = 0;
-  for (const s of segments) t += Math.max(0, s.weight);
-  return t || 1;
-}
-function timelineSlots(segments, gap = 0) {
-  const n = segments.length;
-  const g = n > 1 ? clamp014(gap) : 0;
-  const total = totalWeight(segments);
-  const content = 1 - g;
-  const gapW = n > 1 ? g / (n - 1) : 0;
-  const slots = [];
-  let acc = 0;
-  for (let i = 0; i < n; i++) {
-    const sw = Math.max(0, segments[i].weight) / total * content;
-    slots.push({ kind: "segment", index: i, a: acc, b: acc + sw });
-    acc += sw;
-    if (i < n - 1) {
-      slots.push({ kind: "gap", index: i, a: acc, b: acc + gapW });
-      acc += gapW;
-    }
-  }
-  return slots;
-}
-function boundaries(segments, gap = 0) {
-  if (gap > 0 && segments.length > 1) return [];
-  const total = totalWeight(segments);
-  const out = [];
-  let acc = 0;
-  for (let i = 0; i < segments.length - 1; i++) {
-    acc += segments[i].weight;
-    out.push(acc / total);
-  }
-  return out;
-}
-function segmentSpan(segments, index, gap = 0) {
-  if (gap > 0) {
-    const slot = timelineSlots(segments, gap).find((s) => s.kind === "segment" && s.index === index);
-    if (slot) return [slot.a, slot.b];
-  }
-  const total = totalWeight(segments);
-  let acc = 0;
-  for (let i = 0; i < index; i++) acc += segments[i].weight;
-  return [acc / total, (acc + segments[index].weight) / total];
-}
-function segmentIndexAt(xNorm, segments, gap = 0) {
-  if (gap > 0) {
-    const x2 = clamp014(xNorm);
-    const slots = timelineSlots(segments, gap);
-    for (const s of slots) if (x2 < s.b) return s.index;
-    return segments.length - 1;
-  }
-  const total = totalWeight(segments);
-  const x = clamp014(xNorm) * total;
-  let acc = 0;
-  for (let i = 0; i < segments.length; i++) {
-    acc += segments[i].weight;
-    if (x <= acc) return i;
-  }
-  return segments.length - 1;
-}
-function boundaryAt(xNorm, segments, edgeHitNorm, gap = 0) {
-  if (segments.length < 2) return null;
-  const bs = boundaries(segments, gap);
-  let best = null;
-  let bestDist = edgeHitNorm;
-  for (let i = 0; i < bs.length; i++) {
-    const d = Math.abs(xNorm - bs[i]);
-    if (d <= bestDist) {
-      bestDist = d;
-      best = i;
-    }
-  }
-  return best;
-}
-function smootherstep(t) {
-  const x = clamp014(t);
-  return x * x * x * (x * (x * 6 - 15) + 10);
-}
-function cloneSegments(comp, segments) {
-  return { ...comp, segments };
-}
-function splitSegment(comp, index) {
-  const src = comp.segments[index];
-  if (!src) return comp;
-  const next = comp.segments.slice();
-  next.splice(index + 1, 0, { ...src });
-  return cloneSegments(comp, next.map((s) => ({ ...s, weight: 1 })));
-}
-function cycleSegmentType(comp, index) {
-  const src = comp.segments[index];
-  if (!src) return comp;
-  const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(src.type) + 1) % CURVE_CYCLE.length];
-  const next = comp.segments.slice();
-  next[index] = { ...src, type, curvature: 0, steepness: 0, overshoot: 0, anticipate: 0 };
-  return cloneSegments(comp, next);
-}
-function setSegmentCurvature(comp, index, curvature) {
-  const src = comp.segments[index];
-  if (!src) return comp;
-  const next = comp.segments.slice();
-  next[index] = { ...src, curvature: clampBipolar(curvature) };
-  return cloneSegments(comp, next);
-}
-function setSegmentSteepness(comp, index, steepness) {
-  const src = comp.segments[index];
-  if (!src) return comp;
-  const next = comp.segments.slice();
-  next[index] = { ...src, steepness: clampBipolar(steepness) };
-  return cloneSegments(comp, next);
-}
-function redistributeWeight(comp, boundaryIndex, deltaFrac) {
-  const segs = comp.segments;
-  const i = boundaryIndex;
-  if (i < 0 || i >= segs.length - 1) return comp;
-  const total = totalWeight(segs);
-  const span = segs[i].weight + segs[i + 1].weight;
-  const minW = CURVE_MIN_WEIGHT_FRAC * total;
-  let wi = segs[i].weight + deltaFrac * total;
-  wi = Math.max(minW, Math.min(span - minW, wi));
-  const next = segs.slice();
-  next[i] = { ...segs[i], weight: wi };
-  next[i + 1] = { ...segs[i + 1], weight: span - wi };
-  return cloneSegments(comp, next);
-}
-function cycleDriverType(comp) {
-  if (!comp.driver) return comp;
-  const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(comp.driver.type) + 1) % CURVE_CYCLE.length];
-  return { ...comp, driver: { ...comp.driver, type, curvature: 0, steepness: 0, overshoot: 0, anticipate: 0 } };
-}
-function setDriverCurvature(comp, curvature) {
-  if (!comp.driver) return comp;
-  return { ...comp, driver: { ...comp.driver, curvature: clampBipolar(curvature) } };
-}
-function setDriverSteepness(comp, steepness) {
-  if (!comp.driver) return comp;
-  return { ...comp, driver: { ...comp.driver, steepness: clampBipolar(steepness) } };
-}
-var DRAG_ENERGY_GAIN = 0.6;
-var DRAG_STEEP_GAIN = 0.6;
-var COMPOSER_HEADER_H = 16;
-function headerHit(xN, py, segments, layout) {
-  if (py >= 0 && py < COMPOSER_HEADER_H) return segmentIndexAt(xN, segments, layout.gap ?? 0);
-  if (layout.driverY != null && py >= layout.driverY && py < layout.driverY + COMPOSER_HEADER_H) return "driver";
-  return null;
-}
-function toLocalCoords(clientX, clientY, rect, totalH) {
-  const xN = clamp014((clientX - rect.left) / (rect.width || 1));
-  const py = (clientY - rect.top) / (rect.height || 1) * totalH;
-  return { xN, py };
-}
-function pointerTarget(xN, py, segments, layout, edgeHitNorm) {
-  const gap = layout.gap ?? 0;
-  if (layout.driverY != null && py >= layout.driverY) return { kind: "driver" };
-  const b = boundaryAt(xN, segments, edgeHitNorm, gap);
-  if (b != null) return { kind: "boundary", index: b };
-  return { kind: "segment", index: segmentIndexAt(xN, segments, gap) };
-}
-function applySegmentBodyDrag(comp, index, baseCurvature, baseSteepness, dxFrac, dyFrac) {
-  const next = setSegmentCurvature(comp, index, baseCurvature + dxFrac / DRAG_ENERGY_GAIN);
-  return setSegmentSteepness(next, index, baseSteepness - dyFrac / DRAG_STEEP_GAIN);
-}
-function applyDriverBodyDrag(comp, baseCurvature, baseSteepness, dxFrac, dyFrac) {
-  const next = setDriverCurvature(comp, baseCurvature + dxFrac / DRAG_ENERGY_GAIN);
-  return setDriverSteepness(next, baseSteepness - dyFrac / DRAG_STEEP_GAIN);
-}
-function buildSamplers(comp) {
-  return {
-    segments: comp.segments.map(buildSampler),
-    driver: comp.driver ? buildSampler(comp.driver) : null
-  };
-}
-function directionPhase(u, dir) {
-  const x = clamp014(u);
-  if (dir === "reverse") return 1 - x;
-  if (dir === "mirror") return 1 - Math.abs(1 - 2 * x);
-  return x;
-}
-function readComposition(comp, u, s) {
-  const inputPhase = directionPhase(u, comp.direction);
-  const warpedPhase = s.driver ? clamp014(s.driver(inputPhase)) : inputPhase;
-  const gap = comp.gap ?? 0;
-  if (gap > 0 && comp.segments.length > 1) {
-    const slots = timelineSlots(comp.segments, gap);
-    const slot = slots.find((sl) => warpedPhase < sl.b) ?? slots[slots.length - 1];
-    const localT2 = slot.b > slot.a ? (warpedPhase - slot.a) / (slot.b - slot.a) : 0;
-    if (slot.kind === "segment") {
-      const value3 = s.segments[slot.index] ? s.segments[slot.index](localT2) : 0;
-      return { inputPhase, warpedPhase, value: value3, segIndex: slot.index, localT: localT2 };
-    }
-    const n = comp.segments.length;
-    const endVal = s.segments[slot.index] ? s.segments[slot.index](1) : 0;
-    const startVal = s.segments[(slot.index + 1) % n] ? s.segments[(slot.index + 1) % n](0) : 0;
-    const value2 = lerp(endVal, startVal, smootherstep(localT2));
-    return { inputPhase, warpedPhase, value: value2, segIndex: slot.index, localT: localT2 };
-  }
-  const segIndex = segmentIndexAt(warpedPhase, comp.segments);
-  const [a, b] = segmentSpan(comp.segments, segIndex);
-  const localT = b > a ? (warpedPhase - a) / (b - a) : 0;
-  const value = s.segments[segIndex] ? s.segments[segIndex](localT) : 0;
-  return { inputPhase, warpedPhase, value, segIndex, localT };
-}
-var COMPOSER_GAP = 10;
-var COMPOSER_PAD_FRAC = 0.18;
-var COMPOSER_DRIVER_FRAC = 0.55;
-function composerLayout(width, height, hasDriver) {
-  const driverH = hasDriver ? Math.round(height * COMPOSER_DRIVER_FRAC) : 0;
-  const totalH = height + (hasDriver ? COMPOSER_GAP + driverH : 0);
-  return {
-    W: width,
-    totalH,
-    mainRect: { x: 0, y: 0, w: width, h: height },
-    driverRect: hasDriver ? { x: 0, y: height + COMPOSER_GAP, w: width, h: driverH } : null
-  };
-}
-function mapY(rect, ny) {
-  const pad = rect.h * COMPOSER_PAD_FRAC;
-  const top = rect.y + pad;
-  const bot = rect.y + rect.h - pad;
-  return bot - ny * (bot - top);
-}
-function spanX(span, nx, W) {
-  return (span[0] + nx * (span[1] - span[0])) * W;
-}
-function curvePath(curve, rect, span, W, samples = 40) {
-  const x = (nx) => spanX(span, nx, W);
-  const y = (ny) => mapY(rect, ny);
-  if (curve.type === "spring") {
-    const sampler = buildSampler(curve);
-    let d = `M ${x(0)} ${y(sampler(0))}`;
-    for (let i = 1; i <= samples; i++) {
-      const t = i / samples;
-      d += ` L ${x(t)} ${y(sampler(t))}`;
-    }
-    return d;
-  }
-  const e = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot, curve.anticipate);
-  let pts = [
-    [0, 0],
-    [e[0], e[1]],
-    [e[2], e[3]],
-    [1, 1]
-  ];
-  if (curve.flipX) pts = pts.map(([px, py]) => [1 - px, py]).reverse();
-  if (curve.flipY) pts = pts.map(([px, py]) => [px, 1 - py]);
-  return `M ${x(pts[0][0])} ${y(pts[0][1])} C ${x(pts[1][0])} ${y(pts[1][1])}, ${x(pts[2][0])} ${y(pts[2][1])}, ${x(pts[3][0])} ${y(pts[3][1])}`;
-}
-function connectorPath(slot, samplers, segCount, rect, W, samples = 24) {
-  const endVal = samplers.segments[slot.index] ? samplers.segments[slot.index](1) : 0;
-  const next = (slot.index + 1) % segCount;
-  const startVal = samplers.segments[next] ? samplers.segments[next](0) : 0;
-  let d = `M ${slot.a * W} ${mapY(rect, endVal)}`;
-  for (let i = 1; i <= samples; i++) {
-    const t = i / samples;
-    const v = lerp(endVal, startVal, smootherstep(t));
-    d += ` L ${(slot.a + (slot.b - slot.a) * t) * W} ${mapY(rect, v)}`;
-  }
-  return d;
-}
-function diagonalLine(rect, span, W) {
-  return { x1: span[0] * W, y1: mapY(rect, 0), x2: span[1] * W, y2: mapY(rect, 1) };
-}
-function playheadGeometry(read, layout) {
-  const seriesX = read.warpedPhase * layout.W;
-  return {
-    seriesX,
-    dotX: seriesX,
-    dotY: mapY(layout.mainRect, read.value),
-    driverX: read.inputPhase * layout.W
-  };
-}
-var DEFAULT_TRIGGER_STEPS = 5;
-var TRIGGER_FLYBACK = 0.5;
-function triggersCrossed(prevValue, curValue, steps) {
-  const n = Math.max(2, Math.floor(steps));
-  const seg = 1 / (n - 1);
-  const p = clamp014(prevValue);
-  const c = clamp014(curValue);
-  const delta = c - p;
-  const fired = [];
-  if (Math.abs(delta) > TRIGGER_FLYBACK) {
-    fired.push(delta < 0 ? n - 1 : 0);
-  } else if (delta > 0) {
-    for (let k = 1; k <= n - 2; k++) {
-      const level = k * seg;
-      if (p < level && level <= c) fired.push(k);
-    }
-  } else if (delta < 0) {
-    for (let k = n - 2; k >= 1; k--) {
-      const level = k * seg;
-      if (c <= level && level < p) fired.push(k);
-    }
-  }
-  return fired;
-}
-
-// src/solid/components/CurveComposer.tsx
+import { buildSamplers, segmentSpan, segmentIndexAt, boundaries, splitSegment, cycleSegmentType, redistributeWeight, cycleDriverType, readComposition, triggersCrossed, toLocalCoords, pointerTarget, headerHit, applySegmentBodyDrag, applyDriverBodyDrag, composerLayout, mapY, curvePath, diagonalLine, playheadGeometry, timelineSlots, connectorPath, DEFAULT_TRIGGER_STEPS, DRAG_THRESHOLD, EDGE_HIT } from "tweakers/curve-composer-core";
 var _tmpl$71 = /* @__PURE__ */ _$template32(`<div class=tweakers-cc-wrap><svg class=tweakers-cc><rect class=tweakers-cc-lane rx=8></rect><line class=tweakers-cc-playhead x1=0 x2=0></line><circle class=tweakers-cc-dot cx=0 r=3>`);
 var _tmpl$228 = /* @__PURE__ */ _$template32(`<svg><line class=tweakers-cc-grid></svg>`, false, true, false);
 var _tmpl$321 = /* @__PURE__ */ _$template32(`<svg><rect class=tweakers-cc-seg-selected rx=8></svg>`, false, true, false);
@@ -12627,7 +7761,7 @@ function CurveComposer(props) {
       };
       return;
     }
-    const target = pointerTarget(xN, py, p.segments, hitLayout(), EDGE_HIT2 / rectW);
+    const target = pointerTarget(xN, py, p.segments, hitLayout(), EDGE_HIT / rectW);
     if (target.kind === "driver") {
       drag = {
         kind: "driver",
@@ -12674,7 +7808,7 @@ function CurveComposer(props) {
         });
         return;
       }
-      const t = pointerTarget(xN, py, p.segments, hitLayout(), EDGE_HIT2 / rectW2);
+      const t = pointerTarget(xN, py, p.segments, hitLayout(), EDGE_HIT / rectW2);
       setHover(t.kind === "driver" ? {
         kind: "driver",
         index: 0
@@ -12687,7 +7821,7 @@ function CurveComposer(props) {
     const svgRect = svgEl.getBoundingClientRect();
     const rectW = svgRect.width;
     const rectH = svgRect.height;
-    const moved = Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > DRAG_THRESHOLD2;
+    const moved = Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > DRAG_THRESHOLD;
     if (!moved) return;
     if (d.kind === "boundary") {
       const deltaFrac = (e.clientX - d.startX) / rectW;
@@ -13093,6 +8227,27 @@ function CurveComposer(props) {
   })();
 }
 _$delegateEvents26(["pointerdown", "pointermove", "pointerup", "dblclick"]);
+
+// src/solid/index.ts
+import { springify } from "tweakers/curve-composer-core";
+import { gradientToCss as gradientToCss3, DEFAULT_GRADIENT as DEFAULT_GRADIENT2 } from "tweakers/gradient-core";
+import {
+  XY_DETENT_PX,
+  XY_DEFAULT_STEP,
+  resolveAxis as resolveAxis2,
+  clamp as clamp3,
+  snapToStep,
+  valueToNorm,
+  normToValue,
+  invertY,
+  valueFromPoint as valueFromPoint2,
+  pointFromValue as pointFromValue2,
+  applyDetentAxis as applyDetentAxis2,
+  nudge as nudge2,
+  centerValue as centerValue2,
+  normalizeValue as normalizeValue2
+} from "tweakers/xy-pad-core";
+import { TweakStore as TweakStore12 } from "tweakers/store";
 export {
   AnalyserVisualization,
   ButtonGroup,
@@ -13102,7 +8257,7 @@ export {
   ControlRenderer,
   ControlShell,
   CurveComposer,
-  DEFAULT_GRADIENT,
+  DEFAULT_GRADIENT2 as DEFAULT_GRADIENT,
   EasingVisualization,
   Folder,
   GradientControl,
@@ -13121,28 +8276,28 @@ export {
   Toggle,
   TransitionControl,
   TweakRoot,
-  TweakStore,
+  TweakStore12 as TweakStore,
   TweakTimeline,
   WaveformVisualization,
   XYControl,
   XYPad,
   XY_DEFAULT_STEP,
   XY_DETENT_PX,
-  applyDetentAxis,
-  centerValue,
-  clamp2 as clamp,
+  applyDetentAxis2 as applyDetentAxis,
+  centerValue2 as centerValue,
+  clamp3 as clamp,
   createTweakTimeline,
   createTweakers,
-  gradientToCss,
+  gradientToCss3 as gradientToCss,
   invertY,
   normToValue,
-  normalizeValue,
-  nudge,
-  pointFromValue,
-  resolveAxis,
+  normalizeValue2 as normalizeValue,
+  nudge2 as nudge,
+  pointFromValue2 as pointFromValue,
+  resolveAxis2 as resolveAxis,
   snapToStep,
   springify,
-  valueFromPoint,
+  valueFromPoint2 as valueFromPoint,
   valueToNorm
 };
 //# sourceMappingURL=index.js.map

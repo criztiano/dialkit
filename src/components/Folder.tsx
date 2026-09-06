@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ICON_PANEL, ICON_CHEVRON } from '../icons';
+import { ICON_PANEL, ICON_CHEVRON } from 'tweakers/icons';
 import { Checkbox } from './Checkbox';
 
 interface FolderProps {

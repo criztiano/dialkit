@@ -1,5 +1,5 @@
 import { For } from 'solid-js';
-import { TweakStore, hintDomId } from '../../store/TweakStore';
+import { TweakStore, hintDomId } from 'tweakers/store';
 import type {
   ControlMeta,
   TweakValue,
@@ -7,8 +7,8 @@ import type {
   SpringConfig,
   TransitionConfig,
   XYValue,
-} from '../../store/TweakStore';
-import type { GradientValue } from '../../gradient-core';
+} from 'tweakers/store';
+import type { GradientValue } from 'tweakers/gradient-core';
 import { useShortcutContext } from './ShortcutListener';
 import { Folder } from './Folder';
 import { ModuleFolder } from './ModuleFolder';

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { TimelineUiStore } from 'tweakers/timeline';
-  import { ICON_TIMELINE } from '../../../icons';
+  import { ICON_TIMELINE } from 'tweakers/icons';
 
   let visible = $state(TimelineUiStore.getVisible());
   $effect(() => TimelineUiStore.subscribe(() => {

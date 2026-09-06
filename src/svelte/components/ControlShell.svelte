@@ -3,7 +3,7 @@
   import { TweakStore } from 'tweakers/store';
   import type { AffordanceConfig, AffordanceStatus } from 'tweakers/store';
   import Portal from '../Portal.svelte';
-  import { AFFORDANCE_POPOVER_WIDTH, placePopover } from '../../affordance-core';
+  import { AFFORDANCE_POPOVER_WIDTH, placePopover } from 'tweakers/affordance-core';
 
   let { hint, title, id, affordance, panelId, path, children } = $props<{
     /** Help text for this control. Without one the tooltip is not rendered. */

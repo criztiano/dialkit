@@ -1,7 +1,7 @@
 import { Teleport, defineComponent, h, nextTick, onMounted, ref, watch } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
 import { ColorPickerPanel } from './ColorPickerPanel';
-import { parseHex, normalizeHexEdit, bareHex, opacityPercent } from '../../color-core';
+import { parseHex, normalizeHexEdit, bareHex, opacityPercent } from 'tweakers/color-core';
 
 const PICKER_WIDTH = 240;
 // Estimated open heights for the above/below flip (SV area + sliders + fields + padding).

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
-import { TimelineStore } from '../store/TimelineStore';
-import { computeStaticTimeline, parseTimelineConfig } from '../timeline-core';
-import type { TweakTimelineValues, TimelineConfig } from '../timeline-core';
+import { TimelineStore } from 'tweakers/timeline';
+import { computeStaticTimeline, parseTimelineConfig } from 'tweakers/timeline';
+import type { TweakTimelineValues, TimelineConfig } from 'tweakers/timeline';
 import {
   buildTimelineMeta,
   buildTimelineValues,
   type TweakTimelineOptions,
-} from '../timeline/adapter';
+} from 'tweakers/timeline';
 import { useTweakStorePanel, useSerialized } from './useTweakStorePanel';
 
 export type {
@@ -22,7 +22,7 @@ export type {
   TimelineStepConfig,
   TimelineStepValues,
   TweakTimelineValues,
-} from '../timeline-core';
+} from 'tweakers/timeline';
 
 export type UseTweakTimelineOptions = TweakTimelineOptions;
 

@@ -1,5 +1,5 @@
-import { ICON_CLOSE } from '../icons';
-import type { ChipOption } from '../store/TweakStore';
+import { ICON_CLOSE } from 'tweakers/icons';
+import type { ChipOption } from 'tweakers/store';
 
 interface ChipsControlProps {
   label: string;

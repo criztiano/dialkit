@@ -3,7 +3,7 @@ import {
   DEFAULT_TRANSFER, TRANSFER_MAX_POINTS, insertPoint, isIdentityTransfer, movePoint,
   nearestPoint, normalizeTransfer, removePoint, sampleTransfer,
   type TransferPoint, type TransferValue,
-} from '../transfer-core';
+} from 'tweakers/transfer-core';
 
 interface TransferCurveProps {
   label: string;

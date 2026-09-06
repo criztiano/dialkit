@@ -1,4 +1,4 @@
-import type { CurveSegment, CurveDriver, DriverDirection } from '../../curve-composer-core';
+import type { CurveSegment, CurveDriver, DriverDirection } from 'tweakers/curve-composer-core';
 type $$ComponentProps = {
     segments: CurveSegment[];
     driver?: CurveDriver | null;

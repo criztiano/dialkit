@@ -1,8 +1,8 @@
 import { createEffect, createSignal, onCleanup, Show, type JSX } from 'solid-js';
 import { Dynamic, Portal } from 'solid-js/web';
-import { TweakStore } from '../../store/TweakStore';
-import type { AffordanceConfig, AffordanceContext, AffordanceStatus } from '../../store/TweakStore';
-import { AFFORDANCE_POPOVER_WIDTH, placePopover } from '../../affordance-core';
+import { TweakStore } from 'tweakers/store';
+import type { AffordanceConfig, AffordanceContext, AffordanceStatus } from 'tweakers/store';
+import { AFFORDANCE_POPOVER_WIDTH, placePopover } from 'tweakers/affordance-core';
 
 interface ControlShellProps {
   /** Help text for this control. Without one the tooltip is not rendered. */

@@ -3,7 +3,7 @@
   import Portal from '../Portal.svelte';
   import { TweakStore } from 'tweakers/store';
   import { dropdownTransition } from './transitions';
-  import { ICON_CHEVRON, ICON_TRASH } from '../../icons';
+  import { ICON_CHEVRON, ICON_TRASH } from 'tweakers/icons';
 
   // Structural on purpose: stock Preset[] and provider-derived PresetItem[]
   // both fit. `deletable` defaults to true so stock callers stay unchanged.

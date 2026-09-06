@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { AnalyserVisualization, Slider, ColorControl } from 'tweakers';
-import type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, AnalyserTransferDraw } from 'tweakers';
+import { AnalyserVisualization, Slider, ColorControl } from 'dialkit';
+import type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, AnalyserTransferDraw } from 'dialkit';
 
 const PIXEL_SIZES = [1, 2, 4, 6]; // pixelated block-size multipliers
 const CHANNEL_NAMES = ['drone', 'blips'] as const;

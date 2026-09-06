@@ -3,7 +3,7 @@ import { act, create } from 'react-test-renderer';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { useTweakers } from './hooks/useTweakers';
-import { TweakStore } from './store/TweakStore';
+import { TweakStore } from 'tweakers/store';
 
 // The hook only registers a panel and reads the store back — no DOM — but
 // react-test-renderer still wants a window to exist.

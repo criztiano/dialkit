@@ -1,6 +1,6 @@
 import { defineComponent, inject, onMounted, onUnmounted, provide, ref, type InjectionKey, type Ref } from 'vue';
-import { TweakStore } from '../../store/TweakStore';
-import { getEffectiveStep, applySliderDelta, findControl, isInputFocused, getActiveModifier, DRAG_SENSITIVITY } from '../../shortcut-utils';
+import { TweakStore } from 'tweakers/store';
+import { getEffectiveStep, applySliderDelta, findControl, isInputFocused, getActiveModifier, DRAG_SENSITIVITY } from 'tweakers/shortcut-utils';
 
 export interface ShortcutState {
   activePanelId: Ref<string | null>;

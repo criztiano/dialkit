@@ -1,5 +1,5 @@
 import { defineComponent, h, computed, type PropType } from 'vue';
-import type { SpringConfig } from '../../store/TweakStore';
+import type { SpringConfig } from 'tweakers/store';
 
 function generateSpringCurve(
   stiffness: number,

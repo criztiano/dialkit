@@ -4,7 +4,7 @@ import type { ReactTestRenderer, ReactTestInstance } from 'react-test-renderer';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { ListControl } from './components/ListControl';
-import type { TweakEvent, ListItemType, ListItemValue } from './store/TweakStore';
+import type { TweakEvent, ListItemType, ListItemValue } from 'tweakers/store';
 
 // ListControl disarms drag-to-reorder on a window listener, and Folder measures
 // window height; neither exists under node:test.

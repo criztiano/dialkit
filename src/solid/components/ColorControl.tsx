@@ -2,7 +2,7 @@ import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { animate } from 'motion';
 import { ColorPickerPanel } from './ColorPickerPanel';
-import { parseHex, normalizeHexEdit, bareHex, opacityPercent } from '../../color-core';
+import { parseHex, normalizeHexEdit, bareHex, opacityPercent } from 'tweakers/color-core';
 
 interface ColorControlProps {
   label: string;

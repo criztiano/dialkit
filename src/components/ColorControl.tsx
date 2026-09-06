@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { ColorPickerPanel } from './ColorPickerPanel';
-import { parseHex, normalizeHexEdit, bareHex, opacityPercent } from '../color-core';
+import { parseHex, normalizeHexEdit, bareHex, opacityPercent } from 'tweakers/color-core';
 
 interface ColorControlProps {
   label: string;

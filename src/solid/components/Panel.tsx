@@ -1,8 +1,8 @@
 import { createSignal, createEffect, onMount, onCleanup, JSX } from 'solid-js';
 import { animate } from 'motion';
-import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../../icons';
-import { TweakStore } from '../../store/TweakStore';
-import type { PanelConfig, TweakValue } from '../../store/TweakStore';
+import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from 'tweakers/icons';
+import { TweakStore } from 'tweakers/store';
+import type { PanelConfig, TweakValue } from 'tweakers/store';
 import { Folder } from './Folder';
 import { ControlRenderer } from './ControlRenderer';
 import { PresetManager } from './PresetManager';
