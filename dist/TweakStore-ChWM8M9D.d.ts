@@ -1,5 +1,32 @@
 import { RangeValue } from './range-slider-core.js';
 
+/** Opt-in meanings for numeric Move faces. Values keep the host's units. */
+type MoveSliderVisual = {
+    kind: 'opacity';
+    opaqueValue?: number;
+} | {
+    kind: 'blur';
+} | {
+    kind: 'pan';
+    left?: number;
+    center?: number;
+    right?: number;
+} | {
+    kind: 'stereo-width';
+    mono?: number;
+    unity?: number;
+} | {
+    kind: 'pitch';
+    unit?: 'semitones' | 'cents';
+};
+type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';
+type MoveSelectVisual = {
+    kind: 'playback';
+    /** Map host option values to drawings. Omit when values are mode names. */
+    modes?: Record<string, MovePlaybackMode>;
+};
+type MoveVisual = MoveSliderVisual | MoveSelectVisual;
+
 interface FilterAxisConfig {
     min?: number;
     max?: number;
@@ -24,6 +51,8 @@ type XYAxis = {
 };
 type SelectConfig = {
     type: 'select';
+    /** Optional semantic drawing for the Move surface. */
+    moveVisual?: MoveSelectVisual;
     /**
      * An option may name an `icon` from `LUCIDE_ICONS` — the Move slot draws it
      * instead of making you read the mode name off a controller.
@@ -188,6 +217,7 @@ type AffordanceConfig = {
     label?: string;
 };
 type ControlMeta = {
+    moveVisual?: MoveVisual;
     type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser' | 'filter';
     path: string;
     label: string;

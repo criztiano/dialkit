@@ -1,3 +1,5 @@
+import type { MoveSliderVisual, MoveSelectVisual, MoveVisual } from '../move-visual-core';
+export type { MoveSliderVisual, MoveSelectVisual, MoveVisual, MovePlaybackMode } from '../move-visual-core';
 // Lightweight state store with subscriptions for tweakers
 
 import { HEX_COLOR_REGEX } from '../color-core';
@@ -58,6 +60,8 @@ export type ActionConfig = {
 
 export type SelectConfig = {
   type: 'select';
+  /** Optional semantic drawing for the Move surface. */
+  moveVisual?: MoveSelectVisual;
   /**
    * An option may name an `icon` from `LUCIDE_ICONS` — the Move slot draws it
    * instead of making you read the mode name off a controller.
@@ -157,6 +161,8 @@ export type RangeConfig = {
  */
 export type SliderConfig = {
   type: 'slider';
+  /** Optional semantic drawing for the Move surface; never inferred from labels. */
+  moveVisual?: MoveSliderVisual;
   default: number;
   min: number;
   max: number;
@@ -503,6 +509,7 @@ export type AffordanceConfig = {
 };
 
 export type ControlMeta = {
+  moveVisual?: MoveVisual;
   type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser' | 'filter';
   path: string;
   label: string;
@@ -1631,6 +1638,7 @@ class TweakStoreClass {
           label,
           min: value.min,
           max: value.max,
+          moveVisual: value.moveVisual,
           step: value.step ?? this.inferStep(value.min, value.max),
           unit: value.unit,
           formatValue: value.formatValue,
@@ -1659,7 +1667,7 @@ class TweakStoreClass {
       } else if (this.isActionConfig(value)) {
         controls.push({ type: 'action', path, label: (value as ActionConfig).label || label, caption: (value as ActionConfig).caption });
       } else if (this.isSelectConfig(value)) {
-        controls.push({ type: 'select', path, label, options: value.options, display: value.display, preview: value.preview });
+        controls.push({ type: 'select', path, label, options: value.options, display: value.display, preview: value.preview, moveVisual: value.moveVisual });
       } else if (this.isColorConfig(value)) {
         controls.push({ type: 'color', path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {

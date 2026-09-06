@@ -20,3 +20,10 @@ Thanks for contributing.
 - Include a short summary of what changed and why.
 - Add validation notes (for example: `npm run typecheck`, `npm run build`).
 - Update `README.md` when behavior or API docs change.
+
+## Shared component standards
+
+Follow the [component checklist](docs/contributing-components.md) and keep the
+[control dictionary](docs/controls.md) current. Consumer updates follow the
+[snapshot workflow](docs/integration.md); reusable fixes belong in source, not
+in app-owned copies of `dist`. Run both `npm test` and `npm run test:timeline`.

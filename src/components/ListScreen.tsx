@@ -17,6 +17,13 @@ export interface ListScreenProps {
   onSelect?: (value: string) => void;
   /** 400px with left-aligned rows, instead of the 200px centered default. */
   wide?: boolean;
+  /**
+   * How the view follows the selection. `nearest` (the default) scrolls only
+   * far enough to bring the row into view; `center` holds the selection in
+   * the middle of the screen, so a long list runs past a still row and only
+   * the two ends of it can push the selection off centre.
+   */
+  follow?: 'nearest' | 'center';
   className?: string;
   style?: CSSProperties;
 }
@@ -53,15 +60,35 @@ export function ListScreen({
   value,
   onSelect,
   wide,
+  follow = 'nearest',
   className,
   style,
 }: ListScreenProps): ReactElement {
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const row = rootRef.current?.querySelector('[data-selected]');
-    row?.scrollIntoView?.({ block: 'nearest' });
-  }, [value]);
+    const root = rootRef.current;
+    if (!root) return;
+
+    // `data-over-top` / `data-over-bottom` mark rows scrolled out of sight,
+    // for hosts that soften the edge they went behind: an edge hiding
+    // nothing must stay crisp, or the end of a list reads as damage.
+    const sync = () => {
+      root.querySelector('[data-selected]')?.scrollIntoView?.({ block: follow });
+      const end = root.scrollHeight - root.clientHeight;
+      root.toggleAttribute?.('data-over-top', root.scrollTop > 1);
+      root.toggleAttribute?.('data-over-bottom', root.scrollTop < end - 1);
+    };
+    sync();
+
+    // A host can resize the screen under the list — the Move slot grows one
+    // to the whole list while it is touched — which changes both what is
+    // hidden and where the middle is.
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(sync);
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, [value, follow, items.length]);
 
   const rootClassName = ['tweakers-list-screen', className].filter(Boolean).join(' ');
 

@@ -238,6 +238,9 @@ export function PhotoStack() {
   const bgColor = params.darkMode ? '#0d0d0d' : '#ffffff';
   const textColor = params.darkMode ? '#ffffff' : '#1a1a1a';
   const subtextColor = params.darkMode ? '#666' : '#888';
+  const transition = params.transitionSpring.type === 'easing'
+    ? { ...params.transitionSpring, type: 'tween' as const }
+    : params.transitionSpring;
 
   // Visible wiring for the new controls so they can be tested at a glance.
   const palette = PALETTES.find((p) => p.value === params.palette);
@@ -368,7 +371,7 @@ export function PhotoStack() {
                     opacity: 0,
                     zIndex: visibleCount + 1,
                   }}
-                  transition={params.transitionSpring}
+                  transition={transition}
                   style={{
                     position: 'absolute',
                     width: shape.width,
@@ -379,7 +382,7 @@ export function PhotoStack() {
                   <motion.div
                     initial={false}
                     animate={{ opacity: shadowOpacity }}
-                    transition={params.transitionSpring}
+                    transition={transition}
                     style={{
                       position: 'absolute',
                       inset: 0,
@@ -433,7 +436,7 @@ export function PhotoStack() {
                     scale: 1,
                     zIndex: visibleCount + 1,
                   }}
-                  transition={params.transitionSpring}
+                  transition={transition}
                   style={{
                     position: 'absolute',
                     width: shape.width,
@@ -473,7 +476,7 @@ export function PhotoStack() {
                     <motion.div
                       initial={false}
                       animate={{ opacity: overlayOpacity }}
-                      transition={params.transitionSpring}
+                      transition={transition}
                       style={{
                         position: 'absolute',
                         inset: 0,

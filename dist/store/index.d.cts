@@ -1,3 +1,30 @@
+/** Opt-in meanings for numeric Move faces. Values keep the host's units. */
+type MoveSliderVisual = {
+    kind: 'opacity';
+    opaqueValue?: number;
+} | {
+    kind: 'blur';
+} | {
+    kind: 'pan';
+    left?: number;
+    center?: number;
+    right?: number;
+} | {
+    kind: 'stereo-width';
+    mono?: number;
+    unity?: number;
+} | {
+    kind: 'pitch';
+    unit?: 'semitones' | 'cents';
+};
+type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';
+type MoveSelectVisual = {
+    kind: 'playback';
+    /** Map host option values to drawings. Omit when values are mode names. */
+    modes?: Record<string, MovePlaybackMode>;
+};
+type MoveVisual = MoveSliderVisual | MoveSelectVisual;
+
 /**
  * gradient-core — DOM-free gradient math shared by every framework port of the
  * gradient editor. Pure functions only; anything touching the DOM lives in the
@@ -103,6 +130,8 @@ type ActionConfig = {
 };
 type SelectConfig = {
     type: 'select';
+    /** Optional semantic drawing for the Move surface. */
+    moveVisual?: MoveSelectVisual;
     /**
      * An option may name an `icon` from `LUCIDE_ICONS` — the Move slot draws it
      * instead of making you read the mode name off a controller.
@@ -199,6 +228,8 @@ type RangeConfig = {
  */
 type SliderConfig = {
     type: 'slider';
+    /** Optional semantic drawing for the Move surface; never inferred from labels. */
+    moveVisual?: MoveSliderVisual;
     default: number;
     min: number;
     max: number;
@@ -472,6 +503,7 @@ type AffordanceConfig = {
     label?: string;
 };
 type ControlMeta = {
+    moveVisual?: MoveVisual;
     type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser' | 'filter';
     path: string;
     label: string;
@@ -909,4 +941,4 @@ declare function defaultListItemParams(schema: Record<string, ListItemField>): R
 declare function normalizeListItems(config: ListConfig): ListItemValue[];
 declare const TweakStore: TweakStoreClass;
 
-export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type CurveConfig, type EasingConfig, type FileConfig, type FilterConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type PanelConfig, type Preset, type PresetItem, type PresetProvider, type PresetProviderPreset, type RangeConfig, type RangeValue, type ReservedKey, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SwatchConfig, type SwatchOption, TAB_PATH, type TextConfig, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakStorePanelOptions, type TweakValue, type TweakersPersistOptions, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, formatLabel, groupListFields, hintDomId, inferStep, isEasingConfigValue, isHexColor, isSpringConfigValue, normalizeListItems, parseListItemSchema, resolveTweakValues };
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type CurveConfig, type EasingConfig, type FileConfig, type FilterConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type MovePlaybackMode, type MoveSelectVisual, type MoveSliderVisual, type MoveVisual, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type PanelConfig, type Preset, type PresetItem, type PresetProvider, type PresetProviderPreset, type RangeConfig, type RangeValue, type ReservedKey, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SwatchConfig, type SwatchOption, TAB_PATH, type TextConfig, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakStorePanelOptions, type TweakValue, type TweakersPersistOptions, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, formatLabel, groupListFields, hintDomId, inferStep, isEasingConfigValue, isHexColor, isSpringConfigValue, normalizeListItems, parseListItemSchema, resolveTweakValues };

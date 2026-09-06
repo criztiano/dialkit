@@ -6,7 +6,6 @@
   import Folder from './Folder.svelte';
   import PresetManager from './PresetManager.svelte';
   import ControlRenderer from './ControlRenderer.svelte';
-  import ShortcutsMenu from './ShortcutsMenu.svelte';
   import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../../icons';
 
   let { panel, defaultOpen = true, inline = false, toolbarExtra } = $props<{
@@ -16,10 +15,7 @@
     toolbarExtra?: Snippet;
   }>();
 
-  const hasShortcuts = $derived(Object.keys(panel.shortcuts).length > 0);
-
   let copied = $state(false);
-  let isPanelOpen = $state(defaultOpen);
   let values = $state<Record<string, TweakValue>>(TweakStore.getValues(panel.id));
   let presets = $state<PresetItem[]>(TweakStore.getPresetItems(panel.id));
   let activePresetId = $state<string | null>(TweakStore.getActivePresetId(panel.id));
@@ -85,7 +81,6 @@
     {defaultOpen}
     isRoot={true}
     {inline}
-    onOpenChange={(open) => (isPanelOpen = open)}
     enabled={panel.module ? (values['_enabled'] as boolean) : undefined}
     onEnabledChange={panel.module
       ? (v) => TweakStore.updateValue(panel.id, '_enabled', v)

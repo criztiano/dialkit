@@ -3,6 +3,7 @@ node_modules/
 
 # Build output — dist/ is committed so `github:` installs work without a build step
 .svelte-kit/
+/example/dist/
 
 # Generated artifacts from svelte-package
 src/store/TweakStore.d.ts

@@ -63,10 +63,10 @@ export function CurveComposerShowcase() {
   const [playheadColor, setPlayheadColor] = useState('#6366f1');
   const [mode, setMode] = useState<'continuous' | 'trigger'>('continuous');
   const [triggerSteps, setTriggerSteps] = useState(5);
-  const [normalize, setNormalize] = useState(FOLLOWER_DEFAULTS.normalize);
-  const [springStiffness, setSpringStiffness] = useState(FOLLOWER_DEFAULTS.stiffness);
-  const [springDamping, setSpringDamping] = useState(FOLLOWER_DEFAULTS.damping);
-  const [springMass, setSpringMass] = useState(FOLLOWER_DEFAULTS.mass);
+  const [normalize, setNormalize] = useState<boolean>(FOLLOWER_DEFAULTS.normalize);
+  const [springStiffness, setSpringStiffness] = useState<number>(FOLLOWER_DEFAULTS.stiffness);
+  const [springDamping, setSpringDamping] = useState<number>(FOLLOWER_DEFAULTS.damping);
+  const [springMass, setSpringMass] = useState<number>(FOLLOWER_DEFAULTS.mass);
 
   const { segments, driver, direction } = comp;
   const gap = comp.gap ?? 0;

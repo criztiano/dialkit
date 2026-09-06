@@ -14,6 +14,15 @@ description: >-
 
 # Integrating tweakers into an app
 
+Read the [current guidebook](../../docs/README.md) first. For Move apps, its
+[Move integration standards](../../docs/integration.md) and
+[design language](../../docs/design-language.md) supersede the sidebar-specific
+layout guidance below. Use the bottom `MovePanel` as the main Move surface;
+`TweakRoot mode="inline"` remains the general-panel option. Inspect the
+[control dictionary](../../docs/controls.md) before creating a custom component.
+Reusable slot bodies belong upstream, never in a consumer vendor directory.
+
+
 tweakers is not just a tweak-panel library — it is a design system for
 parameter-driven interfaces. Integrating it well means two things at once:
 every app parameter lands on the *right* tweakers control, and the app's
@@ -112,7 +121,7 @@ live outside the panel.
 
 **All controls live in panels.** Mount `TweakRoot mode="inline"` inside a
 fixed-width sidebar (~300px, full height, `overflow: hidden`). The inline panel
-keeps tweakers's card chrome — panel ground, cards, 2px corners — so give the
+keeps tweakers's card chrome — panel ground, cards, token-defined corners — so give the
 sidebar container a little padding (~12px) and let the card float on the app
 ground. The floating popover mode is for tweaking during development, not for a
 real app surface. Don't scatter individual controls across the app: every
@@ -195,7 +204,7 @@ them wholesale. The panel's theme is the design anchor for the whole window:
   needs a line between two things, the answer is spacing, a section, or an
   existing component. A hand-added divider is how a surface starts drifting
   away from the set.
-- Dark instrument surfaces, 2px radius, uppercase mono labels against
+- Dark instrument surfaces, component-owned radius tokens, uppercase mono labels against
   reading-face values: custom canvases (waveforms, diagrams) drawn in the
   center pane should sample the same palette so they look native to the set.
 

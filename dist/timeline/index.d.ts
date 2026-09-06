@@ -1,3 +1,29 @@
+/** Opt-in meanings for numeric Move faces. Values keep the host's units. */
+type MoveSliderVisual = {
+    kind: 'opacity';
+    opaqueValue?: number;
+} | {
+    kind: 'blur';
+} | {
+    kind: 'pan';
+    left?: number;
+    center?: number;
+    right?: number;
+} | {
+    kind: 'stereo-width';
+    mono?: number;
+    unity?: number;
+} | {
+    kind: 'pitch';
+    unit?: 'semitones' | 'cents';
+};
+type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';
+type MoveSelectVisual = {
+    kind: 'playback';
+    /** Map host option values to drawings. Omit when values are mode names. */
+    modes?: Record<string, MovePlaybackMode>;
+};
+
 /**
  * gradient-core — DOM-free gradient math shared by every framework port of the
  * gradient editor. Pure functions only; anything touching the DOM lives in the
@@ -103,6 +129,8 @@ type ActionConfig = {
 };
 type SelectConfig = {
     type: 'select';
+    /** Optional semantic drawing for the Move surface. */
+    moveVisual?: MoveSelectVisual;
     /**
      * An option may name an `icon` from `LUCIDE_ICONS` — the Move slot draws it
      * instead of making you read the mode name off a controller.
@@ -199,6 +227,8 @@ type RangeConfig = {
  */
 type SliderConfig = {
     type: 'slider';
+    /** Optional semantic drawing for the Move surface; never inferred from labels. */
+    moveVisual?: MoveSliderVisual;
     default: number;
     min: number;
     max: number;

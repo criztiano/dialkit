@@ -583,15 +583,17 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   pointer-events: none;
 }
 
+/* Drawn in a 16 box at 14px, so the stroke lands just under its own number:
+   3 reads as the ~2.6px the ring wants to carry at slot size. */
 .tweakers-mod-ring-track {
   fill: none;
   stroke: var(--tweak-border-hover, rgba(255, 255, 255, 0.15));
-  stroke-width: 2;
+  stroke-width: 3;
 }
 
 .tweakers-mod-ring-arc {
   fill: none;
-  stroke-width: 2;
+  stroke-width: 3;
   stroke-linecap: round;
 }
 
@@ -5350,22 +5352,23 @@ input.tweakers-list-item-title:focus {
   }
 }
 
-.tweakers-move-dial-mod {
+/* A wired control wears the modulation ring here too — the same one the dock
+   panel draws, so "this is wired, and this is where the modulation has it"
+   reads the same on both surfaces. Only the placing is the panel's: the
+   slot's top corner, or inline on a pad chip. */
+.tweakers-mod-ring.tweakers-move-dial-mod {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  pointer-events: none;
+  top: 7px;
+  right: 7px;
+  width: 14px;
+  height: 14px;
 }
 
-.tweakers-move-pad-mod {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
+.tweakers-mod-ring.tweakers-move-pad-mod {
+  position: static;
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
-  pointer-events: none;
 }
 
 /* Header cluster — the volume-dial readout. The readout rides the end of the
@@ -5558,21 +5561,6 @@ input.tweakers-list-item-title:focus {
   opacity: 1;
 }
 
-/* Enum slots keep the option value centred in place; the control's own
-   label shrinks and sits just above the option cells. */
-.tweakers-move-dial[data-kind="enum"] .tweakers-move-dial-value {
-  opacity: 1;
-}
-
-.tweakers-move-dial[data-kind="enum"] .tweakers-move-dial-label,
-.tweakers-move-dial[data-kind="enum"]:hover .tweakers-move-dial-label,
-.tweakers-move-dial[data-kind="enum"][data-active] .tweakers-move-dial-label {
-  font-size: 14px;
-  bottom: -2px;
-  opacity: 0.55;
-  -webkit-line-clamp: 1;
-}
-
 /* A substituted slot always reads name-on-tag + live value — the centred
    label would double the tag, so it stays hidden. */
 .tweakers-move-dial[data-sub] .tweakers-move-dial-label {
@@ -5666,11 +5654,15 @@ input.tweakers-list-item-title:focus {
 
    Band arithmetic, from the slot's own edges:
      top    = chip top (6) + chip height (18) + 8
-     bottom = option bottom + option line (20) + 8 */
+     bottom = option bottom + option line (16) + 8 */
 .tweakers-move-dial {
-  --move-option-bottom: 23px;   /* the track's 8 + 9, plus 6 of air */
+  --move-indicator-bottom: 8px;
+  --move-indicator-height: 9px;
+  --move-option-gap: 8px;
+  --move-option-bottom: calc(var(--move-indicator-bottom) + var(--move-indicator-height) + var(--move-option-gap));
   --move-shape-top: 32px;       /* chip top (6) + chip height (18) + 8 */
-  --move-shape-bottom: 47px;    /* option bottom (23) + option line (16) + 8 */
+  --move-shape-bottom: calc(var(--move-option-bottom) + 16px + 8px);
+  --move-head-h: 18px;
 }
 
 /* Height, not a bottom edge: an <svg> is a replaced element, so top+bottom
@@ -5714,8 +5706,8 @@ input.tweakers-list-item-title:focus {
   position: absolute;
   left: 8px;
   right: 9px;
-  bottom: 8px;
-  height: 9px;
+  bottom: var(--move-indicator-bottom);
+  height: var(--move-indicator-height);
   padding: 2px;
   background: var(--move-bg);
   border-radius: 8px;
@@ -5845,25 +5837,26 @@ input.tweakers-list-item-title:focus {
   white-space: nowrap;
 }
 
-/* Envelope stage slot — one column of the ADSR's four-part picture. Each
-   slot draws its own stage on a display like the filter's, and because the
-   segments meet at the slot edges (attack ends at full, decay lands on the
-   sustain level, sustain runs flat, release falls to rest) the row reads as
-   one envelope cut into four windows. */
+/* The 4-slot envelope — the filter's big sibling. One display spans the
+   four stage columns and draws the whole ADSR as one shape; each stage
+   keeps a small caption where its own slot's label would have been, over
+   its own drag zone, so the hardware's one-knob-per-column rule holds
+   under the shared picture. (The span itself is set inline — the control
+   spans however many stage columns the layout gives it.) */
 .tweakers-move-env-display {
   position: absolute;
-  top: 26px;
+  top: 8px;
   left: 8px;
   right: 9px;
-  bottom: 30px;
+  bottom: 28px;
   background: var(--move-display, #1e1e1e);
   border-radius: var(--move-radius-small, 8px);
   overflow: hidden;
   pointer-events: none;
 }
 
-/* The drawing runs edge to edge so neighbouring segments line up, with a
-   little vertical air so the peak and the floor keep their full stroke. */
+/* The drawing runs the display's full width, with a little vertical air so
+   the peak and the floor keep their full stroke. */
 .tweakers-move-env-shape {
   position: absolute;
   top: 6px;
@@ -5892,10 +5885,187 @@ input.tweakers-list-item-title:focus {
   opacity: 1;
 }
 
-/* No pagination cells under an envelope slot, so its caption sits lower
-   than an enum's, clear of nothing but the slot's edge. */
-.tweakers-move-dial[data-kind="env"] .tweakers-move-dial-option {
+/* The joint handles — small squares pinned where the ramps meet (the
+   attack's peak, the decay's landing, the sustain's edge), the design's
+   own marks. They share the line's ink and dim with it; the one whose
+   bend pad is held comes up to full brightness on its own. */
+.tweakers-move-env-handle {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--move-text);
+  border-radius: 3px;
+  background: var(--move-display, #1e1e1e);
+  opacity: 0.5;
+  transition: opacity 0.12s;
+  pointer-events: none;
+}
+
+.tweakers-move-dial[data-kind="env"]:hover .tweakers-move-env-handle,
+.tweakers-move-dial[data-kind="env"][data-active] .tweakers-move-env-handle,
+.tweakers-move-env-handle[data-held] {
+  opacity: 1;
+}
+
+/* A stage caption per column, the filter readout's rule at a quarter of
+   the width — the label sits where its own slot's label would have been,
+   and gives way to its stage's value on touch. */
+.tweakers-move-env-readout {
+  position: absolute;
+  bottom: 6px;
+  width: 25%;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.tweakers-move-env-readout[data-stage="attack"] { left: 0; }
+.tweakers-move-env-readout[data-stage="decay"] { left: 25%; }
+.tweakers-move-env-readout[data-stage="sustain"] { left: 50%; }
+.tweakers-move-env-readout[data-stage="release"] { left: 75%; }
+
+.tweakers-move-env-readout .tweakers-move-dial-label,
+.tweakers-move-env-readout .tweakers-move-dial-value {
+  font-size: 13px;
+  line-height: 16px;
+  white-space: nowrap;
+  -webkit-line-clamp: 1;
+}
+
+/* The drag zones: one per stage column, over the whole slot — the pointer
+   edits the stage whose column it is in. */
+.tweakers-move-env-zones {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+.tweakers-move-env-zone {
+  position: relative;
+  flex: 1;
+}
+
+/* The scope lives IN the rate dial: the live signal fills everything above
+   the bar, edge to edge with no title in its way, and the dial's own
+   readout floats over the wave. You turn the wave you're watching. */
+.tweakers-move-scope-display {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  right: 7px;
+  bottom: 21px;
+  background: var(--move-display, #1e1e1e);
+  border-radius: var(--move-radius-small, 8px);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* The wave keeps a little vertical air so its peaks hold their stroke. */
+.tweakers-move-scope-wave {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  width: 100%;
+  height: calc(100% - 8px);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.tweakers-move-scope-wave path {
+  fill: none;
+  stroke: var(--move-text);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.8;
+}
+
+/* The readout reads over the rolling wave the way a shape slot's label
+   reads over its drawing — lifted, with the display's own dark behind it. */
+.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-readout {
+  z-index: 1;
+}
+
+.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-label,
+.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-value {
+  text-shadow: 0 0 6px var(--move-display, #1e1e1e), 0 0 6px var(--move-display, #1e1e1e);
+}
+
+/* A big toggle — the pad's language at slot size: the indicator bar up
+   top, the name centred, the whole slot inverting when it is on. */
+.tweakers-move-dial[data-kind="toggle"][data-on] {
+  background: var(--move-text);
+  color: var(--move-text-inverse);
+}
+
+.tweakers-move-dial-toggle-indicator {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 4px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--move-bg);
+}
+
+.tweakers-move-dial-toggle-indicator[data-on] {
+  background: var(--move-chip);
+}
+
+.tweakers-move-dial-toggle-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--move-font-label);
+  font-size: 16px;
+  line-height: 20px;
+}
+
+/* The plain enum face — the list screen at slot size: the options on the
+   display, dim, the current one bright on its highlight. No pagination
+   cells to count; you see where you are and where a turn takes you. */
+.tweakers-move-enum-list {
+  position: absolute;
+  top: 26px;
+  left: 6px;
+  right: 7px;
   bottom: 8px;
+  padding: 4px;
+  background: var(--move-display, #1e1e1e);
+  border-radius: var(--move-radius-small, 8px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.tweakers-move-enum-row {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-family: var(--move-font-label);
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--move-text);
+  opacity: 0.22;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity 0.12s, background 0.12s;
+}
+
+.tweakers-move-enum-row[data-selected] {
+  background: rgba(222, 227, 201, 0.1);
+  opacity: 1;
 }
 
 /* Range slot — the bar fills BETWEEN two handle ticks (the span), and the
@@ -5953,6 +6123,120 @@ input.tweakers-list-item-title:focus {
 
 .tweakers-move-dial[data-active] .tweakers-move-dial-enum-cell[data-on] {
   box-shadow: 0 0 12px 0 rgba(222, 227, 201, 0.7);
+}
+
+/* An option picker with no picture puts the choice itself in the slot, and
+   the whole slot turns into screen: the chip is left as a head at the top
+   holding the control's name, and the list takes every pixel under it.
+   Nothing is inset — on this instrument a display is a hole cut in the face,
+   and here the hole is the face.
+
+   The band is cut for exactly five rows: pad (3) + 5 rows (20) + 4 gaps (3)
+   + foot (7) = the 122px left below an 18px head. That is what makes "more
+   than five" the moment the list starts to run. */
+.tweakers-move-dial-screen {
+  --move-list-row: 20px;
+  --move-list-gap: 3px;
+  --move-list-pad: 3px;
+  /* The last row sits off the floor: 4px more than the top has, which the
+     gaps give back so the five rows still land exactly. */
+  --move-list-foot: calc(var(--move-list-pad) + 4px);
+  /* The whole run, laid out — what a touch grows the screen to. */
+  --move-screen-full: calc(
+    var(--move-head-h) + var(--move-list-pad) + var(--move-list-foot)
+    + var(--move-list-count, 1) * var(--move-list-row)
+    + (var(--move-list-count, 1) - 1) * var(--move-list-gap)
+  );
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--move-display, #1e1e1e);
+  border-radius: var(--move-radius);
+  overflow: hidden;
+}
+
+/* Touched, a list too long for its slot grows up out of it: the whole run
+   on screen while the knob is going through it, half the window at most,
+   and scrolling past that. It is over the page at that point, so it takes
+   the shadow of something lifted off the face. */
+.tweakers-move-dial[data-active] .tweakers-move-dial-screen[data-grow] {
+  top: auto;
+  height: min(var(--move-screen-full), 50vh);
+  z-index: 6;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* The head: the last of the chip, the width of the slot, rounded to its top
+   corners. The name is a caption here, not the headline the list is. */
+.tweakers-move-dial-head {
+  flex: 0 0 var(--move-head-h);
+  padding: 0 8px;
+  background: var(--move-chip);
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+  font-size: 11px;
+  line-height: var(--move-head-h);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Rows and ink are the standalone component's, one size down. It is a
+   readout, not a second control — the slot's drag and the column's knob
+   still step the options — so the rows take no pointer of their own. */
+.tweakers-list-screen.tweakers-move-dial-list {
+  /* The component declares its own row metrics on this very element, so
+     they have to be handed back to the screen's — which is the one place
+     they are stated, since the grown height is measured from them. */
+  --move-list-row: inherit;
+  --move-list-gap: inherit;
+  --move-list-pad: inherit;
+  --move-list-fade-top: 0px;
+  --move-list-fade-bottom: 0px;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: auto;
+  max-height: none;
+  padding: var(--move-list-pad) 2px var(--move-list-foot);
+  border-radius: 0;
+  background: none;
+  /* Centred while the options fit the screen, from the top once they
+     overflow — a plain \`center\` would strand the first rows out of reach. */
+  justify-content: center;
+  justify-content: safe center;
+  pointer-events: none;
+  /* Rows dissolve at an edge that is hiding something, and only there: at
+     either end of the run the last row must read as the end, not as a row
+     cut in half. Both stops collapse to zero when nothing is behind them. */
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--move-list-fade-top),
+    #000 calc(100% - var(--move-list-fade-bottom)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--move-list-fade-top),
+    #000 calc(100% - var(--move-list-fade-bottom)),
+    transparent 100%
+  );
+}
+
+.tweakers-move-dial-list[data-over-top] {
+  --move-list-fade-top: 14px;
+}
+
+.tweakers-move-dial-list[data-over-bottom] {
+  --move-list-fade-bottom: 14px;
+}
+
+.tweakers-move-dial-list .tweakers-list-screen-row {
+  font-size: 14px;
+  line-height: 16px;
 }
 
 /* XY slot — the pad fills the slot behind the label: crosshair lines meet
@@ -6269,13 +6553,25 @@ input.tweakers-list-item-title:focus {
     font-size: 18px;
   }
   .tweakers-move-dial {
-    --move-option-bottom: 22px;
     --move-shape-top: 32px;
-    --move-shape-bottom: 44px;
+    --move-shape-bottom: calc(var(--move-option-bottom) + 14px + 8px);
+    --move-head-h: 16px;
   }
   .tweakers-move-dial-option {
     font-size: 12px;
     line-height: 14px;
+  }
+  /* The same five rows, cut for a 100px slot: 3 + 5×14 + 4×1 + 7 = the 84px
+     left under a 16px head. Set on the screen, which is what measures the
+     grown height from them; the list inherits. */
+  .tweakers-move-dial-screen {
+    --move-list-row: 14px;
+    --move-list-gap: 1px;
+  }
+  .tweakers-move-dial-list .tweakers-list-screen-row {
+    padding: 1px 0;
+    font-size: 12px;
+    line-height: 12px;
   }
 }
 
@@ -6487,5 +6783,93 @@ input.tweakers-list-item-title:focus {
 
 .tweakers-list-screen-row[data-muted][data-selected] .tweakers-list-screen-tag {
   opacity: 0.3;
+}
+
+/* Semantic Move faces share the existing picture band. Geometry follows the
+   value immediately; only the specimen receives blur or alpha. */
+.tweakers-move-dial {
+  --move-visual-stroke: 1.5;
+  --move-visual-guide-opacity: 0.6;
+  --move-visual-reference-opacity: 0.7;
+  --move-visual-pitch-active: #f39a38;
+  --move-visual-font-size: 10px;
+  --move-visual-focus-width: 2px;
+  --move-visual-focus-offset: 2px;
+  --move-visual-disabled-opacity: 0.45;
+}
+
+.tweakers-move-dial[role="slider"]:focus-visible {
+  outline: var(--move-visual-focus-width) solid var(--move-text);
+  outline-offset: var(--move-visual-focus-offset);
+}
+
+.tweakers-move-dial[role="slider"][data-disabled] {
+  opacity: var(--move-visual-disabled-opacity);
+  cursor: not-allowed;
+}
+
+.tweakers-move-visual {
+  position: absolute;
+  top: var(--move-shape-top);
+  left: 8%;
+  width: 84%;
+  height: calc(100% - var(--move-shape-top) - var(--move-shape-bottom));
+  overflow: hidden;
+  color: var(--move-text);
+  pointer-events: none;
+}
+
+.tweakers-move-visual text {
+  fill: currentColor;
+  text-anchor: middle;
+  font-family: var(--move-font-label);
+  font-size: var(--move-visual-font-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.tweakers-move-visual-guide,
+.tweakers-move-visual-reference,
+.tweakers-move-visual-line,
+.tweakers-move-visual-lobes {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--move-visual-stroke);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tweakers-move-visual-guide {
+  opacity: var(--move-visual-guide-opacity);
+}
+
+.tweakers-move-visual-reference {
+  opacity: var(--move-visual-reference-opacity);
+  stroke-dasharray: 2 3;
+}
+
+.tweakers-move-visual-solid,
+.tweakers-move-visual-point,
+.tweakers-move-visual-pitch-marker {
+  fill: currentColor;
+}
+
+.tweakers-move-visual-pitch-marker[data-offset],
+.tweakers-move-visual-point[data-offset] {
+  fill: var(--move-visual-pitch-active);
+}
+
+.tweakers-move-dial[data-visual] .tweakers-move-dial-option {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Numeric readings sit 4px above the indicator row's centre. */
+.tweakers-move-visual-value {
+  bottom: calc(var(--move-indicator-bottom) + var(--move-indicator-height) / 2 + 4px);
+  transform: translateY(50%);
+}
+
+.tweakers-move-dial[data-visual] .tweakers-move-visual,
+.tweakers-move-dial[data-visual] .tweakers-move-dial-icon {
+  transform: translateY(8px);
 }
 `;

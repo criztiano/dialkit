@@ -954,6 +954,7 @@ var TweakStoreClass = class {
           label,
           min: value.min,
           max: value.max,
+          moveVisual: value.moveVisual,
           step: value.step ?? this.inferStep(value.min, value.max),
           unit: value.unit,
           formatValue: value.formatValue,
@@ -982,7 +983,7 @@ var TweakStoreClass = class {
       } else if (this.isActionConfig(value)) {
         controls.push({ type: "action", path, label: value.label || label, caption: value.caption });
       } else if (this.isSelectConfig(value)) {
-        controls.push({ type: "select", path, label, options: value.options, display: value.display, preview: value.preview });
+        controls.push({ type: "select", path, label, options: value.options, display: value.display, preview: value.preview, moveVisual: value.moveVisual });
       } else if (this.isColorConfig(value)) {
         controls.push({ type: "color", path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {

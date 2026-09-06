@@ -1,8 +1,12 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import { moveNumericDrawing, movePlaybackMode, type MovePlaybackMode } from '../move-visual-core';
+import { MoveSlotNumericBody, MoveSlotPlaybackDrawing } from './move-visuals';
+export { MoveSlotNumericBody, MoveSlotPlaybackDrawing } from './move-visuals';
 import type { ControlMeta } from '../store/TweakStore';
 import { LUCIDE_ICONS } from '../icons';
-import { enumOptionValue } from '../move-layout';
+import { enumOptionLabel, enumOptionValue } from '../move-layout';
 import { resolveFilterAxis, type FilterValue } from '../filter-core';
+import { ListScreen } from './ListScreen';
 
 /**
  * The big-slot library — the dictionary of what a Move dial slot can be.
@@ -24,20 +28,25 @@ import { resolveFilterAxis, type FilterValue } from '../filter-core';
  *   at arm's length you read a picture, not a word.
  * - `curve`   — an option picker whose current option draws its shape (the
  *   select's `preview` sampler) — the curve-selection slot.
- * - `enum`    — a plain option picker as a list screen at slot size: every
- *   option on the display, dim, the current one bright on its highlight.
+ * - `enum`    — a plain stepped option picker: every option on the Move's
+ *   own list screen, which is the whole slot; a touch grows it to the run.
  * - `xy`      — a 2D pad filling the slot; on the hardware the column's
  *   knob turns X and the volume knob turns Y while touched.
  * - `range`   — two handles on one bar; column knob = low end, volume
  *   knob = high end while touched.
+ * - `opacity`, `blur`, `pan`, `stereo-width`, `pitch` — explicit numeric
+ *   meanings, drawn as specimens or positioned against domain references.
+ * - `playback` — an explicitly mapped playback icon.
  * - `filter`  — the 2-slot control: cutoff and resonance as one picture,
  *   the magnitude response maximised across both columns, each hand's
  *   small label sitting where its own slot's label would have been.
  * - `env`     — the 4-slot control: the whole ADSR drawn as one shape on a
  *   single display spanning the four stage columns, one caption and drag
- *   zone per stage.
+ *   zone per stage, square handles pinned on the joints.
  * - `scope`   — a dial with the oscilloscope in it: the modulator's live
  *   signal fills the slot behind the dial's own readout and bar.
+ * - `toggle`  — a switch in a big slot of its own: the pad's language at
+ *   slot size, the whole slot inverting when it is on.
  *
  * Multi-slot controls (`filter` spans 2 columns, `env` spans 4) follow one
  * pattern: the container takes `grid-column: span N`, the display and its
@@ -54,6 +63,12 @@ export type MoveSlotKind =
   | 'xy'
   | 'range'
   | 'filter'
+  | 'opacity'
+  | 'blur'
+  | 'pan'
+  | 'stereo-width'
+  | 'pitch'
+  | 'playback'
   | 'env'
   | 'scope'
   | 'toggle';
@@ -61,12 +76,16 @@ export type MoveSlotKind =
 /** Which face a control wears in its slot, from its meta and moment. */
 export function moveSlotKind(
   meta: ControlMeta,
-  opts: { enum?: boolean; shape?: string | null; glyph?: string | null; valueFirst?: boolean; stage?: string | null } = {}
+  opts: { enum?: boolean; shape?: string | null; glyph?: string | null; valueFirst?: boolean; value?: unknown; stage?: string | null } = {}
 ): MoveSlotKind {
   if (meta.type === 'filter') return 'filter';
   if (opts.stage) return 'env';
+  if (meta.type === 'toggle') return 'toggle';
   if (meta.type === 'xy') return 'xy';
   if (meta.type === 'range') return 'range';
+  const drawing = moveNumericDrawing(meta, opts.value ?? meta.min);
+  if (drawing) return drawing.kind;
+  if (movePlaybackMode(meta, opts.value)) return 'playback';
   if (opts.enum) {
     if (opts.shape) return 'curve';
     if (opts.glyph) return 'icon';
@@ -150,17 +169,30 @@ export function MoveSlotDefaultBody({
   );
 }
 
-/** How many list rows an enum slot shows before it windows on the selection. */
-export const MOVE_ENUM_LIST_ROWS = 4;
+/** How many option rows a slot-sized list screen holds — the count the CSS
+ *  band is cut for, and the point past which the list starts to run. */
+export const MOVE_LIST_ROWS = 5;
 
-/** The option picker's three faces — a list of the options themselves, a
- *  glyph, or a drawn shape. A slot with a picture reads top down: what the
- *  knob is on the tag, the picture between, what it is set to underneath.
- *  The plain face is the list screen at slot size: every option on the
- *  display, dim, the current one bright on its highlight — you see where
- *  you are and where a turn takes you, no pagination cells to count. */
+/** The option picker's faces — a list, or a picture: a glyph, a drawn shape,
+ *  or a playback drawing.
+ *
+ *  A face with a picture reads top down: what the knob is on the tag, the
+ *  picture between, what it is set to underneath, and the pagination cells
+ *  under that to say where the named option sits in the run.
+ *
+ *  With no picture to stand for the option, the slot shows the choice itself
+ *  and becomes the screen: a small head keeps the control's name, and the
+ *  list has everything under it — the current option lit, the rest dim
+ *  around it. Naming only the selection spends a whole slot saying one word;
+ *  the list spends it saying where that word sits among the others.
+ *
+ *  Past the five rows the slot holds, the list runs behind a still
+ *  selection — and a touch grows the screen up out of the slot to the whole
+ *  list, so the run can be seen while the knob is going through it. It is a
+ *  readout, not a second control — the slot's own drag, and the column's
+ *  knob, still step the options. */
 export function MoveSlotEnumBody({
-  label, optionLabel, options, activeIdx, shape, glyph,
+  label, optionLabel, options, activeIdx, shape, glyph, playback,
 }: {
   label: string;
   optionLabel: string;
@@ -168,13 +200,19 @@ export function MoveSlotEnumBody({
   activeIdx: number;
   shape: string | null;
   glyph: string | null;
+  playback?: MovePlaybackMode | null;
 }) {
-  if (shape || glyph) {
+  const selected = options[activeIdx];
+
+  // A picture names one option at a time, so it keeps the pagination cells
+  // to say where that one sits. A list has the whole run on it already.
+  if (playback || shape || glyph) {
     return (
       <>
         <span className="tweakers-move-dial-tag">{label}</span>
-        {shape && <MoveSlotShape d={shape} />}
-        {glyph && <MoveSlotGlyph name={glyph} className="tweakers-move-dial-icon" />}
+        {playback && <MoveSlotPlaybackDrawing mode={playback} />}
+        {!playback && shape && <MoveSlotShape d={shape} />}
+        {!playback && glyph && <MoveSlotGlyph name={glyph} className="tweakers-move-dial-icon" />}
         <span className="tweakers-move-dial-option">{optionLabel}</span>
         <div className="tweakers-move-dial-bar">
           <div className="tweakers-move-dial-enum">
@@ -190,31 +228,60 @@ export function MoveSlotEnumBody({
       </>
     );
   }
-  // A window follows the selection when the list outgrows the slot, the
-  // list screen's own rule at slot size.
-  const start = Math.max(
-    0,
-    Math.min(activeIdx - (MOVE_ENUM_LIST_ROWS >> 1), options.length - MOVE_ENUM_LIST_ROWS)
+
+  return (
+    <div
+      className="tweakers-move-dial-screen"
+      // More options than the slot holds: the screen grows to the whole list
+      // while the dial is touched. The count is what the CSS measures that
+      // grown height from, so the row metrics stay in the stylesheet.
+      data-grow={options.length > MOVE_LIST_ROWS || undefined}
+      style={{ '--move-list-count': options.length } as CSSProperties}
+    >
+      <span className="tweakers-move-dial-head">{label}</span>
+      <ListScreen
+        className="tweakers-move-dial-list"
+        items={options.map((opt) => ({
+          value: enumOptionValue(opt as never),
+          label: enumOptionLabel(opt as never),
+        }))}
+        value={selected ? enumOptionValue(selected as never) : undefined}
+        follow="center"
+      />
+    </div>
   );
-  const windowed = options.slice(start, start + MOVE_ENUM_LIST_ROWS);
+}
+
+/** The XY slot face. Coordinates are normalized screen positions (Y down).
+ * The panel owns gestures and normalization; a preview replaces the crosshair.
+ */
+export function MoveSlotXYBody({ label, value, position, gridN, shape = null }: {
+  label: string;
+  value: ReactNode;
+  position: { x: number; y: number };
+  gridN: number;
+  shape?: string | null;
+}) {
   return (
     <>
-      <span className="tweakers-move-dial-tag">{label}</span>
-      <div className="tweakers-move-enum-list">
-        {windowed.map((opt, j) => {
-          const value = enumOptionValue(opt as never);
-          const optLabel = typeof opt === 'string' ? opt : opt.label;
-          return (
-            <span
-              key={value}
-              className="tweakers-move-enum-row"
-              data-selected={start + j === activeIdx || undefined}
-            >
-              {optLabel}
-            </span>
-          );
-        })}
+      <div className="tweakers-move-xy">
+        {shape !== null ? (
+          <MoveSlotShape d={shape} className="tweakers-move-xy-curve" />
+        ) : (
+          <>
+            {gridN > 0 && (
+              <span className="tweakers-move-xy-grid" style={{
+                '--tweak-xy-grid-step-x': `${100 / gridN}%`,
+                '--tweak-xy-grid-step-y': `${100 / gridN}%`,
+              } as CSSProperties} />
+            )}
+            <span className="tweakers-move-xy-line" data-axis="x" style={{ top: `${position.y * 100}%` }} />
+            <span className="tweakers-move-xy-line" data-axis="y" style={{ left: `${position.x * 100}%` }} />
+            <span className="tweakers-move-xy-dot" style={{ left: `${position.x * 100}%`, top: `${position.y * 100}%` }} />
+          </>
+        )}
       </div>
+      <MoveSlotReadout label={label} value={value} />
     </>
   );
 }
@@ -378,18 +445,24 @@ export function MoveSlotToggleBody({ label, on }: { label: string; on: boolean }
  * The dictionary itself — every big-slot case the kit knows, named, with
  * the component that draws it. `value`, `icon`, `curve` and `enum` are
  * faces of shared bodies (the same markup, chosen by `moveSlotKind`);
- * `xy` stays inline in the MovePanel for now, its face being nothing but
- * its gesture surface.
+ * every face is reusable; gesture ownership stays in MovePanel.
  */
 export const MOVE_SLOT_LIBRARY = {
+  opacity: { description: 'overlapping circles showing transparency', component: MoveSlotNumericBody },
+  blur: { description: 'pixel blur on a single filled circle', component: MoveSlotNumericBody },
+  pan: { description: 'position between L, C and R references', component: MoveSlotNumericBody },
+  'stereo-width': { description: 'stereo separation with a unity reference', component: MoveSlotNumericBody },
+  pitch: { description: 'signed pitch ruler with a zero reference', component: MoveSlotNumericBody },
+  playback: { description: 'explicit playback traversal with a named mode', component: MoveSlotEnumBody },
   default: { description: 'name centred, value on touch, fill bar', component: MoveSlotDefaultBody },
   value: { description: 'value-first: the value is the headline, the name a tag on top', component: MoveSlotDefaultBody },
   icon: { description: 'option picker showing the current option as a glyph', component: MoveSlotEnumBody },
   curve: { description: 'option picker drawing the current option’s shape — curve selection', component: MoveSlotEnumBody },
-  enum: { description: 'option picker as a list screen at slot size, selection bright', component: MoveSlotEnumBody },
+  enum: { description: 'stepped option picker showing every option on a list screen', component: MoveSlotEnumBody },
+  xy: { description: 'two axes in one gesture field, or a live shape preview', component: MoveSlotXYBody },
   range: { description: 'two handles on one bar; volume knob is the second hand', component: MoveSlotRangeBody },
   filter: { description: '2 slots: cutoff + resonance as one response picture', component: MoveSlotFilterBody },
   env: { description: '4 slots: the whole ADSR as one shape, a caption per stage', component: MoveSlotEnvBody },
   scope: { description: 'a dial with the live signal filling it behind the readout', component: MoveSlotScopeBody },
   toggle: { description: 'a switch in a big slot — the pad’s language at slot size', component: MoveSlotToggleBody },
-} as const;
+} as const satisfies Record<MoveSlotKind, { description: string; component: unknown }>;

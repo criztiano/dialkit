@@ -6,6 +6,7 @@ import 'tweakers/styles.css';
 import { PhotoStack } from './PhotoStack';
 import { Release } from './Release';
 import { Library } from './Library';
+import { SpecializedShowcase } from './SpecializedShowcase';
 
 // A Move demo page (track 2 on the panel) with the two-handed dials: the xy
 // pad and the range span (knob = X / low end, volume knob = Y / high end
@@ -77,6 +78,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/" element={<><PhotoStack /><TweakRoot position="top-right" /><MovePanel /></>} />
         <Route path="/release-1.2" element={<Release />} />
         <Route path="/library" element={<Library />} />
+        <Route path="/specialized" element={<SpecializedShowcase />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>

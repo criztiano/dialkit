@@ -2,6 +2,56 @@ import * as react_jsx_runtime from 'react/jsx-runtime';
 import * as React$1 from 'react';
 import React__default, { ReactNode, CSSProperties, ReactElement } from 'react';
 
+/** Opt-in meanings for numeric Move faces. Values keep the host's units. */
+type MoveSliderVisual = {
+    kind: 'opacity';
+    opaqueValue?: number;
+} | {
+    kind: 'blur';
+} | {
+    kind: 'pan';
+    left?: number;
+    center?: number;
+    right?: number;
+} | {
+    kind: 'stereo-width';
+    mono?: number;
+    unity?: number;
+} | {
+    kind: 'pitch';
+    unit?: 'semitones' | 'cents';
+};
+type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';
+type MoveSelectVisual = {
+    kind: 'playback';
+    /** Map host option values to drawings. Omit when values are mode names. */
+    modes?: Record<string, MovePlaybackMode>;
+};
+type MoveVisual = MoveSliderVisual | MoveSelectVisual;
+type MoveNumericDrawing = {
+    kind: 'opacity';
+    alpha: number;
+} | {
+    kind: 'blur';
+    radius: number;
+} | {
+    kind: 'pan';
+    position: number;
+} | {
+    kind: 'stereo-width';
+    separation: number;
+    unity: number | null;
+} | {
+    kind: 'pitch';
+    position: number;
+    zero: number | null;
+};
+/** Invalid or incompatible metadata falls back to the ordinary face. No label inference. */
+declare function moveNumericDrawing(meta: ControlMeta, value: unknown): MoveNumericDrawing | null;
+declare function movePlaybackMode(meta: ControlMeta, value: unknown): MovePlaybackMode | null;
+/** Semantic formatting is a fallback; a host formatter or unit always wins. */
+declare function moveVisualReading(meta: ControlMeta, value: number): string;
+
 /**
  * color-core — DOM-free color math shared by every framework port of the
  * color picker (React, Solid, Vue, Svelte). Pure functions only; anything
@@ -466,6 +516,8 @@ type ActionConfig = {
 };
 type SelectConfig = {
     type: 'select';
+    /** Optional semantic drawing for the Move surface. */
+    moveVisual?: MoveSelectVisual;
     /**
      * An option may name an `icon` from `LUCIDE_ICONS` — the Move slot draws it
      * instead of making you read the mode name off a controller.
@@ -562,6 +614,8 @@ type RangeConfig = {
  */
 type SliderConfig = {
     type: 'slider';
+    /** Optional semantic drawing for the Move surface; never inferred from labels. */
+    moveVisual?: MoveSliderVisual;
     default: number;
     min: number;
     max: number;
@@ -835,6 +889,7 @@ type AffordanceConfig = {
     label?: string;
 };
 type ControlMeta = {
+    moveVisual?: MoveVisual;
     type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser' | 'filter';
     path: string;
     label: string;
@@ -1373,7 +1428,9 @@ interface MovePanelProps {
  * applies at 0.1× relative to where shift went down, and releasing shift
  * rebases at 1× so the value never jumps.
  *
- * Controls wired to a modulation slot wear that slot's colour as a dot, and
+ * Controls wired to a modulation slot wear the dock panel's own modulation
+ * ring — the slot's colour, and an arc running from the control's value to
+ * where the modulation is holding it — in the slot's corner, and
  * the track row carries one circle per slot — the on-screen step button.
  */
 declare function MovePanel({ theme, productionEnabled, panels: only, dock }: MovePanelProps): react_jsx_runtime.JSX.Element | null;
@@ -2054,6 +2111,17 @@ declare function filterShapePath(meta: ControlMeta, value: unknown): string | nu
 /** Where the fill anchors for a bipolar/origin slider, 0..1 (else 0). */
 declare function dialOrigin(meta: ControlMeta): number;
 
+/** A static value specimen; labels and precise readouts never inherit its effects. */
+declare function MoveSlotNumericBody({ label, value, drawing }: {
+    label: string;
+    value: string;
+    drawing: MoveNumericDrawing;
+}): react_jsx_runtime.JSX.Element;
+/** Reuse the bundled option icons for playback, mirroring forward for reverse. */
+declare function MoveSlotPlaybackDrawing({ mode }: {
+    mode: MovePlaybackMode;
+}): react_jsx_runtime.JSX.Element;
+
 /**
  * The big-slot library — the dictionary of what a Move dial slot can be.
  *
@@ -2074,20 +2142,25 @@ declare function dialOrigin(meta: ControlMeta): number;
  *   at arm's length you read a picture, not a word.
  * - `curve`   — an option picker whose current option draws its shape (the
  *   select's `preview` sampler) — the curve-selection slot.
- * - `enum`    — a plain option picker as a list screen at slot size: every
- *   option on the display, dim, the current one bright on its highlight.
+ * - `enum`    — a plain stepped option picker: every option on the Move's
+ *   own list screen, which is the whole slot; a touch grows it to the run.
  * - `xy`      — a 2D pad filling the slot; on the hardware the column's
  *   knob turns X and the volume knob turns Y while touched.
  * - `range`   — two handles on one bar; column knob = low end, volume
  *   knob = high end while touched.
+ * - `opacity`, `blur`, `pan`, `stereo-width`, `pitch` — explicit numeric
+ *   meanings, drawn as specimens or positioned against domain references.
+ * - `playback` — an explicitly mapped playback icon.
  * - `filter`  — the 2-slot control: cutoff and resonance as one picture,
  *   the magnitude response maximised across both columns, each hand's
  *   small label sitting where its own slot's label would have been.
  * - `env`     — the 4-slot control: the whole ADSR drawn as one shape on a
  *   single display spanning the four stage columns, one caption and drag
- *   zone per stage.
+ *   zone per stage, square handles pinned on the joints.
  * - `scope`   — a dial with the oscilloscope in it: the modulator's live
  *   signal fills the slot behind the dial's own readout and bar.
+ * - `toggle`  — a switch in a big slot of its own: the pad's language at
+ *   slot size, the whole slot inverting when it is on.
  *
  * Multi-slot controls (`filter` spans 2 columns, `env` spans 4) follow one
  * pattern: the container takes `grid-column: span N`, the display and its
@@ -2095,13 +2168,14 @@ declare function dialOrigin(meta: ControlMeta): number;
  * small caption where its own single slot's label would have been — so the
  * hardware's one-knob-per-column rule still holds under the shared picture.
  */
-type MoveSlotKind = 'default' | 'value' | 'icon' | 'curve' | 'enum' | 'xy' | 'range' | 'filter' | 'env' | 'scope' | 'toggle';
+type MoveSlotKind = 'default' | 'value' | 'icon' | 'curve' | 'enum' | 'xy' | 'range' | 'filter' | 'opacity' | 'blur' | 'pan' | 'stereo-width' | 'pitch' | 'playback' | 'env' | 'scope' | 'toggle';
 /** Which face a control wears in its slot, from its meta and moment. */
 declare function moveSlotKind(meta: ControlMeta, opts?: {
     enum?: boolean;
     shape?: string | null;
     glyph?: string | null;
     valueFirst?: boolean;
+    value?: unknown;
     stage?: string | null;
 }): MoveSlotKind;
 /** One glyph from the bundled lucide subset; an unknown name draws nothing. */
@@ -2132,19 +2206,45 @@ declare function MoveSlotDefaultBody({ label, value, pct, originPct, atOrigin, }
     /** Parked on the origin exactly — the dial's zero. */
     atOrigin?: boolean;
 }): react_jsx_runtime.JSX.Element;
-/** The option picker's three faces — a list of the options themselves, a
- *  glyph, or a drawn shape. A slot with a picture reads top down: what the
- *  knob is on the tag, the picture between, what it is set to underneath.
- *  The plain face is the list screen at slot size: every option on the
- *  display, dim, the current one bright on its highlight — you see where
- *  you are and where a turn takes you, no pagination cells to count. */
-declare function MoveSlotEnumBody({ label, optionLabel, options, activeIdx, shape, glyph, }: {
+/** The option picker's faces — a list, or a picture: a glyph, a drawn shape,
+ *  or a playback drawing.
+ *
+ *  A face with a picture reads top down: what the knob is on the tag, the
+ *  picture between, what it is set to underneath, and the pagination cells
+ *  under that to say where the named option sits in the run.
+ *
+ *  With no picture to stand for the option, the slot shows the choice itself
+ *  and becomes the screen: a small head keeps the control's name, and the
+ *  list has everything under it — the current option lit, the rest dim
+ *  around it. Naming only the selection spends a whole slot saying one word;
+ *  the list spends it saying where that word sits among the others.
+ *
+ *  Past the five rows the slot holds, the list runs behind a still
+ *  selection — and a touch grows the screen up out of the slot to the whole
+ *  list, so the run can be seen while the knob is going through it. It is a
+ *  readout, not a second control — the slot's own drag, and the column's
+ *  knob, still step the options. */
+declare function MoveSlotEnumBody({ label, optionLabel, options, activeIdx, shape, glyph, playback, }: {
     label: string;
     optionLabel: string;
     options: NonNullable<ControlMeta['options']>;
     activeIdx: number;
     shape: string | null;
     glyph: string | null;
+    playback?: MovePlaybackMode | null;
+}): react_jsx_runtime.JSX.Element;
+/** The XY slot face. Coordinates are normalized screen positions (Y down).
+ * The panel owns gestures and normalization; a preview replaces the crosshair.
+ */
+declare function MoveSlotXYBody({ label, value, position, gridN, shape }: {
+    label: string;
+    value: ReactNode;
+    position: {
+        x: number;
+        y: number;
+    };
+    gridN: number;
+    shape?: string | null;
 }): react_jsx_runtime.JSX.Element;
 /** The range slot — readout plus the two-handled span bar. */
 declare function MoveSlotRangeBody({ label, value, lo, hi, }: {
@@ -2218,10 +2318,33 @@ declare function MoveSlotToggleBody({ label, on }: {
  * The dictionary itself — every big-slot case the kit knows, named, with
  * the component that draws it. `value`, `icon`, `curve` and `enum` are
  * faces of shared bodies (the same markup, chosen by `moveSlotKind`);
- * `xy` stays inline in the MovePanel for now, its face being nothing but
- * its gesture surface.
+ * every face is reusable; gesture ownership stays in MovePanel.
  */
 declare const MOVE_SLOT_LIBRARY: {
+    readonly opacity: {
+        readonly description: "overlapping circles showing transparency";
+        readonly component: typeof MoveSlotNumericBody;
+    };
+    readonly blur: {
+        readonly description: "pixel blur on a single filled circle";
+        readonly component: typeof MoveSlotNumericBody;
+    };
+    readonly pan: {
+        readonly description: "position between L, C and R references";
+        readonly component: typeof MoveSlotNumericBody;
+    };
+    readonly 'stereo-width': {
+        readonly description: "stereo separation with a unity reference";
+        readonly component: typeof MoveSlotNumericBody;
+    };
+    readonly pitch: {
+        readonly description: "signed pitch ruler with a zero reference";
+        readonly component: typeof MoveSlotNumericBody;
+    };
+    readonly playback: {
+        readonly description: "explicit playback traversal with a named mode";
+        readonly component: typeof MoveSlotEnumBody;
+    };
     readonly default: {
         readonly description: "name centred, value on touch, fill bar";
         readonly component: typeof MoveSlotDefaultBody;
@@ -2239,8 +2362,12 @@ declare const MOVE_SLOT_LIBRARY: {
         readonly component: typeof MoveSlotEnumBody;
     };
     readonly enum: {
-        readonly description: "option picker as a list screen at slot size, selection bright";
+        readonly description: "stepped option picker showing every option on a list screen";
         readonly component: typeof MoveSlotEnumBody;
+    };
+    readonly xy: {
+        readonly description: "two axes in one gesture field, or a live shape preview";
+        readonly component: typeof MoveSlotXYBody;
     };
     readonly range: {
         readonly description: "two handles on one bar; volume knob is the second hand";
@@ -2660,6 +2787,13 @@ interface ListScreenProps {
     onSelect?: (value: string) => void;
     /** 400px with left-aligned rows, instead of the 200px centered default. */
     wide?: boolean;
+    /**
+     * How the view follows the selection. `nearest` (the default) scrolls only
+     * far enough to bring the row into view; `center` holds the selection in
+     * the middle of the screen, so a long list runs past a still row and only
+     * the two ends of it can push the selection off centre.
+     */
+    follow?: 'nearest' | 'center';
     className?: string;
     style?: CSSProperties;
 }
@@ -2674,7 +2808,7 @@ interface ListScreenProps {
  * presentational: the host owns the selection state and any wheel or
  * arrow-key stepping.
  */
-declare function ListScreen({ items, value, onSelect, wide, className, style, }: ListScreenProps): ReactElement;
+declare function ListScreen({ items, value, onSelect, wide, follow, className, style, }: ListScreenProps): ReactElement;
 
 /**
  * The modulation layer's runtime — a singleton beside the TweakStore.
@@ -3473,9 +3607,11 @@ type AnalyserSpring = boolean | {
     damping?: number;
 };
 
-type AnalyserSource = 'frequency' | 'waveform' | 'ekg';
+type AnalyserSource = 'frequency' | 'waveform' | 'ekg' | 'transfer' | 'overlay';
 type AnalyserVariant = 'line' | 'area';
 type AnalyserMode = 'smooth' | 'pixelated';
+/** Transfer view: connect the samples ('segments') or plot isolated dots ('scatter'). */
+type AnalyserTransferDraw = 'segments' | 'scatter';
 
 interface AnalyserVisualizationProps {
     /**
@@ -3488,8 +3624,31 @@ interface AnalyserVisualizationProps {
      * 'frequency' — live spectrum (EQ-style). 'waveform' — time-domain oscilloscope.
      * 'ekg' — a medical-monitor trace: a pen dot fixed at the right edge rides the
      * signal's level while the history it draws streams away to the left.
+     * 'transfer' — an XY plot of `analyser` (horizontal) against `analyserB`
+     * (vertical): a memoryless shaper draws its transfer curve, time-dependent
+     * processing opens it into loops. 'overlay' — both signals as waveforms on one
+     * axis (input behind, output in front), synced to a rising zero crossing so
+     * periodic tones hold still.
      */
     source?: AnalyserSource;
+    /**
+     * Transfer / overlay only: the second signal tap — the processed output that
+     * `analyser` (the input) is compared against. Same passive, never-mutated
+     * contract as `analyser`.
+     */
+    analyserB?: AnalyserNode | null;
+    /** Output-trace / Y-axis color for transfer and overlay. Defaults to `waveColor`. */
+    waveColorB?: string;
+    /**
+     * Transfer only: 'segments' (default) connects successive samples into a
+     * curve; 'scatter' plots isolated dots — steadier reading on noisy signals.
+     */
+    transferDraw?: AnalyserTransferDraw;
+    /**
+     * Overlay only: samples shown after the sync point — a horizontal zoom.
+     * Null / absent shows the analyser's whole buffer.
+     */
+    windowSize?: number | null;
     /** 'area' — translucent fill under the trace plus a crisp outline. 'line' — outline only. */
     variant?: AnalyserVariant;
     /**
@@ -3536,7 +3695,7 @@ interface AnalyserVisualizationProps {
     width?: number;
     height?: number;
 }
-declare function AnalyserVisualization({ analyser, source, variant, mode, pixelSize, scale, spring, grid, gridSubdivisions, waveColor, fillColor, muted, onMuteChange, soloed, onSoloChange, rangeHz, marker, width, height, }: AnalyserVisualizationProps): react_jsx_runtime.JSX.Element;
+declare function AnalyserVisualization({ analyser, analyserB, source, variant, mode, pixelSize, scale, spring, grid, gridSubdivisions, waveColor, fillColor, waveColorB, transferDraw, windowSize, muted, onMuteChange, soloed, onSoloChange, rangeHz, marker, width, height, }: AnalyserVisualizationProps): react_jsx_runtime.JSX.Element;
 
 interface AnalyserRowProps {
     panelId: string;
@@ -3899,4 +4058,4 @@ interface SpectrumAudioLevelMeterProps extends AudioLevelMeterBaseProps {
 type AudioLevelMeterProps = MonoAudioLevelMeterProps | StereoAudioLevelMeterProps | SpectrumAudioLevelMeterProps;
 declare function AudioLevelMeter(props: AudioLevelMeterProps): ReactElement;
 
-export { ADSR_DEF, ADSR_STAGE_MAX, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AnalyserMode, AnalyserRow, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, AudioLevelMeter, type AudioLevelMeterColors, type AudioLevelMeterMode, type AudioLevelMeterProps, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, Checkbox, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, CurvePreview, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DriverDirection, ENV_BEND_STAGES, type EasingConfig, EasingVisualization, type EnvStage, FILTER_DB_CEIL, FILTER_DB_FLOOR, type FileConfig, FileControl, type FilterAxis, type FilterAxisConfig, type FilterConfig, FilterControl, type FilterResponse, type FilterShapeType, type FilterValue, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_DIALS, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_PADS, MOVE_SLOT_LIBRARY, MOVE_SPECIAL_BUTTONS, MOVE_TRACKS, MOVE_WAVEFORM_STEPS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, Module, type MonoAudioLevelMeterProps, MoveActionButton, type MoveActionButtonProps, type MoveFunctionButton, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, type MovePadCell, type MovePage, MovePanel, type MoveScreenList, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotEnvBody, MoveSlotFilterBody, MoveSlotGlyph, type MoveSlotKind, MoveSlotRangeBody, MoveSlotReadout, MoveSlotScopeBody, MoveSlotShape, MoveSlotToggleBody, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, MoveVolumeDisplay, type MoveVolumeDisplayState, MoveWaveform, type MoveWaveformProps, MoveWaveformStore, type MoveWaveformVariant, type MoveWaveformView, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type NumberConfig, NumberControl, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpectrumAudioLevelMeterProps, type SpringConfig, SpringControl, SpringVisualization, type SpringifyOptions, type StereoAudioLevelMeterProps, type SwatchConfig, SwatchControl, type SwatchOption, TAB_PATH, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type TweakConfig, type TweakEvent, type TweakMode, type TweakPosition, TweakRoot, TweakStore, type TweakTheme, TweakTimeline, type TweakTimelineProps, type TweakTimelineValues, type TweakValue, type UseTweakTimelineOptions, type UseTweakersOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, applyModulation, buildModMovePage, buildMovePages, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultFilterResponse, defaultListItemParams, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, dialOrigin, dialSpan, displayHex, enumOptionIcon, envCurveParam, envelopeJoints, envelopePoints, filterHand01, filterHandValue, filterResponsePath, filterShapePath, filterShapeResponse, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, isSpanContinuation, lfoSyncedHz, listModTypes, loopFromStep, loopSteps, modColor, modKey, modPageLayout, modPageWidth, modRingArc, moveAppPadRow, movePadRows, moveSlotKind, moveStop, defaultView as moveWaveformDefaultView, nearestHandle, normToValue, normalizeCurveMarkers, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeFilterValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeValue, normalizeXYDial, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, readComposition, redistributeWeight, registerModType, removeDriver, removeSegment, removeStop, resolveAxis, resolveFilterAxis, rgbToHsl, rgbToHsv, rgbToOklch, scrubBy, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, springify, stepPosition, triggerLevels, triggersCrossed, useTweakTimeline, useTweakers, valueFromPoint, valueToNorm, valueToPercent, visibleColumns, visibleModControls, zoomBy };
+export { ADSR_DEF, ADSR_STAGE_MAX, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AnalyserMode, AnalyserRow, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserTransferDraw, type AnalyserVariant, AnalyserVisualization, AudioLevelMeter, type AudioLevelMeterColors, type AudioLevelMeterMode, type AudioLevelMeterProps, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, Checkbox, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, CurvePreview, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DriverDirection, ENV_BEND_STAGES, type EasingConfig, EasingVisualization, type EnvStage, FILTER_DB_CEIL, FILTER_DB_FLOOR, type FileConfig, FileControl, type FilterAxis, type FilterAxisConfig, type FilterConfig, FilterControl, type FilterResponse, type FilterShapeType, type FilterValue, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_DIALS, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_PADS, MOVE_SLOT_LIBRARY, MOVE_SPECIAL_BUTTONS, MOVE_TRACKS, MOVE_WAVEFORM_STEPS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, Module, type MonoAudioLevelMeterProps, MoveActionButton, type MoveActionButtonProps, type MoveFunctionButton, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, type MoveNumericDrawing, type MovePadCell, type MovePage, MovePanel, type MovePlaybackMode, type MoveScreenList, type MoveSelectVisual, type MoveSliderVisual, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotEnvBody, MoveSlotFilterBody, MoveSlotGlyph, type MoveSlotKind, MoveSlotNumericBody, MoveSlotPlaybackDrawing, MoveSlotRangeBody, MoveSlotReadout, MoveSlotScopeBody, MoveSlotShape, MoveSlotToggleBody, MoveSlotXYBody, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, type MoveVisual, MoveVolumeDisplay, type MoveVolumeDisplayState, MoveWaveform, type MoveWaveformProps, MoveWaveformStore, type MoveWaveformVariant, type MoveWaveformView, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type NumberConfig, NumberControl, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpectrumAudioLevelMeterProps, type SpringConfig, SpringControl, SpringVisualization, type SpringifyOptions, type StereoAudioLevelMeterProps, type SwatchConfig, SwatchControl, type SwatchOption, TAB_PATH, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type TweakConfig, type TweakEvent, type TweakMode, type TweakPosition, TweakRoot, TweakStore, type TweakTheme, TweakTimeline, type TweakTimelineProps, type TweakTimelineValues, type TweakValue, type UseTweakTimelineOptions, type UseTweakersOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, applyModulation, buildModMovePage, buildMovePages, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultFilterResponse, defaultListItemParams, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, dialOrigin, dialSpan, displayHex, enumOptionIcon, envCurveParam, envelopeJoints, envelopePoints, filterHand01, filterHandValue, filterResponsePath, filterShapePath, filterShapeResponse, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, isSpanContinuation, lfoSyncedHz, listModTypes, loopFromStep, loopSteps, modColor, modKey, modPageLayout, modPageWidth, modRingArc, moveAppPadRow, moveNumericDrawing, movePadRows, movePlaybackMode, moveSlotKind, moveStop, moveVisualReading, defaultView as moveWaveformDefaultView, nearestHandle, normToValue, normalizeCurveMarkers, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeFilterValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeValue, normalizeXYDial, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, readComposition, redistributeWeight, registerModType, removeDriver, removeSegment, removeStop, resolveAxis, resolveFilterAxis, rgbToHsl, rgbToHsv, rgbToOklch, scrubBy, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, springify, stepPosition, triggerLevels, triggersCrossed, useTweakTimeline, useTweakers, valueFromPoint, valueToNorm, valueToPercent, visibleColumns, visibleModControls, zoomBy };

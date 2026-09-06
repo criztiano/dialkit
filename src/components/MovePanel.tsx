@@ -9,7 +9,9 @@ import { isDevDefault } from '../env';
 import type { TweakTheme } from './TweakRoot';
 import { buildMovePages, buildModMovePage, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, isEnumDial, isSpanContinuation, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_DIALS, MOVE_PADS } from '../move-layout';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody } from './move-slots';
+import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody } from './move-slots';
+import { moveNumericDrawing, movePlaybackMode, moveVisualReading, moveKeyboardValue } from '../move-visual-core';
+import { ModRing } from './ModRing';
 import { MoveSurfaceStore, type MovePadCell } from '../move-surface-store';
 import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValue, applyDetentAxis, type XYValue } from '../xy-pad-core';
 import { nearestHandle, type RangeValue } from '../range-slider-core';
@@ -40,11 +42,6 @@ const PAD_ROWS = 4;
 
 /** The slider track's inset from the dial slot's edges (Figma 802:767). */
 const DIAL_TRACK_INSET = 10;
-/* The enum list's band inside its slot — under the tag, down to the edge.
-   The pointer maps over this band, so a tap lands on the row it touches. */
-const ENUM_LIST_TOP = 26;
-const ENUM_LIST_BOTTOM = 8;
-
 /** The xy field's inset within its slot — must match .tweakers-move-xy. */
 const XY_INSET = { left: 8, top: 8, right: 9, bottom: 8 };
 
@@ -63,6 +60,26 @@ function boldColons(text: string) {
   if (!text.includes(':')) return text;
   return text.split(':').flatMap((part, i) =>
     i === 0 ? [part] : [<span key={`sep-${i}`} className="tweakers-move-volume-sep">:</span>, part]
+  );
+}
+
+/**
+ * A wired control's ring, on this surface: the dock panel's own ring — slot
+ * colour, live arc — placed in a dial slot's corner, or inline on a pad chip.
+ * Module scope, not a closure inside the panel: the arc subscribes per frame,
+ * and a component re-declared on every render would tear that down and build
+ * it again on every value the panel draws.
+ */
+function MoveModRing({ panelId, path, pad }: { panelId: string; path: string; pad?: boolean }) {
+  const assignment = ModulationStore.getAssignment(panelId, path);
+  if (!assignment || !ModulationStore.getSlot(assignment.slot)) return null;
+  return (
+    <ModRing
+      panelId={panelId}
+      path={path}
+      assignment={assignment}
+      className={pad ? 'tweakers-move-pad-mod' : 'tweakers-move-dial-mod'}
+    />
   );
 }
 
@@ -125,7 +142,9 @@ export const MOVE_PAGE_SELECT_EVENT = 'move-tweakers:page-select';
  * applies at 0.1× relative to where shift went down, and releasing shift
  * rebases at 1× so the value never jumps.
  *
- * Controls wired to a modulation slot wear that slot's colour as a dot, and
+ * Controls wired to a modulation slot wear the dock panel's own modulation
+ * ring — the slot's colour, and an arc running from the control's value to
+ * where the modulation is holding it — in the slot's corner, and
  * the track row carries one circle per slot — the on-screen step button.
  */
 export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport' }: MovePanelProps) {
@@ -326,6 +345,16 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     return fineRef.current;
   };
 
+  const dialFromKeyboard = (e: React.KeyboardEvent<HTMLElement>, meta: ControlMeta) => {
+    if (e.altKey || e.ctrlKey || e.metaKey || TweakStore.isDisabled(page.panel.id, meta.path)) return;
+    const next = moveKeyboardValue(meta, values[meta.path], e.key, e.shiftKey);
+    if (next === null) return;
+    e.preventDefault();
+    e.stopPropagation();
+    armMod(meta.path);
+    TweakStore.updateValue(page.panel.id, meta.path, next);
+  };
+
   // Whole-slot hotspot, position-on-the-track sets the value — the same feel
   // as the library Slider's card.
   const dialFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) => {
@@ -451,15 +480,6 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     TweakStore.updateValue(page.panel.id, meta.path, denormalizeEnumDial(meta, v01));
   };
 
-  // The plain enum face is a list, so its pointer reads top-to-bottom over
-  // the list's own band — a tap lands on the row it touches.
-  const enumListFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const top = rect.top + ENUM_LIST_TOP;
-    const span = rect.height - ENUM_LIST_TOP - ENUM_LIST_BOTTOM;
-    const v01 = Math.min(1, Math.max(0, (e.clientY - top) / (span || 1)));
-    TweakStore.updateValue(page.panel.id, meta.path, denormalizeEnumDial(meta, v01));
-  };
 
   // A bipolar (origin-anchored) dial reads out its real signed value; plain
   // dials keep the 0–100 position the Move itself works in.
@@ -486,21 +506,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const chipLatched = (col: number, meta: ControlMeta) =>
     latched[col]?.path === meta.path || !!hwLatched[meta.path];
 
-  // A wired control wears its slot's palette colour as a dot.
-  const modColorFor = (path: string): string | null => {
-    const a = ModulationStore.getAssignment(page.panel.id, path);
-    return a && ModulationStore.getSlot(a.slot) ? modColor(a.slot) : null;
-  };
-
   // Touching a control arms it for the assignment gesture (step press).
   const armMod = (path: string) => ModulationStore.noteTouch(page.panel.id, path);
-
-  // The dot itself: absolute in a dial slot, inline on a pad chip.
-  const ModDot = ({ path, pad }: { path: string; pad?: boolean }) => {
-    const c = modColorFor(path);
-    if (!c) return null;
-    return <span className={pad ? 'tweakers-move-pad-mod' : 'tweakers-move-dial-mod'} style={{ background: c }} />;
-  };
 
   // What a dial column actually edits: a held chip wins (screen or pad),
   // then a latched one, then the column's own dial.
@@ -639,6 +646,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 if (isSpanContinuation(page, i)) return null;
                 const meta = page.dials[i]?.type === 'filter' ? page.dials[i] : dialAt(i);
                 if (!meta) return <div key={`empty-${i}`} className="tweakers-move-dial" data-empty="true" />;
+                const disabled = TweakStore.isDisabled(page.panel.id, meta.path);
                 const active =
                   dragPath === meta.path ||
                   !!handTouch[meta.path] ||
@@ -680,7 +688,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
                       onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
                     >
-                      <ModDot path={meta.path} />
+                      <MoveModRing panelId={page.panel.id} path={meta.path} />
                       <MoveSlotFilterBody meta={meta} value={fv} shape={shape} />
                     </div>
                   );
@@ -724,44 +732,14 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerCancel={() => xyRelease(meta)}
                     >
                       {valueFirst && <span className="tweakers-move-dial-sub">{meta.label}</span>}
-                      <ModDot path={meta.path} />
-                      <div className="tweakers-move-xy">
-                        {preview ? (
-                          <svg
-                            className="tweakers-move-xy-curve"
-                            viewBox="0 0 100 100"
-                            preserveAspectRatio="none"
-                            aria-hidden="true"
-                          >
-                            <path d={previewPathData(preview.points)} />
-                          </svg>
-                        ) : (
-                          <>
-                            {gridN > 0 && (
-                              <span
-                                className="tweakers-move-xy-grid"
-                                style={{
-                                  '--tweak-xy-grid-step-x': `${100 / gridN}%`,
-                                  '--tweak-xy-grid-step-y': `${100 / gridN}%`,
-                                } as React.CSSProperties}
-                              />
-                            )}
-                            <span className="tweakers-move-xy-line" data-axis="x" style={{ top: `${pos.y * 100}%` }} />
-                            <span className="tweakers-move-xy-line" data-axis="y" style={{ left: `${pos.x * 100}%` }} />
-                            <span className="tweakers-move-xy-dot" style={{ left: `${pos.x * 100}%`, top: `${pos.y * 100}%` }} />
-                          </>
-                        )}
-                      </div>
-                      <div className="tweakers-move-dial-readout">
-                        <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
-                          {meta.label}
-                        </span>
-                        <span className="tweakers-move-dial-value">
-                          {preview
-                            ? preview.label
-                            : `${Math.round(pos.x * 100)}·${Math.round((1 - pos.y) * 100)}`}
-                        </span>
-                      </div>
+                      <MoveModRing panelId={page.panel.id} path={meta.path} />
+                      <MoveSlotXYBody
+                        label={meta.label}
+                        value={preview ? preview.label : `${Math.round(pos.x * 100)}·${Math.round((1 - pos.y) * 100)}`}
+                        position={pos}
+                        gridN={gridN}
+                        shape={preview ? previewPathData(preview.points) : null}
+                      />
                     </div>
                   );
                 }
@@ -790,15 +768,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
                       onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
                     >
-                      <ModDot path={meta.path} />
+                      <MoveModRing panelId={page.panel.id} path={meta.path} />
                       <MoveSlotRangeBody label={meta.label} value={rangeReading(meta)} lo={pos.lo} hi={pos.hi} />
                     </div>
                   );
                 }
                 // A select with options is a stepped enum dial: the bar splits
                 // into one cell per option, the active cell filled, and the
-                // value line names the option. A drag picks the nearest cell;
-                // on the hardware the column's knob steps the same way.
+                // slot shows the option — as a picture where there is one, and
+                // otherwise as the whole list, lit on the current row. A drag
+                // picks the nearest cell; on the hardware the column's knob
+                // steps the same way.
                 if (isEnumDial(meta)) {
                   const options = meta.options ?? [];
                   const activeIdx = enumIndex(meta, values[meta.path]);
@@ -808,36 +788,46 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   // the value, so its name steps back to a tag at the top.
                   const shape = enumShapePath(meta, values[meta.path]);
                   const glyph = enumOptionIcon(option as never);
-                  // The plain face is a list, read top to bottom — its
-                  // pointer maps down the rows; picture faces keep the
-                  // left-to-right sweep.
-                  const pickFromPointer = shape || glyph ? enumFromPointer : enumListFromPointer;
+                  const playback = movePlaybackMode(meta, values[meta.path]);
                   return (
                     <div
                       key={meta.path}
                       className="tweakers-move-dial"
                       data-kind="enum"
+                      data-visual={playback ? 'playback' : undefined}
+                      role="slider"
+                      tabIndex={disabled ? -1 : 0}
+                      aria-label={meta.label}
+                      aria-valuemin={0}
+                      aria-valuemax={Math.max(0, options.length - 1)}
+                      aria-valuenow={activeIdx}
+                      aria-valuetext={optionLabel}
+                      aria-orientation="horizontal"
+                      aria-disabled={disabled || undefined}
+                      data-disabled={disabled || undefined}
+                      onKeyDown={(e) => dialFromKeyboard(e, meta)}
                       data-shape={shape ? true : undefined}
-                      data-list={!shape && !glyph ? true : undefined}
                       data-active={active || undefined}
                       onPointerDown={(e) => {
+                      if (TweakStore.isDisabled(page.panel.id, meta.path)) return;
                         try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
                         fineRef.current = null;
                         setDragPath(meta.path);
                         armMod(meta.path);
-                        pickFromPointer(e, meta);
+                        enumFromPointer(e, meta);
                       }}
                       onPointerMove={(e) => {
-                        if (dragPath === meta.path) pickFromPointer(e, meta);
+                        if (!TweakStore.isDisabled(page.panel.id, meta.path) && dragPath === meta.path) enumFromPointer(e, meta);
                       }}
                       onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
                       onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
                     >
-                      {/* A slot with a picture in it reads top down: what the
-                          knob is on the chip, the picture between, what it is
-                          set to underneath. No crossfade — with the name out
-                          of the way there is nothing for the value to replace. */}
-                      <ModDot path={meta.path} />
+                      {/* An option slot reads top down: what the knob is on
+                          the chip, the picture — curve, glyph or list —
+                          between, what it is set to underneath. No crossfade:
+                          with the name out of the way there is nothing left
+                          for the value to replace. */}
+                      <MoveModRing panelId={page.panel.id} path={meta.path} />
                       <MoveSlotEnumBody
                         label={meta.label}
                         optionLabel={optionLabel}
@@ -845,6 +835,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                         activeIdx={activeIdx}
                         shape={shape}
                         glyph={glyph}
+                        playback={playback}
                       />
                     </div>
                   );
@@ -861,7 +852,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       data-on={!!values[meta.path] || undefined}
                       onClick={() => TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path])}
                     >
-                      <ModDot path={meta.path} />
+                      <MoveModRing panelId={page.panel.id} path={meta.path} />
                       <MoveSlotToggleBody label={meta.label} on={!!values[meta.path]} />
                     </div>
                   );
@@ -891,7 +882,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
                       onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
                     >
-                      <ModDot path={meta.path} />
+                      <MoveModRing panelId={page.panel.id} path={meta.path} />
                       <MoveSlotScopeBody
                         label={meta.label}
                         value={chipValue(meta).num + (meta.unit ? ` ${meta.unit}` : '')}
@@ -973,7 +964,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                             onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
                             onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
                           >
-                            <ModDot path={m.path} />
+                            <MoveModRing panelId={page.panel.id} path={m.path} />
                           </div>
                         ))}
                       </div>
@@ -997,6 +988,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 // A substituted chip (held or latched into the slot) reads as
                 // its real value — the same number its chip shows below — and
                 // a small tag names what the slot is controlling.
+                const drawing = moveNumericDrawing(meta, values[meta.path]);
                 const subbed = meta !== page.dials[i];
                 const subValue = subbed || valueFirst ? chipValue(meta) : null;
                 return (
@@ -1005,8 +997,21 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     className="tweakers-move-dial"
                     data-active={active || undefined}
                     data-latched={latchedHere || undefined}
-                    data-sub={subbed || valueFirst || undefined}
+                    data-sub={(!drawing && (subbed || valueFirst)) || undefined}
+                    data-visual={drawing?.kind}
+                    role="slider"
+                    tabIndex={disabled ? -1 : 0}
+                    aria-label={meta.label}
+                    aria-valuemin={meta.min ?? 0}
+                    aria-valuemax={meta.max ?? 1}
+                    aria-valuenow={Number(values[meta.path])}
+                    aria-valuetext={moveVisualReading(meta, Number(values[meta.path]))}
+                    aria-orientation="horizontal"
+                    aria-disabled={disabled || undefined}
+                    data-disabled={disabled || undefined}
+                    onKeyDown={(e) => dialFromKeyboard(e, meta)}
                     onPointerDown={(e) => {
+                      if (TweakStore.isDisabled(page.panel.id, meta.path)) return;
                       try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
                       fineRef.current = null;
                       setDragPath(meta.path);
@@ -1014,14 +1019,16 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       dialFromPointer(e, meta);
                     }}
                     onPointerMove={(e) => {
-                      if (dragPath === meta.path) dialFromPointer(e, meta);
+                      if (!TweakStore.isDisabled(page.panel.id, meta.path) && dragPath === meta.path) dialFromPointer(e, meta);
                     }}
                     onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
                     onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
                   >
-                    {(subbed || valueFirst) && <span className="tweakers-move-dial-sub">{meta.label}</span>}
-                    <ModDot path={meta.path} />
-                    <MoveSlotDefaultBody
+                    {!drawing && (subbed || valueFirst) && <span className="tweakers-move-dial-sub">{meta.label}</span>}
+                    <MoveModRing panelId={page.panel.id} path={meta.path} />
+                    {drawing ? (
+                      <MoveSlotNumericBody label={meta.label} value={moveVisualReading(meta, Number(values[meta.path]))} drawing={drawing} />
+                    ) : <MoveSlotDefaultBody
                       label={meta.label}
                       value={subValue
                         ? `${subValue.num}${subValue.unit ? ` ${subValue.unit}` : ''}`
@@ -1029,7 +1036,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       pct={pct}
                       originPct={originPct}
                       atOrigin={atOrigin}
-                    />
+                    />}
 
                   </div>
                 );
@@ -1150,7 +1157,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                         onPointerUp={() => releaseChip(col, meta)}
                         onPointerCancel={() => setHeld(null)}
                       >
-                        <ModDot path={meta.path} pad />
+                        <MoveModRing panelId={page.panel.id} path={meta.path} pad />
                         <span className="tweakers-move-pad-title">{meta.label}</span>
                         <span className="tweakers-move-pad-reading">
                           <span className="tweakers-move-pad-number">{value.num}</span>

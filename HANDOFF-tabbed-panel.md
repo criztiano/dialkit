@@ -1,3 +1,7 @@
+> Historical handoff (2026-08-14). Tabs are now documented in the README.
+> Repository paths, dependency advice and design decisions below are historical;
+> use the [current guidebook](docs/README.md) for integration work.
+
 # Handoff — tabbed side-panel variant (tweakers)
 
 Written 2026-08-14. Everything a fresh session needs; assume no prior context.
