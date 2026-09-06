@@ -1,8 +1,8 @@
 import { defineComponent, h, onMounted, onUnmounted, ref, Teleport, type VNodeChild } from 'vue';
-import { TweakStore } from '../../store/TweakStore';
-import type { PanelConfig } from '../../store/TweakStore';
-import { TimelineStore } from '../../store/TimelineStore';
-import type { TimelineMeta } from '../../store/TimelineStore';
+import { TweakStore } from 'tweakers/store';
+import type { PanelConfig } from 'tweakers/store';
+import { TimelineStore } from 'tweakers/timeline';
+import type { TimelineMeta } from 'tweakers/timeline';
 import { Panel } from './Panel';
 import { Folder } from './Folder';
 import { ShortcutListener } from './ShortcutListener';

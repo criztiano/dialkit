@@ -1,8 +1,8 @@
 import { Fragment, defineComponent, h, onMounted, onUnmounted, ref, type PropType, type VNodeChild } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
-import { ICON_ADD_PRESET, ICON_CHECK, ICON_CLIPBOARD } from '../../icons';
-import { TweakStore } from '../../store/TweakStore';
-import type { TweakValue, PanelConfig } from '../../store/TweakStore';
+import { ICON_ADD_PRESET, ICON_CHECK, ICON_CLIPBOARD } from 'tweakers/icons';
+import { TweakStore } from 'tweakers/store';
+import type { TweakValue, PanelConfig } from 'tweakers/store';
 import { Folder } from './Folder';
 import { ControlRenderer } from './ControlRenderer';
 import { PresetManager } from './PresetManager';

@@ -1,5 +1,5 @@
 import type { ShortcutConfig, XYAxis } from 'tweakers/store';
-import { type XYValue } from '../../xy-pad-core';
+import { type XYValue } from 'tweakers/xy-pad-core';
 type $$ComponentProps = {
     label: string;
     value: XYValue;

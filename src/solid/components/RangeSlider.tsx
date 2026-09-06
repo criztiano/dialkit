@@ -9,9 +9,9 @@ import {
   pickDragTarget,
   isOutsideSpan,
   handleLeftStyles,
-} from '../../range-slider-core';
-import type { RangeValue } from '../../store/TweakStore';
-import { decimalsForStep, roundValue } from '../../shortcut-utils';
+} from 'tweakers/range-slider-core';
+import type { RangeValue } from 'tweakers/store';
+import { decimalsForStep, roundValue } from 'tweakers/shortcut-utils';
 
 interface RangeSliderProps {
   label: string;

@@ -1,5 +1,5 @@
 {
-  "name": "tweakers-example",
+  "name": "dialkit-example",
   "private": true,
   "type": "module",
   "scripts": {
@@ -7,7 +7,8 @@
     "build": "vite build"
   },
   "dependencies": {
-    "tweakers": "file:..",
+    "dialkit": "file:..",
+    "tweakers": "file:../../tweakers",
     "motion": "^12.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

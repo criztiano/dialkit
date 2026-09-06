@@ -2,7 +2,7 @@ import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { animate } from 'motion';
 import { GradientPanel } from './GradientPanel';
-import { gradientToCss, type GradientValue } from '../../gradient-core';
+import { gradientToCss, type GradientValue } from 'tweakers/gradient-core';
 
 interface GradientControlProps {
   label: string;

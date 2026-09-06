@@ -1,5 +1,5 @@
-import { ICON_CHECK } from '../icons';
-import type { MultiSelectOption } from '../store/TweakStore';
+import { ICON_CHECK } from 'tweakers/icons';
+import type { MultiSelectOption } from 'tweakers/store';
 
 interface MultiSelectControlProps {
   label: string;

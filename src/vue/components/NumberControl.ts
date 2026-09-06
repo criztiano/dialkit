@@ -1,5 +1,5 @@
 import { defineComponent, h, computed, nextTick, ref, watch, type PropType } from 'vue';
-import { decimalsForStep, roundValue } from '../../shortcut-utils';
+import { decimalsForStep, roundValue } from 'tweakers/shortcut-utils';
 
 const CLICK_THRESHOLD = 3;
 

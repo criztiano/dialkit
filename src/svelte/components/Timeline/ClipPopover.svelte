@@ -8,7 +8,7 @@
     timelinePopoverDisplayValues,
   } from 'tweakers/timeline';
   import type { TimelineClipMeta } from 'tweakers/timeline';
-  import { findControl } from '../../../shortcut-utils';
+  import { findControl } from 'tweakers/shortcut-utils';
   import Portal from '../../Portal.svelte';
   import ControlRenderer from '../ControlRenderer.svelte';
   import type { TweakTheme } from '../TweakRoot.svelte';

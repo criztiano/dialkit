@@ -4,8 +4,8 @@ import type { ReactTestRenderer, ReactTestInstance } from 'react-test-renderer';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { ControlRenderer } from './components/ControlRenderer';
-import { TweakStore } from './store/TweakStore';
-import type { AffordanceContext } from './store/TweakStore';
+import { TweakStore } from 'tweakers/store';
+import type { AffordanceContext } from 'tweakers/store';
 
 // Folder measures window height and Slider binds pointer handlers; node:test has
 // no DOM. document is stubbed only enough for the popover's listeners and portal.

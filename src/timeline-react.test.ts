@@ -4,9 +4,9 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { useTweakTimeline } from './hooks/useTweakTimeline';
-import { TweakStore } from './store/TweakStore';
-import { TimelineStore } from './store/TimelineStore';
-import type { TimelineConfig } from './timeline-core';
+import { TweakStore } from 'tweakers/store';
+import { TimelineStore } from 'tweakers/timeline';
+import type { TimelineConfig } from 'tweakers/timeline';
 
 type TimelineSnapshot = {
   duration: number;

@@ -1,6 +1,6 @@
 import { CSSProperties } from 'react';
-import { useTweakers, TweakRoot } from 'tweakers';
-import 'tweakers/styles.css';
+import { useTweakers, TweakRoot } from 'dialkit';
+import 'dialkit/styles.css';
 
 const features = [
   'Light and dark mode. System preference detection',

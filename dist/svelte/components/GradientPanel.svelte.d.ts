@@ -1,4 +1,4 @@
-import { type GradientValue } from '../../gradient-core';
+import { type GradientValue } from 'tweakers/gradient-core';
 type $$ComponentProps = {
     value: GradientValue;
     onChange: (value: GradientValue) => void;

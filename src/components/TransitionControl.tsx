@@ -1,4 +1,4 @@
-import { SpringConfig, EasingConfig, TransitionConfig, TweakStore } from '../store/TweakStore';
+import { SpringConfig, EasingConfig, TransitionConfig, TweakStore } from 'tweakers/store';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
 import { SegmentedControl } from './SegmentedControl';

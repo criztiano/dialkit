@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { TweakStore, type ControlMeta } from './store/TweakStore';
+import { TweakStore, type ControlMeta } from 'tweakers/store';
 
 // `labels` overrides the name derived from a control's config key. It is keyed by
 // path for the same reason as `hints`: the controls that most need a label their

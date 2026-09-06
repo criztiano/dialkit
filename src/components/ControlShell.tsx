@@ -1,11 +1,11 @@
 import { createElement, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { TweakStore } from '../store/TweakStore';
-import type { AffordanceConfig, AffordanceContext } from '../store/TweakStore';
-import { ModulationStore } from '../store/ModulationStore';
-import { AFFORDANCE_POPOVER_WIDTH, placePopover } from '../affordance-core';
-import { ModRing } from './ModRing';
+import { TweakStore } from 'tweakers/store';
+import type { AffordanceConfig, AffordanceContext } from 'tweakers/store';
+import { ModulationStore } from 'tweakers/modulation-store';
+import { AFFORDANCE_POPOVER_WIDTH, placePopover } from 'tweakers/affordance-core';
+import { ModRing } from 'tweakers';
 
 interface ControlShellProps {
   /** Help text for this control. Without one the tooltip is not rendered. */

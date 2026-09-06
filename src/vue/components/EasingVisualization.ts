@@ -1,5 +1,5 @@
 import { defineComponent, h, computed, type PropType } from 'vue';
-import type { EasingConfig } from '../../store/TweakStore';
+import type { EasingConfig } from 'tweakers/store';
 
 export const easingPresets: Record<string, [number, number, number, number]> = {
   linear: [0, 0, 1, 1],

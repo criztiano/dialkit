@@ -1,6 +1,6 @@
 import { defineComponent, h, onMounted, onUnmounted, ref, type PropType } from 'vue';
-import { TweakStore } from '../../store/TweakStore';
-import type { SpringConfig } from '../../store/TweakStore';
+import { TweakStore } from 'tweakers/store';
+import type { SpringConfig } from 'tweakers/store';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
 import { SegmentedControl } from './SegmentedControl';

@@ -1,8 +1,8 @@
 import { createSignal, mergeProps, onCleanup, onMount, Show } from 'solid-js';
-import { createWaveformEngine, WAVEFORM_MAX_ZOOM } from '../../waveform-engine';
-import type { WaveformRuntime, WaveformMode, WaveformLoop } from '../../waveform-engine';
+import { createWaveformEngine, WAVEFORM_MAX_ZOOM } from 'tweakers/waveform-engine';
+import type { WaveformRuntime, WaveformMode, WaveformLoop } from 'tweakers/waveform-engine';
 
-export type { WaveformMode, WaveformLoop } from '../../waveform-engine';
+export type { WaveformMode, WaveformLoop } from 'tweakers/waveform-engine';
 
 interface WaveformVisualizationProps {
   buffer?: AudioBuffer | null;

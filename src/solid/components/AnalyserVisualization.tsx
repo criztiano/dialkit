@@ -1,5 +1,5 @@
 import { mergeProps, onCleanup, onMount, Show } from 'solid-js';
-import { createAnalyserEngine } from '../../analyser-engine';
+import { createAnalyserEngine } from 'tweakers/analyser-engine';
 import type {
   AnalyserRuntime,
   AnalyserSource,
@@ -7,9 +7,9 @@ import type {
   AnalyserMode,
   AnalyserScale,
   AnalyserSpring,
-} from '../../analyser-engine';
+} from 'tweakers/analyser-engine';
 
-export type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, AnalyserSpring } from '../../analyser-engine';
+export type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, AnalyserSpring } from 'tweakers/analyser-engine';
 
 interface AnalyserVisualizationProps {
   analyser?: AnalyserNode | null;

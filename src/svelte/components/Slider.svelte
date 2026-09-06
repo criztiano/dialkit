@@ -3,7 +3,7 @@
   import { Spring } from 'svelte/motion';
   import type { Snippet } from 'svelte';
   import type { ShortcutConfig } from 'tweakers/store';
-  import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut } from '../../shortcut-utils';
+  import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut } from 'tweakers/shortcut-utils';
 
   let {
     label,

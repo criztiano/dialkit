@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { GradientPanel } from './GradientPanel';
-import { gradientToCss, type GradientValue } from '../gradient-core';
+import { gradientToCss, type GradientValue } from 'tweakers/gradient-core';
 
 interface GradientControlProps {
   label: string;

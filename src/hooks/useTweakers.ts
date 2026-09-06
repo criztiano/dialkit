@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
-import { TweakStore, TweakConfig, TweakValue, TweakEvent, ResolvedValues, SpringConfig, EasingConfig, SelectConfig, SliderConfig, ColorConfig, GradientConfig, TextConfig, GalleryConfig, FileConfig, SwatchConfig, ChipsConfig, MultiSelectConfig, ListConfig, CurveConfig, AnalyserConfig, XYConfig, RangeConfig, FilterConfig, TransferConfig, ActionConfig, ShortcutConfig, AffordanceConfig, PresetProvider, normalizeListItems } from '../store/TweakStore';
+import { TweakStore, TweakConfig, TweakValue, TweakEvent, ResolvedValues, SpringConfig, EasingConfig, SelectConfig, SliderConfig, ColorConfig, GradientConfig, TextConfig, GalleryConfig, FileConfig, SwatchConfig, ChipsConfig, MultiSelectConfig, ListConfig, CurveConfig, AnalyserConfig, XYConfig, RangeConfig, FilterConfig, TransferConfig, ActionConfig, ShortcutConfig, AffordanceConfig, PresetProvider, normalizeListItems } from 'tweakers/store';
 import { useTweakStorePanel } from './useTweakStorePanel';
-import { normalizeGradient, DEFAULT_GRADIENT } from '../gradient-core';
-import { resolveAxis, normalizeValue as normalizeXYValue } from '../xy-pad-core';
-import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { normalizeTransfer, DEFAULT_TRANSFER } from '../transfer-core';
+import { normalizeGradient, DEFAULT_GRADIENT } from 'tweakers/gradient-core';
+import { resolveAxis, normalizeValue as normalizeXYValue } from 'tweakers/xy-pad-core';
+import { resolveFilterAxis, normalizeFilterValue } from 'tweakers/filter-core';
+import { normalizeTransfer, DEFAULT_TRANSFER } from 'tweakers/transfer-core';
 
 export interface UseTweakersOptions {
   onAction?: (action: string) => void;

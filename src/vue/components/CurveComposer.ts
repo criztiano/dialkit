@@ -40,7 +40,7 @@ import {
   DEFAULT_TRIGGER_STEPS,
   DRAG_THRESHOLD,
   EDGE_HIT,
-} from '../../curve-composer-core';
+} from 'tweakers/curve-composer-core';
 
 export type {
   CurveType,
@@ -48,7 +48,7 @@ export type {
   CurveDriver,
   CurveComposition,
   DriverDirection,
-} from '../../curve-composer-core';
+} from 'tweakers/curve-composer-core';
 
 // A drag in progress, captured against the composition state at press time so live
 // commits compute from a stable baseline rather than compounding.

@@ -52,9 +52,9 @@ export { default as SpringVisualization } from './components/SpringVisualization
 export { default as TransitionControl } from './components/TransitionControl.svelte';
 export { default as EasingVisualization } from './components/EasingVisualization.svelte';
 export { default as WaveformVisualization } from './components/WaveformVisualization.svelte';
-export type { WaveformMode, WaveformLoop } from '../waveform-engine';
+export type { WaveformMode, WaveformLoop } from 'tweakers/waveform-engine';
 export { default as AnalyserVisualization } from './components/AnalyserVisualization.svelte';
-export type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, AnalyserSpring } from '../analyser-engine';
+export type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, AnalyserSpring } from 'tweakers/analyser-engine';
 export { default as CurveComposer } from './components/CurveComposer.svelte';
 // The editing + sampling helpers, mirroring what is re-exported for gradients
 // below: a host app driving its own composition state needs them, and they are
@@ -83,7 +83,7 @@ export {
   setDriverSteepness,
   setDriverOvershoot,
   setDriverAnticipate,
-} from '../curve-composer-core';
+} from 'tweakers/curve-composer-core';
 export type {
   CurveType,
   CurveSegment,
@@ -94,7 +94,7 @@ export type {
   Sampler,
   SpringifyOptions,
   DriverDirection,
-} from '../curve-composer-core';
+} from 'tweakers/curve-composer-core';
 export { default as TextControl } from './components/TextControl.svelte';
 export { default as SelectControl } from './components/SelectControl.svelte';
 export { default as ColorControl } from './components/ColorControl.svelte';
@@ -113,11 +113,11 @@ export {
   setGradientAngle,
   DEFAULT_GRADIENT,
   MIN_STOPS,
-} from '../gradient-core';
-export type { GradientValue, GradientStop, GradientType } from '../gradient-core';
+} from 'tweakers/gradient-core';
+export type { GradientValue, GradientStop, GradientType } from 'tweakers/gradient-core';
 export { default as XYPad } from './components/XYPad.svelte';
 export { default as XYControl } from './components/XYControl.svelte';
-export type { XYValue, AxisSpec, Point } from '../xy-pad-core';
+export type { XYValue, AxisSpec, Point } from 'tweakers/xy-pad-core';
 export { default as FileControl } from './components/FileControl.svelte';
 export { default as SwatchControl } from './components/SwatchControl.svelte';
 export { default as ChipsControl } from './components/ChipsControl.svelte';

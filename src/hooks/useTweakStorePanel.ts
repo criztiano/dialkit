@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useSyncExternalStore } from 'react';
-import { TweakStore } from '../store/TweakStore';
-import type { AffordanceConfig, TweakConfig, TweakersPersistOptions, TweakValue, PresetProvider, ShortcutConfig } from '../store/TweakStore';
+import { TweakStore } from 'tweakers/store';
+import type { AffordanceConfig, TweakConfig, TweakersPersistOptions, TweakValue, PresetProvider, ShortcutConfig } from 'tweakers/store';
 
 export interface UseTweakStorePanelOptions {
   id?: string;

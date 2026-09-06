@@ -6,7 +6,7 @@
   import Folder from './Folder.svelte';
   import PresetManager from './PresetManager.svelte';
   import ControlRenderer from './ControlRenderer.svelte';
-  import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../../icons';
+  import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from 'tweakers/icons';
 
   let { panel, defaultOpen = true, inline = false, toolbarExtra } = $props<{
     panel: PanelConfig;

@@ -1,7 +1,7 @@
 import { computed, onMounted, onUnmounted, shallowRef, watch, type ComputedRef } from 'vue';
-import { TweakStore } from '../store/TweakStore';
-import { TimelineStore } from '../store/TimelineStore';
-import type { TimelineLoopRegion } from '../store/TimelineStore';
+import { TweakStore } from 'tweakers/store';
+import { TimelineStore } from 'tweakers/timeline';
+import type { TimelineLoopRegion } from 'tweakers/timeline';
 import {
   buildTimelineMeta,
   buildTimelineValues,
@@ -10,7 +10,7 @@ import {
   type TweakTimelineOptions,
   type TweakTimelineValues,
   type TimelineConfig,
-} from '../timeline';
+} from 'tweakers/timeline';
 
 export type UseTweakTimelineOptions = TweakTimelineOptions;
 

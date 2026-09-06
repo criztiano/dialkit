@@ -1,5 +1,5 @@
 import { defineComponent, h, ref, onMounted, onBeforeUnmount, type PropType } from 'vue';
-import { createAnalyserEngine } from '../../analyser-engine';
+import { createAnalyserEngine } from 'tweakers/analyser-engine';
 import type {
   AnalyserRuntime,
   AnalyserEngine,
@@ -8,9 +8,9 @@ import type {
   AnalyserMode,
   AnalyserScale,
   AnalyserSpring,
-} from '../../analyser-engine';
+} from 'tweakers/analyser-engine';
 
-export type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, AnalyserSpring } from '../../analyser-engine';
+export type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, AnalyserSpring } from 'tweakers/analyser-engine';
 
 export const AnalyserVisualization = defineComponent({
   name: 'TweakersAnalyserVisualization',

@@ -18,7 +18,7 @@ export type {
   TimelinePropStepConfig,
   TimelineStepConfig,
   TimelineStepValues,
-} from '../timeline';
+} from 'tweakers/timeline';
 
 // Root component
 export { TweakRoot } from './components/TweakRoot';
@@ -46,16 +46,16 @@ export { AnalyserVisualization } from './components/AnalyserVisualization';
 export type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, AnalyserSpring } from './components/AnalyserVisualization';
 export { CurveComposer } from './components/CurveComposer';
 export type { CurveType, CurveSegment, CurveDriver, CurveComposition, DriverDirection } from './components/CurveComposer';
-export { springify } from '../curve-composer-core';
-export type { Sampler, SpringifyOptions } from '../curve-composer-core';
+export { springify } from 'tweakers/curve-composer-core';
+export type { Sampler, SpringifyOptions } from 'tweakers/curve-composer-core';
 export { TextControl } from './components/TextControl';
 export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';
 export { ColorPickerPanel } from './components/ColorPickerPanel';
 export { GradientControl } from './components/GradientControl';
 export { GradientPanel } from './components/GradientPanel';
-export { gradientToCss, DEFAULT_GRADIENT } from '../gradient-core';
-export type { GradientValue, GradientStop, GradientType } from '../gradient-core';
+export { gradientToCss, DEFAULT_GRADIENT } from 'tweakers/gradient-core';
+export type { GradientValue, GradientStop, GradientType } from 'tweakers/gradient-core';
 export { XYPad } from './components/XYPad';
 export type { XYPadProps } from './components/XYPad';
 export { XYControl } from './components/XYControl';
@@ -74,15 +74,15 @@ export {
   nudge,
   centerValue,
   normalizeValue,
-} from '../xy-pad-core';
-export type { XYValue, AxisSpec, Point } from '../xy-pad-core';
+} from 'tweakers/xy-pad-core';
+export type { XYValue, AxisSpec, Point } from 'tweakers/xy-pad-core';
 export { PresetManager } from './components/PresetManager';
 export { ControlRenderer } from './components/ControlRenderer';
 export { TransitionControl } from './components/TransitionControl';
 export { EasingVisualization } from './components/EasingVisualization';
 
 // Store exports
-export { TweakStore } from '../store/TweakStore';
+export { TweakStore } from 'tweakers/store';
 export type {
   SpringConfig,
   EasingConfig,
@@ -106,4 +106,4 @@ export type {
   ResolvedValues,
   ControlMeta,
   PanelConfig,
-} from '../store/TweakStore';
+} from 'tweakers/store';

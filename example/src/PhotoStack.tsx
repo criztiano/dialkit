@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useTweakers, TweakStore, Slider, Toggle } from 'tweakers';
-import type { AffordanceContext, ChipOption, ListItemType } from 'tweakers';
+import { useTweakers, TweakStore, Slider, Toggle } from 'dialkit';
+import type { AffordanceContext, ChipOption, ListItemType } from 'dialkit';
 
 const PANEL_NAME = 'Photo Stack';
 

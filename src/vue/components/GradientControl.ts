@@ -1,7 +1,7 @@
 import { Teleport, defineComponent, h, onMounted, ref, watch, type PropType } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
 import { GradientPanel } from './GradientPanel';
-import { gradientToCss, type GradientValue } from '../../gradient-core';
+import { gradientToCss, type GradientValue } from 'tweakers/gradient-core';
 
 const PANEL_WIDTH = 240;
 // Estimated open heights for the above/below flip. Linear/conic carry an angle

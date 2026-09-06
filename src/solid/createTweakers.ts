@@ -1,7 +1,7 @@
 import { createSignal, createMemo, createEffect, onMount, onCleanup, createUniqueId, type Accessor } from 'solid-js';
-import { TweakStore } from '../store/TweakStore';
-import type { TweakConfig, ResolvedValues, TweakValue, SpringConfig, SelectConfig, ColorConfig, GradientConfig, TextConfig, ActionConfig, ShortcutConfig, AffordanceConfig, PresetProvider } from '../store/TweakStore';
-import { normalizeGradient, DEFAULT_GRADIENT } from '../gradient-core';
+import { TweakStore } from 'tweakers/store';
+import type { TweakConfig, ResolvedValues, TweakValue, SpringConfig, SelectConfig, ColorConfig, GradientConfig, TextConfig, ActionConfig, ShortcutConfig, AffordanceConfig, PresetProvider } from 'tweakers/store';
+import { normalizeGradient, DEFAULT_GRADIENT } from 'tweakers/gradient-core';
 
 export interface CreateTweakersOptions {
   onAction?: (action: string) => void;

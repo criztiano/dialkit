@@ -3,7 +3,7 @@
   import { slide } from 'svelte/transition';
 
   import type { Snippet } from 'svelte';
-  import { ICON_PANEL, ICON_CHEVRON } from '../../icons';
+  import { ICON_PANEL, ICON_CHEVRON } from 'tweakers/icons';
   import Checkbox from './Checkbox.svelte';
 
   let {

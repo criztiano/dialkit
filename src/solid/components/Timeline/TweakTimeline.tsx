@@ -9,11 +9,11 @@ import {
   type JSX,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { TweakStore, formatLabel } from '../../../store/TweakStore';
-import type { ControlMeta, TweakValue } from '../../../store/TweakStore';
-import { TimelineStore } from '../../../store/TimelineStore';
-import type { TimelineClipMeta, TimelineLoopRegion, TimelineMeta } from '../../../store/TimelineStore';
-import { TimelineUiStore } from '../../../store/TimelineUiStore';
+import { TweakStore, formatLabel } from 'tweakers/store';
+import type { ControlMeta, TweakValue } from 'tweakers/store';
+import { TimelineStore } from 'tweakers/timeline';
+import type { TimelineClipMeta, TimelineLoopRegion, TimelineMeta } from 'tweakers/timeline';
+import { TimelineUiStore } from 'tweakers/timeline';
 import {
   TIMELINE_MIN_CLIP_DURATION,
   clampClipMove,
@@ -27,11 +27,11 @@ import {
   formatStepLabel,
   normalizeTimelineValuesForCopy,
   timelinePopoverDisplayValues,
-} from '../../../timeline-core';
-import type { TimelineClipLoop, TimelineStepStatic } from '../../../timeline-core';
-import { clamp } from '../../../transition-math';
-import { buildCopyInstruction } from '../../../copy-instruction';
-import { isDevDefault } from '../../../env';
+} from 'tweakers/timeline';
+import type { TimelineClipLoop, TimelineStepStatic } from 'tweakers/timeline';
+import { clamp } from 'tweakers/transition-math';
+import { buildCopyInstruction } from 'tweakers/copy-instruction';
+import { isDevDefault } from 'tweakers/env';
 import {
   ICON_ADD_PRESET,
   ICON_CHEVRON,
@@ -41,8 +41,8 @@ import {
   ICON_PAUSE,
   ICON_PLAY,
   ICON_REPLAY,
-} from '../../../icons';
-import { findControl } from '../../../shortcut-utils';
+} from 'tweakers/icons';
+import { findControl } from 'tweakers/shortcut-utils';
 import { fromStore } from '../../primitives';
 import { ControlRenderer } from '../ControlRenderer';
 import { PresetManager } from '../PresetManager';

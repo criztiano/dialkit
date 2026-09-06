@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { decimalsForStep, roundValue } from '../shortcut-utils';
+import { decimalsForStep, roundValue } from 'tweakers/shortcut-utils';
 
 interface NumberControlProps {
   label: string;

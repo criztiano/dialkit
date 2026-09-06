@@ -1,5 +1,5 @@
 import { createContext, useContext, createSignal, onMount, onCleanup, JSX } from 'solid-js';
-import { TweakStore } from '../../store/TweakStore';
+import { TweakStore } from 'tweakers/store';
 import {
   getEffectiveStep,
   applySliderDelta,
@@ -7,7 +7,7 @@ import {
   findControl,
   isInputFocused,
   getActiveModifier,
-} from '../../shortcut-utils';
+} from 'tweakers/shortcut-utils';
 
 type ShortcutState = {
   activePanelId: string | null;

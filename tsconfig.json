@@ -17,17 +17,12 @@
     "declarationMap": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "baseUrl": ".",
-    "paths": {
-      "tweakers/store": ["src/store/TweakStore.ts"],
-      "tweakers/timeline": ["src/timeline/index.ts"]
-    }
+    "baseUrl": "."
   },
   "include": [
     "src/index.ts",
     "src/components/**/*",
-    "src/hooks/**/*",
-    "src/store/**/*"
+    "src/hooks/**/*"
   ],
   "exclude": ["node_modules", "dist", "example"]
 }

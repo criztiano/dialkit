@@ -2,7 +2,7 @@ import { createSignal, For, Show, onCleanup } from 'solid-js';
 import { SegmentedControl } from './SegmentedControl';
 import { ColorPickerPanel } from './ColorPickerPanel';
 import { GradientTransformPad } from './GradientTransformPad';
-import { ICON_GRIP } from '../../icons';
+import { ICON_GRIP } from 'tweakers/icons';
 import {
   gradientToCss,
   addStop,
@@ -17,7 +17,7 @@ import {
   type GradientValue,
   type GradientType,
   type GradientStop,
-} from '../../gradient-core';
+} from 'tweakers/gradient-core';
 
 interface GradientPanelProps {
   value: GradientValue;

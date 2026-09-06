@@ -1,6 +1,6 @@
 import { defineComponent, h, onMounted, onUnmounted, ref } from 'vue';
-import { ICON_TIMELINE } from '../../../icons';
-import { TimelineUiStore } from '../../../store/TimelineUiStore';
+import { ICON_TIMELINE } from 'tweakers/icons';
+import { TimelineUiStore } from 'tweakers/timeline';
 
 export const TimelineToggleButton = defineComponent({
   name: 'TweakersTimelineToggleButton',

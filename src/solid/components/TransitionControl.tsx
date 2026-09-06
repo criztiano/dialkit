@@ -1,6 +1,6 @@
 import { createSignal, Show } from 'solid-js';
-import { TweakStore } from '../../store/TweakStore';
-import type { EasingConfig, SpringConfig, TransitionConfig } from '../../store/TweakStore';
+import { TweakStore } from 'tweakers/store';
+import type { EasingConfig, SpringConfig, TransitionConfig } from 'tweakers/store';
 import { fromStore } from '../primitives';
 import { EasingVisualization } from './EasingVisualization';
 import { Folder } from './Folder';

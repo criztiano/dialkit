@@ -1,7 +1,7 @@
 import { createSignal, createEffect, onCleanup, For } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { animate } from 'motion';
-import { TweakStore, ShortcutConfig } from '../../store/TweakStore';
+import { TweakStore, ShortcutConfig } from 'tweakers/store';
 
 interface ShortcutsMenuProps {
   panelId: string;

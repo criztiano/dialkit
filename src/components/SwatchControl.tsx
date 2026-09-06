@@ -2,8 +2,8 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { PresenceMotionDiv } from './PresenceMotionDiv';
-import { ICON_CHEVRON } from '../icons';
-import type { SwatchOption } from '../store/TweakStore';
+import { ICON_CHEVRON } from 'tweakers/icons';
+import type { SwatchOption } from 'tweakers/store';
 
 interface SwatchControlProps {
   label: string;

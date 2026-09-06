@@ -1,6 +1,6 @@
 import { defineComponent, h, onMounted, onUnmounted, ref, type PropType } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
-import { ICON_CHEVRON, ICON_PANEL } from '../../icons';
+import { ICON_CHEVRON, ICON_PANEL } from 'tweakers/icons';
 import { Checkbox } from './Checkbox';
 
 export const Folder = defineComponent({

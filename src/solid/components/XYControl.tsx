@@ -1,5 +1,5 @@
 import { XYPad } from './XYPad';
-import type { ShortcutConfig, XYAxis, XYValue } from '../../store/TweakStore';
+import type { ShortcutConfig, XYAxis, XYValue } from 'tweakers/store';
 
 interface XYControlProps {
   label: string;

@@ -2,7 +2,7 @@
   import Portal from '../Portal.svelte';
   import { dropdownTransition } from './transitions';
   import GradientPanel from './GradientPanel.svelte';
-  import { gradientToCss, type GradientValue } from '../../gradient-core';
+  import { gradientToCss, type GradientValue } from 'tweakers/gradient-core';
 
   let { label, value, onChange } = $props<{
     label: string;

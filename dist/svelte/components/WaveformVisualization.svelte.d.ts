@@ -1,4 +1,4 @@
-import type { WaveformMode, WaveformLoop } from '../../waveform-engine';
+import type { WaveformMode, WaveformLoop } from 'tweakers/waveform-engine';
 type $$ComponentProps = {
     buffer?: AudioBuffer | null;
     progress?: number;

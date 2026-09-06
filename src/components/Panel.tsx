@@ -1,10 +1,10 @@
 import { useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { TweakStore, PanelConfig, ControlMeta, TAB_PATH } from '../store/TweakStore';
+import { TweakStore, PanelConfig, ControlMeta, TAB_PATH } from 'tweakers/store';
 import { splitPanelTabs } from '../panel-tabs';
-import { buildCopyInstruction } from '../copy-instruction';
-import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../icons';
+import { buildCopyInstruction } from 'tweakers/copy-instruction';
+import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from 'tweakers/icons';
 import { Folder } from './Folder';
 import { ControlRenderer } from './ControlRenderer';
 import { PresetManager } from './PresetManager';

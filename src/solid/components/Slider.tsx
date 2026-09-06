@@ -1,13 +1,13 @@
 import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { animate, motionValue } from 'motion';
-import type { ShortcutConfig } from '../../store/TweakStore';
+import type { ShortcutConfig } from 'tweakers/store';
 import {
   decimalsForStep,
   roundValue,
   snapToDecile,
   formatSliderShortcut,
-} from '../../shortcut-utils';
+} from 'tweakers/shortcut-utils';
 
 interface SliderProps {
   label: string;

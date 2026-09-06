@@ -1,5 +1,5 @@
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch, type ComputedRef } from 'vue';
-import { TweakStore } from '../store/TweakStore';
+import { TweakStore } from 'tweakers/store';
 import type {
   ActionConfig,
   ColorConfig,
@@ -14,8 +14,8 @@ import type {
   TextConfig,
   AffordanceConfig,
   PresetProvider,
-} from '../store/TweakStore';
-import { normalizeGradient, DEFAULT_GRADIENT } from '../gradient-core';
+} from 'tweakers/store';
+import { normalizeGradient, DEFAULT_GRADIENT } from 'tweakers/gradient-core';
 
 export interface UseTweakersOptions {
   onAction?: (action: string) => void;

@@ -1,4 +1,4 @@
-import type { SpringConfig } from '../../store/TweakStore';
+import type { SpringConfig } from 'tweakers/store';
 
 interface SpringVisualizationProps {
   spring: SpringConfig;

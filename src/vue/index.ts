@@ -19,17 +19,17 @@ export type {
   TimelinePropStepConfig,
   TimelineStepConfig,
   TimelineStepValues,
-} from '../timeline';
+} from 'tweakers/timeline';
 export { TweakTimeline } from './components/Timeline/TweakTimeline';
 export { TimelineToggleButton } from './components/Timeline/TimelineToggleButton';
 export { ControlRenderer } from './components/ControlRenderer';
-export { TimelineStore } from '../store/TimelineStore';
+export { TimelineStore } from 'tweakers/timeline';
 export type {
   TimelineMeta,
   TimelineClipMeta,
   TimelineClipTrackMeta,
   TimelineTransport,
-} from '../store/TimelineStore';
+} from 'tweakers/timeline';
 
 export { TweakRoot } from './components/TweakRoot';
 export type { TweakPosition, TweakMode, TweakTheme } from './components/TweakRoot';
@@ -58,8 +58,8 @@ export { AnalyserVisualization } from './components/AnalyserVisualization';
 export type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, AnalyserSpring } from './components/AnalyserVisualization';
 export { CurveComposer } from './components/CurveComposer';
 export type { CurveType, CurveSegment, CurveDriver, CurveComposition, DriverDirection } from './components/CurveComposer';
-export { springify } from '../curve-composer-core';
-export type { Sampler, SpringifyOptions } from '../curve-composer-core';
+export { springify } from 'tweakers/curve-composer-core';
+export type { Sampler, SpringifyOptions } from 'tweakers/curve-composer-core';
 export { TextControl } from './components/TextControl';
 export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';
@@ -78,13 +78,13 @@ export {
   setGradientAngle,
   DEFAULT_GRADIENT,
   MIN_STOPS,
-} from '../gradient-core';
-export type { GradientValue, GradientStop, GradientType } from '../gradient-core';
+} from 'tweakers/gradient-core';
+export type { GradientValue, GradientStop, GradientType } from 'tweakers/gradient-core';
 export { XYPad } from './components/XYPad';
 export { XYControl } from './components/XYControl';
 export { PresetManager } from './components/PresetManager';
 
-export { TweakStore } from '../store/TweakStore';
+export { TweakStore } from 'tweakers/store';
 export type {
   SpringConfig,
   EasingConfig,
@@ -110,4 +110,4 @@ export type {
   AffordanceContext,
   AffordanceStatus,
   ShortcutConfig,
-} from '../store/TweakStore';
+} from 'tweakers/store';

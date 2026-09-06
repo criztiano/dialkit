@@ -30,7 +30,7 @@ import {
   DEFAULT_TRIGGER_STEPS,
   DRAG_THRESHOLD,
   EDGE_HIT,
-} from '../../curve-composer-core';
+} from 'tweakers/curve-composer-core';
 
 export type {
   CurveType,
@@ -38,7 +38,7 @@ export type {
   CurveDriver,
   CurveComposition,
   DriverDirection,
-} from '../../curve-composer-core';
+} from 'tweakers/curve-composer-core';
 
 interface CurveComposerProps {
   /** The curve series (controlled). */

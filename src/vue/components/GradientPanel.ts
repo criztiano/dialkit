@@ -2,7 +2,7 @@ import { computed, defineComponent, h, ref, onBeforeUnmount, type PropType } fro
 import { SegmentedControl } from './SegmentedControl';
 import { ColorPickerPanel } from './ColorPickerPanel';
 import { GradientTransformPad } from './GradientTransformPad';
-import { ICON_GRIP } from '../../icons';
+import { ICON_GRIP } from 'tweakers/icons';
 import {
   gradientToCss,
   addStop,
@@ -16,7 +16,7 @@ import {
   PALETTE_DRAG_CANCEL_PX,
   type GradientValue,
   type GradientType,
-} from '../../gradient-core';
+} from 'tweakers/gradient-core';
 
 const TYPE_OPTIONS: { value: GradientType; label: string }[] = [
   { value: 'linear', label: 'Linear' },

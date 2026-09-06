@@ -9,9 +9,9 @@ import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 import { createRenderer, defineComponent, h } from 'vue';
 import { TweakTimeline as VueTweakTimeline } from './vue/components/Timeline/TweakTimeline';
 import { useTweakTimeline as useVueTweakTimeline } from './vue/useTweakTimeline';
-import { TweakStore } from './store/TweakStore';
-import { TimelineStore } from './store/TimelineStore';
-import { TimelineUiStore } from './store/TimelineUiStore';
+import { TweakStore } from 'tweakers/store';
+import { TimelineStore } from 'tweakers/timeline';
+import { TimelineUiStore } from 'tweakers/timeline';
 
 type HostNode = {
   parent: HostNode | null;
@@ -110,8 +110,8 @@ describe('framework timeline adapters', () => {
       globalThis.document = globalThis.window.document;
       const { createRoot } = await import('solid-js');
       const { createTweakTimeline } = await import('./src/solid/createTweakTimeline.ts');
-      const { TweakStore } = await import('./src/store/TweakStore.ts');
-      const { TimelineStore } = await import('./src/store/TimelineStore.ts');
+      const { TweakStore } = await import('tweakers/store');
+      const { TimelineStore } = await import('tweakers/timeline');
       const id = 'solid-timeline-lifecycle';
       let dispose;
       let timeline;
@@ -152,10 +152,7 @@ describe('framework timeline adapters', () => {
   });
 
   it('compiles and resolves the Svelte adapter value contract during SSR', async () => {
-    let source = readFileSync('src/svelte/createTweakTimeline.svelte.ts', 'utf8');
-    source = source
-      .replaceAll("from 'tweakers/store'", "from '../src/store/TweakStore.ts'")
-      .replaceAll("from 'tweakers/timeline'", "from '../src/timeline/index.ts'");
+    const source = readFileSync('src/svelte/createTweakTimeline.svelte.ts', 'utf8');
     const javascript = transpileModule(source, {
       compilerOptions: {
         module: ModuleKind.ESNext,

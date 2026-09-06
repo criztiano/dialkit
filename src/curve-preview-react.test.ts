@@ -5,7 +5,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { ControlRenderer } from './components/ControlRenderer';
 import { useTweakers } from './hooks/useTweakers';
-import { TweakStore } from './store/TweakStore';
+import { TweakStore } from 'tweakers/store';
 
 // node:test has no DOM; stub what the control tree touches.
 const globals = globalThis as { window?: unknown };

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { createAnalyserEngine } from '../../analyser-engine';
+  import { createAnalyserEngine } from 'tweakers/analyser-engine';
   import type {
     AnalyserRuntime,
     AnalyserSource,
@@ -8,7 +8,7 @@
     AnalyserMode,
     AnalyserScale,
     AnalyserSpring,
-  } from '../../analyser-engine';
+  } from 'tweakers/analyser-engine';
 
   let {
     analyser = null,

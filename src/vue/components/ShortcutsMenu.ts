@@ -1,5 +1,5 @@
 import { defineComponent, h, onUnmounted, ref, Teleport, type PropType } from 'vue';
-import { TweakStore, ShortcutConfig } from '../../store/TweakStore';
+import { TweakStore, ShortcutConfig } from 'tweakers/store';
 
 function formatShortcutKey(sc: ShortcutConfig): string {
   if (!sc.key) return '\u2014';

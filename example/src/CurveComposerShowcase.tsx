@@ -17,8 +17,8 @@ import {
   readComposition,
   triggerLevels,
   springify,
-} from 'tweakers';
-import type { CurveSegment, CurveDriver, DriverDirection, CurveComposition } from 'tweakers';
+} from 'dialkit';
+import type { CurveSegment, CurveDriver, DriverDirection, CurveComposition } from 'dialkit';
 
 const SPRING_SCALE_MIN = -0.2;
 const SPRING_SCALE_MAX = 1.5;

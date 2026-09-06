@@ -8,7 +8,7 @@
     setGradientSquash,
     setGradientRotation,
     type GradientValue,
-  } from '../../gradient-core';
+  } from 'tweakers/gradient-core';
 
   /**
    * Figma-style on-canvas transform controls for a gradient — a live preview with

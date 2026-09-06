@@ -26,8 +26,8 @@
     ICON_PAUSE,
     ICON_PLAY,
     ICON_REPLAY,
-  } from '../../../icons';
-  import { findControl } from '../../../shortcut-utils';
+  } from 'tweakers/icons';
+  import { findControl } from 'tweakers/shortcut-utils';
   import PresetManager from '../PresetManager.svelte';
   import type { TweakTheme } from '../TweakRoot.svelte';
   import ClipPopover from './ClipPopover.svelte';

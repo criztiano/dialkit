@@ -1,7 +1,7 @@
 import { useCallback, useSyncExternalStore } from 'react';
 import { motion } from 'motion/react';
-import { ICON_TIMELINE } from '../../icons';
-import { TimelineUiStore } from '../../store/TimelineUiStore';
+import { ICON_TIMELINE } from 'tweakers/icons';
+import { TimelineUiStore } from 'tweakers/timeline';
 
 export function TimelineToggleButton() {
   const subscribe = useCallback(

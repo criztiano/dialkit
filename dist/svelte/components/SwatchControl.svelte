@@ -2,7 +2,7 @@
   import { Spring } from 'svelte/motion';
   import Portal from '../Portal.svelte';
   import { dropdownTransition } from './transitions';
-  import { ICON_CHEVRON } from '../../icons';
+  import { ICON_CHEVRON } from 'tweakers/icons';
   import type { SwatchOption } from 'tweakers/store';
 
   let { label, value, options, onChange } = $props<{

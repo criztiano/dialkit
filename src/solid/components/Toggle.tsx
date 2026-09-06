@@ -1,7 +1,7 @@
 import { Show } from 'solid-js';
 import { Checkbox } from './Checkbox';
-import type { ShortcutConfig } from '../../store/TweakStore';
-import { formatToggleShortcut } from '../../shortcut-utils';
+import type { ShortcutConfig } from 'tweakers/store';
+import { formatToggleShortcut } from 'tweakers/shortcut-utils';
 
 interface ToggleProps {
   label: string;

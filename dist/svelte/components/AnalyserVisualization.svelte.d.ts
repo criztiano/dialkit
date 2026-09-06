@@ -1,4 +1,4 @@
-import type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, AnalyserSpring } from '../../analyser-engine';
+import type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, AnalyserSpring } from 'tweakers/analyser-engine';
 type $$ComponentProps = {
     analyser?: AnalyserNode | null;
     source?: AnalyserSource;

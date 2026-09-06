@@ -1,7 +1,7 @@
 import { computed, defineComponent, h, onBeforeUnmount, onMounted, ref, Teleport, watch, type PropType } from 'vue';
-import { TweakStore } from '../../store/TweakStore';
-import type { AffordanceConfig, AffordanceContext, AffordanceStatus } from '../../store/TweakStore';
-import { AFFORDANCE_POPOVER_WIDTH, placePopover } from '../../affordance-core';
+import { TweakStore } from 'tweakers/store';
+import type { AffordanceConfig, AffordanceContext, AffordanceStatus } from 'tweakers/store';
+import { AFFORDANCE_POPOVER_WIDTH, placePopover } from 'tweakers/affordance-core';
 
 /**
  * The chrome around one leaf control: a hint tooltip and an affordance dot.

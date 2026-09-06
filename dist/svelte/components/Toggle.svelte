@@ -1,7 +1,7 @@
 <script lang="ts">
   import Checkbox from './Checkbox.svelte';
   import type { ShortcutConfig } from 'tweakers/store';
-  import { formatToggleShortcut } from '../../shortcut-utils';
+  import { formatToggleShortcut } from 'tweakers/shortcut-utils';
 
   let { label, checked, onChange, shortcut, shortcutActive = false } = $props<{
     label: string;

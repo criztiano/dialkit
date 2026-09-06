@@ -1,5 +1,5 @@
 <script module lang="ts">
-  import type { ColorFormat } from '../../color-core';
+  import type { ColorFormat } from 'tweakers/color-core';
 
   // The format choice follows the user across pickers within a session —
   // switching to OKLCH once shouldn't need repeating per control.
@@ -25,8 +25,8 @@
     type HSVA,
     type ChannelSpec,
     type PaletteSlots,
-  } from '../../color-core';
-  import { loadPalette, savePalette, subscribePalette } from '../../color-palette-store';
+  } from 'tweakers/color-core';
+  import { loadPalette, savePalette, subscribePalette } from 'tweakers/color-palette-store';
 
   let { value, onChange, alpha = false, palette = false } = $props<{
     value: string;

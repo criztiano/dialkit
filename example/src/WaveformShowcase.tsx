@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { WaveformVisualization, Slider, ColorControl } from 'tweakers';
-import type { WaveformMode, WaveformLoop } from 'tweakers';
+import { WaveformVisualization, Slider, ColorControl } from 'dialkit';
+import type { WaveformMode, WaveformLoop } from 'dialkit';
 
 const DURATION = 3; // seconds
 const PIXEL_SIZES = [1, 2, 4, 6]; // pixelated block-size multipliers

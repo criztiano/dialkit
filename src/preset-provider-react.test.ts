@@ -5,8 +5,8 @@ import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { Panel } from './components/Panel';
 import { useTweakers } from './hooks/useTweakers';
-import { TweakStore } from './store/TweakStore';
-import type { PresetProvider } from './store/TweakStore';
+import { TweakStore } from 'tweakers/store';
+import type { PresetProvider } from 'tweakers/store';
 
 // Folder measures window height and the preset dropdown portals to body;
 // node:test has no DOM, so both are stubbed just enough to render.

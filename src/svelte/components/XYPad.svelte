@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { ShortcutConfig, XYAxis } from 'tweakers/store';
-  import { formatSliderShortcut } from '../../shortcut-utils';
+  import { formatSliderShortcut } from 'tweakers/shortcut-utils';
   import {
     resolveAxis,
     valueFromPoint,
@@ -11,7 +11,7 @@
     normalizeValue,
     type XYValue,
     type AxisSpec,
-  } from '../../xy-pad-core';
+  } from 'tweakers/xy-pad-core';
 
   let {
     label,

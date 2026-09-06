@@ -1,5 +1,5 @@
 import { createSignal, createEffect } from 'solid-js';
-import { decimalsForStep, roundValue } from '../../shortcut-utils';
+import { decimalsForStep, roundValue } from 'tweakers/shortcut-utils';
 
 interface NumberControlProps {
   label: string;

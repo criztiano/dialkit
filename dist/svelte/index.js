@@ -32,14 +32,14 @@ export { default as CurveComposer } from './components/CurveComposer.svelte';
 // below: a host app driving its own composition state needs them, and they are
 // otherwise reachable only from the React entry. `tweakers/curve-composer-core`
 // serves the same functions to code that must stay framework-free.
-export { defaultComposition, buildSamplers, springify, readComposition, directionPhase, splitSegment, removeSegment, cycleSegmentType, flipSegment, redistributeWeight, setSegmentCurvature, setSegmentSteepness, setSegmentOvershoot, setSegmentAnticipate, addDriver, removeDriver, cycleDriverType, flipDriver, setDriverCurvature, setDriverSteepness, setDriverOvershoot, setDriverAnticipate, } from '../curve-composer-core';
+export { defaultComposition, buildSamplers, springify, readComposition, directionPhase, splitSegment, removeSegment, cycleSegmentType, flipSegment, redistributeWeight, setSegmentCurvature, setSegmentSteepness, setSegmentOvershoot, setSegmentAnticipate, addDriver, removeDriver, cycleDriverType, flipDriver, setDriverCurvature, setDriverSteepness, setDriverOvershoot, setDriverAnticipate, } from 'tweakers/curve-composer-core';
 export { default as TextControl } from './components/TextControl.svelte';
 export { default as SelectControl } from './components/SelectControl.svelte';
 export { default as ColorControl } from './components/ColorControl.svelte';
 export { default as ColorPickerPanel } from './components/ColorPickerPanel.svelte';
 export { default as GradientControl } from './components/GradientControl.svelte';
 export { default as GradientPanel } from './components/GradientPanel.svelte';
-export { gradientToCss, normalizeGradient, colorAtPosition, addStop, removeStop, moveStop, setStopColor, setGradientType, setGradientAngle, DEFAULT_GRADIENT, MIN_STOPS, } from '../gradient-core';
+export { gradientToCss, normalizeGradient, colorAtPosition, addStop, removeStop, moveStop, setStopColor, setGradientType, setGradientAngle, DEFAULT_GRADIENT, MIN_STOPS, } from 'tweakers/gradient-core';
 export { default as XYPad } from './components/XYPad.svelte';
 export { default as XYControl } from './components/XYControl.svelte';
 export { default as FileControl } from './components/FileControl.svelte';

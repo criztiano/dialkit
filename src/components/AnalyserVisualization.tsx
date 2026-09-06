@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react';
-import { createAnalyserEngine } from '../analyser-engine';
-import type { AnalyserRuntime } from '../analyser-engine';
+import { createAnalyserEngine } from 'tweakers/analyser-engine';
+import type { AnalyserRuntime } from 'tweakers/analyser-engine';
 
 export type {
   AnalyserSource,
@@ -9,7 +9,7 @@ export type {
   AnalyserScale,
   AnalyserSpring,
   AnalyserTransferDraw,
-} from '../analyser-engine';
+} from 'tweakers/analyser-engine';
 import type {
   AnalyserSource,
   AnalyserVariant,
@@ -17,7 +17,7 @@ import type {
   AnalyserScale,
   AnalyserSpring,
   AnalyserTransferDraw,
-} from '../analyser-engine';
+} from 'tweakers/analyser-engine';
 
 interface AnalyserVisualizationProps {
   /**

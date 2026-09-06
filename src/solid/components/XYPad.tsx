@@ -1,7 +1,7 @@
 import { createSignal, Show } from 'solid-js';
 import type { JSX } from 'solid-js';
-import type { ShortcutConfig, XYAxis } from '../../store/TweakStore';
-import { formatSliderShortcut } from '../../shortcut-utils';
+import type { ShortcutConfig, XYAxis } from 'tweakers/store';
+import { formatSliderShortcut } from 'tweakers/shortcut-utils';
 import {
   resolveAxis,
   valueFromPoint,
@@ -12,7 +12,7 @@ import {
   normalizeValue,
   type XYValue,
   type AxisSpec,
-} from '../../xy-pad-core';
+} from 'tweakers/xy-pad-core';
 
 export interface XYPadProps {
   label: string;

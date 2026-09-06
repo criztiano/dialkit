@@ -1,5 +1,5 @@
 import { Fragment, defineComponent, h, inject, type PropType } from 'vue';
-import { TweakStore, hintDomId } from '../../store/TweakStore';
+import { TweakStore, hintDomId } from 'tweakers/store';
 import type {
   ControlMeta,
   TweakValue,
@@ -7,8 +7,8 @@ import type {
   SpringConfig,
   TransitionConfig,
   XYValue,
-} from '../../store/TweakStore';
-import type { GradientValue } from '../../gradient-core';
+} from 'tweakers/store';
+import type { GradientValue } from 'tweakers/gradient-core';
 import { ColorControl } from './ColorControl';
 import { Folder } from './Folder';
 import { ModuleFolder } from './ModuleFolder';

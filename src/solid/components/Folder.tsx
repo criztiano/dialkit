@@ -1,6 +1,6 @@
 import { createSignal, createEffect, onCleanup, Show, JSX } from 'solid-js';
 import { animate } from 'motion';
-import { ICON_PANEL, ICON_CHEVRON } from '../../icons';
+import { ICON_PANEL, ICON_CHEVRON } from 'tweakers/icons';
 import { Checkbox } from './Checkbox';
 
 interface FolderProps {

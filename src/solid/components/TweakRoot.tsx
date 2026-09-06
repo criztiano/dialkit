@@ -1,8 +1,8 @@
 import { createSignal, onMount, onCleanup, Show, For } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { TweakStore } from '../../store/TweakStore';
-import type { PanelConfig } from '../../store/TweakStore';
-import { TimelineStore } from '../../store/TimelineStore';
+import { TweakStore } from 'tweakers/store';
+import type { PanelConfig } from 'tweakers/store';
+import { TimelineStore } from 'tweakers/timeline';
 import { ShortcutListener } from './ShortcutListener';
 import { Panel } from './Panel';
 import { Folder } from './Folder';

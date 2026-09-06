@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import { ICON_GRIP, ICON_PLUS, ICON_TRASH } from '../icons';
+import { ICON_GRIP, ICON_PLUS, ICON_TRASH } from 'tweakers/icons';
 import { Folder } from './Folder';
 import { ControlShell } from './ControlShell';
 import { Slider } from './Slider';
@@ -17,7 +17,7 @@ import {
   type ListItemType,
   type ListField,
   type TweakEvent,
-} from '../store/TweakStore';
+} from 'tweakers/store';
 
 interface ListControlProps {
   label: string;

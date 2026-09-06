@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import { ICON_CHEVRON, ICON_CHECK } from '../icons';
-import type { GalleryItem } from '../store/TweakStore';
+import { ICON_CHEVRON, ICON_CHECK } from 'tweakers/icons';
+import type { GalleryItem } from 'tweakers/store';
 
 interface GalleryControlProps {
   label: string;
