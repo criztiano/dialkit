@@ -275,6 +275,7 @@ export type {
   TransitionConfig,
   ActionConfig,
   SelectConfig,
+  ToggleConfig,
   ColorConfig,
   GradientConfig,
   XYConfig,
