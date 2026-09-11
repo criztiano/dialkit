@@ -1,6 +1,14 @@
-# tweakers v1.2.0
+# dialkit v1.2.0
 
-Real-time parameter tweaking for React, Solid, Svelte, and Vue.
+The sidebar panel — real-time parameter tweaking for React, Solid, Svelte and
+Vue, powered by [tweakers](https://github.com/criztiano/tweakers), which owns
+the shared store and the Move surface. Install both: one tweakers copy in the
+tree means one store, which is what keeps a panel, the Move and the hardware
+looking at the same values.
+
+```bash
+npm install dialkit tweakers motion
+```
 
 ## Guidebook
 
@@ -23,7 +31,7 @@ design language, its own controls, and its own API. The debt to dialkit stands.
 ## Quick Start
 
 ```bash
-npm install tweakers motion
+npm install dialkit tweakers motion
 ```
 
 ```tsx
