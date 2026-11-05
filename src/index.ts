@@ -87,6 +87,8 @@ export type {
   DialPadAxis,
   DialPadConfig,
   DialPadValue,
+  DialXYAxis,
+  DialXYConfig,
   BackgroundConfig,
   BackgroundValue,
   BackgroundValueUpdate,

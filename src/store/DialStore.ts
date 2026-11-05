@@ -2,11 +2,13 @@ import { roundValue } from '../numeric';
 import { parseColor } from '../color';
 import { normalizePadValue, type DialPadConfig, type DialPadValue } from '../dial-pad';
 import { normalizeAnchorValue, type AnchorConfig, type AnchorValue } from '../anchor';
+import { xyPadConfig, type DialXYConfig } from '../xy-pad';
 import { normalizeLayersValue, sameLayersValue, type LayersConfig, type LayersValue } from '../layers';
 import { defaultTransitionPresets, type TransitionPresetOption } from '../transition-presets';
 import { cloneGradient, normalizeBackgroundValue, normalizeGradient, sameBackgroundValue, type BackgroundConfig, type BackgroundGradient, type BackgroundValue, type BackgroundValueUpdate, type SavedGradient } from '../background';
 export type { DialPadAxis, DialPadConfig, DialPadValue } from '../dial-pad';
 export type { AnchorConfig, AnchorValue } from '../anchor';
+export type { DialXYAxis, DialXYConfig } from '../xy-pad';
 export type { LayerItem, LayersConfig, LayersValue, LayerActionKind } from '../layers';
 export type {
   BackgroundConfig, BackgroundGradient, BackgroundMedia, BackgroundMediaDisplay, BackgroundMediaFit, BackgroundMediaRatio, BackgroundMode, BackgroundValue, BackgroundValueUpdate,
@@ -82,7 +84,7 @@ export type TextConfig = {
   placeholder?: string;
 };
 
-export type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | ImageConfig | TextConfig | DialPadConfig | DialPadValue | BackgroundConfig | BackgroundValue | AnchorConfig | AnchorValue | LayersConfig | LayersValue | null;
+export type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | ImageConfig | TextConfig | DialPadConfig | DialPadValue | DialXYConfig | BackgroundConfig | BackgroundValue | AnchorConfig | AnchorValue | LayersConfig | LayersValue | null;
 
 /**
  * Folder keys that configure the folder instead of adding a control:
@@ -210,7 +212,7 @@ export type ResolvedValues<T extends DialConfig> = {
             ? string
             : T[K] extends TextConfig
               ? string
-              : T[K] extends DialPadConfig
+              : T[K] extends DialPadConfig | DialXYConfig
                 ? DialPadValue
                 : T[K] extends BackgroundConfig
                   ? BackgroundValue
@@ -234,7 +236,7 @@ export type DialKitValueUpdates<T extends DialConfig> = {
         ? never
         : T[K] extends SelectConfig | ColorConfig | ImageConfig | TextConfig
           ? string
-          : T[K] extends DialPadConfig
+          : T[K] extends DialPadConfig | DialXYConfig
             ? DialPadValue
             : T[K] extends BackgroundConfig
               ? BackgroundValueUpdate
@@ -605,6 +607,7 @@ export function isLeafConfigValue(value: unknown): boolean {
     isImageConfigValue(value) ||
     isTextConfigValue(value) ||
     isPadConfigValue(value) ||
+    isXYConfigValue(value) ||
     isBackgroundConfigValue(value) ||
     isAnchorConfigValue(value) ||
     isLayersConfigValue(value)
@@ -619,6 +622,7 @@ function configDefaultValue(value: DialConfig[string]): DialValue {
   if (isImageConfigValue(value)) return value.default ?? getFirstOptionValue(value.options ?? []);
   if (isTextConfigValue(value)) return value.default ?? '';
   if (isPadConfigValue(value)) return normalizePadValue(undefined, value);
+  if (isXYConfigValue(value)) return normalizePadValue(undefined, xyPadConfig(value));
   if (isAnchorConfigValue(value)) return normalizeAnchorValue(undefined, value);
   if (isBackgroundConfigValue(value)) return normalizeBackgroundValue(value.default);
   if (isLayersConfigValue(value)) return normalizeLayersValue(value.default);
@@ -716,6 +720,11 @@ function isTextConfigValue(value: unknown): value is TextConfig {
 
 function isPadConfigValue(value: unknown): value is DialPadConfig {
   return hasType(value, 'pad');
+}
+
+/** An `xy` config is parsed as a pad: see {@link xyPadConfig}. */
+function isXYConfigValue(value: unknown): value is DialXYConfig {
+  return hasType(value, 'xy');
 }
 
 function isAnchorConfigValue(value: unknown): value is AnchorConfig {
@@ -1909,6 +1918,8 @@ class DialStoreClass {
           control = { type: 'text', path, label, placeholder: value.placeholder };
         } else if (isPadConfigValue(value)) {
           control = { type: 'pad', path, label, pad: value };
+        } else if (isXYConfigValue(value)) {
+          control = { type: 'pad', path, label, pad: xyPadConfig(value) };
         } else if (isLayersConfigValue(value)) {
           control = { type: 'layers', path, label, layers: { ...value, default: normalizeLayersValue(value.default) } };
         } else if (isAnchorConfigValue(value)) {
