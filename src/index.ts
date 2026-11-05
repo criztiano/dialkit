@@ -68,6 +68,45 @@ export { PresetManager } from './components/PresetManager';
 export { VersionGallery } from './components/VersionGallery';
 export { ShortcutsMenu } from './components/ShortcutsMenu';
 
+// Component library: blocks an app can place in its own UI, outside a panel
+export { SegmentedControl } from './components/SegmentedControl';
+export { Module, ModuleFolder } from './components/Module';
+export { CurveComposer } from './components/CurveComposer';
+export type { CurveComposerProps } from './components/CurveComposer';
+export type { CurveType, CurveSegment, CurveDriver, CurveComposition, DriverDirection } from './curve-composer-core';
+export {
+  CURVE_CYCLE,
+  defaultComposition,
+  splitSegment,
+  removeSegment,
+  flipSegment,
+  flipDriver,
+  flipSegmentX,
+  flipSegmentY,
+  flipDriverX,
+  flipDriverY,
+  cycleSegmentType,
+  setSegmentCurvature,
+  setSegmentSteepness,
+  setSegmentOvershoot,
+  setSegmentAnticipate,
+  redistributeWeight,
+  addDriver,
+  removeDriver,
+  cycleDriverType,
+  setDriverCurvature,
+  setDriverSteepness,
+  setDriverOvershoot,
+  setDriverAnticipate,
+  springify,
+  buildSamplers,
+  readComposition,
+  triggerLevels,
+  triggersCrossed,
+  DEFAULT_TRIGGER_STEPS,
+} from './curve-composer-core';
+export type { Sampler, SpringifyOptions, CompositionSamplers, CompositionRead } from './curve-composer-core';
+
 // Hints (hold H over a control to read what it does)
 export { HintStore } from './hints';
 export { HintTip, HintTooltip } from './components/Hint';
