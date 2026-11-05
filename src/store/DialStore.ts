@@ -6,6 +6,7 @@ import { xyPadConfig, type DialXYConfig } from '../xy-pad';
 import { normalizeFilterValue, type DialFilterConfig, type DialFilterValue } from '../filter';
 import { DEFAULT_TRANSFER, normalizeTransfer, type DialTransferConfig, type DialTransferValue } from '../transfer';
 import type { DialCurveConfig } from '../curve-preview';
+import type { DialAnalyserConfig } from '../analyser';
 import { normalizeLayersValue, sameLayersValue, type LayersConfig, type LayersValue } from '../layers';
 import { defaultTransitionPresets, type TransitionPresetOption } from '../transition-presets';
 import { cloneGradient, normalizeBackgroundValue, normalizeGradient, sameBackgroundValue, type BackgroundConfig, type BackgroundGradient, type BackgroundValue, type BackgroundValueUpdate, type SavedGradient } from '../background';
@@ -15,6 +16,7 @@ export type { DialXYAxis, DialXYConfig } from '../xy-pad';
 export type { DialFilterAxisConfig, DialFilterConfig, DialFilterValue } from '../filter';
 export type { DialTransferConfig, DialTransferValue, TransferPoint } from '../transfer';
 export type { DialCurveConfig } from '../curve-preview';
+export type { AnalyserScale, AnalyserSpring, DialAnalyserConfig } from '../analyser';
 export type { LayerItem, LayersConfig, LayersValue, LayerActionKind } from '../layers';
 export type {
   BackgroundConfig, BackgroundGradient, BackgroundMedia, BackgroundMediaDisplay, BackgroundMediaFit, BackgroundMediaRatio, BackgroundMode, BackgroundValue, BackgroundValueUpdate,
@@ -90,7 +92,7 @@ export type TextConfig = {
   placeholder?: string;
 };
 
-export type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | ImageConfig | TextConfig | DialPadConfig | DialPadValue | DialXYConfig | DialFilterConfig | DialFilterValue | DialTransferConfig | DialTransferValue | DialCurveConfig | BackgroundConfig | BackgroundValue | AnchorConfig | AnchorValue | LayersConfig | LayersValue | null;
+export type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | ImageConfig | TextConfig | DialPadConfig | DialPadValue | DialXYConfig | DialFilterConfig | DialFilterValue | DialTransferConfig | DialTransferValue | DialCurveConfig | DialAnalyserConfig | BackgroundConfig | BackgroundValue | AnchorConfig | AnchorValue | LayersConfig | LayersValue | null;
 
 /**
  * Folder keys that configure the folder instead of adding a control:
@@ -204,7 +206,7 @@ export function unwrapVisibility(value: DialConfig[string]): DialConfig[string] 
 type AnchorConfigValue<C> = C extends { default: null } ? AnchorValue | null : AnchorValue;
 
 /** Rows that draw but hold no value: they have no key in the resolved values. */
-type DisplayConfig = DialCurveConfig;
+type DisplayConfig = DialCurveConfig | DialAnalyserConfig;
 
 export type ResolvedValues<T extends DialConfig> = {
   [K in keyof T as K extends FolderMetaKey ? never : T[K] extends DisplayConfig ? never : K]: T[K] extends ControlWithVisibility<infer U extends DialConfig[string]>
@@ -277,7 +279,7 @@ export type ShortcutConfig = {
 };
 
 export type ControlMeta = {
-  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'image' | 'text' | 'pad' | 'background' | 'anchor' | 'layers' | 'filter' | 'transfer' | 'curve';
+  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'image' | 'text' | 'pad' | 'background' | 'anchor' | 'layers' | 'filter' | 'transfer' | 'curve' | 'analyser';
   path: string;
   label: string;
   min?: number;
@@ -312,6 +314,8 @@ export type ControlMeta = {
   transfer?: DialTransferConfig;
   /** Curve only: the config as written; its `sample` is kept fresh by `syncLiveConfigs`. */
   curve?: DialCurveConfig;
+  /** Analyser only: the config as written; its getters are kept fresh by `syncLiveConfigs`. */
+  analyser?: DialAnalyserConfig;
   anchor?: AnchorConfig;
   background?: BackgroundConfig;
   /** Layers only: the config, with its default made valid. Its add, duplicate and delete send `layerAction` paths. */
@@ -769,7 +773,11 @@ function isCurveConfigValue(value: unknown): value is DialCurveConfig {
 
 /** A row that draws but holds no value. See {@link DisplayConfig}. */
 function isDisplayConfigValue(value: unknown): value is DisplayConfig {
-  return isCurveConfigValue(value);
+  return isCurveConfigValue(value) || isAnalyserConfigValue(value);
+}
+
+function isAnalyserConfigValue(value: unknown): value is DialAnalyserConfig {
+  return hasType(value, 'analyser') && typeof (value as DialAnalyserConfig).analyser === 'function';
 }
 
 function isAnchorConfigValue(value: unknown): value is AnchorConfig {
@@ -1973,6 +1981,8 @@ class DialStoreClass {
           control = { type: 'transfer', path, label, transfer: value };
         } else if (isCurveConfigValue(value)) {
           control = { type: 'curve', path, label, curve: value };
+        } else if (isAnalyserConfigValue(value)) {
+          control = { type: 'analyser', path, label, analyser: value };
         } else if (isLayersConfigValue(value)) {
           control = { type: 'layers', path, label, layers: { ...value, default: normalizeLayersValue(value.default) } };
         } else if (isAnchorConfigValue(value)) {
