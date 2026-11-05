@@ -1318,6 +1318,145 @@
   white-space: nowrap;
 }
 
+/* Module: a titled block with an Off/On switch in its header. Off folds the body away. */
+.dialkit-module {
+  display: flex;
+  flex-direction: column;
+}
+.dialkit-module-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: var(--dial-row-height);
+  user-select: none;
+}
+.dialkit-module-header[data-toggle="true"] { cursor: pointer; }
+.dialkit-module-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--dial-text-section);
+  transition: color 0.15s;
+}
+.dialkit-module[data-enabled="false"] .dialkit-module-title { color: var(--dial-text-label); }
+.dialkit-module-header[data-toggle="true"]:hover .dialkit-module-title { color: var(--dial-text-primary); }
+.dialkit-module-switch {
+  flex-shrink: 0;
+  align-self: stretch;
+  display: flex;
+  background: var(--dial-surface);
+  border-radius: var(--dial-radius);
+}
+.dialkit-module-switch .dialkit-segmented { flex: 1; }
+.dialkit-module-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.dialkit-module-collapse[data-open="true"] { grid-template-rows: 1fr; }
+.dialkit-module-collapse-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+.dialkit-module-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dial-row-gap);
+  padding: 2px 0 10px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dialkit-module-collapse { transition: none; }
+}
+
+/* Curve composer: a series of curves in one lane, with an optional driver lane below. */
+.dialkit-composer {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+.dialkit-composer-svg {
+  display: block;
+  color: var(--dial-text-primary);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.dialkit-composer-lane { fill: var(--dial-surface); }
+.dialkit-composer-seg-hover {
+  fill: var(--dial-surface-hover);
+  pointer-events: none;
+}
+.dialkit-composer-seg-selected {
+  fill: var(--dial-surface-active);
+  stroke: var(--dial-border-hover);
+  stroke-width: 1;
+  pointer-events: none;
+}
+.dialkit-composer-grid {
+  stroke: var(--dial-text-tertiary);
+  stroke-opacity: 0.2;
+  stroke-width: 1;
+  pointer-events: none;
+}
+.dialkit-composer-diagonal {
+  stroke: var(--dial-text-tertiary);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  opacity: 0.4;
+  pointer-events: none;
+}
+.dialkit-composer-curve {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.dialkit-composer-curve-driver { stroke-opacity: 0.6; }
+.dialkit-composer-connector {
+  fill: none;
+  stroke: currentColor;
+  stroke-opacity: 0.3;
+  stroke-width: 2;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+.dialkit-composer-boundary {
+  stroke: var(--dial-text-tertiary);
+  stroke-width: 1;
+  transition: stroke 0.15s, stroke-width 0.15s;
+}
+.dialkit-composer-boundary[data-active="true"] {
+  stroke: var(--dial-text-primary);
+  stroke-width: 2;
+}
+.dialkit-composer-playhead {
+  stroke: currentColor;
+  stroke-opacity: 0.5;
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+.dialkit-composer-dot {
+  fill: currentColor;
+  pointer-events: none;
+}
+.dialkit-composer-label {
+  fill: var(--dial-text-label);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 500;
+  text-anchor: middle;
+  text-transform: capitalize;
+  pointer-events: none;
+}
+
 /* Transition mode tabs, Bézier fields, copy and paste, and presets */
 /* The row keeps the panel's row height, so the tabs and their pill are 28px. */
 .dialkit-transition-type {
