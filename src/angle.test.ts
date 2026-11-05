@@ -64,7 +64,7 @@ describe('angle dial controls', () => {
     try {
       DialStore.registerPanel(id, 'Angle', config);
       const [headingMeta, tiltMeta, levelMeta] = DialStore.getPanel(id)!.controls;
-      assert.deepEqual([headingMeta.type, headingMeta.dial, headingMeta.step], ['slider', true, 10]);
+      assert.deepEqual([headingMeta.type, headingMeta.dial, headingMeta.step], ['slider', true, 1]);
       assert.deepEqual([tiltMeta.dial, tiltMeta.origin, tiltMeta.wrap, tiltMeta.step], [true, 0, false, 0.5]);
       assert.deepEqual([levelMeta.dial, levelMeta.unit, levelMeta.step], [false, ' dB', 0.1]);
       DialStore.updateValue(id, 'tilt', 30);

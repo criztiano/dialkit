@@ -2070,7 +2070,8 @@ class DialStoreClass {
           // The object form of the tuple; `display: 'dial'` draws an angle dial.
           control = {
             type: 'slider', path, label, min: value.min, max: value.max,
-            step: value.step ?? inferStep(value.min, value.max), unit: value.unit,
+            // A dial turns in whole steps unless told otherwise; a slider infers its step from the range.
+            step: value.step ?? (value.display === 'dial' ? 1 : inferStep(value.min, value.max)), unit: value.unit,
             formatValue: value.formatValue, dial: value.display === 'dial', origin: value.origin, wrap: value.wrap, shortcut,
           };
         } else if (isNumberConfigValue(value)) {
