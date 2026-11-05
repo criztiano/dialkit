@@ -5,6 +5,10 @@ import { mergeControls } from '../control-presence';
 import { ShortcutContext } from './ShortcutListener';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
+import { AngleDial } from './AngleDial';
+import { NumberControl } from './NumberControl';
+import { RangeSlider } from './RangeSlider';
+import type { RangeValue } from '../range';
 import { Toggle } from './Toggle';
 import { SpringControl } from './SpringControl';
 import { TransitionControl } from './TransitionControl';
@@ -117,6 +121,24 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration,
 
     switch (control.type) {
       case 'slider':
+        if (control.dial) {
+          return (
+            <AngleDial
+              key={control.path}
+              label={control.label}
+              hint={control.hint}
+              value={value as number}
+              onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+              min={control.min}
+              max={control.max}
+              step={control.step}
+              unit={control.unit}
+              formatValue={control.formatValue}
+              origin={control.origin}
+              wrap={control.wrap}
+            />
+          );
+        }
         return (
           <Slider
             key={control.path}
@@ -128,8 +150,41 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration,
             max={control.max}
             step={control.step}
             unit={control.unit}
+            formatValue={control.formatValue}
             shortcut={control.shortcut}
             shortcutActive={shortcutCtx.activePanelId === panelId && shortcutCtx.activePath === control.path}
+          />
+        );
+
+      case 'number':
+        return (
+          <NumberControl
+            key={control.path}
+            label={control.label}
+            hint={control.hint}
+            value={value as number}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            min={control.min}
+            max={control.max}
+            step={control.step}
+            unit={control.unit}
+            formatValue={control.formatValue}
+            orientation={control.orientation}
+          />
+        );
+
+      case 'range':
+        return (
+          <RangeSlider
+            key={control.path}
+            label={control.label}
+            hint={control.hint}
+            value={value as RangeValue}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            min={control.min}
+            max={control.max}
+            step={control.step}
+            defaultValue={control.rangeDefault}
           />
         );
 

@@ -13,6 +13,8 @@ interface SliderProps {
   max?: number;
   step?: number;
   unit?: string;
+  /** Replaces the shown value; `unit` is then not added. */
+  formatValue?: (value: number) => string;
   shortcut?: ShortcutConfig;
   shortcutActive?: boolean;
   hint?: string;
@@ -31,11 +33,13 @@ export function Slider({
   min = 0,
   max = 1,
   step = 0.01,
-  unit,
+  unit: unitProp,
+  formatValue,
   shortcut,
   shortcutActive,
   hint,
 }: SliderProps) {
+  const unit = formatValue ? undefined : unitProp;
   // While a panel rebuilds, its controls and values can disagree for one
   // render: a slider with no value shows its minimum instead of throwing on
   // value.toFixed below.
@@ -344,7 +348,7 @@ export function Slider({
     handleInputSubmit();
   };
 
-  const displayValue = value.toFixed(decimalsForStep(step, min, max));
+  const displayValue = formatValue ? formatValue(value) : value.toFixed(decimalsForStep(step, min, max));
 
   // Handle opacity: not active → 0, active → 0.5, dragging → 0.9
   // Value dodge: fade when handle overlaps label (left) or value (right)
