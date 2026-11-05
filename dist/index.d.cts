@@ -43,6 +43,163 @@ type AnchorConfig = {
     default?: Partial<AnchorValue> | null;
 };
 
+/** One axis of an `xy` config. Missing fields default to 0 to 1 in steps of 0.01. */
+type DialXYAxis = {
+    min?: number;
+    max?: number;
+    step?: number;
+    /** Where the axis rests. Defaults to the middle of a bipolar axis, else `min`. */
+    origin?: number;
+    /** The axis has a meaningful middle: it rests there. */
+    bipolar?: boolean;
+    /** The axis field's name. Defaults to X or Y. */
+    label?: string;
+};
+/**
+ * The object form of a pad: `{ type: 'xy', x: { min, max, step }, y: ... }`.
+ * It shows as a {@link DialPadConfig} pad and has the same `{ x, y }` value.
+ */
+type DialXYConfig = {
+    type: 'xy';
+    /** Starting point. A missing or invalid axis starts at its origin. */
+    default?: Partial<DialPadValue>;
+    x?: DialXYAxis;
+    y?: DialXYAxis;
+    /** Hides the label box; the fields fill the row. */
+    hideLabel?: boolean;
+    /** Drag an axis label left or right to change its value. */
+    dragLabels?: boolean;
+};
+
+/**
+ * A filter: one value, two hands, cutoff and resonance, drawn as the
+ * magnitude response they make. `response` draws the app's own filter;
+ * without one the control draws a lowpass.
+ */
+type DialFilterConfig = {
+    type: 'filter';
+    /** Starting point. A missing hand opens the filter: cutoff at max, resonance at min. */
+    default?: Partial<DialFilterValue>;
+    cutoff?: DialFilterAxisConfig;
+    resonance?: DialFilterAxisConfig;
+    /** The drawn response, from each hand's 0 to 1 position: t sweeps the spectrum, y is the gain from 0 to 1. */
+    response?: (cutoff01: number, resonance01: number) => (t: number) => number;
+    /** `false` draws the response dimmed, as a bypassed filter. Default on. */
+    enabled?: boolean;
+};
+type DialFilterAxisConfig = {
+    min?: number;
+    max?: number;
+    /** 0 or none: continuous. */
+    step?: number;
+    default?: number;
+    /** The hand's slider label. Defaults to Freq and Res. */
+    label?: string;
+    unit?: string;
+};
+type DialFilterValue = {
+    cutoff: number;
+    resonance: number;
+};
+type FilterShapeType = 'lowpass' | 'highpass' | 'bandpass' | 'notch' | 'peak';
+/**
+ * A 2-pole biquad magnitude over a log frequency sweep, for a `response`:
+ * `response: (c, r) => filterShapeResponse('highpass', c, r)`. The knee
+ * sweeps 3 decades and Q runs from 0.7 (no bump) to about 10.
+ */
+declare function filterShapeResponse(type: FilterShapeType, cutoff01: number, resonance01: number): (t: number) => number;
+
+/**
+ * A transfer curve maps input to output (a gamma, a falloff, an edge ramp),
+ * both from 0 to 1. Between points the curve is monotone cubic
+ * (Fritsch–Carlson), so it never overshoots the values you placed.
+ */
+type DialTransferConfig = {
+    type: 'transfer';
+    /** Starting shape. Defaults to straight through. */
+    default?: DialTransferValue;
+    /** Plot height in px, from 64 to 200. Default 104. */
+    height?: number;
+    /** Grid divisions behind the curve. Default 4; 0 hides it. */
+    grid?: number;
+    /** Names for the two axes. */
+    axisLabels?: {
+        x?: string;
+        y?: string;
+    };
+};
+type TransferPoint = {
+    x: number;
+    y: number;
+};
+type DialTransferValue = {
+    points: TransferPoint[];
+};
+/** The curve's output at `x` from 0 to 1. Outside the domain it holds the ends. */
+declare function sampleTransfer(points: TransferPoint[], x: number): number;
+/** The curve as `size` samples across the domain: a 1-D texture for a shader. */
+declare function transferLut(points: TransferPoint[], size?: number): Float32Array;
+
+/**
+ * A read-only curve row: draws a shape the app's own values make (a pitch
+ * arc, a falloff). It holds no value, so nothing lands in the resolved
+ * values, versions, or storage. `sample` may close over the app's state; the
+ * React hook keeps it fresh on every render (see `syncLiveConfigs`).
+ */
+type DialCurveConfig = {
+    type: 'curve';
+    /** t from 0 to 1 → y. Non-finite results break the stroke there. */
+    sample: (t: number) => number;
+    /** Fixed y-range. Default: fits each draw with a little headroom. */
+    domain?: [number, number];
+    /** Vertical reference lines at these x positions from 0 to 1; others are skipped. */
+    markers?: readonly number[];
+    /** Plot height in px, from 32 to 160. Default 64. Ignored when `aspect` is set. */
+    height?: number;
+    /** Width ÷ height: the plot keeps its proportions at any panel width. */
+    aspect?: number;
+    /** `false` hides the label line; a string replaces the key's label. */
+    label?: false | string;
+};
+
+type AnalyserScale = 'log' | 'linear';
+/** `true` uses the default spring; an object sets stiffness and damping. */
+type AnalyserSpring = boolean | {
+    stiffness?: number;
+    damping?: number;
+};
+/**
+ * A read-only live analyser row: a spectrum or an oscilloscope of the app's
+ * AnalyserNode. It holds no value, so nothing lands in the resolved values,
+ * versions, or storage. The node is only read, never changed: its fftSize,
+ * smoothing, and dB window stay the app's.
+ */
+type DialAnalyserConfig = {
+    type: 'analyser';
+    /** The live node, read every frame: a getter, so the app can supply it after its audio context starts. */
+    analyser: () => AnalyserNode | null;
+    /** `'frequency'` (default): a spectrum. `'waveform'`: an oscilloscope. */
+    source?: 'frequency' | 'waveform';
+    /** `'area'` (default) fills under the trace; `'line'` draws the trace only. */
+    variant?: 'line' | 'area';
+    /** `'smooth'` (default) or `'pixelated'` blocks. */
+    mode?: 'smooth' | 'pixelated';
+    /** Pixelated only: the block size multiplier. Default 2. */
+    pixelSize?: number;
+    /** Spectrum spacing. Default `'log'`. */
+    scale?: AnalyserScale;
+    /** Spring the trace's movement on top of the node's own smoothing. Default off. */
+    spring?: AnalyserSpring;
+    /** Spectrum only: show only this frequency window, in Hz. */
+    rangeHz?: readonly [number, number];
+    /** Spectrum only: a vertical reference line in Hz, read every frame. */
+    marker?: () => number | null;
+    /** Plot height in px, from 32 to 160. Default 56. */
+    height?: number;
+    /** `false` hides the label line; a string replaces the key's label. */
+    label?: false | string;
+};
+
 /**
  * The layer list control's value: the rows, top first, and the selected row.
  *
@@ -99,6 +256,249 @@ declare function parseLayerAction(path: string, action: string): {
  * becomes null.
  */
 declare function normalizeLayersValue(value: unknown, fallback?: LayersValue): LayersValue;
+
+/** A range's value. The helpers keep `min <= max`. */
+type RangeValue = {
+    min: number;
+    max: number;
+};
+/**
+ * A range slider: two handles on one track. `default` falls back to the full
+ * track `{ min, max }`, and `step` to the slider's step for the track.
+ */
+type RangeSliderConfig = {
+    type: 'range';
+    min: number;
+    max: number;
+    default?: RangeValue;
+    step?: number;
+};
+
+type NumberConfig = {
+    type: 'number';
+    default: number;
+    min?: number;
+    max?: number;
+    /** Falls back to a step that fits `default`, as a bare number's slider does. */
+    step?: number;
+    /** Shown after the value, as a slider's unit is. */
+    unit?: string;
+    /** Replaces the shown value; `unit` is then not added. */
+    formatValue?: (value: number) => string;
+    /** `vertical` puts the label above a centred value, and a drag scrubs up and down. */
+    orientation?: 'horizontal' | 'vertical';
+};
+
+/**
+ * The object form of a slider, for what the `[default, min, max, step?, unit?]`
+ * tuple cannot say. `display: 'dial'` draws it as an angle dial: for values
+ * whose two ends are the same place (a heading, a hue, a tilt). To the store
+ * it stays a slider, so presets, shortcuts and other frameworks see a slider.
+ */
+type SliderConfig = {
+    type: 'slider';
+    default: number;
+    min: number;
+    max: number;
+    /** Falls back to the tuple's step for the range. */
+    step?: number;
+    /** Shown after the value. A dial over a half turn or more shows ° without it. */
+    unit?: string;
+    /** Replaces the shown value; `unit` is then not added. */
+    formatValue?: (value: number) => string;
+    display?: 'track' | 'dial';
+    /** Dial only: the value the sweep grows from, and the double-click reset. Defaults to `min`. */
+    origin?: number;
+    /** Dial only: past an end, come back around. Defaults to true for a full turn (360 or more). */
+    wrap?: boolean;
+};
+
+/**
+ * The choice controls: chips, a multiselect, swatches, a file picker and a
+ * gallery. Their values stay JSON: a picked file's name, never the file
+ * (the files go out on the event channel, see {@link DialEvent}).
+ */
+type ChipOption = {
+    value: string;
+    label: string;
+    /** Shows a remove button that sends a `remove` event. The app takes the chip out of its options. */
+    removable?: boolean;
+};
+/** One of a set of chips that wrap onto more lines. The value is the chosen chip's value. */
+type ChipsConfig = {
+    type: 'chips';
+    options: ChipOption[];
+    default?: string;
+};
+type MultiSelectOption = {
+    value: string;
+    label: string;
+    /** One quiet line under the label, such as what the option contains. */
+    hint?: string;
+    /** A small badge next to the label, such as 'local' or 'cloud'. */
+    tag?: string;
+};
+/**
+ * Checkbox rows. The value is the checked values, in option order. An
+ * option is a `{ value, label }` row or a string (its own value and label).
+ */
+type MultiSelectConfig = {
+    type: 'multiselect';
+    options: (string | MultiSelectOption)[];
+    default?: string[];
+};
+type SwatchOption = {
+    value: string;
+    label: string;
+    /** One color shows a chip; more show a strip. */
+    colors: string[];
+};
+/** A dropdown of named palettes. The value is the chosen palette's value. */
+type SwatchConfig = {
+    type: 'swatch';
+    options: SwatchOption[];
+    default?: string;
+};
+/**
+ * A file picker. The value is the picked file's name ("3 files" for more
+ * than one), or '' when none is picked; the files go out as a `file` event.
+ */
+type FileConfig = {
+    type: 'file';
+    /** The file input's `accept`, such as 'image/*' or '.svg,image/svg+xml'. */
+    accept?: string;
+    multiple?: boolean;
+};
+type GalleryItem = {
+    id: string;
+    src?: string;
+    alt?: string;
+    /** Kept so old configs still type-check. The image picker draws square thumbnails. */
+    aspect?: number;
+    /** Kept so old configs still type-check. Items without `src` do not show. */
+    render?: () => unknown;
+};
+/** One image from a grid of thumbnails, shown in the image picker. The value is the chosen item's id. */
+type GalleryConfig = {
+    type: 'gallery';
+    items: GalleryItem[];
+    default?: string;
+    /** Kept so old configs still type-check. The image picker sets its own columns. */
+    columns?: number;
+};
+/**
+ * What a control tells the app that is not a value: files picked, a chip
+ * removed, a list changed. Hear them with `DialStore.subscribeEvents` or
+ * the `onEvent` option of `useDialKit`.
+ */
+type DialEvent = {
+    kind: 'file';
+    files: FileList;
+} | {
+    kind: 'remove';
+    value: string;
+} | {
+    kind: 'list';
+    op: 'add' | 'remove' | 'move' | 'set' | 'rename';
+    index?: number;
+    from?: number;
+    to?: number;
+    itemType?: string;
+};
+
+/**
+ * The list control: rows the user adds, renames, reorders and removes. Each
+ * row is one of the config's item types and holds that type's fields.
+ */
+/** One row: its item type and its field values. Plain JSON, so presets keep it. */
+type ListItemValue = {
+    type: string;
+    params: Record<string, number | boolean | string>;
+    /** The row's own name, shown in place of its type's label. Absent (never '') without one. */
+    title?: string;
+};
+/**
+ * A field of an item type, in the panel's shorthand, scalars only: a slider
+ * tuple or number, a boolean, a string (a hex color or text), or a select,
+ * color, swatch or text config.
+ */
+type ListItemField = [number, number, number, number?] | number | boolean | string | {
+    type: 'select';
+    options: (string | {
+        value: string;
+        label: string;
+    })[];
+    default?: string;
+} | {
+    type: 'color';
+    default?: string;
+} | SwatchConfig | {
+    type: 'text';
+    default?: string;
+    placeholder?: string;
+};
+type ListItemType = {
+    /** Shown in the add menu, and as a row's title when the row has none of its own. */
+    label: string;
+    /** The type's fields, by param name. */
+    schema: Record<string, ListItemField>;
+    /** A hint per field, by param name. */
+    hints?: Record<string, string>;
+    /**
+     * A section per field, by param name. Fields without one stay at the top
+     * of the row; each section is a folder below them, the first one open.
+     */
+    groups?: Record<string, string>;
+};
+type ListConfig = {
+    type: 'list';
+    /** The item types a user can add. */
+    itemTypes: Record<string, ListItemType>;
+    /** The first rows. Each row's missing params take its type's defaults. */
+    default?: ListItemValue[];
+    /** The most rows the list takes. */
+    max?: number;
+    /** The add button's text. Default 'Add'. */
+    addLabel?: string;
+};
+type ListFieldKind = 'slider' | 'toggle' | 'select' | 'color' | 'swatch' | 'text';
+/** One field of a row, ready to draw. */
+type ListField = {
+    key: string;
+    label: string;
+    kind: ListFieldKind;
+    hint?: string;
+    group?: string;
+    swatchOptions?: SwatchOption[];
+    min?: number;
+    max?: number;
+    step?: number;
+    options?: (string | {
+        value: string;
+        label: string;
+    })[];
+    placeholder?: string;
+    defaultValue: number | boolean | string;
+};
+type ListFieldGroup = {
+    label: string;
+    fields: ListField[];
+};
+/** An item type's schema as fields, in declared order. Fields it cannot read are left out. */
+declare function parseListItemSchema(schema: Record<string, ListItemField>, hints?: Record<string, string>, groups?: Record<string, string>): ListField[];
+/** A row's fields split into its top area and its sections, in the order each section's first field is declared. */
+declare function groupListFields(fields: ListField[]): {
+    flat: ListField[];
+    groups: ListFieldGroup[];
+};
+/** The params of a new row of a type. */
+declare function defaultListItemParams(schema: Record<string, ListItemField>): Record<string, number | boolean | string>;
+/**
+ * Rows made valid against the item types: rows of an unknown type drop,
+ * missing params take their type's defaults, and a blank title drops. A
+ * value that is not a list becomes the fallback.
+ */
+declare function normalizeListItems(value: unknown, itemTypes: Record<string, ListItemType>, fallback?: ListItemValue[]): ListItemValue[];
 
 type BezierPoints = EasingConfig['ease'];
 
@@ -328,7 +728,9 @@ type TextConfig = {
     default?: string;
     placeholder?: string;
 };
-type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | ImageConfig | TextConfig | DialPadConfig | DialPadValue | BackgroundConfig | BackgroundValue | AnchorConfig | AnchorValue | LayersConfig | LayersValue | null;
+type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | ImageConfig | TextConfig | DialPadConfig | DialPadValue | DialXYConfig | DialFilterConfig | DialFilterValue | DialTransferConfig | DialTransferValue | DialCurveConfig | DialAnalyserConfig | BackgroundConfig | BackgroundValue | AnchorConfig | AnchorValue | LayersConfig | LayersValue | ChoiceConfig | string[] | ListItemValue[] | SliderConfig | NumberConfig | RangeSliderConfig | RangeValue | null;
+/** The choice controls' configs (see choice.ts and list.ts). */
+type ChoiceConfig = ChipsConfig | MultiSelectConfig | SwatchConfig | FileConfig | GalleryConfig | ListConfig;
 /**
  * Folder keys that configure the folder instead of adding a control:
  * `_collapsed`, `_fields`, `_reset`, `_hints` (a sentence per child key),
@@ -402,15 +804,21 @@ declare function withVisibility<T extends DialValue | [number, number, number, n
 type AnchorConfigValue<C> = C extends {
     default: null;
 } ? AnchorValue | null : AnchorValue;
+/** Rows that draw but hold no value: they have no key in the resolved values. */
+type DisplayConfig = DialCurveConfig | DialAnalyserConfig;
 type ResolvedValues<T extends DialConfig> = {
-    [K in keyof T as K extends FolderMetaKey ? never : K]: T[K] extends ControlWithVisibility<infer U extends DialConfig[string]> ? ResolvedValues<{
+    [K in keyof T as K extends FolderMetaKey ? never : T[K] extends DisplayConfig ? never : K]: T[K] extends ControlWithVisibility<infer U extends DialConfig[string]> ? ResolvedValues<{
         value: U;
-    }>['value'] : T[K] extends [number, number, number, number?, string?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig | ImageConfig ? string : T[K] extends TextConfig ? string : T[K] extends DialPadConfig ? DialPadValue : T[K] extends BackgroundConfig ? BackgroundValue : T[K] extends AnchorConfig ? AnchorConfigValue<T[K]> : T[K] extends LayersConfig ? LayersValue : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
+    }> extends {
+        value: infer V;
+    } ? V : never : T[K] extends [number, number, number, number?, string?] ? number : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig | ImageConfig ? string : T[K] extends TextConfig ? string : T[K] extends DialPadConfig | DialXYConfig ? DialPadValue : T[K] extends DialFilterConfig ? DialFilterValue : T[K] extends DialTransferConfig ? DialTransferValue : T[K] extends BackgroundConfig ? BackgroundValue : T[K] extends AnchorConfig ? AnchorConfigValue<T[K]> : T[K] extends LayersConfig ? LayersValue : T[K] extends SliderConfig | NumberConfig ? number : T[K] extends RangeSliderConfig ? RangeValue : T[K] extends ChipsConfig | SwatchConfig | FileConfig | GalleryConfig ? string : T[K] extends MultiSelectConfig ? string[] : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? ResolvedValues<T[K]> : T[K];
 };
 type DialKitValueUpdates<T extends DialConfig> = {
-    [K in keyof T as K extends FolderMetaKey ? never : K]?: T[K] extends ControlWithVisibility<infer U extends DialConfig[string]> ? DialKitValueUpdates<{
+    [K in keyof T as K extends FolderMetaKey ? never : T[K] extends DisplayConfig ? never : K]?: T[K] extends ControlWithVisibility<infer U extends DialConfig[string]> ? DialKitValueUpdates<{
         value: U;
-    }>['value'] : T[K] extends [number, number, number, number?, string?] ? number : T[K] extends SpringConfig | EasingConfig ? TransitionConfig : T[K] extends ActionConfig ? never : T[K] extends SelectConfig | ColorConfig | ImageConfig | TextConfig ? string : T[K] extends DialPadConfig ? DialPadValue : T[K] extends BackgroundConfig ? BackgroundValueUpdate : T[K] extends AnchorConfig ? AnchorConfigValue<T[K]> : T[K] extends LayersConfig ? LayersValue : T[K] extends DialConfig ? DialKitValueUpdates<T[K]> : T[K];
+    }> extends {
+        value: infer V;
+    } ? V : never : T[K] extends [number, number, number, number?, string?] ? number : T[K] extends SpringConfig | EasingConfig ? TransitionConfig : T[K] extends ActionConfig ? never : T[K] extends SelectConfig | ColorConfig | ImageConfig | TextConfig ? string : T[K] extends DialPadConfig | DialXYConfig ? DialPadValue : T[K] extends DialFilterConfig ? DialFilterValue : T[K] extends DialTransferConfig ? DialTransferValue : T[K] extends BackgroundConfig ? BackgroundValueUpdate : T[K] extends AnchorConfig ? AnchorConfigValue<T[K]> : T[K] extends LayersConfig ? LayersValue : T[K] extends SliderConfig | NumberConfig ? number : T[K] extends RangeSliderConfig ? RangeValue : T[K] extends ChipsConfig | SwatchConfig | FileConfig | GalleryConfig ? string : T[K] extends MultiSelectConfig ? string[] : T[K] extends ListConfig ? ListItemValue[] : T[K] extends DialConfig ? DialKitValueUpdates<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -421,7 +829,7 @@ type ShortcutConfig = {
     interaction?: ShortcutInteraction;
 };
 type ControlMeta = {
-    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'image' | 'text' | 'pad' | 'background' | 'anchor' | 'layers';
+    type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'image' | 'text' | 'pad' | 'background' | 'anchor' | 'layers' | 'number' | 'range' | 'chips' | 'multiselect' | 'swatch' | 'file' | 'gallery' | 'list' | 'filter' | 'transfer' | 'curve' | 'analyser';
     path: string;
     label: string;
     min?: number;
@@ -451,11 +859,44 @@ type ControlMeta = {
     add?: SelectAddConfig;
     placeholder?: string;
     pad?: DialPadConfig;
+    /** Filter only: the config as written; its `response` is kept fresh by `syncLiveConfigs`. */
+    filter?: DialFilterConfig;
+    transfer?: DialTransferConfig;
+    /** Curve only: the config as written; its `sample` is kept fresh by `syncLiveConfigs`. */
+    curve?: DialCurveConfig;
+    /** Analyser only: the config as written; its getters are kept fresh by `syncLiveConfigs`. */
+    analyser?: DialAnalyserConfig;
     anchor?: AnchorConfig;
     background?: BackgroundConfig;
     /** Layers only: the config, with its default made valid. Its add, duplicate and delete send `layerAction` paths. */
     layers?: LayersConfig & {
         default: LayersValue;
+    };
+    /** Slider and number: replaces the shown value. */
+    formatValue?: (value: number) => string;
+    /** Slider only: drawn as an angle dial, from `display: 'dial'`. See {@link SliderConfig}. */
+    dial?: boolean;
+    /** Angle dial only: where the sweep starts and a double-click returns. See {@link SliderConfig}. */
+    origin?: number;
+    /** Angle dial only: past an end, come back around. */
+    wrap?: boolean;
+    /** Number only: the label above a centred value. See {@link NumberConfig}. */
+    orientation?: NumberConfig['orientation'];
+    /** Range only: the value a double-click on the track restores. */
+    rangeDefault?: RangeValue;
+    /** Chips only. A removable chip's remove sends a `remove` event. */
+    chips?: ChipOption[];
+    /** Multiselect only: its options, string options made into rows. */
+    multiSelect?: MultiSelectOption[];
+    /** Swatch only: the palettes. */
+    swatches?: SwatchOption[];
+    /** File only. A pick sends a `file` event with the files. */
+    file?: FileConfig;
+    /** Gallery only: the items. */
+    gallery?: GalleryItem[];
+    /** List only: the config, with its default made valid. Each change also sends a `list` event. */
+    list?: ListConfig & {
+        default: ListItemValue[];
     };
     shortcut?: ShortcutConfig;
     visibleWhen?: VisibleWhen;
@@ -524,6 +965,7 @@ type PanelConfig = {
 };
 type Listener$3 = () => void;
 type ActionListener = (action: string) => void;
+type EventListener = (path: string, event: DialEvent) => void;
 type ResetListener = (folderPath: string) => void;
 type Preset = {
     id: string;
@@ -621,6 +1063,7 @@ declare class DialStoreClass {
     private panelsInPopover;
     private snapshots;
     private actionListeners;
+    private eventListeners;
     private resetListeners;
     private presets;
     private activePreset;
@@ -732,6 +1175,9 @@ declare class DialStoreClass {
     isPanelInPopover(name: string): boolean;
     subscribeActions(panelId: string, listener: ActionListener): () => void;
     triggerAction(panelId: string, path: string): void;
+    /** Hear what a panel's controls tell the app that is not a value: files picked, chips removed, lists changed. */
+    subscribeEvents(panelId: string, listener: EventListener): () => void;
+    emitEvent(panelId: string, path: string, event: DialEvent): void;
     /**
      * Hear each folder reset of a panel, with the path of the folder (or the
      * spring, transition or background) being reset. The listener runs before
@@ -835,6 +1281,8 @@ interface UseDialOptions {
     defaultCollapsed?: boolean;
     persist?: DialKitPersistOptions;
     onAction?: (action: string) => void;
+    /** Called with what a control tells the app that is not a value: files picked (`file`), a chip removed, a list changed. */
+    onEvent?: (path: string, event: DialEvent) => void;
     /**
      * Called with a folder's path when its reset button (or `DialStore.resetFolder`)
      * resets it, before the reset writes the values back.
@@ -1329,11 +1777,87 @@ interface SliderProps {
     max?: number;
     step?: number;
     unit?: string;
+    /** Shows this text in place of the number and `unit`. Typing a value still edits the number. */
+    formatValue?: (value: number) => string;
+    /**
+     * Fills from this value instead of from `min`, toward either side of it.
+     * While dragging, the value catches at the origin for a few pixels.
+     */
+    origin?: number;
+    /** The same as `origin={0}`. */
+    bipolar?: boolean;
     shortcut?: ShortcutConfig;
     shortcutActive?: boolean;
     hint?: string;
 }
-declare function Slider({ label, value, onChange, min, max, step, unit, shortcut, shortcutActive, hint, }: SliderProps): react_jsx_runtime.JSX.Element;
+declare function Slider({ label, value, onChange, min, max, step, unit, formatValue, origin, bipolar, shortcut, shortcutActive, hint, }: SliderProps): react_jsx_runtime.JSX.Element;
+
+interface RangeSliderProps {
+    label: string;
+    value: RangeValue;
+    onChange: (value: RangeValue) => void;
+    /** Start of the track. */
+    min?: number;
+    /** End of the track. */
+    max?: number;
+    step?: number;
+    /** What a double-click on the track restores. Defaults to the full track. */
+    defaultValue?: RangeValue;
+    hint?: string;
+}
+/**
+ * Two handles on one track. Drag a handle to move one end, drag inside the
+ * span to move both, or click the empty track to bring the nearer end there.
+ * Shift while dragging moves at a tenth of the speed. A click on either
+ * number types it, and a double-click on the track restores the default.
+ */
+declare function RangeSlider({ label, value: rawValue, onChange, min, max, step, defaultValue, hint, }: RangeSliderProps): react_jsx_runtime.JSX.Element;
+
+interface NumberControlProps {
+    label: string;
+    value: number;
+    onChange: (value: number) => void;
+    /** Optional: unlike a slider's, a number's bounds may be left open. */
+    min?: number;
+    max?: number;
+    step?: number;
+    unit?: string;
+    /** Replaces the shown value; `unit` is then not added. */
+    formatValue?: (value: number) => string;
+    /** `vertical` puts the label above a centred value. */
+    orientation?: 'horizontal' | 'vertical';
+    hint?: string;
+}
+/**
+ * A number with no track. Drag anywhere on the row to scrub it, a step per
+ * pixel (Shift ten, Alt a tenth); click it to type. ⌘ while pressing selects
+ * the text instead.
+ */
+declare function NumberControl({ label, value, onChange, min, max, step, unit, formatValue, orientation, hint, }: NumberControlProps): react_jsx_runtime.JSX.Element;
+
+interface AngleDialProps {
+    label: string;
+    value: number;
+    onChange: (value: number) => void;
+    min?: number;
+    max?: number;
+    step?: number;
+    unit?: string;
+    /** Replaces the shown value; `unit` is then not added. */
+    formatValue?: (value: number) => string;
+    /** The value the sweep grows from, and the double-click reset. Defaults to `min`. */
+    origin?: number;
+    /** Past an end, come back around. Defaults to true for a full turn. */
+    wrap?: boolean;
+    hint?: string;
+}
+/**
+ * A slider drawn as a rotary needle, for values whose two ends are the same
+ * place: a heading, a hue, a tilt. The needle follows the pointer like a
+ * compass, and on a wrapping range a drag past the top keeps turning.
+ * Arrows step (Shift ten), and Home or a double-click returns to the origin.
+ */
+declare function AngleDial({ label, value, onChange, min, max, step, unit, formatValue, origin, wrap, hint, }: AngleDialProps): react_jsx_runtime.JSX.Element;
 
 interface ToggleProps {
     label: string;
@@ -1514,6 +2038,8 @@ interface SelectControlProps {
         hint?: string;
         onClick: () => void;
     };
+    /** Dropdown only: drawn before an option's label, in the trigger and in each row (a swatch's colors). */
+    preview?: (value: string) => ReactNode;
 }
 declare function SelectControl(props: SelectControlProps): react_jsx_runtime.JSX.Element;
 
@@ -1532,6 +2058,10 @@ type ImageControlProps = {
     options?: ImageOption[];
     onChange: (value: string) => void;
     hint?: string;
+    /** `false` drops the upload button, for a fixed set of images (a gallery). Default `true`. */
+    upload?: boolean;
+    /** `false` drops the Remove button, so an image is always chosen. Default `true`. */
+    clearable?: boolean;
 };
 
 declare function ImageControl(props: ImageControlProps): react_jsx_runtime.JSX.Element;
@@ -1587,6 +2117,111 @@ type LayerListControlProps = {
 
 /** The layer list: an add button, then rows with an eye, duplicate and delete. */
 declare function LayerListControl(props: LayerListControlProps): react_jsx_runtime.JSX.Element;
+
+interface FilterControlProps {
+    panelId: string;
+    control: ControlMeta;
+    value: DialFilterValue | undefined;
+    onChange: (value: DialFilterValue) => void;
+}
+/** The response the two hands make, with a slider for each hand under it. */
+declare function FilterControl({ panelId, control, value, onChange }: FilterControlProps): react_jsx_runtime.JSX.Element;
+
+interface TransferCurveProps extends Omit<DialTransferConfig, 'type' | 'default'> {
+    label: string;
+    value: DialTransferValue;
+    onChange: (value: DialTransferValue) => void;
+    hint?: string;
+}
+/**
+ * A curve you draw instead of numbers you guess. Drag a point; click the
+ * plot to add one; drag a point out of the plot, or press Delete, to remove
+ * it; double-click to straighten the curve. Arrow keys move a focused point.
+ */
+declare function TransferCurve({ label, value, onChange, height, grid, axisLabels, hint }: TransferCurveProps): react_jsx_runtime.JSX.Element;
+
+interface CurvePreviewProps {
+    panelId: string;
+    control: ControlMeta;
+}
+/** The read-only `{ type: 'curve' }` row: the app's sampler, drawn. */
+declare function CurvePreview({ panelId, control }: CurvePreviewProps): react_jsx_runtime.JSX.Element;
+
+interface AnalyserRowProps {
+    panelId: string;
+    control: ControlMeta;
+}
+/**
+ * The read-only `{ type: 'analyser' }` row: a live spectrum or oscilloscope.
+ * The canvas needs a pixel width, so the row measures itself.
+ */
+declare function AnalyserRow({ panelId, control }: AnalyserRowProps): react_jsx_runtime.JSX.Element;
+
+interface ChipsControlProps {
+    label: string;
+    value: string;
+    options: ChipOption[];
+    onChange: (value: string) => void;
+    /** A removable chip's remove: the app takes the chip out of its options. */
+    onRemove: (value: string) => void;
+    hint?: string;
+}
+/** One of a set of chips that wrap onto more lines. A removable chip has a remove button. */
+declare function ChipsControl({ label, value, options, onChange, onRemove, hint }: ChipsControlProps): react_jsx_runtime.JSX.Element;
+
+interface MultiSelectControlProps {
+    label: string;
+    value: string[];
+    options: MultiSelectOption[];
+    onChange: (value: string[]) => void;
+    hint?: string;
+}
+/** Checkbox rows. The value is the checked values in option order, not click order. */
+declare function MultiSelectControl({ label, value, options, onChange, hint }: MultiSelectControlProps): react_jsx_runtime.JSX.Element;
+
+interface SwatchControlProps {
+    label: string;
+    value: string;
+    options: SwatchOption[];
+    onChange: (value: string) => void;
+    hint?: string;
+}
+/** A select dropdown of named palettes: each row and the trigger show the palette's colors before its name. */
+declare function SwatchControl({ label, value, options, onChange, hint }: SwatchControlProps): react_jsx_runtime.JSX.Element;
+
+interface FileControlProps {
+    label: string;
+    /** The picked file's name, or '' when none is picked. */
+    value: string;
+    accept?: string;
+    multiple?: boolean;
+    onChange: (value: string) => void;
+    /** The picked files. They are not stored: only their name is the value. */
+    onPick: (files: FileList) => void;
+    hint?: string;
+}
+/** A row that opens the file picker, shows the picked file's name, and clears it. */
+declare function FileControl({ label, value, accept, multiple, onChange, onPick, hint }: FileControlProps): react_jsx_runtime.JSX.Element;
+
+interface ListControlProps {
+    label: string;
+    value: ListItemValue[];
+    itemTypes: Record<string, ListItemType>;
+    addLabel?: string;
+    maxItems?: number;
+    onChange: (value: ListItemValue[]) => void;
+    /** What changed, for apps that apply list changes one at a time. Sent after each `onChange`. */
+    onEvent: (event: Extract<DialEvent, {
+        kind: 'list';
+    }>) => void;
+    hint?: string;
+}
+/**
+ * Rows the user adds, renames, drags into order and removes. Each row is one
+ * of the item types and shows that type's fields; fields in a section show
+ * in a folder under the row's own fields, the first section open.
+ */
+declare function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, onEvent, hint }: ListControlProps): react_jsx_runtime.JSX.Element;
 
 /**
  * Draws a background value into a canvas at the canvas's own size: the solid
@@ -1761,6 +2396,312 @@ interface ShortcutsMenuProps {
 }
 declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react_jsx_runtime.JSX.Element | null;
 
+interface SegmentedControlOption<T extends string> {
+    value: T;
+    label: string;
+    /** SVG path data in a 24 × 24 box, shown in place of the label. */
+    icon?: string | string[];
+    /** The icon's box: 24 (the default) or 16, drawn with a 1.5 stroke. */
+    iconSize?: 16 | 24;
+}
+interface SegmentedControlProps<T extends string> {
+    options: SegmentedControlOption<T>[];
+    value: T;
+    onChange: (value: T) => void;
+    /** Accessible name for the group. */
+    label?: string;
+}
+declare function SegmentedControl<T extends string>({ options, value, onChange, label, }: SegmentedControlProps<T>): react_jsx_runtime.JSX.Element;
+
+interface ModuleProps {
+    title: string;
+    /** Whether the module is on. The Off/On switch is the expand control:
+     *  off collapses the body away, on reveals it. */
+    enabled: boolean;
+    onEnabledChange: (enabled: boolean) => void;
+    /** One line of help, shown while H is held over the header. */
+    hint?: string;
+    children?: ReactNode;
+}
+interface ModuleFolderProps extends ModuleProps {
+    /** Whether the body starts open while the module is on. */
+    defaultOpen?: boolean;
+}
+/**
+ * A titled block of controls that turns on and off as a unit (a synth layer,
+ * an effect send, an optional feature). The header's Off/On switch is also
+ * the expand control: off folds the body away.
+ */
+declare function Module({ title, enabled, onEnabledChange, hint, children }: ModuleProps): react_jsx_runtime.JSX.Element;
+/**
+ * A Module whose header also folds the body while the module is on, like a
+ * folder. Turning the module on always opens the body.
+ */
+declare function ModuleFolder({ title, enabled, onEnabledChange, defaultOpen, hint, children }: ModuleFolderProps): react_jsx_runtime.JSX.Element;
+
+/** The curve vocabulary a segment cycles through on quick-click. */
+type CurveType = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'spring';
+/** Cycle order for quick-click (loops back to the start). */
+declare const CURVE_CYCLE: CurveType[];
+/** One curve in the series. `weight` is a relative duration share (normalized by the sum). */
+interface CurveSegment {
+    type: CurveType;
+    weight: number;
+    /**
+     * Bipolar -1..1 "energy" bias. 0 = the type's canonical shape; bezier types skew
+     * both x control points (−1 = energy to the onset, +1 = energy to the fall);
+     * spring maps it to bounce (−1 = none → +1 = max).
+     */
+    curvature: number;
+    /**
+     * Bipolar -1..1 steepness — how pronounced the ease is, independent of the energy bias.
+     * Sweeps linear (−1) ← canonical preset (0) → the explosive extreme (+1, expo-grade: the
+     * eased side's far control point drops to the floor). So steepness is the continuous power
+     * ladder (gentle → quad → … → expo), with circ reachable mid-range. Spring maps it to stiffness.
+     */
+    steepness: number;
+    /**
+     * 0..1 overshoot — pushes the curve above 1 at the END before settling (easeOutBack),
+     * 0 = none. Independent of `anticipate`; set both for easeInOutBack. Beyond ~1 is
+     * elastic/bounce — use spring. Optional; treated as 0 when absent. No-op for spring.
+     */
+    overshoot?: number;
+    /**
+     * 0..1 anticipation — dips the curve below 0 at the START before launching (easeInBack),
+     * 0 = none. Independent of `overshoot`. Optional; treated as 0 when absent. No-op for spring.
+     */
+    anticipate?: number;
+    /**
+     * Mirror the curve in TIME (t → 1−t): the shape plays back to front, so a slow start
+     * becomes a slow finish. Optional; false when absent.
+     *
+     * This is an orientation applied on top of the shape, not another preset, which is why it
+     * works for every type. `easeInOut` and `spring` have no parameter that can express a
+     * mirror — swapping the preset only ever gets you easeIn↔easeOut — so without this they
+     * cannot be flipped at all.
+     */
+    flipX?: boolean;
+    /**
+     * Mirror the curve in VALUE (v → 1−v): the segment falls from its ceiling to its floor
+     * instead of rising. Optional; false when absent.
+     *
+     * Set both flips together and the two mirrors cancel back to a rising curve — that
+     * combination is the classic easing reverse, and is what {@link flipSegment} applies.
+     */
+    flipY?: boolean;
+}
+/** The stacked driver curve (a single curve, no internal splits). */
+interface CurveDriver {
+    type: CurveType;
+    /** Bipolar -1..1 energy bias — see CurveSegment.curvature. */
+    curvature: number;
+    /** Bipolar -1..1 steepness — see CurveSegment.steepness. */
+    steepness: number;
+    /** 0..1 overshoot — see CurveSegment.overshoot. */
+    overshoot?: number;
+    /** 0..1 anticipation — see CurveSegment.anticipate. */
+    anticipate?: number;
+    /** Mirror in time — see CurveSegment.flipX. */
+    flipX?: boolean;
+    /** Mirror in value — see CurveSegment.flipY. */
+    flipY?: boolean;
+}
+type DriverDirection = 'forward' | 'mirror' | 'reverse';
+interface CurveComposition {
+    segments: CurveSegment[];
+    /** null → no driver lane (the component renders a single lane). */
+    driver: CurveDriver | null;
+    direction: DriverDirection;
+    /**
+     * 0..1 — fraction of the timeline given to gaps between segments (distributed equally,
+     * one gap after each segment, the last wrapping to the first). In a gap the value glides
+     * smoothly from the segment's end down to the next segment's start (a faint connector)
+     * instead of snapping. 0 = contiguous (default). Optional.
+     */
+    gap?: number;
+}
+/** A pure `(t) -> value` sampler over local time, both in 0..1 (value may overshoot for springs). */
+type Sampler = (t: number) => number;
+/**
+ * Physics used only by {@link springify}'s one-second driven follower.
+ * This is deliberately distinct from timeline `SpringConfig`, whose defaults describe
+ * a transition settling toward a fixed endpoint rather than tracking a moving signal.
+ */
+interface SpringifyOptions {
+    /** Spring stiffness, constrained to 1..1000. Default 100. */
+    stiffness?: number;
+    /** Damping coefficient, constrained to 0..100. Default 10. */
+    damping?: number;
+    /** Attached mass, constrained to 0.1..10. Default 1. */
+    mass?: number;
+    /**
+     * If the follower escapes 0..1, affinely fit its complete trace back into that range.
+     * Unlike clipping, this preserves the shape and relative size of every bounce. Default false.
+     */
+    normalize?: boolean;
+    /**
+     * Solve for a periodic steady state so position and velocity join seamlessly at t=0/1.
+     * Enable this when the source sampler repeats. Default false.
+     */
+    loop?: boolean;
+}
+/**
+ * Attach a damped follower to any designed curve.
+ *
+ * The source value is the spring's moving target: at every step a second value is pulled
+ * toward it by stiffness, retains momentum through mass, and loses energy through damping.
+ * The trace is baked once so the returned sampler stays deterministic and scrubbable.
+ *
+ * Set `normalize` to fit an over-bouncing trace into 0..1. This is an affine rescale of
+ * the complete trace, not a clamp, so every peak and damped return remains visible.
+ */
+declare function springify(sample: Sampler, options?: SpringifyOptions): Sampler;
+/**
+ * Insert a copy of the segment at `index` after it, then re-divide ALL segments to
+ * equal duration — split always yields evenly-spaced clips.
+ */
+declare function splitSegment(comp: CurveComposition, index: number): CurveComposition;
+/** Remove the segment at `index` (no-op when it's the only one). */
+declare function removeSegment(comp: CurveComposition, index: number): CurveComposition;
+declare function cycleSegmentType(comp: CurveComposition, index: number): CurveComposition;
+declare function flipSegment(comp: CurveComposition, index: number): CurveComposition;
+declare function flipDriver(comp: CurveComposition): CurveComposition;
+/**
+ * Mirror a curve in time — the shape plays back to front.
+ *
+ * Unlike {@link flipSegment}, which rewrites the preset and so can only ever turn easeIn
+ * into easeOut, this is an orientation laid over whatever shape is there. It therefore does
+ * something visible for every type, including `easeInOut` and `spring`, which have no
+ * preset to swap to.
+ */
+declare function flipSegmentX(comp: CurveComposition, index: number): CurveComposition;
+/** Mirror a curve in value — the segment falls from its ceiling instead of rising. */
+declare function flipSegmentY(comp: CurveComposition, index: number): CurveComposition;
+declare function flipDriverX(comp: CurveComposition): CurveComposition;
+declare function flipDriverY(comp: CurveComposition): CurveComposition;
+declare function setSegmentCurvature(comp: CurveComposition, index: number, curvature: number): CurveComposition;
+declare function setSegmentSteepness(comp: CurveComposition, index: number, steepness: number): CurveComposition;
+declare function setSegmentOvershoot(comp: CurveComposition, index: number, overshoot: number): CurveComposition;
+declare function setSegmentAnticipate(comp: CurveComposition, index: number, anticipate: number): CurveComposition;
+/**
+ * Move `deltaFrac` (0..1 of the whole series) across the boundary between segment
+ * `boundaryIndex` and the next, keeping the rest untouched and the pair's combined
+ * width constant. Each side is clamped to `CURVE_MIN_WEIGHT_FRAC`.
+ */
+declare function redistributeWeight(comp: CurveComposition, boundaryIndex: number, deltaFrac: number): CurveComposition;
+declare function addDriver(comp: CurveComposition): CurveComposition;
+declare function removeDriver(comp: CurveComposition): CurveComposition;
+declare function cycleDriverType(comp: CurveComposition): CurveComposition;
+declare function setDriverCurvature(comp: CurveComposition, curvature: number): CurveComposition;
+declare function setDriverSteepness(comp: CurveComposition, steepness: number): CurveComposition;
+declare function setDriverOvershoot(comp: CurveComposition, overshoot: number): CurveComposition;
+declare function setDriverAnticipate(comp: CurveComposition, anticipate: number): CurveComposition;
+interface CompositionSamplers {
+    segments: Sampler[];
+    driver: Sampler | null;
+}
+declare function buildSamplers(comp: CurveComposition): CompositionSamplers;
+interface CompositionRead {
+    /** Read position after direction, before the driver warps it (0..1) — the driver lane marker. */
+    inputPhase: number;
+    /** Read position after the driver warps it (0..1) — the series lane playhead (sweeps once). */
+    warpedPhase: number;
+    /**
+     * Composed output, 0..1 — the ACTIVE segment's own full min→max walk, shaped by that
+     * segment's curve. It resets and climbs again at each divider, so N segments make the
+     * output walk min→max N times across one sweep (the segments are not summed into one path).
+     */
+    value: number;
+    segIndex: number;
+    localT: number;
+}
+/**
+ * Read the composition at raw loop phase `u`. direction reverses/ping-pongs the
+ * traversal of the whole composition; the driver then warps the reading pace. The
+ * playhead sweeps left→right once, while `value` is each segment's own full 0→1 walk.
+ */
+declare function readComposition(comp: CurveComposition, u: number, s: CompositionSamplers): CompositionRead;
+/** Default trigger count for a trigger series. */
+declare const DEFAULT_TRIGGER_STEPS = 5;
+/**
+ * The evenly-spaced trigger levels in VALUE (signal) space — not time. The first sits at
+ * 0 and the last at 1, e.g. steps=5 → [0, .25, .5, .75, 1]. Triggers fire when the composed
+ * value crosses these levels, so a non-linear curve (which reaches each level at an uneven
+ * pace) fires them unevenly in time — that pacing is the whole point. Use these to draw the
+ * horizontal level lines a trigger series rides.
+ */
+declare function triggerLevels(steps: number): number[];
+/**
+ * Level indices (into `triggerLevels`) fired as the composed value moves `prevValue` →
+ * `curValue`. Pass the composed `value` (post driver/direction) frame to frame; the
+ * firing is direction-symmetric — it reads the value sequence, so it works for forward,
+ * reverse, and mirror alike:
+ *
+ * - A smooth move fires the INTERIOR levels (strictly between 0 and 1) it crosses, in the
+ *   travel direction — the curve sets how fast the value reaches each, so non-linear
+ *   curves fire them unevenly.
+ * - A flyback (a single-frame jump larger than {@link TRIGGER_FLYBACK}) is the per-segment /
+ *   loop boundary. The walk reached the far endpoint it flew back from, so that endpoint
+ *   fires: a downward flyback (a forward walk that peaked) fires the top (n−1); an upward
+ *   flyback (a reverse walk that bottomed) fires the floor (0). The opposite endpoint is the
+ *   start of the next walk, folded onto this one so the boundary never double-triggers.
+ *
+ * Values are clamped to [0, 1] so spring overshoot can't perturb the endpoints.
+ */
+declare function triggersCrossed(prevValue: number, curValue: number, steps: number): number[];
+/** A reasonable starting composition for demos / uncontrolled mounts. */
+declare function defaultComposition(): CurveComposition;
+
+interface CurveComposerProps {
+    /** The curve series (controlled). */
+    segments: CurveSegment[];
+    /** The stacked driver curve, or null for none (adds a second lane below). */
+    driver?: CurveDriver | null;
+    /** Playback direction for the demo playhead (forward / mirror / reverse). */
+    direction?: DriverDirection;
+    /** Commit a changed series — fired live during boundary/curvature drags and on click-cycle. */
+    onSegmentsChange?: (segments: CurveSegment[]) => void;
+    /** Commit a changed driver — fired live during driver drags and on click-cycle. */
+    onDriverChange?: (driver: CurveDriver) => void;
+    /** Raw transport phase 0..1, polled every frame for a smooth playhead (no parent re-render). */
+    getPhase?: () => number;
+    /** Static transport phase 0..1 (used when `getPhase` is absent). */
+    phase?: number;
+    /**
+     * Output mode. 'continuous' (default) reads the composed value each frame; 'trigger'
+     * emits a discrete signal (via `onTrigger`) when the composed value crosses one of the
+     * evenly-spaced trigger levels. The component itself draws no trigger UI — visualization
+     * (e.g. markers on the output track) is the consumer's job; see `onTrigger`.
+     *
+     * Trigger firing is direction-symmetric: interior levels fire in whichever direction the
+     * value travels, so it works under `direction: 'forward' | 'mirror' | 'reverse'`.
+     */
+    mode?: 'continuous' | 'trigger';
+    /** Number of trigger levels in trigger mode (first at 0, last at 1, evenly spaced in value). Default 5. */
+    triggerSteps?: number;
+    /** Fired in trigger mode when the value crosses a trigger level; `index` is into `triggerLevels`. */
+    onTrigger?: (index: number) => void;
+    /** Index of the currently selected segment (highlighted); null/undefined for none. */
+    selectedIndex?: number | null;
+    /** Fired when a segment's header strip is clicked — lets the consumer target it (flip/remove/…). */
+    onSelect?: (index: number) => void;
+    /** Curve stroke color. Defaults to the theme's primary text color. */
+    curveColor?: string;
+    /** Playhead and value dot color. Defaults to the curve color. */
+    playheadColor?: string;
+    /** 0..1 — space between segments; the value glides smoothly across each gap (faint connector). */
+    gap?: number;
+    /** Faint vertical reference grid behind each lane. */
+    grid?: boolean;
+    gridSubdivisions?: number;
+    width?: number;
+    /** Height of the main lane; the driver lane adds height below it. */
+    height?: number;
+    /** One line of help, shown while H is held over the composer. */
+    hint?: string;
+}
+declare function CurveComposer({ segments, driver, direction, onSegmentsChange, onDriverChange, getPhase, phase, mode, triggerSteps, onTrigger, selectedIndex, onSelect, gap, curveColor, playheadColor, grid, gridSubdivisions, width, height, hint, }: CurveComposerProps): react_jsx_runtime.JSX.Element;
+
 type Listener = () => void;
 /** How HintStore's `show` and `hide` reach the mounted hint listeners. */
 type HintDisplay = {
@@ -1821,4 +2762,4 @@ declare function HintTip({ always }: {
  */
 declare function HintTooltip(): null;
 
-export { type ActionConfig, type AnchorConfig, AnchorControl, type AnchorControlProps, type AnchorValue, type BackgroundConfig, BackgroundControl, type BackgroundControlProps, type BackgroundGradient, type BackgroundHost, type BackgroundMedia, type BackgroundMediaDisplay, type BackgroundMediaFit, type BackgroundMediaRatio, type BackgroundMode, type BackgroundValue, type BackgroundValueUpdate, ButtonGroup, type ColorConfig, ColorControl, type ControlMeta, ControlRenderer, type ControlWithVisibility, type CopiedTransition, type DialConfig, type DialKitController, type DialKitPersistOptions, type DialKitValueUpdates, type DialMode, DialPad, type DialPadAxis, type DialPadConfig, type DialPadProps, type DialPadValue, type DialPosition, DialRoot, DialStore, type DialTheme, DialTimeline, type DialTimelineProps, type DialTimelineValues, type DialValue, type DialVersions, type EasingConfig, EasingVisualization, type FieldsConfig, Folder, type FolderMode, GRADIENT_SHAPES, type GizmoBox, type GradientFrame, type GradientGizmoCallbacks, type GradientGizmoProps, type GradientHandles, type GradientPoint, type GradientShape, type GradientStop, HintStore, HintTip, HintTooltip, type ImageConfig, ImageControl, type ImageOption, type InlineLabelsConfig, type LayerActionKind, type LayerItem, LayerListControl, type LayerListControlProps, type LayersConfig, type LayersValue, type PadGroupConfig, type PanelConfig, type Preset, PresetManager, type RangeConfig, type ResolvedValues, type RowConfig, type SavedGradient, Section, type SectionProps, type SectionRow, type SelectAddConfig, type SelectConfig, SelectControl, type SelectOption, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, TransitionCopyMenu, type TransitionCopyMenuProps, type TransitionMode, type TransitionPreset, type UseDialOptions, type UseDialTimelineOptions, VersionGallery, type VisibleWhen, type VisibleWhenValue, backgroundGradientCss, backgroundMediaCss, defaultBackgroundValue, defaultGradientHandles, dragGradientCentre, dragGradientEnd, dragGradientWidth, formatClock, formatGizmoAngle, getBackgroundHost, getSavedGradients, gizmoAngle, gizmoPoints, gradientFrame, gradientParamAt, hasBackgroundHost, layerAction, legacyGradientHandles, mountGradientGizmo, normalizeBackgroundValue, normalizeLayersValue, paintBackgroundPreview, paintGradient, parseLayerAction, rotateGradientHandles, setBackgroundHost, setSavedGradients, stopPlacement, stopPositionAt, subscribeBackgroundHost, switchGradientShape, useDialKit, useDialKitController, useDialTimeline, withVisibility };
+export { type ActionConfig, AnalyserRow, type AnalyserScale, type AnalyserSpring, type AnchorConfig, AnchorControl, type AnchorControlProps, type AnchorValue, AngleDial, type BackgroundConfig, BackgroundControl, type BackgroundControlProps, type BackgroundGradient, type BackgroundHost, type BackgroundMedia, type BackgroundMediaDisplay, type BackgroundMediaFit, type BackgroundMediaRatio, type BackgroundMode, type BackgroundValue, type BackgroundValueUpdate, ButtonGroup, CURVE_CYCLE, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, type ControlWithVisibility, type CopiedTransition, CurveComposer, type CurveComposerProps, type CurveComposition, type CurveDriver, CurvePreview, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, type DialAnalyserConfig, type DialConfig, type DialCurveConfig, type DialEvent, type DialFilterAxisConfig, type DialFilterConfig, type DialFilterValue, type DialKitController, type DialKitPersistOptions, type DialKitValueUpdates, type DialMode, DialPad, type DialPadAxis, type DialPadConfig, type DialPadProps, type DialPadValue, type DialPosition, DialRoot, DialStore, type DialTheme, DialTimeline, type DialTimelineProps, type DialTimelineValues, type DialTransferConfig, type DialTransferValue, type DialValue, type DialVersions, type DialXYAxis, type DialXYConfig, type DriverDirection, type EasingConfig, EasingVisualization, type FieldsConfig, type FileConfig, FileControl, FilterControl, type FilterShapeType, Folder, type FolderMode, GRADIENT_SHAPES, type GalleryConfig, type GalleryItem, type GizmoBox, type GradientFrame, type GradientGizmoCallbacks, type GradientGizmoProps, type GradientHandles, type GradientPoint, type GradientShape, type GradientStop, HintStore, HintTip, HintTooltip, type ImageConfig, ImageControl, type ImageOption, type InlineLabelsConfig, type LayerActionKind, type LayerItem, LayerListControl, type LayerListControlProps, type LayersConfig, type LayersValue, type ListConfig, ListControl, type ListField, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, Module, ModuleFolder, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type NumberConfig, NumberControl, type PadGroupConfig, type PanelConfig, type Preset, PresetManager, type RangeConfig, RangeSlider, type RangeSliderConfig, type RangeValue, type ResolvedValues, type RowConfig, type Sampler, type SavedGradient, Section, type SectionProps, type SectionRow, SegmentedControl, type SelectAddConfig, type SelectConfig, SelectControl, type SelectOption, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpringConfig, SpringControl, SpringVisualization, type SpringifyOptions, type SwatchConfig, SwatchControl, type SwatchOption, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, TransferCurve, type TransferPoint, type TransitionConfig, TransitionControl, TransitionCopyMenu, type TransitionCopyMenuProps, type TransitionMode, type TransitionPreset, type UseDialOptions, type UseDialTimelineOptions, VersionGallery, type VisibleWhen, type VisibleWhenValue, addDriver, backgroundGradientCss, backgroundMediaCss, buildSamplers, cycleDriverType, cycleSegmentType, defaultBackgroundValue, defaultComposition, defaultGradientHandles, defaultListItemParams, dragGradientCentre, dragGradientEnd, dragGradientWidth, filterShapeResponse, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatGizmoAngle, getBackgroundHost, getSavedGradients, gizmoAngle, gizmoPoints, gradientFrame, gradientParamAt, groupListFields, hasBackgroundHost, layerAction, legacyGradientHandles, mountGradientGizmo, normalizeBackgroundValue, normalizeLayersValue, normalizeListItems, paintBackgroundPreview, paintGradient, parseLayerAction, parseListItemSchema, readComposition, redistributeWeight, removeDriver, removeSegment, rotateGradientHandles, sampleTransfer, setBackgroundHost, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setSavedGradients, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, splitSegment, springify, stopPlacement, stopPositionAt, subscribeBackgroundHost, switchGradientShape, transferLut, triggerLevels, triggersCrossed, useDialKit, useDialKitController, useDialTimeline, withVisibility };

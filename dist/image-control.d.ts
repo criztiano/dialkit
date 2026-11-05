@@ -1,4 +1,4 @@
-import { I as ImageOption } from './DialStore-CDYWklsr.js';
+import { I as ImageOption } from './DialStore-BfYEfV2g.js';
 import './dial-pad.js';
 import './anchor.js';
 import './background.js';
@@ -9,6 +9,10 @@ type ImageControlProps = {
     options?: ImageOption[];
     onChange: (value: string) => void;
     hint?: string;
+    /** `false` drops the upload button, for a fixed set of images (a gallery). Default `true`. */
+    upload?: boolean;
+    /** `false` drops the Remove button, so an image is always chosen. Default `true`. */
+    clearable?: boolean;
 };
 type NamedImage = {
     value: string;

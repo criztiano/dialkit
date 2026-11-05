@@ -1,4 +1,4 @@
-import { T as TransitionConfig, S as SpringConfig } from './DialStore-CDYWklsr.js';
+import { T as TransitionConfig, S as SpringConfig } from './DialStore-BfYEfV2g.js';
 import './dial-pad.js';
 import './anchor.js';
 import './background.js';

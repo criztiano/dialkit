@@ -384,6 +384,80 @@ function anchorValueFromKey(value, key) {
   return { x: ANCHOR_COLUMNS[nextColumn], y: ANCHOR_ROWS[nextRow] };
 }
 
+// src/xy-pad.ts
+var XY_DEFAULT_STEP = 0.01;
+function padAxisOf(axis = {}, start) {
+  const min = axis.min ?? 0;
+  const max = axis.max ?? 1;
+  const origin = axis.origin ?? (axis.bipolar ? (min + max) / 2 : min);
+  return [typeof start === "number" && Number.isFinite(start) ? start : origin, min, max, axis.step ?? XY_DEFAULT_STEP];
+}
+function xyPadConfig(config) {
+  const labels = { x: config.x?.label, y: config.y?.label };
+  return {
+    type: "pad",
+    x: padAxisOf(config.x, config.default?.x),
+    y: padAxisOf(config.y, config.default?.y),
+    ...labels.x || labels.y ? { labels } : {},
+    ...config.hideLabel ? { hideLabel: true } : {},
+    ...config.dragLabels ? { dragLabels: true } : {}
+  };
+}
+
+// src/filter.ts
+var FILTER_AXIS_DEFAULTS = {
+  cutoff: { min: 0, max: 1, step: 0, label: "Freq" },
+  resonance: { min: 0, max: 1, step: 0, label: "Res" }
+};
+function resolveFilterAxis(axis, hand) {
+  const base = FILTER_AXIS_DEFAULTS[hand];
+  return {
+    min: axis?.min ?? base.min,
+    max: axis?.max ?? base.max,
+    step: axis?.step ?? base.step,
+    label: axis?.label ?? base.label,
+    unit: axis?.unit,
+    default: axis?.default
+  };
+}
+var clamp2 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+function snap(v, axis) {
+  let out = clamp2(Number.isFinite(v) ? v : axis.min, axis.min, axis.max);
+  if (axis.step > 0) out = clamp2(axis.min + Math.round((out - axis.min) / axis.step) * axis.step, axis.min, axis.max);
+  return Number(out.toFixed(6));
+}
+function normalizeFilterValue(value, config = {}) {
+  const cutoff = resolveFilterAxis(config.cutoff, "cutoff");
+  const resonance = resolveFilterAxis(config.resonance, "resonance");
+  const v = typeof value === "object" && value !== null ? value : {};
+  return {
+    cutoff: snap(typeof v.cutoff === "number" ? v.cutoff : cutoff.default ?? cutoff.max, cutoff),
+    resonance: snap(typeof v.resonance === "number" ? v.resonance : resonance.default ?? resonance.min, resonance)
+  };
+}
+
+// src/transfer.ts
+var DEFAULT_TRANSFER = { points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] };
+var TRANSFER_MIN_GAP = 0.02;
+var TRANSFER_MAX_POINTS = 12;
+var clamp01 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
+var finite = (v, fallback) => typeof v === "number" && Number.isFinite(v) ? v : fallback;
+function normalizeTransfer(value) {
+  const raw = value?.points;
+  if (!Array.isArray(raw) || raw.length < 2) return { points: DEFAULT_TRANSFER.points.map((p) => ({ ...p })) };
+  const points = raw.map((p) => ({ x: clamp01(finite(p?.x, 0)), y: clamp01(finite(p?.y, 0)) })).sort((a, b) => a.x - b.x);
+  points[0].x = 0;
+  points[points.length - 1].x = 1;
+  const out = [points[0]];
+  for (let i = 1; i < points.length - 1; i++) {
+    if (points[i].x - out[out.length - 1].x < TRANSFER_MIN_GAP) continue;
+    if (1 - points[i].x < TRANSFER_MIN_GAP) continue;
+    out.push(points[i]);
+  }
+  out.push(points[points.length - 1]);
+  return { points: out.length > TRANSFER_MAX_POINTS ? [...out.slice(0, TRANSFER_MAX_POINTS - 1), out[out.length - 1]] : out };
+}
+
 // src/layers.ts
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -412,6 +486,120 @@ function sameLayersValue(a, b) {
   });
 }
 
+// src/range.ts
+function clamp3(value, lo, hi) {
+  return Math.min(hi, Math.max(lo, value));
+}
+function orderRange(value) {
+  return value.min <= value.max ? value : { min: value.max, max: value.min };
+}
+function clampRange(value, min, max) {
+  return orderRange({ min: clamp3(value.min, min, max), max: clamp3(value.max, min, max) });
+}
+function isRangeValue(value) {
+  return typeof value === "object" && value !== null && Number.isFinite(value.min) && Number.isFinite(value.max);
+}
+function normalizeRangeValue(value, config) {
+  const fallback = isRangeValue(config.default) ? config.default : { min: config.min, max: config.max };
+  return clampRange(isRangeValue(value) ? value : fallback, config.min, config.max);
+}
+
+// src/number.ts
+function clampNumber(value, min, max) {
+  let out = value;
+  if (min != null) out = Math.max(min, out);
+  if (max != null) out = Math.min(max, out);
+  return out;
+}
+function normalizeNumberValue(value, fallback, step, min, max) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  const clamped = clampNumber(value, min, max);
+  return typeof step === "number" && step > 0 ? roundValue(clamped, step, min, max) : clamped;
+}
+
+// src/choice.ts
+function normalizeMultiSelectOptions(options) {
+  return options.map((option) => typeof option === "string" ? { value: option, label: option } : option);
+}
+function normalizeMultiSelectValue(value, options, fallback = []) {
+  if (!Array.isArray(value) || value.some((v) => typeof v !== "string")) return fallback.slice();
+  const checked = new Set(value);
+  return options.filter((option) => checked.has(option.value)).map((option) => option.value);
+}
+function normalizeChoice(value, values, fallback) {
+  return typeof value === "string" && values.includes(value) ? value : fallback;
+}
+
+// src/list.ts
+function formatKey(key) {
+  return key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()).trim();
+}
+function inferStep(min, max) {
+  const range = max - min;
+  if (range <= 1) return 0.01;
+  if (range <= 10) return 0.1;
+  if (range <= 100) return 1;
+  return 10;
+}
+function inferRange(value) {
+  if (value >= 0 && value <= 1) return { min: 0, max: 1, step: 0.01 };
+  if (value >= 0 && value <= 10) return { min: 0, max: value * 3 || 10, step: 0.1 };
+  if (value >= 0 && value <= 100) return { min: 0, max: value * 3 || 100, step: 1 };
+  if (value >= 0) return { min: 0, max: value * 3 || 1e3, step: 10 };
+  return { min: value * 3, max: -value * 3, step: 1 };
+}
+var isHex = (value) => /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(value);
+function typed(def, type) {
+  return typeof def === "object" && def !== null && !Array.isArray(def) && def.type === type;
+}
+function parseListItemSchema(schema, hints, groups) {
+  const fields = [];
+  for (const [key, def] of Object.entries(schema)) {
+    const base = { key, label: formatKey(key), hint: hints?.[key], group: groups?.[key] };
+    if (Array.isArray(def) && typeof def[0] === "number") {
+      const [d, min, max, step] = def;
+      fields.push({ ...base, kind: "slider", min, max, step: step ?? inferStep(min, max), defaultValue: d });
+    } else if (typeof def === "number") {
+      fields.push({ ...base, kind: "slider", ...inferRange(def), defaultValue: def });
+    } else if (typeof def === "boolean") {
+      fields.push({ ...base, kind: "toggle", defaultValue: def });
+    } else if (typeof def === "string") {
+      fields.push({ ...base, kind: isHex(def) ? "color" : "text", defaultValue: def });
+    } else if (typed(def, "select") && Array.isArray(def.options)) {
+      const select = def;
+      const first = select.options[0];
+      fields.push({ ...base, kind: "select", options: select.options, defaultValue: select.default ?? (typeof first === "string" ? first : first?.value ?? "") });
+    } else if (typed(def, "color")) {
+      fields.push({ ...base, kind: "color", defaultValue: def.default ?? "#000000" });
+    } else if (typed(def, "swatch") && Array.isArray(def.options)) {
+      const swatch = def;
+      fields.push({ ...base, kind: "swatch", swatchOptions: swatch.options, defaultValue: swatch.default ?? swatch.options[0]?.value ?? "" });
+    } else if (typed(def, "text")) {
+      const text = def;
+      fields.push({ ...base, kind: "text", placeholder: text.placeholder, defaultValue: text.default ?? "" });
+    }
+  }
+  return fields;
+}
+function defaultListItemParams(schema) {
+  const params = {};
+  for (const field2 of parseListItemSchema(schema)) params[field2.key] = field2.defaultValue;
+  return params;
+}
+function normalizeListItems(value, itemTypes, fallback = []) {
+  if (!Array.isArray(value)) return fallback.map((item) => ({ ...item, params: { ...item.params } }));
+  const rows2 = [];
+  for (const item of value) {
+    if (typeof item !== "object" || item === null || typeof item.type !== "string" || !itemTypes[item.type]) continue;
+    const params = typeof item.params === "object" && item.params !== null ? item.params : {};
+    const row = { type: item.type, params: { ...defaultListItemParams(itemTypes[item.type].schema), ...params } };
+    const title = typeof item.title === "string" ? item.title.trim() : "";
+    if (title) row.title = title;
+    rows2.push(row);
+  }
+  return rows2;
+}
+
 // src/easing-geometry.ts
 var clampY = (value) => Math.max(-1, Math.min(2, value));
 var easingPresets = {
@@ -431,8 +619,8 @@ function parseEase(text) {
 }
 function normalizeEase(ease) {
   return ease.map((value, index) => {
-    const finite2 = Number.isFinite(value) ? value : index < 2 ? 0 : 1;
-    return index % 2 === 0 ? Math.max(0, Math.min(1, finite2)) : finite2;
+    const finite3 = Number.isFinite(value) ? value : index < 2 ? 0 : 1;
+    return index % 2 === 0 ? Math.max(0, Math.min(1, finite3)) : finite3;
   });
 }
 function fitEasingGraph(ease, width, height) {
@@ -619,7 +807,7 @@ var COLUMNS = ["left", "center", "right"];
 var ROWS = ["top", "center", "bottom"];
 var isRecord2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var oneOf2 = (options, value, fallback) => options.includes(value) ? value : fallback;
-var finite = (value) => typeof value === "number" && Number.isFinite(value);
+var finite2 = (value) => typeof value === "number" && Number.isFinite(value);
 var round2 = (n, digits) => Number(n.toFixed(digits)) || 0;
 var validColor = (value) => typeof value === "string" && parseColor(value) !== null;
 function defaultBackgroundValue() {
@@ -651,7 +839,7 @@ function legacyGradientHandles(shape, angle) {
   };
 }
 function normalizePoint(value, fallback) {
-  if (!isRecord2(value) || !finite(value.x) || !finite(value.y)) return { ...fallback };
+  if (!isRecord2(value) || !finite2(value.x) || !finite2(value.y)) return { ...fallback };
   return { x: round2(clamp(value.x, POINT_RANGE.min, POINT_RANGE.max), 6), y: round2(clamp(value.y, POINT_RANGE.min, POINT_RANGE.max), 6) };
 }
 function sortStops(stops) {
@@ -662,7 +850,7 @@ function normalizeGradient(value, fallback = defaultBackgroundValue().gradient) 
   const shape = oneOf2(GRADIENT_SHAPES, input.shape, fallback.shape);
   const handles = isRecord2(input.handles) ? input.handles : {};
   const base = isRecord2(input.handles) ? fallback.handles : switchGradientShape(fallback, shape).handles;
-  const stops = Array.isArray(input.stops) ? input.stops.filter((stop3) => isRecord2(stop3) && finite(stop3.at) && validColor(stop3.color)).map((stop3) => ({ at: round2(clamp(stop3.at, 0, 100), 2), color: stop3.color.trim() })) : [];
+  const stops = Array.isArray(input.stops) ? input.stops.filter((stop3) => isRecord2(stop3) && finite2(stop3.at) && validColor(stop3.color)).map((stop3) => ({ at: round2(clamp(stop3.at, 0, 100), 2), color: stop3.color.trim() })) : [];
   return {
     shape,
     handles: {
@@ -684,8 +872,8 @@ function normalizeMediaDisplay(value, fallback) {
   return {
     fit: oneOf2(MEDIA_FITS, input.fit, fallback.fit),
     ratio: oneOf2(MEDIA_RATIOS, input.ratio, fallback.ratio),
-    zoom: finite(input.zoom) ? round2(clamp(input.zoom, MEDIA_ZOOM.min, MEDIA_ZOOM.max), 1) : fallback.zoom,
-    tileSize: finite(input.tileSize) ? round2(clamp(input.tileSize, MEDIA_TILE_SIZE.min, MEDIA_TILE_SIZE.max), 2) : fallback.tileSize,
+    zoom: finite2(input.zoom) ? round2(clamp(input.zoom, MEDIA_ZOOM.min, MEDIA_ZOOM.max), 1) : fallback.zoom,
+    tileSize: finite2(input.tileSize) ? round2(clamp(input.tileSize, MEDIA_TILE_SIZE.min, MEDIA_TILE_SIZE.max), 2) : fallback.tileSize,
     position: { x: oneOf2(COLUMNS, position.x, fallback.position.x), y: oneOf2(ROWS, position.y, fallback.position.y) }
   };
 }
@@ -894,14 +1082,14 @@ function nextTransitionPresetName(presets, mode) {
 function isStoredTransitionPreset(preset) {
   if (!isRecord3(preset) || typeof preset.id !== "string" || typeof preset.name !== "string" || !isRecord3(preset.value)) return false;
   const value = preset.value;
-  const finite2 = (...keys) => keys.every((key) => Number.isFinite(value[key]));
+  const finite3 = (...keys) => keys.every((key) => Number.isFinite(value[key]));
   switch (preset.mode) {
     case "easing":
-      return value.type === "easing" && finite2("duration") && Array.isArray(value.ease) && value.ease.length === 4 && value.ease.every((n, index) => Number.isFinite(n) && (index % 2 === 1 || n >= 0 && n <= 1));
+      return value.type === "easing" && finite3("duration") && Array.isArray(value.ease) && value.ease.length === 4 && value.ease.every((n, index) => Number.isFinite(n) && (index % 2 === 1 || n >= 0 && n <= 1));
     case "simple":
-      return value.type === "spring" && finite2("visualDuration", "bounce");
+      return value.type === "spring" && finite3("visualDuration", "bounce");
     case "advanced":
-      return value.type === "spring" && finite2("stiffness", "damping", "mass");
+      return value.type === "spring" && finite3("stiffness", "damping", "mass");
     default:
       return false;
   }
@@ -922,6 +1110,7 @@ function resolveConfigValues(config, flatValues, prefix) {
     if (isFolderMetaKey(key)) continue;
     const path = prefix ? `${prefix}.${key}` : key;
     const configValue = unwrapVisibility(rawValue);
+    if (isDisplayConfigValue(configValue)) continue;
     if (isLeafConfigValue(configValue)) {
       result[key] = flatValues[path] !== void 0 ? flatValues[path] : configDefaultValue(configValue);
     } else if (typeof configValue === "object" && configValue !== null) {
@@ -937,7 +1126,7 @@ function flattenConfigUpdates(config, updates, prefix, values) {
     if (nextValue === void 0) continue;
     const path = prefix ? `${prefix}.${key}` : key;
     const configValue = unwrapVisibility(rawValue);
-    if (isActionConfigValue(configValue)) {
+    if (isActionConfigValue(configValue) || isDisplayConfigValue(configValue)) {
       continue;
     }
     if (isLeafConfigValue(configValue)) {
@@ -958,7 +1147,7 @@ function canShowFields(children) {
   return axes >= 2 && axes <= 4 && locks <= 1 && axes + locks === children.length;
 }
 function isLeafConfigValue(value) {
-  return Array.isArray(value) && value.length <= 5 && typeof value[0] === "number" || typeof value === "number" || typeof value === "boolean" || typeof value === "string" || isSpringConfigValue(value) || isEasingConfigValue(value) || isActionConfigValue(value) || isSelectConfigValue(value) || isColorConfigValue(value) || isImageConfigValue(value) || isTextConfigValue(value) || isPadConfigValue(value) || isBackgroundConfigValue(value) || isAnchorConfigValue(value) || isLayersConfigValue(value);
+  return Array.isArray(value) && value.length <= 5 && typeof value[0] === "number" || typeof value === "number" || typeof value === "boolean" || typeof value === "string" || isSpringConfigValue(value) || isEasingConfigValue(value) || isActionConfigValue(value) || isSelectConfigValue(value) || isColorConfigValue(value) || isImageConfigValue(value) || isTextConfigValue(value) || isPadConfigValue(value) || isXYConfigValue(value) || isFilterConfigValue(value) || isTransferConfigValue(value) || isDisplayConfigValue(value) || isBackgroundConfigValue(value) || isAnchorConfigValue(value) || isLayersConfigValue(value) || isSliderConfigValue(value) || isNumberConfigValue(value) || isRangeSliderConfigValue(value) || choiceTypeOf(value) !== void 0;
 }
 function configDefaultValue(value) {
   if (Array.isArray(value)) return value[0];
@@ -967,9 +1156,16 @@ function configDefaultValue(value) {
   if (isImageConfigValue(value)) return value.default ?? getFirstOptionValue(value.options ?? []);
   if (isTextConfigValue(value)) return value.default ?? "";
   if (isPadConfigValue(value)) return normalizePadValue(void 0, value);
+  if (isXYConfigValue(value)) return normalizePadValue(void 0, xyPadConfig(value));
+  if (isFilterConfigValue(value)) return normalizeFilterValue(value.default, value);
+  if (isTransferConfigValue(value)) return normalizeTransfer(value.default ?? DEFAULT_TRANSFER);
   if (isAnchorConfigValue(value)) return normalizeAnchorValue(void 0, value);
   if (isBackgroundConfigValue(value)) return normalizeBackgroundValue(value.default);
   if (isLayersConfigValue(value)) return normalizeLayersValue(value.default);
+  if (isSliderConfigValue(value) || isNumberConfigValue(value)) return value.default;
+  if (isRangeSliderConfigValue(value)) return normalizeRangeValue(void 0, value);
+  const choice = choiceTypeOf(value);
+  if (choice) return choiceDefaultValue(value);
   return value;
 }
 function isRecord3(value) {
@@ -978,6 +1174,8 @@ function isRecord3(value) {
 function sameControlValue(previous, next, control) {
   if (Object.is(previous, next)) return true;
   if (control?.type === "layers") return sameLayersValue(previous, next);
+  if (control?.type === "range") return isRecord3(previous) && isRecord3(next) && previous.min === next.min && previous.max === next.max;
+  if (control?.type === "multiselect" || control?.type === "list") return sameValue(previous, next);
   if (control?.type === "background") {
     return isRecord3(previous) && isRecord3(next) && sameBackgroundValue(previous, next);
   }
@@ -1014,7 +1212,7 @@ function isHexColor(value) {
 function formatLabel(key) {
   return key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()).trim();
 }
-function inferStep(min, max) {
+function inferStep2(min, max) {
   const range = max - min;
   if (range <= 1) return 0.01;
   if (range <= 10) return 0.1;
@@ -1039,6 +1237,24 @@ function isTextConfigValue(value) {
 function isPadConfigValue(value) {
   return hasType(value, "pad");
 }
+function isXYConfigValue(value) {
+  return hasType(value, "xy");
+}
+function isFilterConfigValue(value) {
+  return hasType(value, "filter");
+}
+function isTransferConfigValue(value) {
+  return hasType(value, "transfer");
+}
+function isCurveConfigValue(value) {
+  return hasType(value, "curve") && typeof value.sample === "function";
+}
+function isDisplayConfigValue(value) {
+  return isCurveConfigValue(value) || isAnalyserConfigValue(value);
+}
+function isAnalyserConfigValue(value) {
+  return hasType(value, "analyser") && typeof value.analyser === "function";
+}
 function isAnchorConfigValue(value) {
   return hasType(value, "anchor");
 }
@@ -1047,6 +1263,75 @@ function isBackgroundConfigValue(value) {
 }
 function isLayersConfigValue(value) {
   return hasType(value, "layers");
+}
+function isSliderConfigValue(value) {
+  return hasType(value, "slider");
+}
+function isNumberConfigValue(value) {
+  return hasType(value, "number");
+}
+function isRangeSliderConfigValue(value) {
+  return hasType(value, "range");
+}
+var CHOICE_TYPES = ["chips", "multiselect", "swatch", "file", "gallery", "list"];
+function choiceTypeOf(value) {
+  if (!isRecord3(value)) return void 0;
+  const type = CHOICE_TYPES.find((t) => t === value.type);
+  if (!type || type === "file") return type;
+  if (type === "gallery") return Array.isArray(value.items) ? type : void 0;
+  if (type === "list") return isRecord3(value.itemTypes) ? type : void 0;
+  return Array.isArray(value.options) ? type : void 0;
+}
+function choiceDefaultValue(value) {
+  switch (value.type) {
+    case "chips":
+    case "swatch":
+      return value.default ?? value.options[0]?.value ?? "";
+    case "gallery":
+      return value.default ?? value.items[0]?.id ?? "";
+    // No option is the natural first pick, so none checked is the default.
+    case "multiselect":
+      return value.default ?? [];
+    case "file":
+      return "";
+    case "list":
+      return normalizeListItems(value.default, value.itemTypes);
+  }
+}
+function choiceControl(value, path, label) {
+  switch (value.type) {
+    case "chips":
+      return { type: "chips", path, label, chips: value.options };
+    case "multiselect":
+      return { type: "multiselect", path, label, multiSelect: normalizeMultiSelectOptions(value.options) };
+    case "swatch":
+      return { type: "swatch", path, label, swatches: value.options };
+    case "file":
+      return { type: "file", path, label, file: value };
+    case "gallery":
+      return { type: "gallery", path, label, gallery: value.items };
+    case "list":
+      return { type: "list", path, label, list: { ...value, default: normalizeListItems(value.default, value.itemTypes) } };
+  }
+}
+function normalizeChoiceValue(value, defaultValue, control) {
+  const fallback = typeof defaultValue === "string" ? defaultValue : "";
+  switch (control.type) {
+    case "chips":
+      return normalizeChoice(value, (control.chips ?? []).map((o) => o.value), fallback);
+    case "swatch":
+      return normalizeChoice(value, (control.swatches ?? []).map((o) => o.value), fallback);
+    case "gallery":
+      return normalizeChoice(value, (control.gallery ?? []).map((item) => item.id), fallback);
+    case "multiselect":
+      return normalizeMultiSelectValue(value, control.multiSelect ?? [], defaultValue);
+    case "file":
+      return typeof value === "string" ? value : "";
+    case "list":
+      return normalizeListItems(value, control.list?.itemTypes ?? {}, defaultValue);
+    default:
+      return defaultValue;
+  }
 }
 function getFirstOptionValue(options) {
   const first = options[0];
@@ -1081,6 +1366,7 @@ var DialStoreClass = class {
     this.panelsInPopover = /* @__PURE__ */ new Set();
     this.snapshots = /* @__PURE__ */ new Map();
     this.actionListeners = /* @__PURE__ */ new Map();
+    this.eventListeners = /* @__PURE__ */ new Map();
     this.resetListeners = /* @__PURE__ */ new Map();
     this.presets = /* @__PURE__ */ new Map();
     this.activePreset = /* @__PURE__ */ new Map();
@@ -1233,6 +1519,7 @@ var DialStoreClass = class {
     this.panels.delete(id);
     if (this.listeners.get(id)?.size === 0) this.listeners.delete(id);
     if (this.actionListeners.get(id)?.size === 0) this.actionListeners.delete(id);
+    if (this.eventListeners.get(id)?.size === 0) this.eventListeners.delete(id);
     if (this.resetListeners.get(id)?.size === 0) this.resetListeners.delete(id);
     if (!this.retainedPanels.has(id)) {
       this.panelOpenStates.delete(id);
@@ -1299,7 +1586,7 @@ var DialStoreClass = class {
       if (control?.type === "action") {
         continue;
       }
-      const next = control?.type === "pad" ? normalizePadValue(value, control.pad) : control?.type === "anchor" ? normalizeAnchorValue(value, control.anchor) : control?.type === "layers" ? normalizeLayersValue(value) : control?.type === "background" ? normalizeBackgroundValue(value, panel.values[path]) : value;
+      const next = control?.type === "pad" ? normalizePadValue(value, control.pad) : control?.type === "anchor" ? normalizeAnchorValue(value, control.anchor) : control?.type === "layers" ? normalizeLayersValue(value) : control?.type === "range" ? normalizeRangeValue(value, { min: control.min ?? 0, max: control.max ?? 1, default: control.rangeDefault }) : control?.type === "multiselect" || control?.type === "list" ? normalizeChoiceValue(value, panel.values[path], control) : control?.type === "filter" ? normalizeFilterValue(value, control.filter) : control?.type === "transfer" ? normalizeTransfer(value) : control?.type === "background" ? normalizeBackgroundValue(value, panel.values[path]) : value;
       if (sameControlValue(panel.values[path], next, control) && (!target || sameControlValue(target[path], next, control))) continue;
       panel.values[path] = next;
       validUpdates[path] = next;
@@ -1518,6 +1805,19 @@ var DialStoreClass = class {
   }
   triggerAction(panelId, path) {
     this.actionListeners.get(panelId)?.forEach((fn) => fn(path));
+  }
+  /** Hear what a panel's controls tell the app that is not a value: files picked, chips removed, lists changed. */
+  subscribeEvents(panelId, listener) {
+    if (!this.eventListeners.has(panelId)) this.eventListeners.set(panelId, /* @__PURE__ */ new Set());
+    this.eventListeners.get(panelId).add(listener);
+    return () => {
+      const listeners2 = this.eventListeners.get(panelId);
+      listeners2?.delete(listener);
+      if (listeners2?.size === 0 && !this.panels.has(panelId)) this.eventListeners.delete(panelId);
+    };
+  }
+  emitEvent(panelId, path, event) {
+    this.eventListeners.get(panelId)?.forEach((fn) => fn(path, event));
   }
   /**
    * Hear each folder reset of a panel, with the path of the folder (or the
@@ -1983,14 +2283,15 @@ var DialStoreClass = class {
         const shortcut = shortcuts?.[path];
         let control;
         if (Array.isArray(value) && value.length <= 5 && typeof value[0] === "number") {
+          const range = value;
           control = {
             type: "slider",
             path,
             label,
-            min: value[1],
-            max: value[2],
-            step: value[3] ?? inferStep(value[1], value[2]),
-            unit: value[4],
+            min: range[1],
+            max: range[2],
+            step: range[3] ?? inferStep2(range[1], range[2]),
+            unit: range[4],
             shortcut
           };
         } else if (typeof value === "number") {
@@ -2012,12 +2313,62 @@ var DialStoreClass = class {
           control = { type: "text", path, label, placeholder: value.placeholder };
         } else if (isPadConfigValue(value)) {
           control = { type: "pad", path, label, pad: value };
+        } else if (isXYConfigValue(value)) {
+          control = { type: "pad", path, label, pad: xyPadConfig(value) };
+        } else if (isFilterConfigValue(value)) {
+          control = { type: "filter", path, label, filter: value };
+        } else if (isTransferConfigValue(value)) {
+          control = { type: "transfer", path, label, transfer: value };
+        } else if (isCurveConfigValue(value)) {
+          control = { type: "curve", path, label, curve: value };
+        } else if (isAnalyserConfigValue(value)) {
+          control = { type: "analyser", path, label, analyser: value };
         } else if (isLayersConfigValue(value)) {
           control = { type: "layers", path, label, layers: { ...value, default: normalizeLayersValue(value.default) } };
         } else if (isAnchorConfigValue(value)) {
           control = { type: "anchor", path, label, anchor: value };
+        } else if (choiceTypeOf(value)) {
+          control = choiceControl(value, path, label);
         } else if (isBackgroundConfigValue(value)) {
           control = { type: "background", path, label, background: value, reset: true };
+        } else if (isSliderConfigValue(value)) {
+          control = {
+            type: "slider",
+            path,
+            label,
+            min: value.min,
+            max: value.max,
+            // A dial turns in whole steps unless told otherwise; a slider infers its step from the range.
+            step: value.step ?? (value.display === "dial" ? 1 : inferStep2(value.min, value.max)),
+            unit: value.unit,
+            formatValue: value.formatValue,
+            dial: value.display === "dial",
+            origin: value.origin,
+            wrap: value.wrap,
+            shortcut
+          };
+        } else if (isNumberConfigValue(value)) {
+          control = {
+            type: "number",
+            path,
+            label,
+            min: value.min,
+            max: value.max,
+            step: value.step ?? this.inferRange(value.default).step,
+            unit: value.unit,
+            formatValue: value.formatValue,
+            orientation: value.orientation
+          };
+        } else if (isRangeSliderConfigValue(value)) {
+          control = {
+            type: "range",
+            path,
+            label,
+            min: value.min,
+            max: value.max,
+            step: value.step ?? inferStep2(value.min, value.max),
+            rangeDefault: normalizeRangeValue(void 0, value)
+          };
         } else if (typeof value === "string") {
           if (parseColor(value) && value !== "transparent") {
             control = { type: "color", path, label };
@@ -2069,7 +2420,7 @@ var DialStoreClass = class {
         if (typeof hint2 === "string" && hint2) control.hint = hint2;
         controls2.push(control);
         controlsByPath.set(path, control);
-        if (control.type === "folder") continue;
+        if (control.type === "folder" || isDisplayConfigValue(value)) continue;
         defaultValues[path] = configDefaultValue(value);
         if (isEasingConfigValue(value)) {
           modes[`${path}.__mode`] = "easing";
@@ -2132,10 +2483,25 @@ var DialStoreClass = class {
         return normalizePadValue(existingValue, control.pad);
       case "anchor":
         return normalizeAnchorValue(existingValue, control.anchor);
+      case "number":
+        return normalizeNumberValue(existingValue, defaultValue, control.step, control.min, control.max);
+      case "range":
+        return normalizeRangeValue(existingValue, { min: control.min ?? 0, max: control.max ?? 1, default: defaultValue });
+      case "filter":
+        return normalizeFilterValue(existingValue, control.filter);
+      case "transfer":
+        return isRecord3(existingValue) ? normalizeTransfer(existingValue) : defaultValue;
       case "layers":
         return normalizeLayersValue(existingValue, control.layers?.default);
       case "background":
         return normalizeBackgroundValue(existingValue, defaultValue);
+      case "chips":
+      case "multiselect":
+      case "swatch":
+      case "file":
+      case "gallery":
+      case "list":
+        return normalizeChoiceValue(existingValue, defaultValue, control);
       case "select": {
         if (typeof existingValue !== "string") {
           return defaultValue;
@@ -3747,9 +4113,9 @@ function mountColorControl(host, initial, presentation = "popover") {
     fieldsRow.append(fields);
     let fieldsFormat;
     let syncFields = [];
-    let typed;
+    let typed2;
     const channelKey = () => formatColor({ ...color, a: 1 }, format);
-    const channelValues = (f) => typed?.key === channelKey() ? typed.values : colorChannels(color, f);
+    const channelValues = (f) => typed2?.key === channelKey() ? typed2.values : colorChannels(color, f);
     const channelField = (channel, label2, read, write) => {
       const field2 = numberField({
         className: "dialkit-color-field",
@@ -3795,7 +4161,7 @@ function mountColorControl(host, initial, presentation = "popover") {
         values[i] = n;
         const converted = channelsToColor(values, f, color.a);
         const next = f === "oklch" || f === "hsl" || converted.c > 1e-7 ? converted : { ...converted, h: color.h };
-        typed = { key: formatColor({ ...next, a: 1 }, f), values };
+        typed2 = { key: formatColor({ ...next, a: 1 }, f), values };
         commit(next);
       }));
       fieldsFormat = f;
@@ -4240,7 +4606,7 @@ function mountImageControl(host, initial, presentation = "popover") {
       if (file) acceptFile(file);
     };
     popup.addEventListener("dragover", (event) => {
-      if (!event.dataTransfer?.types.includes("Files")) return;
+      if (props.upload === false || !event.dataTransfer?.types.includes("Files")) return;
       event.preventDefault();
       event.dataTransfer.dropEffect = "copy";
       popup.dataset.dragging = "true";
@@ -4251,6 +4617,7 @@ function mountImageControl(host, initial, presentation = "popover") {
     popup.addEventListener("drop", (event) => {
       event.preventDefault();
       delete popup.dataset.dragging;
+      if (props.upload === false) return;
       const file = event.dataTransfer?.files[0];
       if (file) acceptFile(file);
     });
@@ -4278,7 +4645,8 @@ function mountImageControl(host, initial, presentation = "popover") {
       }
       if (event.key === "Tab") {
         const first = clear.hidden ? buttons.find((button2) => button2.tabIndex === 0) ?? upload : clear;
-        if (event.shiftKey && document.activeElement === first || !event.shiftKey && document.activeElement === upload) {
+        const last = upload.hidden ? buttons.find((button2) => button2.tabIndex === 0) ?? clear : upload;
+        if (event.shiftKey && document.activeElement === first || !event.shiftKey && document.activeElement === last) {
           const next = adjacentTabStop(trigger, event.shiftKey);
           close2(true);
           if (next) {
@@ -4291,7 +4659,8 @@ function mountImageControl(host, initial, presentation = "popover") {
     updatePicker = () => {
       popup?.setAttribute("aria-label", `${props.label} image picker`);
       title.textContent = props.label;
-      clear.hidden = !props.value;
+      clear.hidden = !props.value || props.clearable === false;
+      upload.hidden = props.upload === false;
       clear.setAttribute("aria-label", `Remove ${props.label.toLowerCase()} image`);
       const items = choices();
       empty.hidden = items.length > 0;
@@ -4641,7 +5010,7 @@ function mountDialPad(host, initial) {
 function round22(value) {
   return Math.round(value * 100) / 100;
 }
-function clamp2(value, min, max) {
+function clamp4(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 function isTransitionConfig(value) {
@@ -4682,7 +5051,7 @@ function springSettleDuration(params) {
   const zeta = params.damping / (2 * Math.sqrt(params.stiffness * params.mass));
   const decay = zeta >= 1 ? zeta * w0 - w0 * Math.sqrt(Math.max(0, zeta * zeta - 1)) : zeta * w0;
   const duration = Math.log(200) / Math.max(decay, 1e-6);
-  return round22(clamp2(duration, 0.05, 10));
+  return round22(clamp4(duration, 0.05, 10));
 }
 function springRestDuration(params, distance) {
   const size = Math.abs(distance);
@@ -10258,7 +10627,7 @@ var APPSHOT = {
 var EASE_IN = "cubic-bezier(0.42, 0, 1, 1)";
 var EASE_IN_OUT = "cubic-bezier(0.42, 0, 0.58, 1)";
 var lerp = (a, b, t) => a + (b - a) * t;
-var clamp01 = (v) => Math.min(1, Math.max(0, v));
+var clamp012 = (v) => Math.min(1, Math.max(0, v));
 function frameAt(source, target, p) {
   const sx = source.x + source.width / 2;
   const sy = source.y + source.height / 2;
@@ -10335,7 +10704,7 @@ function startAppshot() {
         x: f.x + padX + (boxW - W * k) / 2,
         y: f.y + padTop,
         radius: lerp(frameRadius, Math.max(APPSHOT.minCornerRadius, slotRadius), p),
-        fade: clamp01((p - APPSHOT.landingAt) * 4)
+        fade: clamp012((p - APPSHOT.landingAt) * 4)
       };
     });
     const end = samples[steps];
@@ -11610,7 +11979,7 @@ function inferFromToRange(key, value, counterpart) {
   const extent = Math.max(Math.abs(lo), Math.abs(hi), 1);
   const min = lo < 0 ? -extent * 2 : 0;
   const max = Math.max(extent * 2, hi);
-  return [value, min, max, inferStep(min, max)];
+  return [value, min, max, inferStep2(min, max)];
 }
 function withFromToRanges(config, counterpart) {
   const result = {};
@@ -11642,7 +12011,7 @@ function sampleCurve(curve, elapsed) {
     return springProgress(elapsed, curve.spring);
   }
   if (curve.ease) {
-    return cubicBezierProgress(clamp2(curve.duration > 0 ? elapsed / curve.duration : 1, 0, 1), curve.ease);
+    return cubicBezierProgress(clamp4(curve.duration > 0 ? elapsed / curve.duration : 1, 0, 1), curve.ease);
   }
   return curve.duration > 0 ? Math.min(1, elapsed / curve.duration) : 1;
 }
@@ -11877,7 +12246,7 @@ function computeClipState(clip, time, cycleTime = time) {
   const phaseElapsed = looping ? cycleTime - clip.at : elapsed;
   const fold = (e) => looping ? e % total : e;
   const basePos = started ? fold(Math.max(0, phaseElapsed)) : 0;
-  const progress = total > 0 ? clamp2(basePos / total, 0, 1) : started ? 1 : 0;
+  const progress = total > 0 ? clamp4(basePos / total, 0, 1) : started ? 1 : 0;
   let current2;
   let stepIndex = 0;
   if (clip.tracks.length && clip.props?.length) {
@@ -11957,7 +12326,7 @@ function mixHexColors(a, b, p) {
   const ca = parseHex(a);
   const cb = parseHex(b);
   if (!ca || !cb) return null;
-  const t = clamp2(p, 0, 1);
+  const t = clamp4(p, 0, 1);
   const mixed = ca.map((v, i) => Math.round(v + (cb[i] - v) * t));
   const hex = (n) => n.toString(16).padStart(2, "0");
   const rgb = `#${hex(mixed[0])}${hex(mixed[1])}${hex(mixed[2])}`;
@@ -12019,18 +12388,18 @@ function cloneTimelineValue(value) {
   );
 }
 function clampTrackDelay(delay, at, trackDuration, timelineDuration) {
-  return clamp2(round22(delay), 0, Math.max(0, round22(timelineDuration - at - trackDuration)));
+  return clamp4(round22(delay), 0, Math.max(0, round22(timelineDuration - at - trackDuration)));
 }
 function clampClipResizeEnd(duration, at, timelineDuration) {
-  return clamp2(round22(duration), TIMELINE_MIN_CLIP_DURATION, timelineDuration - at);
+  return clamp4(round22(duration), TIMELINE_MIN_CLIP_DURATION, timelineDuration - at);
 }
 function clampClipResizeStart(newAt, at, duration) {
-  const clampedAt = clamp2(round22(newAt), 0, at + duration - TIMELINE_MIN_CLIP_DURATION);
+  const clampedAt = clamp4(round22(newAt), 0, at + duration - TIMELINE_MIN_CLIP_DURATION);
   return { at: clampedAt, duration: round22(at + duration - clampedAt) };
 }
 function clampStepResize(duration, at, otherStepsTotal, timelineDuration) {
   const max = Math.max(TIMELINE_MIN_CLIP_DURATION, timelineDuration - at - otherStepsTotal);
-  return clamp2(round22(duration), TIMELINE_MIN_CLIP_DURATION, max);
+  return clamp4(round22(duration), TIMELINE_MIN_CLIP_DURATION, max);
 }
 function canShareTrack(clips) {
   return clips.every(
@@ -12084,41 +12453,41 @@ function nearestWithin(candidates, wanted, min, max) {
   }
   return best;
 }
-function dragTimelineClip(mode, clip, delta, bounds, snap = false) {
+function dragTimelineClip(mode, clip, delta, bounds, snap2 = false) {
   const { at, duration } = clip;
   const tail = clip.tail ?? 0;
   const min = clip.minDuration ?? TIMELINE_MIN_CLIP_DURATION;
   if (mode === "move") {
     const max2 = Math.max(bounds.start, bounds.end - duration);
     const wanted2 = at + delta;
-    const landed2 = snap ? nearestWithin(
+    const landed2 = snap2 ? nearestWithin(
       bounds.targets.flatMap((t) => tail > 0 ? [t, t - duration, t - duration - tail] : [t, t - duration]),
       wanted2,
       bounds.start,
       max2
     ) : void 0;
-    return { at: clamp2(round22(landed2 ?? wanted2), bounds.start, max2), duration };
+    return { at: clamp4(round22(landed2 ?? wanted2), bounds.start, max2), duration };
   }
   if (mode === "end") {
     const max2 = bounds.end - at;
     const wanted2 = duration + delta;
-    const landed2 = snap ? nearestWithin(
+    const landed2 = snap2 ? nearestWithin(
       bounds.targets.flatMap((t) => tail > 0 ? [t - at, t - at - tail] : [t - at]),
       wanted2,
       min,
       max2
     ) : void 0;
-    return { at, duration: clamp2(round22(landed2 ?? wanted2), min, max2) };
+    return { at, duration: clamp4(round22(landed2 ?? wanted2), min, max2) };
   }
   const max = at + duration - min;
   const wanted = at + delta;
-  const landed = snap ? nearestWithin(bounds.targets, wanted, bounds.start, max) : void 0;
-  const next = clamp2(round22(landed ?? wanted), bounds.start, max);
+  const landed = snap2 ? nearestWithin(bounds.targets, wanted, bounds.start, max) : void 0;
+  const next = clamp4(round22(landed ?? wanted), bounds.start, max);
   return { at: next, duration: round22(at + duration - next) };
 }
 function timelineClipProgress(time, at, duration) {
   if (duration <= 0) return time >= at ? 1 : 0;
-  return clamp2((time - at) / duration, 0, 1);
+  return clamp4((time - at) / duration, 0, 1);
 }
 function normalizeTimelineValuesForCopy(values, clips) {
   const normalized = { ...values };
@@ -12352,14 +12721,14 @@ function createDialTimelineRoot(initial = {}) {
   resize.addEventListener("pointerdown", (event) => {
     const start = dock.getBoundingClientRect().height;
     drag.start(event, (next) => {
-      height = clamp2(start + event.clientY - next.clientY, 120, Math.max(120, window.innerHeight - 24));
+      height = clamp4(start + event.clientY - next.clientY, 120, Math.max(120, window.innerHeight - 24));
       size();
     });
   });
   resize.addEventListener("keydown", (event) => {
     if (event.key === "ArrowUp" || event.key === "ArrowDown") {
       event.preventDefault();
-      height = clamp2(height + (event.key === "ArrowUp" ? 20 : -20), 120, Math.max(120, window.innerHeight - 24));
+      height = clamp4(height + (event.key === "ArrowUp" ? 20 : -20), 120, Math.max(120, window.innerHeight - 24));
       size();
     }
   });
@@ -12594,8 +12963,8 @@ function mountSection(host, initial, options) {
       viewport.dataset.zoomed = "";
     else
       delete viewport.dataset.zoomed;
-    const x = clamp2((state2.time - viewStart) * scale(), 0, width());
-    const flagOffset = clamp2(x, 18, Math.max(18, width() - 18)) - x;
+    const x = clamp4((state2.time - viewStart) * scale(), 0, width());
+    const flagOffset = clamp4(x, 18, Math.max(18, width() - 18)) - x;
     playhead.style.display = state2.time < viewStart || state2.time > viewStart + visibleDuration() || !width() ? "none" : "";
     playhead.style.left = `calc(var(--dial-timeline-label-w) + ${x}px)`;
     playhead.style.setProperty("--dial-timeline-playhead-flag-offset", `${flagOffset}px`);
@@ -12618,9 +12987,9 @@ function mountSection(host, initial, options) {
       render();
     }
     if (event.altKey && !full) {
-      const startZoom = zoom, ratio = clamp2((event.clientX - rect.left) / rect.width, 0, 1), time = viewStart + ratio * visibleDuration();
+      const startZoom = zoom, ratio = clamp4((event.clientX - rect.left) / rect.width, 0, 1), time = viewStart + ratio * visibleDuration();
       gesture.start(event, (next) => {
-        zoom = clamp2(startZoom * Math.exp((next.clientX - event.clientX) / 180), 1, Math.max(8, meta.duration * rect.width / 140));
+        zoom = clamp4(startZoom * Math.exp((next.clientX - event.clientX) / 180), 1, Math.max(8, meta.duration * rect.width / 140));
         viewStart = time - ratio * visibleDuration();
         render();
       });
@@ -12630,7 +12999,7 @@ function mountSection(host, initial, options) {
     const start = full ? 0 : viewStart, duration = full ? meta.duration : visibleDuration();
     TimelineStore.pause(meta.id);
     const seek = (next) => {
-      const time = clamp2(start + (next.clientX - rect.left) / rect.width * duration, start, start + duration);
+      const time = clamp4(start + (next.clientX - rect.left) / rect.width * duration, start, start + duration);
       TimelineStore.seek(meta.id, time);
       if (full) {
         viewStart = time - visibleDuration() / 2;
@@ -12714,7 +13083,7 @@ function mountSection(host, initial, options) {
       loop.dataset.active = "";
     else
       delete loop.dataset.active;
-    viewStart = clamp2(viewStart, 0, Math.max(0, meta.duration - visibleDuration()));
+    viewStart = clamp4(viewStart, 0, Math.max(0, meta.duration - visibleDuration()));
     const px = scale();
     renderedWidth = width();
     ruler.replaceChildren();
@@ -12958,7 +13327,7 @@ function mountSection(host, initial, options) {
     const rect = target.getBoundingClientRect();
     const position = () => {
       const p = getDropdownPosition({ getBoundingClientRect: () => rect }, document.body, { fixed: true, width: 280, maxHeight: window.innerHeight - 24, dropdownHeight: popup.scrollHeight + 2 });
-      Object.assign(popup.style, { left: `${clamp2(rect.left + rect.width / 2 - p.width / 2, 12, Math.max(12, window.innerWidth - p.width - 12))}px`, top: `${p.top}px`, width: `${p.width}px`, maxHeight: `${p.maxHeight}px` });
+      Object.assign(popup.style, { left: `${clamp4(rect.left + rect.width / 2 - p.width / 2, 12, Math.max(12, window.innerWidth - p.width - 12))}px`, top: `${p.top}px`, width: `${p.width}px`, maxHeight: `${p.maxHeight}px` });
       popup.dataset.placement = p.above ? "above" : "below";
     };
     const observer2 = new ResizeObserver(position);
