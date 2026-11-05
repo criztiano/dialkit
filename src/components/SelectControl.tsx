@@ -1,6 +1,6 @@
 import { observeDropdownKeyboard } from '../dropdown-keyboard';
 import { openDropdownOnKey } from '../control-keyboard';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { getDialKitPortalRoot, getDropdownPosition, observeDropdownPosition, type DropdownPosition } from '../dropdown-position';
@@ -20,6 +20,8 @@ interface SelectControlProps {
   hint?: string;
   /** Dropdown only: the first row of the dropdown, which adds an option. See `SelectConfig.add`. */
   add?: { label: string; hint?: string; onClick: () => void };
+  /** Dropdown only: drawn before an option's label, in the trigger and in each row (a swatch's colors). */
+  preview?: (value: string) => ReactNode;
 }
 
 function toTitleCase(s: string): string {
@@ -51,7 +53,7 @@ function SegmentedSelect({ label, value, options, onChange, hideLabel, hint }: S
   );
 }
 
-function SelectDropdown({ label, value, options, onChange, hint, add }: SelectControlProps) {
+function SelectDropdown({ label, value, options, onChange, hint, add, preview }: SelectControlProps) {
   const [isOpen, setIsOpen] = useState(false);
   const resyncPresence = usePresenceResync();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -114,6 +116,7 @@ function SelectDropdown({ label, value, options, onChange, hint, add }: SelectCo
       >
         <span className="dialkit-select-label">{label}</span>
         <div className="dialkit-select-right">
+          {preview && selectedOption && preview(selectedOption.value)}
           <span className="dialkit-select-value">{selectedOption?.label ?? value}</span>
           <motion.svg
             className="dialkit-select-chevron"
@@ -170,12 +173,14 @@ function SelectDropdown({ label, value, options, onChange, hint, add }: SelectCo
                 <button
                   key={option.value}
                   className="dialkit-select-option"
+                  data-preview={preview ? 'true' : undefined}
                   data-selected={String(option.value === value)}
                   onClick={() => {
                     onChange(option.value);
                     setIsOpen(false);
                   }}
                 >
+                  {preview?.(option.value)}
                   {option.label}
                 </button>
               ))}

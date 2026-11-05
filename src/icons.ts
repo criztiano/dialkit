@@ -132,3 +132,12 @@ export const ICON_LINK = [
   'M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1',
   'M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1',
 ];
+
+/** A sheet with a folded corner: the file control. */
+export const ICON_FILE = 'M13 3H7C5.89543 3 5 3.89543 5 5V19C5 20.1046 5.89543 21 7 21H17C18.1046 21 19 20.1046 19 19V9M13 3L19 9M13 3V8C13 8.55228 13.4477 9 14 9H19';
+
+/** Six dots, drawn as circles of radius 1.5: a list row's drag handle. */
+export const ICON_GRIP = [
+  { cx: 9, cy: 6 }, { cx: 9, cy: 12 }, { cx: 9, cy: 18 },
+  { cx: 15, cy: 6 }, { cx: 15, cy: 12 }, { cx: 15, cy: 18 },
+];

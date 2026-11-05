@@ -19,6 +19,13 @@ import { AnchorControl } from './AnchorControl';
 import { Fields } from './Fields';
 import { BackgroundControl } from './BackgroundControl';
 import { LayerListControl } from './LayerListControl';
+import { ChipsControl } from './ChipsControl';
+import { MultiSelectControl } from './MultiSelectControl';
+import { SwatchControl } from './SwatchControl';
+import { FileControl } from './FileControl';
+import { ListControl } from './ListControl';
+import { galleryIdOf, galleryImageOptions, gallerySrcOf } from '../choice';
+import type { ListItemValue } from '../list';
 import type { DialPadValue } from '../dial-pad';
 import type { AnchorValue } from '../anchor';
 import { layerAction, type LayersValue } from '../layers';
@@ -326,6 +333,93 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration,
             empty={control.layers?.empty}
             onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
             onAction={(kind, id) => DialStore.triggerAction(panelId, layerAction(control.path, kind, id))}
+          />
+        );
+
+      // The choice controls. A gallery is the image picker over its items'
+      // images, without upload or Remove; its value stays the item's id.
+      case 'chips':
+        return (
+          <ChipsControl
+            key={control.path}
+            label={control.label}
+            hint={control.hint}
+            value={value as string}
+            options={control.chips ?? []}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            onRemove={(v) => DialStore.emitEvent(panelId, control.path, { kind: 'remove', value: v })}
+          />
+        );
+
+      case 'multiselect':
+        return (
+          <MultiSelectControl
+            key={control.path}
+            label={control.label}
+            hint={control.hint}
+            value={(value as string[]) ?? []}
+            options={control.multiSelect ?? []}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+          />
+        );
+
+      case 'swatch':
+        return (
+          <SwatchControl
+            key={control.path}
+            label={control.label}
+            hint={control.hint}
+            value={value as string}
+            options={control.swatches ?? []}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+          />
+        );
+
+      case 'file':
+        return (
+          <FileControl
+            key={control.path}
+            label={control.label}
+            hint={control.hint}
+            value={value as string}
+            accept={control.file?.accept}
+            multiple={control.file?.multiple}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            onPick={(files) => DialStore.emitEvent(panelId, control.path, { kind: 'file', files })}
+          />
+        );
+
+      case 'gallery': {
+        const items = control.gallery ?? [];
+        return (
+          <ImageControl
+            key={control.path}
+            label={control.label}
+            hint={control.hint}
+            options={galleryImageOptions(items)}
+            value={gallerySrcOf(items, value as string)}
+            upload={false}
+            clearable={false}
+            onChange={(src) => {
+              const id = galleryIdOf(items, src);
+              if (id !== undefined) DialStore.updateValue(panelId, control.path, id);
+            }}
+          />
+        );
+      }
+
+      case 'list':
+        return (
+          <ListControl
+            key={control.path}
+            label={control.label}
+            hint={control.hint}
+            value={(value as ListItemValue[]) ?? []}
+            itemTypes={control.list?.itemTypes ?? {}}
+            addLabel={control.list?.addLabel}
+            maxItems={control.list?.max}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            onEvent={(event) => DialStore.emitEvent(panelId, control.path, event)}
           />
         );
 
