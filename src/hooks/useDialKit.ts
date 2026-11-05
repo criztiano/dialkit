@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { DialStore, flattenDialValueUpdates, resolveDialValues } from '../store/DialStore';
 import type {
   DialConfig,
+  DialEvent,
   DialKitPersistOptions,
   DialKitValueUpdates,
   DialValue,
@@ -16,6 +17,8 @@ export interface UseDialOptions {
   defaultCollapsed?: boolean;
   persist?: DialKitPersistOptions;
   onAction?: (action: string) => void;
+  /** Called with what a control tells the app that is not a value: files picked (`file`), a chip removed, a list changed. */
+  onEvent?: (path: string, event: DialEvent) => void;
   /**
    * Called with a folder's path when its reset button (or `DialStore.resetFolder`)
    * resets it, before the reset writes the values back.
@@ -120,11 +123,19 @@ export function useDialKitController<T extends DialConfig>(
   onActionRef.current = options?.onAction;
   const onResetRef = useRef(options?.onReset);
   onResetRef.current = options?.onReset;
+  const onEventRef = useRef(options?.onEvent);
+  onEventRef.current = options?.onEvent;
 
   // Subscribe to action events
   useEffect(() => {
     return DialStore.subscribeActions(panelId, (action) => {
       onActionRef.current?.(action);
+    });
+  }, [panelId]);
+
+  useEffect(() => {
+    return DialStore.subscribeEvents(panelId, (path, event) => {
+      onEventRef.current?.(path, event);
     });
   }, [panelId]);
 

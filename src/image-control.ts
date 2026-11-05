@@ -9,6 +9,10 @@ export type ImageControlProps = {
   options?: ImageOption[];
   onChange: (value: string) => void;
   hint?: string;
+  /** `false` drops the upload button, for a fixed set of images (a gallery). Default `true`. */
+  upload?: boolean;
+  /** `false` drops the Remove button, so an image is always chosen. Default `true`. */
+  clearable?: boolean;
 };
 
 type NamedImage = { value: string; label: string };
@@ -235,7 +239,7 @@ export function mountImageControl(host: HTMLElement, initial: ImageControlProps,
       if (file) acceptFile(file);
     };
     popup.addEventListener('dragover', event => {
-      if (!event.dataTransfer?.types.includes('Files')) return;
+      if (props.upload === false || !event.dataTransfer?.types.includes('Files')) return;
       event.preventDefault();
       event.dataTransfer.dropEffect = 'copy';
       popup!.dataset.dragging = 'true';
@@ -246,6 +250,7 @@ export function mountImageControl(host: HTMLElement, initial: ImageControlProps,
     popup.addEventListener('drop', event => {
       event.preventDefault();
       delete popup!.dataset.dragging;
+      if (props.upload === false) return;
       const file = event.dataTransfer?.files[0];
       if (file) acceptFile(file);
     });
@@ -271,7 +276,8 @@ export function mountImageControl(host: HTMLElement, initial: ImageControlProps,
       if (event.key === 'Escape') { event.preventDefault(); close(true); }
       if (event.key === 'Tab') {
         const first = clear.hidden ? buttons.find(button => button.tabIndex === 0) ?? upload : clear;
-        if ((event.shiftKey && document.activeElement === first) || (!event.shiftKey && document.activeElement === upload)) {
+        const last = upload.hidden ? buttons.find(button => button.tabIndex === 0) ?? clear : upload;
+        if ((event.shiftKey && document.activeElement === first) || (!event.shiftKey && document.activeElement === last)) {
           const next = adjacentTabStop(trigger, event.shiftKey);
           close(true);
           if (next) { event.preventDefault(); next.focus(); }
@@ -281,7 +287,8 @@ export function mountImageControl(host: HTMLElement, initial: ImageControlProps,
     updatePicker = () => {
       popup?.setAttribute('aria-label', `${props.label} image picker`);
       title.textContent = props.label;
-      clear.hidden = !props.value;
+      clear.hidden = !props.value || props.clearable === false;
+      upload.hidden = props.upload === false;
       clear.setAttribute('aria-label', `Remove ${props.label.toLowerCase()} image`);
       const items = choices();
       empty.hidden = items.length > 0;

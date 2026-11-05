@@ -6,6 +6,8 @@ import { normalizeLayersValue, sameLayersValue, type LayersConfig, type LayersVa
 import { normalizeRangeValue, type RangeSliderConfig, type RangeValue } from '../range';
 import { normalizeNumberValue, type NumberConfig } from '../number';
 import type { SliderConfig } from '../angle';
+import { normalizeChoice, normalizeMultiSelectOptions, normalizeMultiSelectValue, type ChipOption, type ChipsConfig, type DialEvent, type FileConfig, type GalleryConfig, type GalleryItem, type MultiSelectConfig, type MultiSelectOption, type SwatchConfig, type SwatchOption } from '../choice';
+import { normalizeListItems, type ListConfig, type ListItemValue } from '../list';
 import { defaultTransitionPresets, type TransitionPresetOption } from '../transition-presets';
 import { cloneGradient, normalizeBackgroundValue, normalizeGradient, sameBackgroundValue, type BackgroundConfig, type BackgroundGradient, type BackgroundValue, type BackgroundValueUpdate, type SavedGradient } from '../background';
 export type { DialPadAxis, DialPadConfig, DialPadValue } from '../dial-pad';
@@ -14,6 +16,8 @@ export type { LayerItem, LayersConfig, LayersValue, LayerActionKind } from '../l
 export type { RangeSliderConfig, RangeValue } from '../range';
 export type { NumberConfig } from '../number';
 export type { SliderConfig } from '../angle';
+export type { ChipOption, ChipsConfig, DialEvent, FileConfig, GalleryConfig, GalleryItem, MultiSelectConfig, MultiSelectOption, SwatchConfig, SwatchOption } from '../choice';
+export type { ListConfig, ListField, ListFieldKind, ListItemField, ListItemType, ListItemValue } from '../list';
 export type {
   BackgroundConfig, BackgroundGradient, BackgroundMedia, BackgroundMediaDisplay, BackgroundMediaFit, BackgroundMediaRatio, BackgroundMode, BackgroundValue, BackgroundValueUpdate,
   GradientHandles, GradientPoint, GradientShape, GradientStop, SavedGradient,
@@ -88,7 +92,10 @@ export type TextConfig = {
   placeholder?: string;
 };
 
-export type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | ImageConfig | TextConfig | DialPadConfig | DialPadValue | BackgroundConfig | BackgroundValue | AnchorConfig | AnchorValue | LayersConfig | LayersValue | SliderConfig | NumberConfig | RangeSliderConfig | RangeValue | null;
+export type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | ImageConfig | TextConfig | DialPadConfig | DialPadValue | BackgroundConfig | BackgroundValue | AnchorConfig | AnchorValue | LayersConfig | LayersValue | ChoiceConfig | string[] | ListItemValue[] | SliderConfig | NumberConfig | RangeSliderConfig | RangeValue | null;
+
+/** The choice controls' configs (see choice.ts and list.ts). */
+type ChoiceConfig = ChipsConfig | MultiSelectConfig | SwatchConfig | FileConfig | GalleryConfig | ListConfig;
 
 /**
  * Folder keys that configure the folder instead of adding a control:
@@ -228,6 +235,12 @@ export type ResolvedValues<T extends DialConfig> = {
                   ? number
                 : T[K] extends RangeSliderConfig
                   ? RangeValue
+                : T[K] extends ChipsConfig | SwatchConfig | FileConfig | GalleryConfig
+                  ? string
+                : T[K] extends MultiSelectConfig
+                  ? string[]
+                : T[K] extends ListConfig
+                  ? ListItemValue[]
                   : T[K] extends DialConfig
                     ? ResolvedValues<T[K]>
                     : T[K];
@@ -256,6 +269,12 @@ export type DialKitValueUpdates<T extends DialConfig> = {
               ? number
             : T[K] extends RangeSliderConfig
               ? RangeValue
+            : T[K] extends ChipsConfig | SwatchConfig | FileConfig | GalleryConfig
+              ? string
+            : T[K] extends MultiSelectConfig
+              ? string[]
+            : T[K] extends ListConfig
+              ? ListItemValue[]
               : T[K] extends DialConfig
                 ? DialKitValueUpdates<T[K]>
                 : T[K];
@@ -272,7 +291,7 @@ export type ShortcutConfig = {
 };
 
 export type ControlMeta = {
-  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'image' | 'text' | 'pad' | 'background' | 'anchor' | 'layers' | 'number' | 'range';
+  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'image' | 'text' | 'pad' | 'background' | 'anchor' | 'layers' | 'number' | 'range' | 'chips' | 'multiselect' | 'swatch' | 'file' | 'gallery' | 'list';
   path: string;
   label: string;
   min?: number;
@@ -318,6 +337,18 @@ export type ControlMeta = {
   orientation?: NumberConfig['orientation'];
   /** Range only: the value a double-click on the track restores. */
   rangeDefault?: RangeValue;
+  /** Chips only. A removable chip's remove sends a `remove` event. */
+  chips?: ChipOption[];
+  /** Multiselect only: its options, string options made into rows. */
+  multiSelect?: MultiSelectOption[];
+  /** Swatch only: the palettes. */
+  swatches?: SwatchOption[];
+  /** File only. A pick sends a `file` event with the files. */
+  file?: FileConfig;
+  /** Gallery only: the items. */
+  gallery?: GalleryItem[];
+  /** List only: the config, with its default made valid. Each change also sends a `list` event. */
+  list?: ListConfig & { default: ListItemValue[] };
   shortcut?: ShortcutConfig;
   visibleWhen?: VisibleWhen;
   /** A short sentence about the control, from its folder's `_hints`. */
@@ -388,6 +419,7 @@ export type PanelConfig = {
 
 type Listener = () => void;
 type ActionListener = (action: string) => void;
+type EventListener = (path: string, event: DialEvent) => void;
 type ResetListener = (folderPath: string) => void;
 
 export type Preset = {
@@ -636,13 +668,14 @@ export function isLeafConfigValue(value: unknown): boolean {
     isLayersConfigValue(value) ||
     isSliderConfigValue(value) ||
     isNumberConfigValue(value) ||
-    isRangeSliderConfigValue(value)
+    isRangeSliderConfigValue(value) ||
+    choiceTypeOf(value) !== undefined
   );
 }
 
 /** Defaults shared by the store and the values returned before a panel mounts. */
 function configDefaultValue(value: DialConfig[string]): DialValue {
-  if (Array.isArray(value)) return value[0];
+  if (Array.isArray(value)) return (value as RangeConfig)[0];
   if (isSelectConfigValue(value)) return value.default ?? getFirstOptionValue(value.options);
   if (isColorConfigValue(value)) return value.default ?? '#000000';
   if (isImageConfigValue(value)) return value.default ?? getFirstOptionValue(value.options ?? []);
@@ -653,6 +686,8 @@ function configDefaultValue(value: DialConfig[string]): DialValue {
   if (isLayersConfigValue(value)) return normalizeLayersValue(value.default);
   if (isSliderConfigValue(value) || isNumberConfigValue(value)) return value.default;
   if (isRangeSliderConfigValue(value)) return normalizeRangeValue(undefined, value);
+  const choice = choiceTypeOf(value);
+  if (choice) return choiceDefaultValue(value as ChoiceConfig);
   return value as DialValue;
 }
 
@@ -664,6 +699,7 @@ function sameControlValue(previous: unknown, next: unknown, control?: ControlMet
   if (Object.is(previous, next)) return true;
   if (control?.type === 'layers') return sameLayersValue(previous, next);
   if (control?.type === 'range') return isRecord(previous) && isRecord(next) && previous.min === next.min && previous.max === next.max;
+  if (control?.type === 'multiselect' || control?.type === 'list') return sameValue(previous, next);
   if (control?.type === 'background') {
     return isRecord(previous) && isRecord(next) && sameBackgroundValue(previous as BackgroundValue, next as BackgroundValue);
   }
@@ -774,6 +810,55 @@ function isRangeSliderConfigValue(value: unknown): value is RangeSliderConfig {
   return hasType(value, 'range');
 }
 
+const CHOICE_TYPES = ['chips', 'multiselect', 'swatch', 'file', 'gallery', 'list'] as const;
+
+/** The choice control a config is, checked as the old kit did: option lists must be arrays. */
+function choiceTypeOf(value: unknown): ChoiceConfig['type'] | undefined {
+  if (!isRecord(value)) return undefined;
+  const type = CHOICE_TYPES.find(t => t === value.type);
+  if (!type || type === 'file') return type;
+  if (type === 'gallery') return Array.isArray(value.items) ? type : undefined;
+  if (type === 'list') return isRecord(value.itemTypes) ? type : undefined;
+  return Array.isArray(value.options) ? type : undefined;
+}
+
+function choiceDefaultValue(value: ChoiceConfig): DialValue {
+  switch (value.type) {
+    case 'chips':
+    case 'swatch': return value.default ?? value.options[0]?.value ?? '';
+    case 'gallery': return value.default ?? value.items[0]?.id ?? '';
+    // No option is the natural first pick, so none checked is the default.
+    case 'multiselect': return value.default ?? [];
+    case 'file': return '';
+    case 'list': return normalizeListItems(value.default, value.itemTypes);
+  }
+}
+
+function choiceControl(value: ChoiceConfig, path: string, label: string): ControlMeta {
+  switch (value.type) {
+    case 'chips': return { type: 'chips', path, label, chips: value.options };
+    case 'multiselect': return { type: 'multiselect', path, label, multiSelect: normalizeMultiSelectOptions(value.options) };
+    case 'swatch': return { type: 'swatch', path, label, swatches: value.options };
+    case 'file': return { type: 'file', path, label, file: value };
+    case 'gallery': return { type: 'gallery', path, label, gallery: value.items };
+    case 'list': return { type: 'list', path, label, list: { ...value, default: normalizeListItems(value.default, value.itemTypes) } };
+  }
+}
+
+/** A stored choice value made valid against its control, or the default. */
+function normalizeChoiceValue(value: unknown, defaultValue: DialValue, control: ControlMeta): DialValue {
+  const fallback = typeof defaultValue === 'string' ? defaultValue : '';
+  switch (control.type) {
+    case 'chips': return normalizeChoice(value, (control.chips ?? []).map(o => o.value), fallback);
+    case 'swatch': return normalizeChoice(value, (control.swatches ?? []).map(o => o.value), fallback);
+    case 'gallery': return normalizeChoice(value, (control.gallery ?? []).map(item => item.id), fallback);
+    case 'multiselect': return normalizeMultiSelectValue(value, control.multiSelect ?? [], defaultValue as string[]);
+    case 'file': return typeof value === 'string' ? value : '';
+    case 'list': return normalizeListItems(value, control.list?.itemTypes ?? {}, defaultValue as ListItemValue[]);
+    default: return defaultValue;
+  }
+}
+
 function getFirstOptionValue(options: (string | { value: string; label: string })[]): string {
   const first = options[0];
   if (first === undefined) return '';
@@ -818,6 +903,7 @@ class DialStoreClass {
   private panelsInPopover = new Set<string>();
   private snapshots: Map<string, Record<string, DialValue>> = new Map();
   private actionListeners: Map<string, Set<ActionListener>> = new Map();
+  private eventListeners: Map<string, Set<EventListener>> = new Map();
   private resetListeners: Map<string, Set<ResetListener>> = new Map();
   private presets: Map<string, Preset[]> = new Map();
   private activePreset: Map<string, string | null> = new Map();
@@ -988,6 +1074,7 @@ class DialStoreClass {
     // notifications. Cleanup happens via unsubscribe closures.
     if (this.listeners.get(id)?.size === 0) this.listeners.delete(id);
     if (this.actionListeners.get(id)?.size === 0) this.actionListeners.delete(id);
+    if (this.eventListeners.get(id)?.size === 0) this.eventListeners.delete(id);
     if (this.resetListeners.get(id)?.size === 0) this.resetListeners.delete(id);
 
     if (!this.retainedPanels.has(id)) {
@@ -1072,6 +1159,7 @@ class DialStoreClass {
         : control?.type === 'anchor' ? normalizeAnchorValue(value, control.anchor)
         : control?.type === 'layers' ? normalizeLayersValue(value)
         : control?.type === 'range' ? normalizeRangeValue(value, { min: control.min ?? 0, max: control.max ?? 1, default: control.rangeDefault })
+        : control?.type === 'multiselect' || control?.type === 'list' ? normalizeChoiceValue(value, panel.values[path], control)
         // Missing fields keep the current value, so a partial update changes only what it names.
         : control?.type === 'background' ? normalizeBackgroundValue(value, panel.values[path] as BackgroundValue)
         : value;
@@ -1342,6 +1430,21 @@ class DialStoreClass {
 
   triggerAction(panelId: string, path: string): void {
     this.actionListeners.get(panelId)?.forEach(fn => fn(path));
+  }
+
+  /** Hear what a panel's controls tell the app that is not a value: files picked, chips removed, lists changed. */
+  subscribeEvents(panelId: string, listener: EventListener): () => void {
+    if (!this.eventListeners.has(panelId)) this.eventListeners.set(panelId, new Set());
+    this.eventListeners.get(panelId)!.add(listener);
+    return () => {
+      const listeners = this.eventListeners.get(panelId);
+      listeners?.delete(listener);
+      if (listeners?.size === 0 && !this.panels.has(panelId)) this.eventListeners.delete(panelId);
+    };
+  }
+
+  emitEvent(panelId: string, path: string, event: DialEvent): void {
+    this.eventListeners.get(panelId)?.forEach(fn => fn(path, event));
   }
 
   /**
@@ -1924,14 +2027,15 @@ class DialStoreClass {
 
         if (Array.isArray(value) && value.length <= 5 && typeof value[0] === 'number') {
           // Range tuple: [default, min, max, step?, unit?]
+          const range = value as RangeConfig;
           control = {
             type: 'slider',
             path,
             label,
-            min: value[1],
-            max: value[2],
-            step: value[3] ?? inferStep(value[1], value[2]),
-            unit: value[4],
+            min: range[1],
+            max: range[2],
+            step: range[3] ?? inferStep(range[1], range[2]),
+            unit: range[4],
             shortcut,
           };
         } else if (typeof value === 'number') {
@@ -1958,6 +2062,8 @@ class DialStoreClass {
           control = { type: 'layers', path, label, layers: { ...value, default: normalizeLayersValue(value.default) } };
         } else if (isAnchorConfigValue(value)) {
           control = { type: 'anchor', path, label, anchor: value };
+        } else if (choiceTypeOf(value)) {
+          control = choiceControl(value as ChoiceConfig, path, label);
         } else if (isBackgroundConfigValue(value)) {
           control = { type: 'background', path, label, background: value, reset: true };
         } else if (isSliderConfigValue(value)) {
@@ -2120,6 +2226,13 @@ class DialStoreClass {
         return normalizeLayersValue(existingValue, control.layers?.default);
       case 'background':
         return normalizeBackgroundValue(existingValue, defaultValue as BackgroundValue);
+      case 'chips':
+      case 'multiselect':
+      case 'swatch':
+      case 'file':
+      case 'gallery':
+      case 'list':
+        return normalizeChoiceValue(existingValue, defaultValue, control);
       case 'select': {
         if (typeof existingValue !== 'string') {
           return defaultValue;

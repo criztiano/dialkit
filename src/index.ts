@@ -65,6 +65,12 @@ export type { BackgroundControlProps } from './background-control';
 export { LayerListControl } from './components/LayerListControl';
 export type { LayerListControlProps } from './layer-list-control';
 export { layerAction, normalizeLayersValue, parseLayerAction } from './layers';
+export { ChipsControl } from './components/ChipsControl';
+export { MultiSelectControl } from './components/MultiSelectControl';
+export { SwatchControl } from './components/SwatchControl';
+export { FileControl } from './components/FileControl';
+export { ListControl } from './components/ListControl';
+export { defaultListItemParams, groupListFields, normalizeListItems, parseListItemSchema } from './list';
 export { backgroundGradientCss, backgroundMediaCss, paintGradient } from './background';
 export * from './background-api';
 export { PresetManager } from './components/PresetManager';
@@ -172,6 +178,22 @@ export type {
   LayersConfig,
   LayersValue,
   LayerActionKind,
+  ChipOption,
+  ChipsConfig,
+  MultiSelectOption,
+  MultiSelectConfig,
+  SwatchOption,
+  SwatchConfig,
+  FileConfig,
+  GalleryItem,
+  GalleryConfig,
+  ListConfig,
+  ListField,
+  ListFieldKind,
+  ListItemField,
+  ListItemType,
+  ListItemValue,
+  DialEvent,
   ControlMeta,
   PanelConfig,
   FolderMode,
