@@ -2,6 +2,11 @@ import { roundValue } from '../numeric';
 import { parseColor } from '../color';
 import { normalizePadValue, type DialPadConfig, type DialPadValue } from '../dial-pad';
 import { normalizeAnchorValue, type AnchorConfig, type AnchorValue } from '../anchor';
+import { xyPadConfig, type DialXYConfig } from '../xy-pad';
+import { normalizeFilterValue, type DialFilterConfig, type DialFilterValue } from '../filter';
+import { DEFAULT_TRANSFER, normalizeTransfer, type DialTransferConfig, type DialTransferValue } from '../transfer';
+import type { DialCurveConfig } from '../curve-preview';
+import type { DialAnalyserConfig } from '../analyser';
 import { normalizeLayersValue, sameLayersValue, type LayersConfig, type LayersValue } from '../layers';
 import { normalizeRangeValue, type RangeSliderConfig, type RangeValue } from '../range';
 import { normalizeNumberValue, type NumberConfig } from '../number';
@@ -12,6 +17,11 @@ import { defaultTransitionPresets, type TransitionPresetOption } from '../transi
 import { cloneGradient, normalizeBackgroundValue, normalizeGradient, sameBackgroundValue, type BackgroundConfig, type BackgroundGradient, type BackgroundValue, type BackgroundValueUpdate, type SavedGradient } from '../background';
 export type { DialPadAxis, DialPadConfig, DialPadValue } from '../dial-pad';
 export type { AnchorConfig, AnchorValue } from '../anchor';
+export type { DialXYAxis, DialXYConfig } from '../xy-pad';
+export type { DialFilterAxisConfig, DialFilterConfig, DialFilterValue } from '../filter';
+export type { DialTransferConfig, DialTransferValue, TransferPoint } from '../transfer';
+export type { DialCurveConfig } from '../curve-preview';
+export type { AnalyserScale, AnalyserSpring, DialAnalyserConfig } from '../analyser';
 export type { LayerItem, LayersConfig, LayersValue, LayerActionKind } from '../layers';
 export type { RangeSliderConfig, RangeValue } from '../range';
 export type { NumberConfig } from '../number';
@@ -92,7 +102,7 @@ export type TextConfig = {
   placeholder?: string;
 };
 
-export type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | ImageConfig | TextConfig | DialPadConfig | DialPadValue | BackgroundConfig | BackgroundValue | AnchorConfig | AnchorValue | LayersConfig | LayersValue | ChoiceConfig | string[] | ListItemValue[] | SliderConfig | NumberConfig | RangeSliderConfig | RangeValue | null;
+export type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | ImageConfig | TextConfig | DialPadConfig | DialPadValue | DialXYConfig | DialFilterConfig | DialFilterValue | DialTransferConfig | DialTransferValue | DialCurveConfig | DialAnalyserConfig | BackgroundConfig | BackgroundValue | AnchorConfig | AnchorValue | LayersConfig | LayersValue | ChoiceConfig | string[] | ListItemValue[] | SliderConfig | NumberConfig | RangeSliderConfig | RangeValue | null;
 
 /** The choice controls' configs (see choice.ts and list.ts). */
 type ChoiceConfig = ChipsConfig | MultiSelectConfig | SwatchConfig | FileConfig | GalleryConfig | ListConfig;
@@ -208,9 +218,12 @@ export function unwrapVisibility(value: DialConfig[string]): DialConfig[string] 
 /** An anchor's value: a cell, or `null` (no cell picked) when its default is `null`. */
 type AnchorConfigValue<C> = C extends { default: null } ? AnchorValue | null : AnchorValue;
 
+/** Rows that draw but hold no value: they have no key in the resolved values. */
+type DisplayConfig = DialCurveConfig | DialAnalyserConfig;
+
 export type ResolvedValues<T extends DialConfig> = {
-  [K in keyof T as K extends FolderMetaKey ? never : K]: T[K] extends ControlWithVisibility<infer U extends DialConfig[string]>
-    ? ResolvedValues<{ value: U }>['value']
+  [K in keyof T as K extends FolderMetaKey ? never : T[K] extends DisplayConfig ? never : K]: T[K] extends ControlWithVisibility<infer U extends DialConfig[string]>
+    ? ResolvedValues<{ value: U }> extends { value: infer V } ? V : never
     : T[K] extends [number, number, number, number?, string?]
     ? number
     : T[K] extends SpringConfig
@@ -223,8 +236,12 @@ export type ResolvedValues<T extends DialConfig> = {
             ? string
             : T[K] extends TextConfig
               ? string
-              : T[K] extends DialPadConfig
+              : T[K] extends DialPadConfig | DialXYConfig
                 ? DialPadValue
+              : T[K] extends DialFilterConfig
+                ? DialFilterValue
+              : T[K] extends DialTransferConfig
+                ? DialTransferValue
                 : T[K] extends BackgroundConfig
                   ? BackgroundValue
                 : T[K] extends AnchorConfig
@@ -247,8 +264,8 @@ export type ResolvedValues<T extends DialConfig> = {
 };
 
 export type DialKitValueUpdates<T extends DialConfig> = {
-  [K in keyof T as K extends FolderMetaKey ? never : K]?: T[K] extends ControlWithVisibility<infer U extends DialConfig[string]>
-    ? DialKitValueUpdates<{ value: U }>['value']
+  [K in keyof T as K extends FolderMetaKey ? never : T[K] extends DisplayConfig ? never : K]?: T[K] extends ControlWithVisibility<infer U extends DialConfig[string]>
+    ? DialKitValueUpdates<{ value: U }> extends { value: infer V } ? V : never
     : T[K] extends [number, number, number, number?, string?]
     ? number
     : T[K] extends SpringConfig | EasingConfig
@@ -257,8 +274,12 @@ export type DialKitValueUpdates<T extends DialConfig> = {
         ? never
         : T[K] extends SelectConfig | ColorConfig | ImageConfig | TextConfig
           ? string
-          : T[K] extends DialPadConfig
+          : T[K] extends DialPadConfig | DialXYConfig
             ? DialPadValue
+          : T[K] extends DialFilterConfig
+            ? DialFilterValue
+          : T[K] extends DialTransferConfig
+            ? DialTransferValue
             : T[K] extends BackgroundConfig
               ? BackgroundValueUpdate
             : T[K] extends AnchorConfig
@@ -291,7 +312,7 @@ export type ShortcutConfig = {
 };
 
 export type ControlMeta = {
-  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'image' | 'text' | 'pad' | 'background' | 'anchor' | 'layers' | 'number' | 'range' | 'chips' | 'multiselect' | 'swatch' | 'file' | 'gallery' | 'list';
+  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'image' | 'text' | 'pad' | 'background' | 'anchor' | 'layers' | 'number' | 'range' | 'chips' | 'multiselect' | 'swatch' | 'file' | 'gallery' | 'list' | 'filter' | 'transfer' | 'curve' | 'analyser';
   path: string;
   label: string;
   min?: number;
@@ -321,6 +342,13 @@ export type ControlMeta = {
   add?: SelectAddConfig;
   placeholder?: string;
   pad?: DialPadConfig;
+  /** Filter only: the config as written; its `response` is kept fresh by `syncLiveConfigs`. */
+  filter?: DialFilterConfig;
+  transfer?: DialTransferConfig;
+  /** Curve only: the config as written; its `sample` is kept fresh by `syncLiveConfigs`. */
+  curve?: DialCurveConfig;
+  /** Analyser only: the config as written; its getters are kept fresh by `syncLiveConfigs`. */
+  analyser?: DialAnalyserConfig;
   anchor?: AnchorConfig;
   background?: BackgroundConfig;
   /** Layers only: the config, with its default made valid. Its add, duplicate and delete send `layerAction` paths. */
@@ -590,6 +618,7 @@ function resolveConfigValues(
     const path = prefix ? `${prefix}.${key}` : key;
     const configValue = unwrapVisibility(rawValue);
 
+    if (isDisplayConfigValue(configValue)) continue;
     if (isLeafConfigValue(configValue)) {
       // `null` is a value (an anchor with no cell picked); only a missing one takes the default.
       result[key] = flatValues[path] !== undefined ? flatValues[path] : configDefaultValue(configValue);
@@ -616,7 +645,7 @@ function flattenConfigUpdates(
     const path = prefix ? `${prefix}.${key}` : key;
     const configValue = unwrapVisibility(rawValue);
 
-    if (isActionConfigValue(configValue)) {
+    if (isActionConfigValue(configValue) || isDisplayConfigValue(configValue)) {
       continue;
     }
 
@@ -663,6 +692,10 @@ export function isLeafConfigValue(value: unknown): boolean {
     isImageConfigValue(value) ||
     isTextConfigValue(value) ||
     isPadConfigValue(value) ||
+    isXYConfigValue(value) ||
+    isFilterConfigValue(value) ||
+    isTransferConfigValue(value) ||
+    isDisplayConfigValue(value) ||
     isBackgroundConfigValue(value) ||
     isAnchorConfigValue(value) ||
     isLayersConfigValue(value) ||
@@ -681,6 +714,9 @@ function configDefaultValue(value: DialConfig[string]): DialValue {
   if (isImageConfigValue(value)) return value.default ?? getFirstOptionValue(value.options ?? []);
   if (isTextConfigValue(value)) return value.default ?? '';
   if (isPadConfigValue(value)) return normalizePadValue(undefined, value);
+  if (isXYConfigValue(value)) return normalizePadValue(undefined, xyPadConfig(value));
+  if (isFilterConfigValue(value)) return normalizeFilterValue(value.default, value);
+  if (isTransferConfigValue(value)) return normalizeTransfer(value.default ?? DEFAULT_TRANSFER);
   if (isAnchorConfigValue(value)) return normalizeAnchorValue(undefined, value);
   if (isBackgroundConfigValue(value)) return normalizeBackgroundValue(value.default);
   if (isLayersConfigValue(value)) return normalizeLayersValue(value.default);
@@ -784,6 +820,32 @@ function isTextConfigValue(value: unknown): value is TextConfig {
 
 function isPadConfigValue(value: unknown): value is DialPadConfig {
   return hasType(value, 'pad');
+}
+
+/** An `xy` config is parsed as a pad: see {@link xyPadConfig}. */
+function isXYConfigValue(value: unknown): value is DialXYConfig {
+  return hasType(value, 'xy');
+}
+
+function isFilterConfigValue(value: unknown): value is DialFilterConfig {
+  return hasType(value, 'filter');
+}
+
+function isTransferConfigValue(value: unknown): value is DialTransferConfig {
+  return hasType(value, 'transfer');
+}
+
+function isCurveConfigValue(value: unknown): value is DialCurveConfig {
+  return hasType(value, 'curve') && typeof (value as DialCurveConfig).sample === 'function';
+}
+
+/** A row that draws but holds no value. See {@link DisplayConfig}. */
+function isDisplayConfigValue(value: unknown): value is DisplayConfig {
+  return isCurveConfigValue(value) || isAnalyserConfigValue(value);
+}
+
+function isAnalyserConfigValue(value: unknown): value is DialAnalyserConfig {
+  return hasType(value, 'analyser') && typeof (value as DialAnalyserConfig).analyser === 'function';
 }
 
 function isAnchorConfigValue(value: unknown): value is AnchorConfig {
@@ -1160,6 +1222,8 @@ class DialStoreClass {
         : control?.type === 'layers' ? normalizeLayersValue(value)
         : control?.type === 'range' ? normalizeRangeValue(value, { min: control.min ?? 0, max: control.max ?? 1, default: control.rangeDefault })
         : control?.type === 'multiselect' || control?.type === 'list' ? normalizeChoiceValue(value, panel.values[path], control)
+        : control?.type === 'filter' ? normalizeFilterValue(value, control.filter)
+        : control?.type === 'transfer' ? normalizeTransfer(value)
         // Missing fields keep the current value, so a partial update changes only what it names.
         : control?.type === 'background' ? normalizeBackgroundValue(value, panel.values[path] as BackgroundValue)
         : value;
@@ -2058,6 +2122,16 @@ class DialStoreClass {
           control = { type: 'text', path, label, placeholder: value.placeholder };
         } else if (isPadConfigValue(value)) {
           control = { type: 'pad', path, label, pad: value };
+        } else if (isXYConfigValue(value)) {
+          control = { type: 'pad', path, label, pad: xyPadConfig(value) };
+        } else if (isFilterConfigValue(value)) {
+          control = { type: 'filter', path, label, filter: value };
+        } else if (isTransferConfigValue(value)) {
+          control = { type: 'transfer', path, label, transfer: value };
+        } else if (isCurveConfigValue(value)) {
+          control = { type: 'curve', path, label, curve: value };
+        } else if (isAnalyserConfigValue(value)) {
+          control = { type: 'analyser', path, label, analyser: value };
         } else if (isLayersConfigValue(value)) {
           control = { type: 'layers', path, label, layers: { ...value, default: normalizeLayersValue(value.default) } };
         } else if (isAnchorConfigValue(value)) {
@@ -2139,7 +2213,7 @@ class DialStoreClass {
         if (typeof hint === 'string' && hint) control.hint = hint;
         controls.push(control);
         controlsByPath.set(path, control);
-        if (control.type === 'folder') continue;
+        if (control.type === 'folder' || isDisplayConfigValue(value)) continue;
         defaultValues[path] = configDefaultValue(value);
         if (isEasingConfigValue(value)) {
           modes[`${path}.__mode`] = 'easing';
@@ -2222,6 +2296,10 @@ class DialStoreClass {
         return normalizeNumberValue(existingValue, defaultValue as number, control.step, control.min, control.max);
       case 'range':
         return normalizeRangeValue(existingValue, { min: control.min ?? 0, max: control.max ?? 1, default: defaultValue as RangeValue });
+      case 'filter':
+        return normalizeFilterValue(existingValue, control.filter);
+      case 'transfer':
+        return isRecord(existingValue) ? normalizeTransfer(existingValue) : defaultValue;
       case 'layers':
         // The app owns the rows: a valid stored value is kept, else the default.
         return normalizeLayersValue(existingValue, control.layers?.default);

@@ -30,12 +30,18 @@ import { FileControl } from './FileControl';
 import { ListControl } from './ListControl';
 import { galleryIdOf, galleryImageOptions, gallerySrcOf } from '../choice';
 import type { ListItemValue } from '../list';
+import { FilterControl } from './FilterControl';
+import { TransferCurve } from './TransferCurve';
+import { CurvePreview } from './CurvePreview';
+import { AnalyserRow } from './AnalyserRow';
 import type { DialPadValue } from '../dial-pad';
 import type { AnchorValue } from '../anchor';
 import { layerAction, type LayersValue } from '../layers';
 import { hasActionHints } from '../hints';
 import { useHints } from '../hooks/useHints';
 import type { BackgroundValue } from '../background';
+import type { DialFilterValue } from '../filter';
+import type { DialTransferValue } from '../transfer';
 
 interface ControlRendererProps {
   panelId: string;
@@ -490,6 +496,37 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration,
             />
           </Folder>
         );
+
+      case 'filter':
+        return (
+          <FilterControl
+            key={control.path}
+            panelId={panelId}
+            control={control}
+            value={value as DialFilterValue}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+          />
+        );
+
+      case 'transfer':
+        return (
+          <TransferCurve
+            key={control.path}
+            label={control.label}
+            hint={control.hint}
+            value={value as DialTransferValue}
+            height={control.transfer?.height}
+            grid={control.transfer?.grid}
+            axisLabels={control.transfer?.axisLabels}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+          />
+        );
+
+      case 'curve':
+        return <CurvePreview key={control.path} panelId={panelId} control={control} />;
+
+      case 'analyser':
+        return <AnalyserRow key={control.path} panelId={panelId} control={control} />;
 
       case 'action':
         return (

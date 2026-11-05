@@ -64,6 +64,13 @@ export { BackgroundControl } from './components/BackgroundControl';
 export type { BackgroundControlProps } from './background-control';
 export { LayerListControl } from './components/LayerListControl';
 export type { LayerListControlProps } from './layer-list-control';
+export { FilterControl } from './components/FilterControl';
+export { filterShapeResponse } from './filter';
+export type { FilterShapeType } from './filter';
+export { TransferCurve } from './components/TransferCurve';
+export { sampleTransfer, transferLut } from './transfer';
+export { CurvePreview } from './components/CurvePreview';
+export { AnalyserRow } from './components/AnalyserRow';
 export { layerAction, normalizeLayersValue, parseLayerAction } from './layers';
 export { ChipsControl } from './components/ChipsControl';
 export { MultiSelectControl } from './components/MultiSelectControl';
@@ -135,6 +142,18 @@ export type {
   DialPadAxis,
   DialPadConfig,
   DialPadValue,
+  DialXYAxis,
+  DialXYConfig,
+  DialFilterAxisConfig,
+  DialFilterConfig,
+  DialFilterValue,
+  DialTransferConfig,
+  DialTransferValue,
+  TransferPoint,
+  DialCurveConfig,
+  DialAnalyserConfig,
+  AnalyserScale,
+  AnalyserSpring,
   BackgroundConfig,
   BackgroundValue,
   BackgroundValueUpdate,

@@ -2274,6 +2274,32 @@
 .dialkit-pad-instructions { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 @media (prefers-reduced-motion: reduce) { .dialkit-pad-point { transition: none; } }
 
+/* Graph rows: filter, transfer, curve, and analyser draw on one surface. */
+.dialkit-graph { display: grid; gap: var(--dial-row-gap); min-width: 0; }
+.dialkit-graph-surface { position: relative; height: 84px; overflow: hidden; border-radius: var(--dial-radius); background: var(--dial-surface); isolation: isolate; }
+/* The plot sits under the label line. */
+.dialkit-graph-surface > svg { position: absolute; top: 28px; left: 0; width: 100%; height: calc(100% - 28px); overflow: visible; pointer-events: none; }
+.dialkit-graph-label { position: absolute; top: 8px; left: 12px; z-index: 1; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dial-text-label); font-size: 13px; font-weight: 500; pointer-events: none; }
+.dialkit-graph-stroke { fill: none; stroke: var(--dial-text-primary); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.dialkit-graph-surface[data-disabled] .dialkit-graph-stroke { stroke: var(--dial-text-tertiary); }
+/* Transfer: the plot is inset so the end points stay whole. */
+.dialkit-transfer-plot { position: absolute; top: 28px; right: 12px; bottom: 12px; left: 12px; cursor: crosshair; touch-action: none; user-select: none; -webkit-user-select: none; }
+.dialkit-transfer-plot > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.dialkit-transfer-plot[data-dropping] { cursor: no-drop; }
+.dialkit-transfer-plot[data-dropping] .dialkit-transfer-point[data-dragging] { opacity: 0.4; }
+.dialkit-transfer-grid { stroke: var(--dial-border); stroke-width: 1; opacity: 0.65; }
+.dialkit-transfer[data-idle] .dialkit-graph-stroke { stroke: var(--dial-text-secondary); }
+.dialkit-transfer-axis { position: absolute; top: 8px; right: 32px; color: var(--dial-text-tertiary); font-size: 11px; font-weight: 500; pointer-events: none; }
+.dialkit-transfer-axis-x { top: auto; bottom: 14px; right: 16px; }
+/* Curve: the plot sizes the surface, from its height or its aspect. */
+.dialkit-curve { height: auto; padding-top: 28px; }
+.dialkit-curve[data-bare] { padding-top: 0; }
+.dialkit-graph-surface.dialkit-curve > svg { position: static; display: block; width: 100%; }
+.dialkit-curve-marker { stroke: var(--dial-text-tertiary); stroke-width: 1; opacity: 0.6; }
+/* Analyser: the canvas draws in its own CSS color. */
+.dialkit-analyser-plot { position: relative; }
+.dialkit-analyser-canvas { display: block; color: var(--dial-text-primary); }
+
 /* Anchor: a 3 × 3 grid of positions, shared across frameworks. */
 .dialkit-anchor { position: relative; display: grid; grid-template: repeat(3, 26px) / repeat(3, minmax(0, 1fr)); padding: 4px; border-radius: var(--dial-radius); background: var(--dial-surface); }
 /* The pill spans one cell and draws its highlight inset from the cell's edges. */
