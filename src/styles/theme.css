@@ -2152,6 +2152,11 @@
 .dialkit-transfer[data-idle] .dialkit-graph-stroke { stroke: var(--dial-text-secondary); }
 .dialkit-transfer-axis { position: absolute; top: 8px; right: 32px; color: var(--dial-text-tertiary); font-size: 11px; font-weight: 500; pointer-events: none; }
 .dialkit-transfer-axis-x { top: auto; bottom: 14px; right: 16px; }
+/* Curve: the plot sizes the surface, from its height or its aspect. */
+.dialkit-curve { height: auto; padding-top: 28px; }
+.dialkit-curve[data-bare] { padding-top: 0; }
+.dialkit-graph-surface.dialkit-curve > svg { position: static; display: block; width: 100%; }
+.dialkit-curve-marker { stroke: var(--dial-text-tertiary); stroke-width: 1; opacity: 0.6; }
 
 /* Anchor: a 3 × 3 grid of positions, shared across frameworks. */
 .dialkit-anchor { position: relative; display: grid; grid-template: repeat(3, 26px) / repeat(3, minmax(0, 1fr)); padding: 4px; border-radius: var(--dial-radius); background: var(--dial-surface); }

@@ -9,6 +9,8 @@ function Demo() {
   // A second panel's functions close over these values, so its drawings follow them.
   const inputs = useDialKit('Graph inputs', {
     shape: { type: 'select', options: ['lowpass', 'highpass', 'bandpass', 'notch', 'peak'], default: 'lowpass' },
+    bend: [0.5, 0, 1],
+    flip: false,
   }, { id: 'graph-inputs' });
   const values = useDialKit('Graphs', {
     tumble: { type: 'xy', x: { min: -180, max: 180, step: 1, bipolar: true, label: 'Yaw' }, y: { min: -90, max: 90, step: 1, bipolar: true, label: 'Pitch' } },
@@ -20,6 +22,7 @@ function Demo() {
       response: (c: number, r: number) => filterShapeResponse(inputs.shape as FilterShapeType, c, r),
     },
     gamma: { type: 'transfer', default: { points: [{ x: 0, y: 0 }, { x: 0.4, y: 0.6 }, { x: 1, y: 1 }] }, axisLabels: { x: 'In', y: 'Out' } },
+    arc: { type: 'curve', sample: (t: number) => (inputs.flip ? -1 : 1) * Math.pow(Math.sin(t * Math.PI), 1 + inputs.bend * 4), domain: [-1, 1], markers: [0.5] },
     _hints: { tone: 'Cutoff and resonance of the tone filter.', gamma: 'Click to add a point. Drag one out to remove it.' },
   }, { id: 'graph-demo' });
   return <main style={{ minHeight: '100vh', padding: 32, background: theme === 'dark' ? '#151515' : '#f4f3f1', color: theme === 'dark' ? '#ededed' : '#222', font: '13px system-ui' }}>

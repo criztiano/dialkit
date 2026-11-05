@@ -21,6 +21,7 @@ import { BackgroundControl } from './BackgroundControl';
 import { LayerListControl } from './LayerListControl';
 import { FilterControl } from './FilterControl';
 import { TransferCurve } from './TransferCurve';
+import { CurvePreview } from './CurvePreview';
 import type { DialPadValue } from '../dial-pad';
 import type { AnchorValue } from '../anchor';
 import { layerAction, type LayersValue } from '../layers';
@@ -370,6 +371,9 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration,
             onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
           />
         );
+
+      case 'curve':
+        return <CurvePreview key={control.path} panelId={panelId} control={control} />;
 
       case 'action':
         return (

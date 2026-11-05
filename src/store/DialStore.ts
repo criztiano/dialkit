@@ -5,6 +5,7 @@ import { normalizeAnchorValue, type AnchorConfig, type AnchorValue } from '../an
 import { xyPadConfig, type DialXYConfig } from '../xy-pad';
 import { normalizeFilterValue, type DialFilterConfig, type DialFilterValue } from '../filter';
 import { DEFAULT_TRANSFER, normalizeTransfer, type DialTransferConfig, type DialTransferValue } from '../transfer';
+import type { DialCurveConfig } from '../curve-preview';
 import { normalizeLayersValue, sameLayersValue, type LayersConfig, type LayersValue } from '../layers';
 import { defaultTransitionPresets, type TransitionPresetOption } from '../transition-presets';
 import { cloneGradient, normalizeBackgroundValue, normalizeGradient, sameBackgroundValue, type BackgroundConfig, type BackgroundGradient, type BackgroundValue, type BackgroundValueUpdate, type SavedGradient } from '../background';
@@ -13,6 +14,7 @@ export type { AnchorConfig, AnchorValue } from '../anchor';
 export type { DialXYAxis, DialXYConfig } from '../xy-pad';
 export type { DialFilterAxisConfig, DialFilterConfig, DialFilterValue } from '../filter';
 export type { DialTransferConfig, DialTransferValue, TransferPoint } from '../transfer';
+export type { DialCurveConfig } from '../curve-preview';
 export type { LayerItem, LayersConfig, LayersValue, LayerActionKind } from '../layers';
 export type {
   BackgroundConfig, BackgroundGradient, BackgroundMedia, BackgroundMediaDisplay, BackgroundMediaFit, BackgroundMediaRatio, BackgroundMode, BackgroundValue, BackgroundValueUpdate,
@@ -88,7 +90,7 @@ export type TextConfig = {
   placeholder?: string;
 };
 
-export type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | ImageConfig | TextConfig | DialPadConfig | DialPadValue | DialXYConfig | DialFilterConfig | DialFilterValue | DialTransferConfig | DialTransferValue | BackgroundConfig | BackgroundValue | AnchorConfig | AnchorValue | LayersConfig | LayersValue | null;
+export type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | ImageConfig | TextConfig | DialPadConfig | DialPadValue | DialXYConfig | DialFilterConfig | DialFilterValue | DialTransferConfig | DialTransferValue | DialCurveConfig | BackgroundConfig | BackgroundValue | AnchorConfig | AnchorValue | LayersConfig | LayersValue | null;
 
 /**
  * Folder keys that configure the folder instead of adding a control:
@@ -201,9 +203,12 @@ export function unwrapVisibility(value: DialConfig[string]): DialConfig[string] 
 /** An anchor's value: a cell, or `null` (no cell picked) when its default is `null`. */
 type AnchorConfigValue<C> = C extends { default: null } ? AnchorValue | null : AnchorValue;
 
+/** Rows that draw but hold no value: they have no key in the resolved values. */
+type DisplayConfig = DialCurveConfig;
+
 export type ResolvedValues<T extends DialConfig> = {
-  [K in keyof T as K extends FolderMetaKey ? never : K]: T[K] extends ControlWithVisibility<infer U extends DialConfig[string]>
-    ? ResolvedValues<{ value: U }>['value']
+  [K in keyof T as K extends FolderMetaKey ? never : T[K] extends DisplayConfig ? never : K]: T[K] extends ControlWithVisibility<infer U extends DialConfig[string]>
+    ? ResolvedValues<{ value: U }> extends { value: infer V } ? V : never
     : T[K] extends [number, number, number, number?, string?]
     ? number
     : T[K] extends SpringConfig
@@ -234,8 +239,8 @@ export type ResolvedValues<T extends DialConfig> = {
 };
 
 export type DialKitValueUpdates<T extends DialConfig> = {
-  [K in keyof T as K extends FolderMetaKey ? never : K]?: T[K] extends ControlWithVisibility<infer U extends DialConfig[string]>
-    ? DialKitValueUpdates<{ value: U }>['value']
+  [K in keyof T as K extends FolderMetaKey ? never : T[K] extends DisplayConfig ? never : K]?: T[K] extends ControlWithVisibility<infer U extends DialConfig[string]>
+    ? DialKitValueUpdates<{ value: U }> extends { value: infer V } ? V : never
     : T[K] extends [number, number, number, number?, string?]
     ? number
     : T[K] extends SpringConfig | EasingConfig
@@ -272,7 +277,7 @@ export type ShortcutConfig = {
 };
 
 export type ControlMeta = {
-  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'image' | 'text' | 'pad' | 'background' | 'anchor' | 'layers' | 'filter' | 'transfer';
+  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'image' | 'text' | 'pad' | 'background' | 'anchor' | 'layers' | 'filter' | 'transfer' | 'curve';
   path: string;
   label: string;
   min?: number;
@@ -305,6 +310,8 @@ export type ControlMeta = {
   /** Filter only: the config as written; its `response` is kept fresh by `syncLiveConfigs`. */
   filter?: DialFilterConfig;
   transfer?: DialTransferConfig;
+  /** Curve only: the config as written; its `sample` is kept fresh by `syncLiveConfigs`. */
+  curve?: DialCurveConfig;
   anchor?: AnchorConfig;
   background?: BackgroundConfig;
   /** Layers only: the config, with its default made valid. Its add, duplicate and delete send `layerAction` paths. */
@@ -549,6 +556,7 @@ function resolveConfigValues(
     const path = prefix ? `${prefix}.${key}` : key;
     const configValue = unwrapVisibility(rawValue);
 
+    if (isDisplayConfigValue(configValue)) continue;
     if (isLeafConfigValue(configValue)) {
       // `null` is a value (an anchor with no cell picked); only a missing one takes the default.
       result[key] = flatValues[path] !== undefined ? flatValues[path] : configDefaultValue(configValue);
@@ -575,7 +583,7 @@ function flattenConfigUpdates(
     const path = prefix ? `${prefix}.${key}` : key;
     const configValue = unwrapVisibility(rawValue);
 
-    if (isActionConfigValue(configValue)) {
+    if (isActionConfigValue(configValue) || isDisplayConfigValue(configValue)) {
       continue;
     }
 
@@ -625,6 +633,7 @@ export function isLeafConfigValue(value: unknown): boolean {
     isXYConfigValue(value) ||
     isFilterConfigValue(value) ||
     isTransferConfigValue(value) ||
+    isDisplayConfigValue(value) ||
     isBackgroundConfigValue(value) ||
     isAnchorConfigValue(value) ||
     isLayersConfigValue(value)
@@ -752,6 +761,15 @@ function isFilterConfigValue(value: unknown): value is DialFilterConfig {
 
 function isTransferConfigValue(value: unknown): value is DialTransferConfig {
   return hasType(value, 'transfer');
+}
+
+function isCurveConfigValue(value: unknown): value is DialCurveConfig {
+  return hasType(value, 'curve') && typeof (value as DialCurveConfig).sample === 'function';
+}
+
+/** A row that draws but holds no value. See {@link DisplayConfig}. */
+function isDisplayConfigValue(value: unknown): value is DisplayConfig {
+  return isCurveConfigValue(value);
 }
 
 function isAnchorConfigValue(value: unknown): value is AnchorConfig {
@@ -1953,6 +1971,8 @@ class DialStoreClass {
           control = { type: 'filter', path, label, filter: value };
         } else if (isTransferConfigValue(value)) {
           control = { type: 'transfer', path, label, transfer: value };
+        } else if (isCurveConfigValue(value)) {
+          control = { type: 'curve', path, label, curve: value };
         } else if (isLayersConfigValue(value)) {
           control = { type: 'layers', path, label, layers: { ...value, default: normalizeLayersValue(value.default) } };
         } else if (isAnchorConfigValue(value)) {
@@ -2012,7 +2032,7 @@ class DialStoreClass {
         if (typeof hint === 'string' && hint) control.hint = hint;
         controls.push(control);
         controlsByPath.set(path, control);
-        if (control.type === 'folder') continue;
+        if (control.type === 'folder' || isDisplayConfigValue(value)) continue;
         defaultValues[path] = configDefaultValue(value);
         if (isEasingConfigValue(value)) {
           modes[`${path}.__mode`] = 'easing';

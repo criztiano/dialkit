@@ -1,9 +1,9 @@
 import { DialStore, isFolderMetaKey, unwrapVisibility, type ControlMeta, type DialConfig } from './store/DialStore';
 
 /** Controls whose config holds functions the drawing reads: a filter's `response`, a curve's `sample`, an analyser's getters. */
-export type LiveControlType = 'filter';
+export type LiveControlType = 'filter' | 'curve';
 
-const LIVE_TYPES: readonly string[] = ['filter'] satisfies LiveControlType[];
+const LIVE_TYPES: readonly string[] = ['filter', 'curve'] satisfies LiveControlType[];
 
 const listeners = new Map<string, Set<() => void>>();
 
