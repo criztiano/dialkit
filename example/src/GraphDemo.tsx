@@ -19,7 +19,8 @@ function Demo() {
       resonance: { min: 0, max: 1, step: 0.01 },
       response: (c: number, r: number) => filterShapeResponse(inputs.shape as FilterShapeType, c, r),
     },
-    _hints: { tone: 'Cutoff and resonance of the tone filter.' },
+    gamma: { type: 'transfer', default: { points: [{ x: 0, y: 0 }, { x: 0.4, y: 0.6 }, { x: 1, y: 1 }] }, axisLabels: { x: 'In', y: 'Out' } },
+    _hints: { tone: 'Cutoff and resonance of the tone filter.', gamma: 'Click to add a point. Drag one out to remove it.' },
   }, { id: 'graph-demo' });
   return <main style={{ minHeight: '100vh', padding: 32, background: theme === 'dark' ? '#151515' : '#f4f3f1', color: theme === 'dark' ? '#ededed' : '#222', font: '13px system-ui' }}>
     <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>Switch theme</button>

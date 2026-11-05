@@ -20,6 +20,7 @@ import { Fields } from './Fields';
 import { BackgroundControl } from './BackgroundControl';
 import { LayerListControl } from './LayerListControl';
 import { FilterControl } from './FilterControl';
+import { TransferCurve } from './TransferCurve';
 import type { DialPadValue } from '../dial-pad';
 import type { AnchorValue } from '../anchor';
 import { layerAction, type LayersValue } from '../layers';
@@ -27,6 +28,7 @@ import { hasActionHints } from '../hints';
 import { useHints } from '../hooks/useHints';
 import type { BackgroundValue } from '../background';
 import type { DialFilterValue } from '../filter';
+import type { DialTransferValue } from '../transfer';
 
 interface ControlRendererProps {
   panelId: string;
@@ -351,6 +353,20 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration,
             panelId={panelId}
             control={control}
             value={value as DialFilterValue}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+          />
+        );
+
+      case 'transfer':
+        return (
+          <TransferCurve
+            key={control.path}
+            label={control.label}
+            hint={control.hint}
+            value={value as DialTransferValue}
+            height={control.transfer?.height}
+            grid={control.transfer?.grid}
+            axisLabels={control.transfer?.axisLabels}
             onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
           />
         );

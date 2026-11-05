@@ -64,6 +64,8 @@ export type { LayerListControlProps } from './layer-list-control';
 export { FilterControl } from './components/FilterControl';
 export { filterShapeResponse } from './filter';
 export type { FilterShapeType } from './filter';
+export { TransferCurve } from './components/TransferCurve';
+export { sampleTransfer, transferLut } from './transfer';
 export { layerAction, normalizeLayersValue, parseLayerAction } from './layers';
 export { backgroundGradientCss, backgroundMediaCss, paintGradient } from './background';
 export * from './background-api';
@@ -95,6 +97,9 @@ export type {
   DialFilterAxisConfig,
   DialFilterConfig,
   DialFilterValue,
+  DialTransferConfig,
+  DialTransferValue,
+  TransferPoint,
   BackgroundConfig,
   BackgroundValue,
   BackgroundValueUpdate,
