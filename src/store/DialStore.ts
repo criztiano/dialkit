@@ -3,11 +3,17 @@ import { parseColor } from '../color';
 import { normalizePadValue, type DialPadConfig, type DialPadValue } from '../dial-pad';
 import { normalizeAnchorValue, type AnchorConfig, type AnchorValue } from '../anchor';
 import { normalizeLayersValue, sameLayersValue, type LayersConfig, type LayersValue } from '../layers';
+import { normalizeRangeValue, type RangeSliderConfig, type RangeValue } from '../range';
+import { normalizeNumberValue, type NumberConfig } from '../number';
+import type { SliderConfig } from '../angle';
 import { defaultTransitionPresets, type TransitionPresetOption } from '../transition-presets';
 import { cloneGradient, normalizeBackgroundValue, normalizeGradient, sameBackgroundValue, type BackgroundConfig, type BackgroundGradient, type BackgroundValue, type BackgroundValueUpdate, type SavedGradient } from '../background';
 export type { DialPadAxis, DialPadConfig, DialPadValue } from '../dial-pad';
 export type { AnchorConfig, AnchorValue } from '../anchor';
 export type { LayerItem, LayersConfig, LayersValue, LayerActionKind } from '../layers';
+export type { RangeSliderConfig, RangeValue } from '../range';
+export type { NumberConfig } from '../number';
+export type { SliderConfig } from '../angle';
 export type {
   BackgroundConfig, BackgroundGradient, BackgroundMedia, BackgroundMediaDisplay, BackgroundMediaFit, BackgroundMediaRatio, BackgroundMode, BackgroundValue, BackgroundValueUpdate,
   GradientHandles, GradientPoint, GradientShape, GradientStop, SavedGradient,
@@ -82,7 +88,7 @@ export type TextConfig = {
   placeholder?: string;
 };
 
-export type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | ImageConfig | TextConfig | DialPadConfig | DialPadValue | BackgroundConfig | BackgroundValue | AnchorConfig | AnchorValue | LayersConfig | LayersValue | null;
+export type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | ImageConfig | TextConfig | DialPadConfig | DialPadValue | BackgroundConfig | BackgroundValue | AnchorConfig | AnchorValue | LayersConfig | LayersValue | SliderConfig | NumberConfig | RangeSliderConfig | RangeValue | null;
 
 /**
  * Folder keys that configure the folder instead of adding a control:
@@ -218,6 +224,10 @@ export type ResolvedValues<T extends DialConfig> = {
                   ? AnchorConfigValue<T[K]>
                 : T[K] extends LayersConfig
                   ? LayersValue
+                : T[K] extends SliderConfig | NumberConfig
+                  ? number
+                : T[K] extends RangeSliderConfig
+                  ? RangeValue
                   : T[K] extends DialConfig
                     ? ResolvedValues<T[K]>
                     : T[K];
@@ -242,6 +252,10 @@ export type DialKitValueUpdates<T extends DialConfig> = {
               ? AnchorConfigValue<T[K]>
             : T[K] extends LayersConfig
               ? LayersValue
+            : T[K] extends SliderConfig | NumberConfig
+              ? number
+            : T[K] extends RangeSliderConfig
+              ? RangeValue
               : T[K] extends DialConfig
                 ? DialKitValueUpdates<T[K]>
                 : T[K];
@@ -258,7 +272,7 @@ export type ShortcutConfig = {
 };
 
 export type ControlMeta = {
-  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'image' | 'text' | 'pad' | 'background' | 'anchor' | 'layers';
+  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'image' | 'text' | 'pad' | 'background' | 'anchor' | 'layers' | 'number' | 'range';
   path: string;
   label: string;
   min?: number;
@@ -292,6 +306,18 @@ export type ControlMeta = {
   background?: BackgroundConfig;
   /** Layers only: the config, with its default made valid. Its add, duplicate and delete send `layerAction` paths. */
   layers?: LayersConfig & { default: LayersValue };
+  /** Slider and number: replaces the shown value. */
+  formatValue?: (value: number) => string;
+  /** Slider only: drawn as an angle dial, from `display: 'dial'`. See {@link SliderConfig}. */
+  dial?: boolean;
+  /** Angle dial only: where the sweep starts and a double-click returns. See {@link SliderConfig}. */
+  origin?: number;
+  /** Angle dial only: past an end, come back around. */
+  wrap?: boolean;
+  /** Number only: the label above a centred value. See {@link NumberConfig}. */
+  orientation?: NumberConfig['orientation'];
+  /** Range only: the value a double-click on the track restores. */
+  rangeDefault?: RangeValue;
   shortcut?: ShortcutConfig;
   visibleWhen?: VisibleWhen;
   /** A short sentence about the control, from its folder's `_hints`. */
@@ -607,7 +633,10 @@ export function isLeafConfigValue(value: unknown): boolean {
     isPadConfigValue(value) ||
     isBackgroundConfigValue(value) ||
     isAnchorConfigValue(value) ||
-    isLayersConfigValue(value)
+    isLayersConfigValue(value) ||
+    isSliderConfigValue(value) ||
+    isNumberConfigValue(value) ||
+    isRangeSliderConfigValue(value)
   );
 }
 
@@ -622,6 +651,8 @@ function configDefaultValue(value: DialConfig[string]): DialValue {
   if (isAnchorConfigValue(value)) return normalizeAnchorValue(undefined, value);
   if (isBackgroundConfigValue(value)) return normalizeBackgroundValue(value.default);
   if (isLayersConfigValue(value)) return normalizeLayersValue(value.default);
+  if (isSliderConfigValue(value) || isNumberConfigValue(value)) return value.default;
+  if (isRangeSliderConfigValue(value)) return normalizeRangeValue(undefined, value);
   return value as DialValue;
 }
 
@@ -632,6 +663,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function sameControlValue(previous: unknown, next: unknown, control?: ControlMeta): boolean {
   if (Object.is(previous, next)) return true;
   if (control?.type === 'layers') return sameLayersValue(previous, next);
+  if (control?.type === 'range') return isRecord(previous) && isRecord(next) && previous.min === next.min && previous.max === next.max;
   if (control?.type === 'background') {
     return isRecord(previous) && isRecord(next) && sameBackgroundValue(previous as BackgroundValue, next as BackgroundValue);
   }
@@ -728,6 +760,18 @@ function isBackgroundConfigValue(value: unknown): value is BackgroundConfig {
 
 function isLayersConfigValue(value: unknown): value is LayersConfig {
   return hasType(value, 'layers');
+}
+
+function isSliderConfigValue(value: unknown): value is SliderConfig {
+  return hasType(value, 'slider');
+}
+
+function isNumberConfigValue(value: unknown): value is NumberConfig {
+  return hasType(value, 'number');
+}
+
+function isRangeSliderConfigValue(value: unknown): value is RangeSliderConfig {
+  return hasType(value, 'range');
 }
 
 function getFirstOptionValue(options: (string | { value: string; label: string })[]): string {
@@ -1027,6 +1071,7 @@ class DialStoreClass {
       const next = control?.type === 'pad' ? normalizePadValue(value, control.pad)
         : control?.type === 'anchor' ? normalizeAnchorValue(value, control.anchor)
         : control?.type === 'layers' ? normalizeLayersValue(value)
+        : control?.type === 'range' ? normalizeRangeValue(value, { min: control.min ?? 0, max: control.max ?? 1, default: control.rangeDefault })
         // Missing fields keep the current value, so a partial update changes only what it names.
         : control?.type === 'background' ? normalizeBackgroundValue(value, panel.values[path] as BackgroundValue)
         : value;
@@ -1915,6 +1960,25 @@ class DialStoreClass {
           control = { type: 'anchor', path, label, anchor: value };
         } else if (isBackgroundConfigValue(value)) {
           control = { type: 'background', path, label, background: value, reset: true };
+        } else if (isSliderConfigValue(value)) {
+          // The object form of the tuple; `display: 'dial'` draws an angle dial.
+          control = {
+            type: 'slider', path, label, min: value.min, max: value.max,
+            step: value.step ?? inferStep(value.min, value.max), unit: value.unit,
+            formatValue: value.formatValue, dial: value.display === 'dial', origin: value.origin, wrap: value.wrap, shortcut,
+          };
+        } else if (isNumberConfigValue(value)) {
+          control = {
+            type: 'number', path, label, min: value.min, max: value.max,
+            step: value.step ?? this.inferRange(value.default).step, unit: value.unit,
+            formatValue: value.formatValue, orientation: value.orientation,
+          };
+        } else if (isRangeSliderConfigValue(value)) {
+          control = {
+            type: 'range', path, label, min: value.min, max: value.max,
+            step: value.step ?? inferStep(value.min, value.max),
+            rangeDefault: normalizeRangeValue(undefined, value),
+          };
         } else if (typeof value === 'string') {
           // Auto-detect: hex color vs text
           if (parseColor(value) && value !== 'transparent') {
@@ -2047,6 +2111,10 @@ class DialStoreClass {
         return normalizePadValue(existingValue, control.pad);
       case 'anchor':
         return normalizeAnchorValue(existingValue, control.anchor);
+      case 'number':
+        return normalizeNumberValue(existingValue, defaultValue as number, control.step, control.min, control.max);
+      case 'range':
+        return normalizeRangeValue(existingValue, { min: control.min ?? 0, max: control.max ?? 1, default: defaultValue as RangeValue });
       case 'layers':
         // The app owns the rows: a valid stored value is kept, else the default.
         return normalizeLayersValue(existingValue, control.layers?.default);

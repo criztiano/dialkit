@@ -38,6 +38,9 @@ export type {
 // Individual components (for advanced usage)
 export { ControlRenderer } from './components/ControlRenderer';
 export { Slider } from './components/Slider';
+export { RangeSlider } from './components/RangeSlider';
+export { NumberControl } from './components/NumberControl';
+export { AngleDial } from './components/AngleDial';
 export { Toggle } from './components/Toggle';
 export { Folder } from './components/Folder';
 export { ButtonGroup } from './components/ButtonGroup';
@@ -161,6 +164,10 @@ export type {
   PadGroupConfig,
   FieldsConfig,
   RangeConfig,
+  RangeSliderConfig,
+  RangeValue,
+  NumberConfig,
+  SliderConfig,
   LayerItem,
   LayersConfig,
   LayersValue,

@@ -2289,6 +2289,36 @@
 .dialkit-anchor-cell[aria-checked="true"] .dialkit-anchor-dot { background: var(--dial-text-primary); }
 .dialkit-anchor-cell:focus-visible .dialkit-anchor-dot { box-shadow: 0 0 0 3px var(--dial-focus-ring); }
 @media (prefers-reduced-motion: reduce) { .dialkit-anchor-dot { transition: none; } }
+/* ── Range, number and angle dial: they draw with the slider's row, label and value ── */
+/* Range: the fill sits between two handles; each handle is a slider for the keyboard. */
+.dialkit-range .dialkit-range-handle:focus-visible { outline: none; opacity: 0.9 !important; box-shadow: 0 0 0 2px var(--dial-focus-ring); }
+.dialkit-range-value { display: inline-flex; align-items: baseline; }
+.dialkit-range-bound { cursor: text; border-radius: 4px; transition: color 0.15s; }
+.dialkit-range-bound:hover { color: var(--dial-text-focus); }
+.dialkit-range-dash { margin: 0 4px; color: var(--dial-text-tertiary); }
+.dialkit-slider:has(.dialkit-range-handle:focus-visible) .dialkit-slider-value { color: var(--dial-text-focus); }
+/* Number: no track; a drag anywhere on the row scrubs it. */
+.dialkit-number { cursor: ew-resize; transition: background 0.15s; }
+.dialkit-number:hover, .dialkit-number[data-scrubbing] { background: var(--dial-surface-hover); }
+.dialkit-number:is(:hover, :focus-visible, [data-scrubbing]) .dialkit-slider-value { color: var(--dial-text-focus); }
+.dialkit-number-vertical { height: calc(var(--dial-row-height) * 1.6); }
+.dialkit-number-vertical .dialkit-number { cursor: ns-resize; }
+.dialkit-number-vertical .dialkit-slider-label { top: 9px; left: 50%; transform: translateX(-50%); }
+.dialkit-number-vertical .dialkit-slider-value { top: auto; bottom: 9px; right: 50%; transform: translateX(50%); }
+.dialkit-number-vertical .dialkit-slider-input { top: auto; bottom: 4px; right: 50%; height: 20px; transform: translateX(50%); text-align: center; }
+/* Angle dial: the label and value of a slider row, with the dial at its end. */
+.dialkit-angle { position: relative; height: var(--dial-row-height); border-radius: var(--dial-radius); background: var(--dial-surface); user-select: none; transition: background 0.15s; }
+.dialkit-angle:hover, .dialkit-angle[data-dragging] { background: var(--dial-surface-hover); }
+.dialkit-angle .dialkit-angle-value { right: var(--dial-row-height); pointer-events: none; }
+.dialkit-angle:is(:hover, [data-dragging], :has(.dialkit-angle-dial:focus-visible)) .dialkit-slider-value { color: var(--dial-text-focus); }
+.dialkit-angle-dial { position: absolute; top: 0; right: 0; display: grid; place-items: center; width: var(--dial-row-height); height: 100%; border-radius: var(--dial-radius); cursor: grab; touch-action: none; }
+.dialkit-angle[data-dragging] .dialkit-angle-dial { cursor: grabbing; }
+.dialkit-angle-dial svg { width: 22px; height: 22px; overflow: visible; }
+.dialkit-angle-face { fill: var(--dial-surface-active); stroke: var(--dial-border-hover); stroke-width: 1; transition: fill 0.15s; }
+.dialkit-angle:is(:hover, [data-dragging]) .dialkit-angle-face { fill: var(--dial-border-hover); }
+.dialkit-angle-sweep { fill: none; stroke: var(--dial-text-tertiary); stroke-width: 2; stroke-linecap: round; }
+.dialkit-angle-needle { stroke: var(--dial-text-primary); stroke-width: 2; stroke-linecap: round; }
+@media (prefers-reduced-motion: reduce) { .dialkit-number, .dialkit-angle, .dialkit-angle-face, .dialkit-range-bound { transition: none; } }
 /* ── Layer list (layer-list-control.ts) ── */
 .dialkit-layers { display: flex; flex-direction: column; gap: var(--dial-row-gap); }
 /* The add button spans the list, drawn with a dashed edge. */
