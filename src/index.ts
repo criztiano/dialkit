@@ -61,6 +61,9 @@ export { BackgroundControl } from './components/BackgroundControl';
 export type { BackgroundControlProps } from './background-control';
 export { LayerListControl } from './components/LayerListControl';
 export type { LayerListControlProps } from './layer-list-control';
+export { FilterControl } from './components/FilterControl';
+export { filterShapeResponse } from './filter';
+export type { FilterShapeType } from './filter';
 export { layerAction, normalizeLayersValue, parseLayerAction } from './layers';
 export { backgroundGradientCss, backgroundMediaCss, paintGradient } from './background';
 export * from './background-api';
@@ -89,6 +92,9 @@ export type {
   DialPadValue,
   DialXYAxis,
   DialXYConfig,
+  DialFilterAxisConfig,
+  DialFilterConfig,
+  DialFilterValue,
   BackgroundConfig,
   BackgroundValue,
   BackgroundValueUpdate,

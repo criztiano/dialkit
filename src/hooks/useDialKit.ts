@@ -10,6 +10,7 @@ import type {
   ShortcutConfig,
 } from '../store/DialStore';
 import { useDialStorePanel } from './useDialStorePanel';
+import { syncLiveConfigs } from '../live-config';
 
 export interface UseDialOptions {
   id?: string;
@@ -120,6 +121,9 @@ export function useDialKitController<T extends DialConfig>(
   onActionRef.current = options?.onAction;
   const onResetRef = useRef(options?.onReset);
   onResetRef.current = options?.onReset;
+
+  // Functions in the config (a curve's `sample`) can close over this render's state.
+  useEffect(() => { syncLiveConfigs(panelId, configRef.current); });
 
   // Subscribe to action events
   useEffect(() => {

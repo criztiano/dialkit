@@ -3,12 +3,14 @@ import { parseColor } from '../color';
 import { normalizePadValue, type DialPadConfig, type DialPadValue } from '../dial-pad';
 import { normalizeAnchorValue, type AnchorConfig, type AnchorValue } from '../anchor';
 import { xyPadConfig, type DialXYConfig } from '../xy-pad';
+import { normalizeFilterValue, type DialFilterConfig, type DialFilterValue } from '../filter';
 import { normalizeLayersValue, sameLayersValue, type LayersConfig, type LayersValue } from '../layers';
 import { defaultTransitionPresets, type TransitionPresetOption } from '../transition-presets';
 import { cloneGradient, normalizeBackgroundValue, normalizeGradient, sameBackgroundValue, type BackgroundConfig, type BackgroundGradient, type BackgroundValue, type BackgroundValueUpdate, type SavedGradient } from '../background';
 export type { DialPadAxis, DialPadConfig, DialPadValue } from '../dial-pad';
 export type { AnchorConfig, AnchorValue } from '../anchor';
 export type { DialXYAxis, DialXYConfig } from '../xy-pad';
+export type { DialFilterAxisConfig, DialFilterConfig, DialFilterValue } from '../filter';
 export type { LayerItem, LayersConfig, LayersValue, LayerActionKind } from '../layers';
 export type {
   BackgroundConfig, BackgroundGradient, BackgroundMedia, BackgroundMediaDisplay, BackgroundMediaFit, BackgroundMediaRatio, BackgroundMode, BackgroundValue, BackgroundValueUpdate,
@@ -84,7 +86,7 @@ export type TextConfig = {
   placeholder?: string;
 };
 
-export type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | ImageConfig | TextConfig | DialPadConfig | DialPadValue | DialXYConfig | BackgroundConfig | BackgroundValue | AnchorConfig | AnchorValue | LayersConfig | LayersValue | null;
+export type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | ImageConfig | TextConfig | DialPadConfig | DialPadValue | DialXYConfig | DialFilterConfig | DialFilterValue | BackgroundConfig | BackgroundValue | AnchorConfig | AnchorValue | LayersConfig | LayersValue | null;
 
 /**
  * Folder keys that configure the folder instead of adding a control:
@@ -214,6 +216,8 @@ export type ResolvedValues<T extends DialConfig> = {
               ? string
               : T[K] extends DialPadConfig | DialXYConfig
                 ? DialPadValue
+              : T[K] extends DialFilterConfig
+                ? DialFilterValue
                 : T[K] extends BackgroundConfig
                   ? BackgroundValue
                 : T[K] extends AnchorConfig
@@ -238,6 +242,8 @@ export type DialKitValueUpdates<T extends DialConfig> = {
           ? string
           : T[K] extends DialPadConfig | DialXYConfig
             ? DialPadValue
+          : T[K] extends DialFilterConfig
+            ? DialFilterValue
             : T[K] extends BackgroundConfig
               ? BackgroundValueUpdate
             : T[K] extends AnchorConfig
@@ -260,7 +266,7 @@ export type ShortcutConfig = {
 };
 
 export type ControlMeta = {
-  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'image' | 'text' | 'pad' | 'background' | 'anchor' | 'layers';
+  type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'image' | 'text' | 'pad' | 'background' | 'anchor' | 'layers' | 'filter';
   path: string;
   label: string;
   min?: number;
@@ -290,6 +296,8 @@ export type ControlMeta = {
   add?: SelectAddConfig;
   placeholder?: string;
   pad?: DialPadConfig;
+  /** Filter only: the config as written; its `response` is kept fresh by `syncLiveConfigs`. */
+  filter?: DialFilterConfig;
   anchor?: AnchorConfig;
   background?: BackgroundConfig;
   /** Layers only: the config, with its default made valid. Its add, duplicate and delete send `layerAction` paths. */
@@ -608,6 +616,7 @@ export function isLeafConfigValue(value: unknown): boolean {
     isTextConfigValue(value) ||
     isPadConfigValue(value) ||
     isXYConfigValue(value) ||
+    isFilterConfigValue(value) ||
     isBackgroundConfigValue(value) ||
     isAnchorConfigValue(value) ||
     isLayersConfigValue(value)
@@ -623,6 +632,7 @@ function configDefaultValue(value: DialConfig[string]): DialValue {
   if (isTextConfigValue(value)) return value.default ?? '';
   if (isPadConfigValue(value)) return normalizePadValue(undefined, value);
   if (isXYConfigValue(value)) return normalizePadValue(undefined, xyPadConfig(value));
+  if (isFilterConfigValue(value)) return normalizeFilterValue(value.default, value);
   if (isAnchorConfigValue(value)) return normalizeAnchorValue(undefined, value);
   if (isBackgroundConfigValue(value)) return normalizeBackgroundValue(value.default);
   if (isLayersConfigValue(value)) return normalizeLayersValue(value.default);
@@ -725,6 +735,10 @@ function isPadConfigValue(value: unknown): value is DialPadConfig {
 /** An `xy` config is parsed as a pad: see {@link xyPadConfig}. */
 function isXYConfigValue(value: unknown): value is DialXYConfig {
   return hasType(value, 'xy');
+}
+
+function isFilterConfigValue(value: unknown): value is DialFilterConfig {
+  return hasType(value, 'filter');
 }
 
 function isAnchorConfigValue(value: unknown): value is AnchorConfig {
@@ -1036,6 +1050,7 @@ class DialStoreClass {
       const next = control?.type === 'pad' ? normalizePadValue(value, control.pad)
         : control?.type === 'anchor' ? normalizeAnchorValue(value, control.anchor)
         : control?.type === 'layers' ? normalizeLayersValue(value)
+        : control?.type === 'filter' ? normalizeFilterValue(value, control.filter)
         // Missing fields keep the current value, so a partial update changes only what it names.
         : control?.type === 'background' ? normalizeBackgroundValue(value, panel.values[path] as BackgroundValue)
         : value;
@@ -1920,6 +1935,8 @@ class DialStoreClass {
           control = { type: 'pad', path, label, pad: value };
         } else if (isXYConfigValue(value)) {
           control = { type: 'pad', path, label, pad: xyPadConfig(value) };
+        } else if (isFilterConfigValue(value)) {
+          control = { type: 'filter', path, label, filter: value };
         } else if (isLayersConfigValue(value)) {
           control = { type: 'layers', path, label, layers: { ...value, default: normalizeLayersValue(value.default) } };
         } else if (isAnchorConfigValue(value)) {
@@ -2058,6 +2075,8 @@ class DialStoreClass {
         return normalizePadValue(existingValue, control.pad);
       case 'anchor':
         return normalizeAnchorValue(existingValue, control.anchor);
+      case 'filter':
+        return normalizeFilterValue(existingValue, control.filter);
       case 'layers':
         // The app owns the rows: a valid stored value is kept, else the default.
         return normalizeLayersValue(existingValue, control.layers?.default);

@@ -19,12 +19,14 @@ import { AnchorControl } from './AnchorControl';
 import { Fields } from './Fields';
 import { BackgroundControl } from './BackgroundControl';
 import { LayerListControl } from './LayerListControl';
+import { FilterControl } from './FilterControl';
 import type { DialPadValue } from '../dial-pad';
 import type { AnchorValue } from '../anchor';
 import { layerAction, type LayersValue } from '../layers';
 import { hasActionHints } from '../hints';
 import { useHints } from '../hooks/useHints';
 import type { BackgroundValue } from '../background';
+import type { DialFilterValue } from '../filter';
 
 interface ControlRendererProps {
   panelId: string;
@@ -340,6 +342,17 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration,
               onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
             />
           </Folder>
+        );
+
+      case 'filter':
+        return (
+          <FilterControl
+            key={control.path}
+            panelId={panelId}
+            control={control}
+            value={value as DialFilterValue}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+          />
         );
 
       case 'action':
