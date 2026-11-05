@@ -13,6 +13,15 @@ interface SliderProps {
   max?: number;
   step?: number;
   unit?: string;
+  /** Shows this text in place of the number and `unit`. Typing a value still edits the number. */
+  formatValue?: (value: number) => string;
+  /**
+   * Fills from this value instead of from `min`, toward either side of it.
+   * While dragging, the value catches at the origin for a few pixels.
+   */
+  origin?: number;
+  /** The same as `origin={0}`. */
+  bipolar?: boolean;
   shortcut?: ShortcutConfig;
   shortcutActive?: boolean;
   hint?: string;
@@ -23,6 +32,8 @@ const DEAD_ZONE = 32;
 const MAX_CURSOR_RANGE = 200;
 const MAX_STRETCH = 8;
 const SNAP_SPRING = { type: 'spring', stiffness: 300, damping: 25, mass: 0.8 } as const;
+/** Half the width of the catch at the origin, in pixels of track. */
+const DETENT_PX = 6;
 
 export function Slider({
   label,
@@ -32,6 +43,9 @@ export function Slider({
   max = 1,
   step = 0.01,
   unit,
+  formatValue,
+  origin,
+  bipolar,
   shortcut,
   shortcutActive,
   hint,
@@ -65,10 +79,19 @@ export function Slider({
 
   const percentage = ((value - min) / (max - min)) * 100;
   const isActive = isInteracting || isHovered;
+  // Without an origin (or with origin at `min`) the fill starts at the left edge.
+  const resolvedOrigin = Math.min(max, Math.max(min, origin ?? (bipolar ? 0 : min)));
+  const hasOrigin = resolvedOrigin > min;
+  const originPercent = ((resolvedOrigin - min) / (max - min)) * 100;
 
   // Motion values for imperative animation
   const fillPercent = useMotionValue(percentage);
-  const fillWidth = useTransform(fillPercent, (pct) => `${pct}%`);
+  const fillWidth = useTransform(fillPercent, (pct) =>
+    hasOrigin ? `${Math.abs(pct - originPercent)}%` : `${pct}%`
+  );
+  const fillLeft = useTransform(fillPercent, (pct) =>
+    hasOrigin ? `${Math.min(pct, originPercent)}%` : '0%'
+  );
   const handleLeft = useTransform(fillPercent, (pct) =>
     `max(5px, calc(${pct}% - 9px))`
   );
@@ -124,6 +147,17 @@ export function Slider({
   const percentFromValue = useCallback(
     (v: number) => ((v - min) / (max - min)) * 100,
     [min, max]
+  );
+
+  const applyDetent = useCallback(
+    (v: number) => {
+      if (!hasOrigin) return v;
+      const trackWidth = wrapperRef.current?.offsetWidth ?? 0;
+      if (trackWidth <= 0) return v;
+      const detentValue = (DETENT_PX / trackWidth) * (max - min);
+      return Math.abs(v - resolvedOrigin) <= detentValue ? resolvedOrigin : v;
+    },
+    [hasOrigin, max, min, resolvedOrigin]
   );
 
   const computeRubberStretch = useCallback(
@@ -187,7 +221,7 @@ export function Slider({
           }
         }
 
-        const newValue = positionToValue(e.clientX);
+        const newValue = applyDetent(positionToValue(e.clientX));
         const newPct = percentFromValue(newValue);
         if (animRef.current) {
           animRef.current.stop();
@@ -201,6 +235,7 @@ export function Slider({
       isInteracting,
       positionToValue,
       percentFromValue,
+      applyDetent,
       onChange,
       fillPercent,
       rubberStretchPx,
@@ -344,7 +379,7 @@ export function Slider({
     handleInputSubmit();
   };
 
-  const displayValue = value.toFixed(decimalsForStep(step, min, max));
+  const displayValue = formatValue ? formatValue(value) : value.toFixed(decimalsForStep(step, min, max));
 
   // Handle opacity: not active → 0, active → 0.5, dragging → 0.9
   // Value dodge: fade when handle overlaps label (left) or value (right)
@@ -407,7 +442,7 @@ export function Slider({
         aria-valuemin={min}
         aria-valuemax={max}
         aria-valuenow={value}
-        aria-valuetext={`${displayValue}${unit ? ` ${unit}` : ''}`}
+        aria-valuetext={formatValue ? displayValue : `${displayValue}${unit ? ` ${unit}` : ''}`}
         onKeyDown={(e) => handleSliderKey(e, value, min, max, step, (next) => {
           animRef.current?.stop(); animRef.current = null;
           fillPercent.jump(percentFromValue(next)); onChange(next);
@@ -429,6 +464,7 @@ export function Slider({
         <motion.div
           className="dialkit-slider-fill"
           style={{
+            left: fillLeft,
             width: fillWidth,
           }}
         />
@@ -486,7 +522,7 @@ export function Slider({
             style={{ cursor: isValueEditable ? 'text' : 'default' }}
           >
             {displayValue}
-            {unit && (
+            {unit && !formatValue && (
               <span className="dialkit-slider-unit" data-spaced={isWordUnit(unit) || undefined}>
                 {unit}
               </span>
