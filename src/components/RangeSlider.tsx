@@ -27,14 +27,21 @@ const CLICK_THRESHOLD = 3;
 // track's edge, with no empty track beyond it, can still be grabbed.
 const HANDLE_HIT_PX = 12;
 const SNAP_SPRING = { type: 'spring', stiffness: 300, damping: 25, mass: 0.8 } as const;
+// The slider's rubber band: past the track's ends the row stretches a little.
+const DEAD_ZONE = 32;
+const MAX_CURSOR_RANGE = 200;
+const MAX_STRETCH = 8;
+// The slider's hover delay before the numbers take a click for typing.
+const VALUE_EDIT_DELAY = 800;
 
 type DragTarget = 'min' | 'max' | 'span';
 
 /**
  * Two handles on one track. Drag a handle to move one end, drag inside the
  * span to move both, or click the empty track to bring the nearer end there.
- * Shift while dragging moves at a tenth of the speed. A click on either
- * number types it, and a double-click on the track restores the default.
+ * Shift while dragging moves at a tenth of the speed. Rest the pointer on
+ * the numbers and a click on either one types it, as on a slider; a
+ * double-click on the track restores the default.
  */
 export function RangeSlider({
   label,
@@ -59,6 +66,8 @@ export function RangeSlider({
   const valueSpanRef = useRef<HTMLSpanElement>(null);
   const [editing, setEditing] = useState<'min' | 'max' | null>(null);
   const [inputValue, setInputValue] = useState('');
+  const [isValueHovered, setIsValueHovered] = useState(false);
+  const [isValueEditable, setIsValueEditable] = useState(false);
 
   const pointerDownPos = useRef<{ x: number; y: number } | null>(null);
   const isClickRef = useRef(true);
@@ -101,6 +110,28 @@ export function RangeSlider({
   const fillWidth = useTransform<number, string>([lowMotion, highMotion], ([lo, hi]) => `${Math.max(0, hi - lo)}%`);
   const lowHandleLeft = useTransform<number, string>([lowMotion, highMotion], ([lo, hi]) => rangeHandleLefts(lo, hi).low);
   const highHandleLeft = useTransform<number, string>([lowMotion, highMotion], ([lo, hi]) => rangeHandleLefts(lo, hi).high);
+
+  const rubberStretchPx = useMotionValue(0);
+  const rubberBandWidth = useTransform(rubberStretchPx, (stretch) => `calc(100% + ${Math.abs(stretch)}px)`);
+  const rubberBandX = useTransform(rubberStretchPx, (stretch) => (stretch < 0 ? stretch : 0));
+
+  const computeRubberStretch = useCallback((clientX: number) => {
+    const rect = wrapperRectRef.current;
+    if (!rect || (clientX >= rect.left && clientX <= rect.right)) return 0;
+    const sign = clientX < rect.left ? -1 : 1;
+    const overflow = Math.max(0, (sign < 0 ? rect.left - clientX : clientX - rect.right) - DEAD_ZONE);
+    return sign * MAX_STRETCH * Math.sqrt(Math.min(overflow / MAX_CURSOR_RANGE, 1));
+  }, []);
+
+  // The numbers take a click for typing once the pointer has rested on them.
+  useEffect(() => {
+    if (!isValueHovered || editing) {
+      if (!editing) setIsValueEditable(false);
+      return;
+    }
+    const timeout = setTimeout(() => setIsValueEditable(true), VALUE_EDIT_DELAY);
+    return () => clearTimeout(timeout);
+  }, [isValueHovered, editing]);
 
   // Follow outside changes while idle, unless a spring is still settling.
   useEffect(() => {
@@ -172,6 +203,7 @@ export function RangeSlider({
         setIsDragging(true);
       }
       if (isClickRef.current) return;
+      rubberStretchPx.jump(computeRubberStretch(e.clientX));
 
       if (e.shiftKey ? !fineRef.current?.shift : fineRef.current?.shift) {
         fineRef.current = { shift: e.shiftKey, range: dragValueRef.current, x: e.clientX };
@@ -197,7 +229,7 @@ export function RangeSlider({
       dragValueRef.current = next;
       onChange(next);
     },
-    [isInteracting, positionToValue, round, min, max, value, syncMotion, onChange, stopAnims]
+    [isInteracting, positionToValue, round, min, max, value, syncMotion, onChange, stopAnims, rubberStretchPx, computeRubberStretch]
   );
 
   const endGesture = () => {
@@ -220,13 +252,15 @@ export function RangeSlider({
         settle(which, percentFromValue(which === 'min' ? next.min : next.max));
         onChange(next);
       }
+      if (rubberStretchPx.get() !== 0) animate(rubberStretchPx, 0, { type: 'spring', visualDuration: 0.35, bounce: 0.15 });
       endGesture();
     },
-    [isInteracting, positionToValue, round, value, min, max, percentFromValue, onChange, stopAnims, settle]
+    [isInteracting, positionToValue, round, value, min, max, percentFromValue, onChange, stopAnims, settle, rubberStretchPx]
   );
 
   const handlePointerCancel = () => {
     if (!pointerDownPos.current) return;
+    rubberStretchPx.jump(0);
     endGesture();
   };
 
@@ -261,6 +295,7 @@ export function RangeSlider({
     // The typed end stops at the track and at the other handle.
     if (!isNaN(parsed)) onChange(editing === 'min' ? setLow(round(parsed), value, min) : setHigh(round(parsed), value, max));
     setEditing(null);
+    setIsValueHovered(false);
   };
 
   const handleInputKeyDown = (e: React.KeyboardEvent) => {
@@ -272,6 +307,7 @@ export function RangeSlider({
     else {
       editingEnded.current = true;
       setEditing(null);
+      setIsValueHovered(false);
     }
     if (which) queueMicrotask(() => handleRefs[which].current?.focus({ preventScroll: true }));
   };
@@ -329,8 +365,16 @@ export function RangeSlider({
       aria-valuenow={value[which]}
       onKeyDown={handleKeyDown(which)}
       style={{ left, y: '-50%' }}
-      animate={{ opacity: handleOpacity(which), scaleX: isActive ? 1 : 0.25 }}
-      transition={{ scaleX: { type: 'spring', visualDuration: 0.25, bounce: 0.15 }, opacity: { duration: 0.15 } }}
+      animate={{
+        opacity: handleOpacity(which),
+        scaleX: isActive ? 1 : 0.25,
+        scaleY: isActive && dodges(which === 'min' ? lowPercent : highPercent) ? 0.75 : 1,
+      }}
+      transition={{
+        scaleX: { type: 'spring', visualDuration: 0.25, bounce: 0.15 },
+        scaleY: { type: 'spring', visualDuration: 0.2, bounce: 0.1 },
+        opacity: { duration: 0.15 },
+      }}
     />
   );
 
@@ -350,6 +394,7 @@ export function RangeSlider({
         onMouseLeave={() => setIsHovered(false)}
         onFocus={(e) => setIsFocused(e.target.classList.contains('dialkit-range-handle'))}
         onBlur={() => setIsFocused(false)}
+        style={{ width: rubberBandWidth, x: rubberBandX }}
       >
         <div className="dialkit-slider-hashmarks">
           {hashMarks.map((pct) => <div key={pct} className="dialkit-slider-hashmark" style={{ left: `${pct}%` }} />)}
@@ -375,15 +420,23 @@ export function RangeSlider({
             onDoubleClick={(e) => e.stopPropagation()}
           />
         ) : (
-          <span ref={valueSpanRef} className="dialkit-slider-value dialkit-range-value">
+          <span
+            ref={valueSpanRef}
+            className={`dialkit-slider-value dialkit-range-value ${isValueEditable ? 'dialkit-slider-value-editable' : ''}`}
+            data-editable={isValueEditable || undefined}
+            onMouseEnter={() => setIsValueHovered(true)}
+            onMouseLeave={() => setIsValueHovered(false)}
+            // Once the numbers take a click, a press anywhere on them leaves the handles alone.
+            onPointerDown={(e) => isValueEditable && e.stopPropagation()}
+            onDoubleClick={(e) => isValueEditable && e.stopPropagation()}
+          >
             {(['min', 'max'] as const).map((which, i) => (
               <span key={which} className="dialkit-range-bound-group">
                 {i === 1 && <span className="dialkit-range-dash">–</span>}
+                {/* Until the hover delay passes, a press on a number drags the range like the track. */}
                 <span
                   className="dialkit-range-bound"
-                  onClick={(e) => { e.stopPropagation(); openEditor(which); }}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onDoubleClick={(e) => e.stopPropagation()}
+                  onClick={(e) => { if (!isValueEditable) return; e.stopPropagation(); openEditor(which); }}
                 >
                   {value[which].toFixed(decimals)}
                 </span>

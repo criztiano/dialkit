@@ -10,8 +10,6 @@ interface CurvePreviewProps {
 
 // The SVG stretches to the row; non-scaling strokes keep the line weight.
 const VIEW_WIDTH = 232;
-// Inset so the stroke never clips at the domain's ends.
-const PAD_Y = 4;
 
 /** The read-only `{ type: 'curve' }` row: the app's sampler, drawn. */
 export function CurvePreview({ panelId, control }: CurvePreviewProps) {
@@ -19,15 +17,15 @@ export function CurvePreview({ panelId, control }: CurvePreviewProps) {
   const config = useLiveConfig(panelId, control, 'curve');
   const height = clampCurveHeight(config?.height);
   const plot = plotCurve(config?.sample ?? (() => NaN), { domain: config?.domain });
-  const pathData = curvePathData(plot.segments, VIEW_WIDTH, height, PAD_Y);
-  const baselineY = plot.baseline !== null ? curveY(plot.baseline, height, PAD_Y) : null;
+  const pathData = curvePathData(plot.segments, VIEW_WIDTH, height);
+  const baselineY = plot.baseline !== null ? curveY(plot.baseline, height) : null;
   const label = typeof config?.label === 'string' ? config.label : control.label;
   const aspect = config?.aspect;
 
   return (
     <div className="dialkit-graph" data-hint={control.hint}>
-      <div className="dialkit-graph-surface dialkit-curve" data-bare={config?.label === false || undefined}>
-        {config?.label !== false && <span className="dialkit-graph-label">{label}</span>}
+      {config?.label !== false && <div className="dialkit-graph-caption"><span className="dialkit-graph-label">{label}</span></div>}
+      <div className="dialkit-graph-surface dialkit-curve">
         <svg
           viewBox={`0 0 ${VIEW_WIDTH} ${height}`}
           preserveAspectRatio="none"

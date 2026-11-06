@@ -486,7 +486,7 @@ export function CurveComposer({
               {diagonal(mainRect, span, `diag-${i}`)}
               <path className="dialkit-composer-curve" d={curvePath(seg, mainRect, span, W)} />
               <text className="dialkit-composer-label" x={(span[0] + span[1]) * 0.5 * W} y={mainRect.y + 13}>
-                {seg.type}
+                {TYPE_NAMES[seg.type] ?? seg.type}
               </text>
             </g>
           );
@@ -534,7 +534,7 @@ export function CurveComposer({
             {diagonal(driverRect, [0, 1], 'driver-diag')}
             <path className="dialkit-composer-curve dialkit-composer-curve-driver" d={curvePath(driver!, driverRect, [0, 1], W)} />
             <text className="dialkit-composer-label" x={W * 0.5} y={driverRect.y + 13}>
-              driver · {driver!.type}
+              Driver · {TYPE_NAMES[driver!.type] ?? driver!.type}
             </text>
             <line ref={driverPlayheadRef} className="dialkit-composer-playhead" x1={0} y1={driverRect.y} x2={0} y2={driverRect.y + driverRect.h} style={{ stroke: playheadColor }} />
           </>

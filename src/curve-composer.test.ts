@@ -155,7 +155,7 @@ describe('library components', () => {
     let renderer!: ReturnType<typeof create>;
     const render = (enabled: boolean) => createElement(Module, { title: 'Air', enabled, onEnabledChange: (v: boolean) => calls.push(v) }, createElement('span', null, 'body'));
     act(() => { renderer = create(render(false)); });
-    const body = () => renderer.root.find((n) => n.props.className === 'dialkit-module-collapse');
+    const body = () => renderer.root.find((n) => n.type === 'div' && n.props.className === 'dialkit-module-collapse');
     assert.equal(body().props['data-open'], 'false');
     const on = renderer.root.find((n) => n.type === 'button' && n.props.children === 'On');
     act(() => on.props.onClick());
@@ -170,7 +170,7 @@ describe('library components', () => {
     act(() => {
       renderer = create(createElement(ModuleFolder, { title: 'Tension', enabled: true, onEnabledChange: () => {} }, createElement('span', null, 'body')));
     });
-    const body = () => renderer.root.find((n) => n.props.className === 'dialkit-module-collapse');
+    const body = () => renderer.root.find((n) => n.type === 'div' && n.props.className === 'dialkit-module-collapse');
     assert.equal(body().props['data-open'], 'true');
     act(() => renderer.root.find((n) => n.props.className === 'dialkit-module-header').props.onClick());
     assert.equal(body().props['data-open'], 'false');

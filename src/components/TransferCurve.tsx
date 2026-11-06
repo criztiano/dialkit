@@ -100,8 +100,8 @@ export function TransferCurve({ label, value, onChange, height = 104, grid = 4, 
 
   return (
     <div className="dialkit-graph" data-hint={hint}>
-      <div className="dialkit-graph-surface dialkit-transfer" style={{ height: plotHeight + 40 }} data-idle={isIdentityTransfer(points) || undefined}>
-        <span className="dialkit-graph-label">{label}</span>
+      <div className="dialkit-graph-caption"><span className="dialkit-graph-label">{label}</span></div>
+      <div className="dialkit-graph-surface dialkit-transfer" style={{ height: plotHeight + 24 }} data-idle={isIdentityTransfer(points) || undefined}>
         {axisLabels?.y && <span className="dialkit-transfer-axis">{axisLabels.y}</span>}
         <div
           ref={plotRef}

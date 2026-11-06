@@ -20,6 +20,7 @@ export function AnalyserRow({ panelId, control }: AnalyserRowProps) {
   const plotRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(0);
+  const [live, setLive] = useState(false);
   const height = clampCurveHeight(config?.height ?? 56);
   const label = typeof config?.label === 'string' ? config.label : control.label;
 
@@ -56,16 +57,17 @@ export function AnalyserRow({ panelId, control }: AnalyserRowProps) {
         width,
         height,
       };
-    });
+    }, setLive);
     return () => engine.destroy();
   }, []);
 
   return (
     <div className="dialkit-graph" data-hint={control.hint}>
-      <div className="dialkit-graph-surface dialkit-curve" data-bare={config?.label === false || undefined}>
-        {config?.label !== false && <span className="dialkit-graph-label">{label}</span>}
-        <div ref={plotRef} className="dialkit-analyser-plot" style={{ height }}>
+      {config?.label !== false && <div className="dialkit-graph-caption"><span className="dialkit-graph-label">{label}</span></div>}
+      <div className="dialkit-graph-surface dialkit-curve">
+        <div ref={plotRef} className="dialkit-analyser-plot" data-live={live || undefined} style={{ height }}>
           <canvas ref={canvasRef} className="dialkit-analyser-canvas" style={{ width, height }} role="img" aria-label={label} />
+          {!live && <span className="dialkit-analyser-empty">Start audio to see the signal</span>}
         </div>
       </div>
     </div>

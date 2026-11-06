@@ -37,8 +37,11 @@ function smoothThrough(ctx: CanvasRenderingContext2D, pts: Pt[]) {
   }
 }
 
-/** Draws `get()`'s analyser on `canvas` every frame until `destroy()`. The trace takes the canvas's CSS color. */
-export function createAnalyserEngine(canvas: HTMLCanvasElement, get: () => AnalyserRuntime): { destroy(): void } {
+/**
+ * Draws `get()`'s analyser on `canvas` every frame until `destroy()`. The trace takes the canvas's CSS color.
+ * `onLiveChange` hears when a node arrives or goes away, so the row can show its empty state.
+ */
+export function createAnalyserEngine(canvas: HTMLCanvasElement, get: () => AnalyserRuntime, onLiveChange?: (live: boolean) => void): { destroy(): void } {
   const ctx = canvas.getContext('2d');
   if (!ctx) return { destroy() {} };
 
@@ -177,6 +180,7 @@ export function createAnalyserEngine(canvas: HTMLCanvasElement, get: () => Analy
 
   let prevNow: number | null = null;
   let raf = 0;
+  let live = false;
   const frame = (now: number) => {
     raf = requestAnimationFrame(frame);
     const rt = get();
@@ -191,6 +195,10 @@ export function createAnalyserEngine(canvas: HTMLCanvasElement, get: () => Analy
     drawBaseline(color, rt.source);
 
     const an = rt.analyser;
+    if (!!an !== live) {
+      live = !!an;
+      onLiveChange?.(live);
+    }
     if (!an) return; // No node yet: the baseline only.
 
     const frequency = rt.source === 'frequency';

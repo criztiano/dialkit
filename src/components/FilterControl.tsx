@@ -21,8 +21,8 @@ export function FilterControl({ panelId, control, value, onChange }: FilterContr
   const path = filterResponsePath(config, v);
   return (
     <div className="dialkit-graph" data-hint={control.hint}>
-      <div className="dialkit-graph-surface" data-disabled={config.enabled === false || undefined} role="img" aria-label={`${control.label} response`}>
-        <span className="dialkit-graph-label">{control.label}</span>
+      <div className="dialkit-graph-caption"><span className="dialkit-graph-label">{control.label}</span></div>
+      <div className="dialkit-graph-surface dialkit-filter" data-disabled={config.enabled === false || undefined} role="img" aria-label={`${control.label} response`}>
         {path && (
           <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
             <path className="dialkit-graph-stroke" d={path} vectorEffect="non-scaling-stroke" />

@@ -102,7 +102,7 @@ export function filterShapeResponse(type: FilterShapeType, cutoff01: number, res
         break;
       default: mag = 1 / den;
     }
-    // Only the top is clamped: a rolloff keeps falling past the floor, and the surface clips it.
+    // Only the top is clamped: a rolloff keeps falling past the floor, and the plot clips it there.
     return Math.min((20 * Math.log10(Math.max(mag, 1e-6)) + FILTER_DB_FLOOR) / (FILTER_DB_FLOOR + FILTER_DB_CEIL), 1);
   };
 }
@@ -112,7 +112,7 @@ const FILTER_SAMPLES = 96;
 /**
  * The response as an SVG path in a 100 × 100 box, y up. The gain is drawn
  * as given, not refitted; the bottom may overshoot by one box so a steep
- * rolloff runs off the edge. Null when the response throws or is not finite.
+ * rolloff runs down to the plot's floor, which clips it. Null when the response throws or is not finite.
  */
 export function filterResponsePath(config: Pick<DialFilterConfig, 'cutoff' | 'resonance' | 'response'>, value: DialFilterValue): string | null {
   const c = filterHand01(value.cutoff, resolveFilterAxis(config.cutoff, 'cutoff'));

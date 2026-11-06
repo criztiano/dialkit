@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 import { SegmentedControl } from './SegmentedControl';
 import { useHints } from '../hooks/useHints';
 
@@ -48,13 +49,20 @@ function ModuleHeader({ title, enabled, onEnabledChange, hint, onToggle }: Omit<
 function ModuleBody({ open, children }: { open: boolean; children: ReactNode }) {
   // A folded body keeps its controls mounted; inert keeps Tab and screen readers out of them.
   const ref = useRef<HTMLDivElement>(null);
+  const reduceMotion = useReducedMotion();
   useLayoutEffect(() => { if (ref.current) ref.current.inert = !open; }, [open]);
+  // It folds on the folder's spring, so a module and a folder move alike.
   return (
-    <div ref={ref} className="dialkit-module-collapse" data-open={String(open)}>
-      <div className="dialkit-module-collapse-clip">
-        <div className="dialkit-module-inner">{children}</div>
-      </div>
-    </div>
+    <motion.div
+      ref={ref}
+      className="dialkit-module-collapse"
+      data-open={String(open)}
+      initial={false}
+      animate={{ height: open ? 'auto' : 0 }}
+      transition={reduceMotion ? { duration: 0 } : { type: 'spring', visualDuration: 0.35, bounce: 0.1 }}
+    >
+      <div className="dialkit-module-inner">{children}</div>
+    </motion.div>
   );
 }
 

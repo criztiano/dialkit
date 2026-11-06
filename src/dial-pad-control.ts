@@ -10,6 +10,9 @@ export type DialPadProps = Omit<DialPadConfig, 'type'> & {
 
 let nextId = 0;
 
+// The number keeps room for all its characters; the axis name gives way first, and only as far as it must.
+const fitValue = (input: HTMLInputElement) => input.style.setProperty('--dial-pad-value-chars', String(Math.max(1, input.value.length)));
+
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
   const el = document.createElement(tag);
   el.className = className;
@@ -83,6 +86,7 @@ export function mountDialPad(host: HTMLElement, initial: DialPadProps) {
     field.append(name, input);
     fields.append(field);
     input.addEventListener('focus', () => input.select());
+    input.addEventListener('input', () => fitValue(input));
     // With dragLabels, the axis label drags the value. A click without a drag
     // still opens the number for typing.
     name.addEventListener('pointerdown', event => {
@@ -116,6 +120,7 @@ export function mountDialPad(host: HTMLElement, initial: DialPadProps) {
       const number = input.value.trim() === '' ? NaN : Number(input.value);
       if (Number.isFinite(number)) commit({ ...value, [axis]: number });
       input.value = String(value[axis]);
+      fitValue(input);
     });
     input.addEventListener('keydown', event => {
       event.stopPropagation();
@@ -132,6 +137,7 @@ export function mountDialPad(host: HTMLElement, initial: DialPadProps) {
         const direction = event.key === 'ArrowUp' ? 1 : -1;
         commit({ ...value, [axis]: snapPadAxis(current + direction * range.step * (event.shiftKey ? 10 : 1), range) });
         input.value = String(value[axis]);
+        fitValue(input);
       }
     });
     return { axis, name, input };
@@ -159,6 +165,7 @@ export function mountDialPad(host: HTMLElement, initial: DialPadProps) {
       input.setAttribute('aria-valuemax', String(range.max));
       input.setAttribute('aria-valuenow', String(value[axis]));
       if (document.activeElement !== input) input.value = String(value[axis]);
+      fitValue(input);
       const fraction = padFraction(value[axis], range, props.mapping);
       point.style[axis === 'x' ? 'left' : 'top'] = `${(axis === 'x' ? fraction : 1 - fraction) * 100}%`;
     });
