@@ -1021,7 +1021,11 @@ export const themeCSS = `@import url('https://fonts.googleapis.com/css2?family=G
   position: relative;
   z-index: 1;
   flex: 0 0 auto;
-  padding: 6px 8px;
+  /* Centred on the row at any --dial-row-height, not only the default. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
   font-family: inherit;
   font-size: 13px;
   font-weight: 500;
