@@ -1808,8 +1808,9 @@ interface RangeSliderProps {
 /**
  * Two handles on one track. Drag a handle to move one end, drag inside the
  * span to move both, or click the empty track to bring the nearer end there.
- * Shift while dragging moves at a tenth of the speed. A click on either
- * number types it, and a double-click on the track restores the default.
+ * Shift while dragging moves at a tenth of the speed. Rest the pointer on
+ * the numbers and a click on either one types it, as on a slider; a
+ * double-click on the track restores the default.
  */
 declare function RangeSlider({ label, value: rawValue, onChange, min, max, step, defaultValue, hint, }: RangeSliderProps): react_jsx_runtime.JSX.Element;
 

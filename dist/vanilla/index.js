@@ -4742,6 +4742,7 @@ function mountImageControl(host, initial, presentation = "popover") {
 
 // src/dial-pad-control.ts
 var nextId2 = 0;
+var fitValue = (input) => input.style.setProperty("--dial-pad-value-chars", String(Math.max(1, input.value.length)));
 function element4(tag, className, text) {
   const el = document.createElement(tag);
   el.className = className;
@@ -4793,6 +4794,7 @@ function mountDialPad(host, initial) {
     field2.append(name, input);
     fields.append(field2);
     input.addEventListener("focus", () => input.select());
+    input.addEventListener("input", () => fitValue(input));
     name.addEventListener("pointerdown", (event) => {
       suppressClick = false;
       if (!props.dragLabels || event.button !== 0 || labelDrag) return;
@@ -4824,6 +4826,7 @@ function mountDialPad(host, initial) {
       const number2 = input.value.trim() === "" ? NaN : Number(input.value);
       if (Number.isFinite(number2)) commit({ ...value, [axis]: number2 });
       input.value = String(value[axis]);
+      fitValue(input);
     });
     input.addEventListener("keydown", (event) => {
       event.stopPropagation();
@@ -4840,6 +4843,7 @@ function mountDialPad(host, initial) {
         const direction = event.key === "ArrowUp" ? 1 : -1;
         commit({ ...value, [axis]: snapPadAxis(current2 + direction * range.step * (event.shiftKey ? 10 : 1), range) });
         input.value = String(value[axis]);
+        fitValue(input);
       }
     });
     return { axis, name, input };
@@ -4865,6 +4869,7 @@ function mountDialPad(host, initial) {
       input.setAttribute("aria-valuemax", String(range.max));
       input.setAttribute("aria-valuenow", String(value[axis]));
       if (document.activeElement !== input) input.value = String(value[axis]);
+      fitValue(input);
       const fraction = padFraction(value[axis], range, props.mapping);
       point.style[axis === "x" ? "left" : "top"] = `${(axis === "x" ? fraction : 1 - fraction) * 100}%`;
     });
