@@ -1,0 +1,147 @@
+import type { DialKitPersistOptions } from '../store/DialStore';
+import type { TimelineMeta, TimelineTransport } from '../store/TimelineStore';
+import { loopSpan } from '../store/TimelineStore';
+import {
+  canShareTrack,
+  computeClipState,
+  type DialTimelineValues,
+  type ParsedTimeline,
+  type TimelineClipStatic,
+  type TimelineConfig,
+} from '../timeline-core';
+
+export interface DialTimelineOptions {
+  id?: string;
+  persist?: DialKitPersistOptions;
+  /**
+   * `false` makes the sequence menu switch sequences only: no rename, lock,
+   * delete or reorder (for example a viewer of a shared page). Default `true`.
+   */
+  presetsEditable?: boolean;
+  /** `false` drops the lock button from the sequence menu. Default `true`. */
+  presetsLockable?: boolean;
+  /** Start playing on mount. Defaults to true. */
+  autoplay?: boolean;
+  /**
+   * Loop when the playhead reaches the end. `true` restarts the whole
+   * timeline; `{ from }` wraps back to that time instead, so clips before it
+   * play once and looping clips keep cycling forever. Defaults to false.
+   */
+  loop?: boolean | { from: number };
+  /**
+   * `'single'` lines every clip up on one track: clips play one after
+   * another, and dragging one stops at its neighbors. Holds plain clips
+   * only — groups, steps, props and looping clips need `'rows'`, the
+   * default.
+   */
+  track?: 'rows' | 'single';
+  /**
+   * Single track only: the bar that opens the timeline holds its start. It
+   * cannot be dragged along the lane and has no start handle, so the
+   * timeline never opens with a lead gap. Its end handle still sets its
+   * length, and whichever bar ends up first holds the pin. Lane clips never
+   * take it. Defaults to false. React dock only for now.
+   */
+  pinStart?: boolean;
+  /**
+   * Called with a clip's key when its bar is clicked (pressed and released
+   * without a drag), before the dock opens the clip's popover. Fires for
+   * every clip. To mark the clip the host is editing, name it with
+   * `TimelineStore.setHighlight(id, key)`. React dock only for now.
+   */
+  onClipClick?: (key: string) => void;
+}
+
+/** Meta a host sets beside the config, for `buildTimelineMeta`. */
+export type TimelineMetaExtras = Pick<DialTimelineOptions, 'pinStart' | 'onClipClick'>;
+
+export type TimelineActions = {
+  play: () => void;
+  pause: () => void;
+  replay: () => void;
+  seek: (time: number) => void;
+};
+
+/** One resolution of the public loop option, shared by every adapter. */
+export function resolveTimelineLoop(
+  loop: DialTimelineOptions['loop']
+): { enabled: boolean; start: number } {
+  if (typeof loop === 'object' && loop !== null) {
+    return {
+      enabled: true,
+      start: Number.isFinite(loop.from) ? Math.max(0, loop.from) : 0,
+    };
+  }
+  return { enabled: Boolean(loop), start: 0 };
+}
+
+export function buildTimelineMeta(
+  id: string,
+  name: string,
+  duration: number,
+  parsed: ParsedTimeline,
+  loop: DialTimelineOptions['loop'],
+  track: DialTimelineOptions['track'] = 'rows',
+  extras: TimelineMetaExtras = {}
+): TimelineMeta {
+  const resolvedLoop = resolveTimelineLoop(loop);
+  const single = track === 'single' && singleTrackFits(name, parsed);
+  return {
+    id,
+    name,
+    duration,
+    loop: resolvedLoop.enabled,
+    loopStart: resolvedLoop.start,
+    track: single ? 'single' : 'rows',
+    clips: parsed.clips,
+    ...(single && extras.pinStart ? { pinStart: true } : {}),
+    ...(extras.onClipClick ? { onClipClick: extras.onClipClick } : {}),
+  };
+}
+
+// Warn once per parsed config — meta is rebuilt on every edit.
+const warnedSingleTrack = new WeakSet<ParsedTimeline>();
+
+function singleTrackFits(name: string, parsed: ParsedTimeline): boolean {
+  if (canShareTrack(parsed.clips)) return true;
+  if (!warnedSingleTrack.has(parsed)) {
+    warnedSingleTrack.add(parsed);
+    console.warn(
+      `[dialkit] Timeline "${name}": track: 'single' holds plain clips only (no groups, steps, props or looping clips) — using rows.`
+    );
+  }
+  return false;
+}
+
+/**
+ * Framework-neutral frame pass. Adapters only own lifecycle and reactivity;
+ * the value shape and loop-cycle math stay identical everywhere.
+ */
+export function buildTimelineValues<T extends TimelineConfig>(
+  staticClips: TimelineClipStatic[],
+  transport: TimelineTransport,
+  timelineDuration: number,
+  loopStart: number,
+  actions: TimelineActions
+): DialTimelineValues<T> {
+  const result: Record<string, unknown> = {
+    time: transport.time,
+    playing: transport.playing,
+    duration: timelineDuration,
+    ...actions,
+  };
+
+  const span = loopSpan(transport.duration, loopStart);
+  const cycleTime = (span > 0 ? transport.wraps * span : 0) + transport.time;
+  for (const clip of staticClips) {
+    const state = computeClipState(clip, transport.time, cycleTime);
+    if (clip.group) {
+      const bucket = (result[clip.group] ??= {}) as Record<string, unknown>;
+      bucket[clip.childKey] = state;
+    } else {
+      result[clip.key] = state;
+    }
+  }
+
+  return result as DialTimelineValues<T>;
+}

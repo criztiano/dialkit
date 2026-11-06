@@ -1,9 +1,9 @@
-import type { TimelineMeta } from 'tweakers/timeline';
-import type { TweakTheme } from '../TweakRoot.svelte';
+import type { TimelineMeta } from 'dialkit/timeline';
+import type { DialTheme } from '../DialRoot.svelte';
 type $$ComponentProps = {
     meta: TimelineMeta;
     defaultOpen: boolean;
-    theme: TweakTheme;
+    theme: DialTheme;
     dockVisible: boolean;
 };
 declare const TimelineSection: import("svelte").Component<$$ComponentProps, {}, "">;

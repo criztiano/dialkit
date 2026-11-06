@@ -1,14 +1,21 @@
 <script lang="ts">
-  import { TweakStore } from 'tweakers/store';
+  import { DialStore } from 'dialkit/store';
   import {
-    clampClipMove,
+    TimelineStore,
     clampClipResizeEnd,
     clampClipResizeStart,
     clampStepResize,
     clampTrackDelay,
+    dragTimelineClip,
     formatSeconds,
-  } from 'tweakers/timeline';
-  import type { TimelineClipLoop, TimelineClipMeta, TimelineStepStatic } from 'tweakers/timeline';
+    timelineClipProgress,
+  } from 'dialkit/timeline';
+  import type {
+    TimelineClipDragBounds,
+    TimelineClipLoop,
+    TimelineClipMeta,
+    TimelineStepStatic,
+  } from 'dialkit/timeline';
 
   const DRAG_THRESHOLD_PX = 3;
 
@@ -18,6 +25,7 @@
     pointerX: number;
     at: number;
     duration: number;
+    bounds: TimelineClipDragBounds;
     stepDurations?: number[];
     clickEl: HTMLElement | null;
     moved: boolean;
@@ -32,6 +40,7 @@
     steps,
     fixedDuration,
     composite = false,
+    single = false,
     baseAt = 0,
     delayMode = false,
     pxPerSecond,
@@ -39,6 +48,8 @@
     timelineDuration,
     selected,
     selectedStepKey,
+    getDragBounds,
+    onSelect,
     onClick,
     onDrag,
   } = $props<{
@@ -50,6 +61,8 @@
     steps?: TimelineStepStatic[];
     fixedDuration: boolean;
     composite?: boolean;
+    /** Single track: the bar carries its name and fills as the playhead crosses it. */
+    single?: boolean;
     baseAt?: number;
     delayMode?: boolean;
     pxPerSecond: number;
@@ -57,6 +70,9 @@
     timelineDuration: number;
     selected: boolean;
     selectedStepKey?: string;
+    getDragBounds: (clipKey: string) => TimelineClipDragBounds;
+    /** Single track: pressing the bar, not an edge, selects it. */
+    onSelect?: (clipKey: string) => void;
     onClick: (clip: TimelineClipMeta, rect: DOMRect, stepKey?: string) => void;
     onDrag: () => void;
   }>();
@@ -68,6 +84,17 @@
   const resizable = $derived(duration > 0 && !fixedDuration && !composite);
   const durationText = $derived(`${fixedDuration && !composite ? '~' : ''}${formatSeconds(duration)}`);
   const looping = $derived(loop === 'repeat' && duration > 0);
+  // Single track: the part of the bar the playhead has crossed.
+  let time = $state(0);
+  $effect(() => {
+    if (!single) return;
+    const id = timelineId;
+    time = TimelineStore.getTransport(id).time;
+    return TimelineStore.subscribe(id, () => {
+      time = TimelineStore.getTransport(id).time;
+    });
+  });
+  const played = $derived(timelineClipProgress(time, at, duration));
   const ghostCycles = $derived.by(() => {
     const result: Array<{ start: number; duration: number; index: number }> = [];
     if (!looping) return result;
@@ -101,12 +128,14 @@
       const edge = target.dataset.edge as 'start' | 'end' | undefined;
       if (edge) mode = edge;
     }
+    if (mode === 'move') onSelect?.(clip.key);
     drag = {
       mode,
       boundaryIndex,
       pointerX: event.clientX,
       at,
       duration,
+      bounds: getDragBounds(clip.key),
       stepDurations: steps?.map((step: TimelineStepStatic) => step.duration),
       clickEl: target.closest?.('[data-step]') as HTMLElement | null,
       moved: false,
@@ -127,28 +156,32 @@
     if (drag.mode === 'boundary' && steps && drag.stepDurations) {
       const index = drag.boundaryIndex ?? 0;
       const others = drag.stepDurations.reduce((sum, value, stepIndex) => stepIndex === index ? sum : sum + value, 0);
-      TweakStore.updateValue(
+      DialStore.updateValue(
         timelineId,
         `${clip.key}.${steps[index].key ?? ''}.duration`,
         clampStepResize(drag.stepDurations[index] + dt, drag.at, others, timelineDuration)
       );
-    } else if (drag.mode === 'move') {
-      if (delayMode) {
-        TweakStore.updateValue(timelineId, `${clip.key}.delay`, clampTrackDelay(drag.at + dt - baseAt, baseAt, drag.duration, timelineDuration));
-      } else {
-        TweakStore.updateValue(timelineId, `${clip.key}.at`, clampClipMove(drag.at + dt, drag.duration, timelineDuration));
-      }
+    } else if (!delayMode && drag.mode !== 'boundary' && !(drag.mode === 'start' && steps)) {
+      // Clip bars. Cmd (Ctrl elsewhere) snaps to other clips and the playhead.
+      const next = dragTimelineClip(drag.mode, drag, dt, drag.bounds, event.metaKey || event.ctrlKey);
+      DialStore.updateValues(timelineId, {
+        ...(drag.mode !== 'end' && { [`${clip.key}.at`]: next.at }),
+        ...(drag.mode !== 'move' && { [`${clip.key}.duration`]: next.duration }),
+      });
+    } else if (drag.mode === 'move' && delayMode) {
+      // Track rows: moving the bar shifts the property's phase.
+      DialStore.updateValue(timelineId, `${clip.key}.delay`, clampTrackDelay(drag.at + dt - baseAt, baseAt, drag.duration, timelineDuration));
     } else if (drag.mode === 'end') {
-      TweakStore.updateValue(timelineId, `${clip.key}.duration`, clampClipResizeEnd(drag.duration + dt, drag.at, timelineDuration));
+      DialStore.updateValue(timelineId, `${clip.key}.duration`, clampClipResizeEnd(drag.duration + dt, drag.at, timelineDuration));
     } else if (steps && drag.stepDurations) {
       const next = clampClipResizeStart(Math.max(drag.at + dt, Math.max(baseAt, 0)), drag.at, drag.stepDurations[0]);
-      TweakStore.updateValues(timelineId, {
+      DialStore.updateValues(timelineId, {
         [delayMode ? `${clip.key}.delay` : `${clip.key}.at`]: delayMode ? Math.max(0, next.at - baseAt) : next.at,
         [`${clip.key}.${steps[0].key ?? ''}.duration`]: next.duration,
       });
     } else {
       const next = clampClipResizeStart(Math.max(drag.at + dt, Math.max(baseAt, 0)), drag.at, drag.duration);
-      TweakStore.updateValues(timelineId, {
+      DialStore.updateValues(timelineId, {
         [delayMode ? `${clip.key}.delay` : `${clip.key}.at`]: delayMode ? Math.max(0, next.at - baseAt) : next.at,
         [`${clip.key}.duration`]: next.duration,
       });
@@ -168,7 +201,7 @@
 
 {#each ghostCycles as cycle (cycle.index)}
   <div
-    class="tweakers-timeline-clip-ghost"
+    class="dialkit-timeline-clip-ghost"
     data-steps={isSteps || undefined}
     aria-hidden="true"
     style:left={`${(cycle.start - viewStart) * pxPerSecond + 1}px`}
@@ -176,58 +209,60 @@
     style:background={clip.color}
   >
     {#each steps ?? [] as step, index (step.key ?? index)}
-      <span class="tweakers-timeline-clip-ghost-segment" style:width={`${step.duration * pxPerSecond}px`}></span>
+      <span class="dialkit-timeline-clip-ghost-segment" style:width={`${step.duration * pxPerSecond}px`}></span>
     {/each}
   </div>
 {/each}
 
+<!-- A single-track bar draws 1px short of its span on each side, so butted bars keep a hairline of lane between them. -->
 <div
-  class="tweakers-timeline-clip"
+  class="dialkit-timeline-clip"
   data-steps={isSteps || undefined}
   data-composite={composite || undefined}
   data-selected={selected || undefined}
   data-dragging={dragging || undefined}
-  style:left={`${(at - viewStart) * pxPerSecond}px`}
-  style:width={`${width}px`}
-  style:background={composite ? `${clip.color}80` : clip.color}
+  style:left={`${(at - viewStart) * pxPerSecond + (single ? 1 : 0)}px`}
+  style:width={`${single ? Math.max(width - 2, 12) : width}px`}
+  style:background={single ? undefined : composite ? `${clip.color}80` : clip.color}
   onpointerdown={handlePointerDown}
   onpointermove={handlePointerMove}
   onpointerup={finish}
   onpointercancel={() => finish()}
   onlostpointercapture={() => finish()}
-  title={barTitle}
   role="button"
   tabindex="0"
   aria-label={barTitle}
 >
   {#if composite}
-    {#if width > 56}<span class="tweakers-timeline-clip-duration">{durationText}</span>{/if}
+    {#if width > 56}<span class="dialkit-timeline-clip-duration">{durationText}</span>{/if}
   {:else if isSteps}
     {#each steps ?? [] as step, index (step.key ?? index)}
       <div
-        class="tweakers-timeline-clip-segment"
+        class="dialkit-timeline-clip-segment"
         data-step={step.key ?? undefined}
         data-selected={selectedStepKey === step.key || undefined}
         style:width={`${step.duration * pxPerSecond}px`}
       >
         {#if step.duration * pxPerSecond > 52}
-          <span class="tweakers-timeline-clip-duration">{formatSeconds(step.duration)}</span>
+          <span class="dialkit-timeline-clip-duration">{formatSeconds(step.duration)}</span>
         {/if}
       </div>
     {/each}
     {#each steps ?? [] as step, index (step.key ?? index)}
       {#if !step.isPhysics}
-        <div class="tweakers-timeline-clip-handle" data-boundary={index} style:left={`${boundaries[index] * pxPerSecond - 4}px`}></div>
+        <div class="dialkit-timeline-clip-handle" data-boundary={index} style:left={`${boundaries[index] * pxPerSecond - 4}px`}></div>
       {/if}
     {/each}
-    {#if !steps?.[0]?.isPhysics}<div class="tweakers-timeline-clip-handle" data-edge="start"></div>{/if}
+    {#if !steps?.[0]?.isPhysics}<div class="dialkit-timeline-clip-handle" data-edge="start"></div>{/if}
   {:else}
-    {#if resizable}<div class="tweakers-timeline-clip-handle" data-edge="start"></div>{/if}
-    {#if width > 56}<span class="tweakers-timeline-clip-duration">{durationText}</span>{/if}
-    {#if resizable}<div class="tweakers-timeline-clip-handle" data-edge="end"></div>{/if}
+    {#if single}<span class="dialkit-timeline-clip-fill" style:width={`${played * 100}%`} aria-hidden="true"></span>{/if}
+    {#if resizable}<div class="dialkit-timeline-clip-handle" data-edge="start"></div>{/if}
+    {#if single}<span class="dialkit-timeline-clip-name">{clip.label}</span>{/if}
+    {#if width > 56}<span class="dialkit-timeline-clip-duration">{durationText}</span>{/if}
+    {#if resizable}<div class="dialkit-timeline-clip-handle" data-edge="end"></div>{/if}
   {/if}
 </div>
 
 {#if looping}
-  <span class="tweakers-timeline-loop-infinity" aria-hidden="true" title="Repeats indefinitely">∞</span>
+  <span class="dialkit-timeline-loop-infinity" aria-hidden="true">∞</span>
 {/if}

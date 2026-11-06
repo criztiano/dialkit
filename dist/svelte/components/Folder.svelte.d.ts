@@ -2,23 +2,21 @@ import type { Snippet } from 'svelte';
 type $$ComponentProps = {
     title: string;
     defaultOpen?: boolean;
-    /** `false` renders a plain section header: no caret, no click-to-collapse, body always open. */
-    collapsible?: boolean;
+    open?: boolean;
     isRoot?: boolean;
     inline?: boolean;
     onOpenChange?: (isOpen: boolean) => void;
     toolbar?: Snippet;
+    /** Short text at the end of a nested folder's title row, such as the preset in use. */
+    meta?: string;
+    /** Buttons beside the title of a nested folder, such as a transition's copy and paste. */
+    actions?: Snippet;
+    panelHeightOffset?: number;
+    /** Shows a reset button after the title, visible while `changed` is true. */
+    onReset?: () => void;
+    changed?: boolean;
     children?: Snippet;
-    /** One line of help for the section, revealed on hover over the header. */
     hint?: string;
-    hintId?: string;
-    /**
-     * Root only — the panel declared `_enabled`, so the whole panel is a
-     * module: the title carries the switch and the body goes away when it is
-     * off. Same idiom as ModuleFolder, one level up.
-     */
-    enabled?: boolean;
-    onEnabledChange?: (enabled: boolean) => void;
 };
 declare const Folder: import("svelte").Component<$$ComponentProps, {}, "">;
 type Folder = ReturnType<typeof Folder>;

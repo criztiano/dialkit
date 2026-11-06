@@ -1,6 +1,7 @@
-import { createSignal, onMount, onCleanup } from 'solid-js';
-import { TweakStore } from 'tweakers/store';
-import type { SpringConfig } from 'tweakers/store';
+import { DialStore } from '../../store/DialStore';
+import type { SpringConfig } from '../../store/DialStore';
+import { HINTS } from '../../hints';
+import { fromStore } from '../primitives';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
 import { SegmentedControl } from './SegmentedControl';
@@ -12,20 +13,17 @@ interface SpringControlProps {
   label: string;
   spring: SpringConfig;
   onChange: (spring: SpringConfig) => void;
+  /** Shows a reset button in the header. See Folder.onReset. */
+  onReset?: () => void;
+  changed?: boolean;
+  hint?: string;
 }
 
 export function SpringControl(props: SpringControlProps) {
-  const [mode, setMode] = createSignal<'simple' | 'advanced'>(
-    TweakStore.getSpringMode(props.panelId, props.path)
+  const mode = fromStore(
+    () => DialStore.getSpringMode(props.panelId, props.path),
+    (notify) => DialStore.subscribe(props.panelId, notify)
   );
-
-  // Subscribe to store changes for mode
-  onMount(() => {
-    const unsub = TweakStore.subscribe(props.panelId, () => {
-      setMode(TweakStore.getSpringMode(props.panelId, props.path));
-    });
-    onCleanup(unsub);
-  });
 
   const isSimpleMode = () => mode() === 'simple';
 
@@ -45,7 +43,7 @@ export function SpringControl(props: SpringControlProps) {
       cache.advanced = props.spring;
     }
 
-    TweakStore.updateSpringMode(props.panelId, props.path, newMode);
+    DialStore.updateSpringMode(props.panelId, props.path, newMode);
 
     if (newMode === 'simple') {
       props.onChange(cache.simple);
@@ -65,12 +63,10 @@ export function SpringControl(props: SpringControlProps) {
   };
 
   return (
-    <Folder title={props.label} defaultOpen={true}>
+    <Folder title={props.label} defaultOpen={true} hint={props.hint} onReset={props.onReset} changed={props.changed}>
       <div style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}>
-        <SpringVisualization spring={props.spring} isSimpleMode={isSimpleMode()} />
-
-        <div class="tweakers-labeled-control">
-          <span class="tweakers-labeled-control-label">Type</span>
+        <div class="dialkit-labeled-control dialkit-transition-type">
+          <span class="dialkit-labeled-control-label">Type</span>
           <SegmentedControl
             options={[
               { value: 'simple' as const, label: 'Time' },
@@ -81,6 +77,8 @@ export function SpringControl(props: SpringControlProps) {
           />
         </div>
 
+        <SpringVisualization spring={props.spring} isSimpleMode={isSimpleMode()} />
+
         {isSimpleMode() ? (
           <>
             <Slider
@@ -88,9 +86,10 @@ export function SpringControl(props: SpringControlProps) {
               value={props.spring.visualDuration ?? 0.3}
               onChange={(v) => handleUpdate('visualDuration', v)}
               min={0.1}
-              max={1}
+              max={5}
               step={0.05}
               unit="s"
+              hint={HINTS.springDuration}
             />
             <Slider
               label="Bounce"
@@ -99,6 +98,7 @@ export function SpringControl(props: SpringControlProps) {
               min={0}
               max={1}
               step={0.05}
+              hint={HINTS.bounce}
             />
           </>
         ) : (
@@ -110,6 +110,7 @@ export function SpringControl(props: SpringControlProps) {
               min={1}
               max={1000}
               step={10}
+              hint={HINTS.stiffness}
             />
             <Slider
               label="Damping"
@@ -118,6 +119,7 @@ export function SpringControl(props: SpringControlProps) {
               min={1}
               max={100}
               step={1}
+              hint={HINTS.damping}
             />
             <Slider
               label="Mass"
@@ -126,6 +128,7 @@ export function SpringControl(props: SpringControlProps) {
               min={0.1}
               max={10}
               step={0.1}
+              hint={HINTS.mass}
             />
           </>
         )}

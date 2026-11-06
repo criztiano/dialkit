@@ -1,12 +1,13 @@
-import { createEffect, createSignal, from, onCleanup, type Accessor } from 'solid-js';
+import { createEffect, createMemo, createSignal, from, onCleanup, untrack, type Accessor } from 'solid-js';
 import { isServer } from 'solid-js/web';
 import type { animate } from 'motion';
+import { mountHints } from '../hints';
 
 /** Handle returned by motion's `animate()`; used instead of `any` for stored animations. */
 export type AnimationHandle = ReturnType<typeof animate>;
 
 /**
- * Bridge an external subscribe/read store (TweakStore et al.) into a Solid accessor.
+ * Bridge an external subscribe/read store (DialStore et al.) into a Solid accessor.
  * Subscribes at setup on the client so updates between setup and mount are not
  * missed; on the server it reads directly without subscribing, so per-request
  * renders never leak listeners on the module-level store singleton.
@@ -19,7 +20,8 @@ export function fromStore<T>(
   const value = from<T>((set) => {
     // Wrap in an updater so values are never mistaken for setter callbacks.
     set(() => read());
-    return subscribe(() => set(() => read()));
+    // Notifications run inside whichever computation wrote the store, so reads here must not become its dependencies.
+    return subscribe(() => set(() => untrack(read)));
   });
   return value as Accessor<T>;
 }
@@ -40,7 +42,9 @@ export interface DropdownPresence {
  * Mount/unmount bookkeeping for an animated dropdown: `open()` mounts
  * immediately (the call site's ref callback runs the enter animation),
  * `close()` plays the provided exit animation and unmounts on completion.
- * Interrupted exits are stopped and re-opened cleanly.
+ * Opening during an exit remounts the dropdown, so its enter animation runs
+ * again. motion's `stop()` does not cancel an animation that has reached its
+ * end but not yet reported it, so only the latest close may unmount.
  */
 export function createDropdownPresence(
   animateExit: (el: HTMLElement, done: () => void) => AnimationHandle
@@ -49,12 +53,17 @@ export function createDropdownPresence(
   const [mounted, setMounted] = createSignal(false);
   let el: HTMLElement | undefined;
   let exitAnim: AnimationHandle | null = null;
+  let generation = 0;
 
   onCleanup(() => exitAnim?.stop());
 
   const open = () => {
-    exitAnim?.stop();
-    exitAnim = null;
+    generation++;
+    if (exitAnim) {
+      exitAnim.stop();
+      exitAnim = null;
+      setMounted(false);
+    }
     setMounted(true);
     setIsOpen(true);
   };
@@ -66,7 +75,9 @@ export function createDropdownPresence(
       return;
     }
     exitAnim?.stop();
+    const current = ++generation;
     exitAnim = animateExit(el, () => {
+      if (current !== generation) return;
       setMounted(false);
       exitAnim = null;
     });
@@ -115,5 +126,15 @@ export function createDropdownDismiss(opts: {
         window.removeEventListener('scroll', handler, true);
       });
     }
+  });
+}
+
+/** Mounts the shared hint listeners while a control has a hint. */
+export function createHints(active: Accessor<boolean>): void {
+  const enabled = createMemo(active);
+  createEffect(() => {
+    if (!enabled()) return;
+    const hints = mountHints();
+    onCleanup(() => hints.destroy());
   });
 }

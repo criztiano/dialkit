@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { TweakStore, formatLabel } from 'tweakers/store';
-  import type { TweakValue } from 'tweakers/store';
+  import { DialStore, formatLabel } from 'dialkit/store';
+  import type { DialValue } from 'dialkit/store';
   import {
     TimelineStore,
     buildCopyInstruction,
@@ -9,34 +9,34 @@
     computeClipStaticFromValues,
     formatClock,
     normalizeTimelineValuesForCopy,
-  } from 'tweakers/timeline';
+    timelineClipDragBounds,
+    timelineClipSpans,
+  } from 'dialkit/timeline';
   import type {
     TimelineClipMeta,
     TimelineClipStatic,
     TimelineMeta,
     TimelineTrackStatic,
     TimelineTransport,
-  } from 'tweakers/timeline';
+  } from 'dialkit/timeline';
   import {
-    ICON_ADD_PRESET,
     ICON_CHEVRON,
     ICON_CHECK,
-    ICON_CLIPBOARD,
+    ICON_CLIPBOARD_PLAIN,
     ICON_LOOP,
     ICON_PAUSE,
     ICON_PLAY,
     ICON_REPLAY,
-  } from 'tweakers/icons';
-  import { findControl } from 'tweakers/shortcut-utils';
+  } from '../../../icons';
+  import { findControl } from '../../../shortcut-utils';
+  import { TIMELINE_HINTS } from '../../../hints';
   import PresetManager from '../PresetManager.svelte';
-  import type { TweakTheme } from '../TweakRoot.svelte';
+  import type { DialTheme } from '../DialRoot.svelte';
   import ClipPopover from './ClipPopover.svelte';
   import type { PopoverState } from './ClipPopover.svelte';
   import TimelineClip from './TimelineClip.svelte';
 
   const DRAG_THRESHOLD_PX = 3;
-  // Pointer travel that turns a ruler click (seek) into a loop-region drag.
-  const LOOP_DRAG_THRESHOLD_PX = 4;
   const MAJOR_TICK_TARGET_PX = 140;
   const MILLISECOND_STEP = 0.001;
   const SECOND_TICK_STEPS = [
@@ -46,7 +46,9 @@
     1, 2, 5, 10, 15, 30, 60, 120, 300, 600,
   ];
   const MIN_TIMELINE_MAX_ZOOM = 8;
-  const PLAYHEAD_FLAG_WIDTH = 52;
+  // The flag hugs its digits; the edge clamp keeps its widest (five
+  // characters) inside the lane.
+  const PLAYHEAD_FLAG_WIDTH = 38;
   const PLAYHEAD_FLAG_EDGE_OVERHANG = 1;
   const ZOOM_DRAG_DISTANCE = 180;
 
@@ -66,20 +68,6 @@
     viewStart: number;
     visibleDuration: number;
   };
-
-  // Ruler gesture: a click seeks the playhead; a drag past the threshold draws
-  // a loop region instead. Option-drag still zooms; Shift first resets zoom.
-  type RulerGesture = {
-    downClientX: number;
-    downTime: number;
-    rect: DOMRect;
-    viewStart: number;
-    visibleDuration: number;
-    moved: boolean;
-  };
-
-  // The barrel doesn't re-export the region type; recover it from the store API.
-  type TimelineLoopRegion = NonNullable<ReturnType<typeof TimelineStore.getLoopRegion>>;
 
   type GroupRow = {
     kind: 'group';
@@ -110,43 +98,38 @@
   let { meta, defaultOpen, theme, dockVisible } = $props<{
     meta: TimelineMeta;
     defaultOpen: boolean;
-    theme: TweakTheme;
+    theme: DialTheme;
     dockVisible: boolean;
   }>();
 
   let open = $state(untrack(() => defaultOpen));
   let copied = $state(false);
   let popover = $state<PopoverState | null>(null);
+  // Single track: the bar last pressed stays selected until the empty lane is pressed.
+  let selectedKey = $state<string | null>(null);
   let collapsedGroups = $state(new Set<string>());
   let expandedTracks = $state(new Set<string>());
   let zoom = $state(1);
   let viewStart = $state(0);
-  let values = $state<Record<string, TweakValue>>(TweakStore.getValues(untrack(() => meta.id)));
+  let values = $state<Record<string, DialValue>>(DialStore.getValues(untrack(() => meta.id)));
   let transport = $state<TimelineTransport>(TimelineStore.getTransport(untrack(() => meta.id)));
-  // Committed loop region (undefined = looping the whole timeline). Shares the
-  // transport notify channel; the stored reference is stable between changes.
-  let loopRegion = $state<TimelineLoopRegion | undefined>(
-    TimelineStore.getLoopRegion(untrack(() => meta.id))
-  );
-  // Live region while the user drags a new one on the ruler.
-  let loopDrag = $state<TimelineLoopRegion | null>(null);
   let laneArea = $state<HTMLDivElement>();
   let horizontalScrollElement = $state<HTMLDivElement>();
   let laneWidth = $state(0);
 
   let zoomDrag: ZoomDragState | null = null;
-  let rulerGesture: RulerGesture | null = null;
+  let rulerScrub: ScrubState | null = null;
   let trackScrub: ScrubState | null = null;
   let overviewScrub: { wasPlaying: boolean; rect: DOMRect } | null = null;
   let playheadScrub: ScrubState | null = null;
 
   const presets = $derived.by(() => {
     values;
-    return TweakStore.getPresets(meta.id);
+    return DialStore.getPresets(meta.id);
   });
   const activePresetId = $derived.by(() => {
     values;
-    return TweakStore.getActivePresetId(meta.id);
+    return DialStore.getActivePresetId(meta.id);
   });
   const visibleDuration = $derived(meta.duration > 0 ? meta.duration / zoom : meta.duration);
   const safeViewStart = $derived(clampViewStart(viewStart, meta.duration, visibleDuration));
@@ -202,8 +185,15 @@
     return { major, medium, fine, majorStep };
   });
 
+  // A single track puts every clip on one lane, named inside its bar.
+  const singleTrack = $derived(meta.track === 'single');
+  const singleClips = $derived(singleTrack
+    ? meta.clips.map((clip: TimelineClipMeta) => ({ clip, stat: computeClipStaticFromValues(values, clip, meta.duration) }))
+    : []);
+
   const rows = $derived.by(() => {
     const result: Array<GroupRow | ClipRow | TrackRow> = [];
+    if (singleTrack) return result;
     let lastGroup: string | undefined;
     for (const clip of meta.clips) {
       if (clip.group !== lastGroup) {
@@ -255,15 +245,13 @@
   });
 
   $effect(() => {
-    values = TweakStore.getValues(meta.id);
+    values = DialStore.getValues(meta.id);
     transport = TimelineStore.getTransport(meta.id);
-    loopRegion = TimelineStore.getLoopRegion(meta.id);
-    const unsubscribeValues = TweakStore.subscribe(meta.id, () => {
-      values = TweakStore.getValues(meta.id);
+    const unsubscribeValues = DialStore.subscribe(meta.id, () => {
+      values = DialStore.getValues(meta.id);
     });
     const unsubscribeTransport = TimelineStore.subscribe(meta.id, () => {
       transport = TimelineStore.getTransport(meta.id);
-      loopRegion = TimelineStore.getLoopRegion(meta.id);
     });
     return () => {
       unsubscribeValues();
@@ -273,8 +261,10 @@
 
   $effect(() => {
     if (!open || !laneArea) return;
-    const measure = () => {
-      if (laneArea) laneWidth = laneArea.getBoundingClientRect().width;
+    // Layout sizes, which a host's zoom (a scale on a parent) leaves alone:
+    // a scaled screen width would place every clip as far out as the zoom.
+    const measure = (entries?: ResizeObserverEntry[]) => {
+      if (laneArea) laneWidth = entries?.[0]?.borderBoxSize?.[0]?.inlineSize ?? laneArea.offsetWidth;
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -347,14 +337,6 @@
     ));
   }
 
-  function rulerTimeFromClientX(clientX: number, rect: DOMRect, viewStartAt: number, visibleAt: number) {
-    return clamp(
-      viewStartAt + ((clientX - rect.left) / rect.width) * visibleAt,
-      viewStartAt,
-      viewStartAt + visibleAt
-    );
-  }
-
   function handleRulerPointerDown(event: PointerEvent) {
     event.preventDefault();
     event.stopPropagation();
@@ -364,17 +346,15 @@
     target.setPointerCapture(event.pointerId);
     if (!event.altKey) {
       const reset = event.shiftKey;
-      const gestureViewStart = reset ? 0 : safeViewStart;
-      const gestureVisible = reset ? meta.duration : visibleDuration;
-      if (reset) resetView();
-      rulerGesture = {
-        downClientX: event.clientX,
-        downTime: rulerTimeFromClientX(event.clientX, rect, gestureViewStart, gestureVisible),
+      rulerScrub = {
+        wasPlaying: TimelineStore.getTransport(meta.id).playing,
         rect,
-        viewStart: gestureViewStart,
-        visibleDuration: gestureVisible,
-        moved: false,
+        viewStart: reset ? 0 : safeViewStart,
+        visibleDuration: reset ? meta.duration : visibleDuration,
       };
+      if (reset) resetView();
+      TimelineStore.pause(meta.id);
+      seek(rulerScrub, event.clientX);
       return;
     }
     const ratio = clamp((event.clientX - rect.left) / rect.width, 0, 1);
@@ -390,20 +370,8 @@
   }
 
   function handleRulerPointerMove(event: PointerEvent) {
-    if (rulerGesture) {
-      const dx = event.clientX - rulerGesture.downClientX;
-      if (!rulerGesture.moved && Math.abs(dx) <= LOOP_DRAG_THRESHOLD_PX) return;
-      rulerGesture.moved = true;
-      const current = rulerTimeFromClientX(
-        event.clientX,
-        rulerGesture.rect,
-        rulerGesture.viewStart,
-        rulerGesture.visibleDuration
-      );
-      loopDrag = {
-        start: Math.min(rulerGesture.downTime, current),
-        end: Math.max(rulerGesture.downTime, current),
-      };
+    if (rulerScrub) {
+      seek(rulerScrub, event.clientX);
       return;
     }
     if (!zoomDrag || meta.duration <= 0) return;
@@ -421,35 +389,16 @@
   }
 
   function finishRuler() {
-    const gesture = rulerGesture;
-    rulerGesture = null;
+    if (rulerScrub?.wasPlaying) TimelineStore.play(meta.id);
+    rulerScrub = null;
     zoomDrag = null;
-    if (!gesture) return;
-    const drag = loopDrag;
-    if (gesture.moved && drag) {
-      // A real drag commits a loop region (store normalizes / rejects tiny widths).
-      TimelineStore.setLoopRegion(meta.id, drag.start, drag.end);
-    } else {
-      // Negligible movement = a click: seek the playhead.
-      TimelineStore.seek(meta.id, gesture.downTime);
-    }
-    loopDrag = null;
-  }
-
-  function cancelRuler() {
-    rulerGesture = null;
-    zoomDrag = null;
-    loopDrag = null;
-  }
-
-  function handleClearLoopRegion() {
-    TimelineStore.clearLoopRegion(meta.id);
   }
 
   function handleTrackPointerDown(event: PointerEvent) {
     const target = event.target as HTMLElement;
-    if (target.closest('.tweakers-timeline-label, button')) return;
-    if (!event.shiftKey && target.closest('.tweakers-timeline-clip')) return;
+    if (target.closest('.dialkit-timeline-label, button')) return;
+    if (!event.shiftKey && target.closest('.dialkit-timeline-clip')) return;
+    selectedKey = null;
     const rect = laneArea?.getBoundingClientRect();
     if (!rect) return;
     event.preventDefault();
@@ -524,14 +473,10 @@
   }
 
   function handleCopy() {
-    const normalized = normalizeTimelineValuesForCopy(TweakStore.getValues(meta.id), meta.clips);
-    void navigator.clipboard.writeText(buildCopyInstruction('createTweakTimeline', meta.name, normalized));
+    const normalized = normalizeTimelineValuesForCopy(DialStore.getValues(meta.id), meta.clips);
+    void navigator.clipboard.writeText(buildCopyInstruction('createDialTimeline', meta.name, normalized));
     copied = true;
     window.setTimeout(() => { copied = false; }, 1500);
-  }
-
-  function handleAddPreset() {
-    TweakStore.savePreset(meta.id, `Version ${presets.length + 2}`);
   }
 
   function toggleSet(current: Set<string>, key: string): Set<string> {
@@ -554,7 +499,7 @@
   }
 
   function getClipControls(path: string, exclusions?: Set<string>) {
-    const panel = TweakStore.getPanel(meta.id);
+    const panel = DialStore.getPanel(meta.id);
     const folder = panel ? findControl(panel.controls, path) : null;
     if (!folder?.children) return [];
     return folder.children.filter((control) => {
@@ -587,6 +532,18 @@
     else openClipPopover(clip, rect, stepKey);
   }
 
+  // Where a dragged bar may go: the whole timeline, or the gap between its
+  // neighbors on a single track. The playhead is a snap target while paused.
+  function getDragBounds(clipKey: string) {
+    const current = TimelineStore.getTransport(meta.id);
+    return timelineClipDragBounds(
+      timelineClipSpans(DialStore.getValues(meta.id), meta.clips, meta.duration),
+      clipKey,
+      meta.duration,
+      { singleTrack, playhead: current.playing ? undefined : current.time }
+    );
+  }
+
   function formatRulerSeconds(time: number, step: number): string {
     if (step >= 1 && Number.isInteger(time)) return formatClock(time);
     const decimals = Math.min(3, Math.max(1, Math.ceil(-Math.log10(step))));
@@ -598,21 +555,55 @@
   }
 </script>
 
-<div class="tweakers-timeline-section">
-  <div class="tweakers-timeline-header" data-open={open || undefined}>
-    <div class="tweakers-timeline-identity">
-      <span class="tweakers-timeline-title">{meta.name}</span>
+<div class="dialkit-timeline-section" role="group" aria-label={meta.name} data-track={singleTrack ? 'single' : undefined}>
+  <div class="dialkit-timeline-header" data-open={open || undefined}>
+    <div class="dialkit-timeline-transport">
+      <button
+        class="dialkit-toolbar-add"
+        onclick={() => transport.playing ? TimelineStore.pause(meta.id) : TimelineStore.play(meta.id)}
+        aria-label={transport.playing ? 'Pause' : 'Play'}
+        data-hint={TIMELINE_HINTS.play}
+      >
+        <span style="position:relative;width:16px;height:16px;">
+          {#if transport.playing}
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="position:absolute;inset:0;width:16px;height:16px;color:var(--dial-text-label);">
+              {#each ICON_PAUSE as path}<path d={path} fill="currentColor" />{/each}
+            </svg>
+          {:else}
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="position:absolute;inset:0;width:16px;height:16px;color:var(--dial-text-label);">
+              <path d={ICON_PLAY} fill="currentColor" />
+            </svg>
+          {/if}
+        </span>
+      </button>
+      <button class="dialkit-toolbar-add" onclick={handleReplay} aria-label="Replay" data-hint={TIMELINE_HINTS.replay}>
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="width:16px;height:16px;color:var(--dial-text-label);">
+          {#each ICON_REPLAY as path}<path d={path} fill="currentColor" />{/each}
+        </svg>
+      </button>
+      <button
+        class="dialkit-toolbar-add dialkit-timeline-toolbar-toggle dialkit-timeline-loop"
+        data-active={meta.loop || undefined}
+        aria-pressed={meta.loop}
+        aria-label="Toggle loop"
+        data-hint={TIMELINE_HINTS.loop}
+        onclick={() => TimelineStore.setLoop(meta.id, !meta.loop)}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          {#each ICON_LOOP as path}<path d={path} />{/each}
+        </svg>
+      </button>
     </div>
 
     {#if !open}
       <div
-        class="tweakers-timeline-overview"
+        class="dialkit-timeline-overview"
         onpointerdown={handleOverviewPointerDown}
         onpointermove={(event) => overviewScrub && seekOverview(event.clientX)}
         onpointerup={finishOverview}
         onpointercancel={finishOverview}
         onlostpointercapture={finishOverview}
-        title="Drag to scrub the full timeline"
+        data-hint={TIMELINE_HINTS.overview}
         role="slider"
         tabindex="0"
         aria-label="Timeline overview"
@@ -621,87 +612,44 @@
         aria-valuenow={transport.time}
       >
         <div
-          class="tweakers-timeline-overview-viewport"
+          class="dialkit-timeline-overview-viewport"
           data-zoomed={overviewViewportWidth < 99.999 || undefined}
           style:left={`${meta.duration > 0 ? (safeViewStart / meta.duration) * 100 : 0}%`}
           style:width={`${overviewViewportWidth}%`}
         ></div>
-        <div class="tweakers-timeline-overview-progress" style:width={`${overviewPlayheadPercent}%`}></div>
-        <div class="tweakers-timeline-overview-playhead" style:left={`${overviewPlayheadPercent}%`}></div>
+        <div class="dialkit-timeline-overview-progress" style:width={`${overviewPlayheadPercent}%`}></div>
+        <div class="dialkit-timeline-overview-playhead" style:left={`${overviewPlayheadPercent}%`}></div>
       </div>
     {/if}
 
-    <div class="tweakers-timeline-actions">
+    <div class="dialkit-timeline-actions">
+      <PresetManager panelId={meta.id} {presets} {activePresetId} noun="sequence" />
       <button
-        class="tweakers-timeline-loop-toggle"
-        data-active={loopRegion ? 'true' : undefined}
-        onclick={handleClearLoopRegion}
-        disabled={!loopRegion}
-        title={loopRegion
-          ? 'Looping a region · click to loop the whole timeline'
-          : 'Looping the whole timeline · drag the ruler to set a loop region'}
-        aria-label={loopRegion ? 'Clear loop region' : 'Looping whole timeline'}
-        aria-pressed={loopRegion ? true : false}
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          {#each ICON_LOOP as path}<path d={path} />{/each}
-        </svg>
-      </button>
-      <button
-        class="tweakers-toolbar-add"
-        onclick={() => transport.playing ? TimelineStore.pause(meta.id) : TimelineStore.play(meta.id)}
-        title={transport.playing ? 'Pause' : 'Play'}
-        aria-label={transport.playing ? 'Pause' : 'Play'}
-      >
-        <span style="position:relative;width:16px;height:16px;">
-          {#if transport.playing}
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="position:absolute;inset:0;width:16px;height:16px;color:var(--tweak-text-label);">
-              {#each ICON_PAUSE as path}<path d={path} fill="currentColor" />{/each}
-            </svg>
-          {:else}
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="position:absolute;inset:0;width:16px;height:16px;color:var(--tweak-text-label);">
-              <path d={ICON_PLAY} fill="currentColor" />
-            </svg>
-          {/if}
-        </span>
-      </button>
-      <button class="tweakers-toolbar-add" onclick={handleReplay} title="Replay" aria-label="Replay">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="width:16px;height:16px;color:var(--tweak-text-label);">
-          {#each ICON_REPLAY as path}<path d={path} fill="currentColor" />{/each}
-        </svg>
-      </button>
-      <button class="tweakers-toolbar-add" onclick={handleAddPreset} title="Add timeline version" aria-label="Add timeline version">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          {#each ICON_ADD_PRESET as path}<path d={path} />{/each}
-        </svg>
-      </button>
-      <PresetManager panelId={meta.id} {presets} {activePresetId} />
-      <button
-        class="tweakers-toolbar-add"
+        class="dialkit-toolbar-add"
         onclick={handleCopy}
-        title="Copy parameters"
         aria-label={copied ? 'Copied parameters' : 'Copy parameters'}
+        data-hint={TIMELINE_HINTS.copy}
       >
         <span style="position:relative;width:16px;height:16px;">
           {#if copied}
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position:absolute;inset:0;width:16px;height:16px;color:var(--tweak-text-label);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position:absolute;inset:0;width:16px;height:16px;">
               <path d={ICON_CHECK} />
             </svg>
           {:else}
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="position:absolute;inset:0;width:16px;height:16px;color:var(--tweak-text-label);">
-              <path d={ICON_CLIPBOARD.board} stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
-              <path d={ICON_CLIPBOARD.sparkle} fill="currentColor" />
-              <path d={ICON_CLIPBOARD.body} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="position:absolute;inset:0;width:16px;height:16px;">
+              <path d={ICON_CLIPBOARD_PLAIN.board} stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+              <path d={ICON_CLIPBOARD_PLAIN.body} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           {/if}
         </span>
       </button>
       <button
-        class="tweakers-timeline-chevron"
+        class="dialkit-timeline-chevron"
         data-open={open}
         aria-expanded={open}
         onclick={() => { open = !open; }}
-        title={open ? 'Collapse timeline' : 'Expand timeline'}
+        aria-label={open ? 'Collapse timeline' : 'Expand timeline'}
+        data-hint={TIMELINE_HINTS.toggle}
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <path d={ICON_CHEVRON} />
@@ -712,7 +660,7 @@
 
   {#if open}
     <div
-      class="tweakers-timeline-body"
+      class="dialkit-timeline-body"
       onwheel={handleTimelineWheel}
       onpointerdown={handleTrackPointerDown}
       onpointermove={(event) => trackScrub && seek(trackScrub, event.clientX)}
@@ -721,18 +669,18 @@
       onlostpointercapture={finishTrack}
       role="presentation"
     >
-      <div class="tweakers-timeline-grid">
-        <div class="tweakers-timeline-row tweakers-timeline-ruler-row">
-          <div class="tweakers-timeline-label"></div>
+      <div class="dialkit-timeline-grid">
+        <div class="dialkit-timeline-row dialkit-timeline-ruler-row">
+          <div class="dialkit-timeline-label"></div>
           <div
             bind:this={laneArea}
-            class="tweakers-timeline-ruler"
+            class="dialkit-timeline-ruler"
             onpointerdown={handleRulerPointerDown}
             onpointermove={handleRulerPointerMove}
             onpointerup={finishRuler}
-            onpointercancel={cancelRuler}
-            onlostpointercapture={cancelRuler}
-            title="Click to seek · drag to set a loop region · Option-drag to zoom · Shift-drag to reset zoom"
+            onpointercancel={finishRuler}
+            onlostpointercapture={finishRuler}
+            data-hint={TIMELINE_HINTS.ruler}
             role="slider"
             tabindex="0"
             aria-label="Timeline ruler"
@@ -740,43 +688,56 @@
             aria-valuemax={viewEnd}
             aria-valuenow={transport.time}
           >
-            {#if pxPerSecond > 0}
-              {@const region = loopDrag ?? loopRegion}
-              {#if region}
-                {@const bandLeft = (region.start - safeViewStart) * pxPerSecond}
-                {@const bandWidth = Math.max(0, (region.end - region.start) * pxPerSecond)}
-                <div class="tweakers-timeline-loop-dim" style={`left:0px;width:${Math.max(0, bandLeft)}px;`}></div>
-                <div class="tweakers-timeline-loop-dim" style={`left:${bandLeft + bandWidth}px;right:0px;`}></div>
-                <div
-                  class="tweakers-timeline-loop-band"
-                  data-live={loopDrag ? 'true' : undefined}
-                  style={`left:${bandLeft}px;width:${bandWidth}px;`}
-                ></div>
-              {/if}
-            {/if}
             {#each ticks.fine as time}
-              <div class="tweakers-timeline-tick tweakers-timeline-tick-fine" style:left={`${(time - safeViewStart) * pxPerSecond}px`}></div>
+              <div class="dialkit-timeline-tick dialkit-timeline-tick-fine" style:left={`${(time - safeViewStart) * pxPerSecond}px`}></div>
             {/each}
             {#each ticks.medium as time}
-              <div class="tweakers-timeline-tick tweakers-timeline-tick-medium" style:left={`${(time - safeViewStart) * pxPerSecond}px`}></div>
+              <div class="dialkit-timeline-tick dialkit-timeline-tick-medium" style:left={`${(time - safeViewStart) * pxPerSecond}px`}></div>
             {/each}
             {#each ticks.major as time}
-              <div class="tweakers-timeline-tick" style:left={`${(time - safeViewStart) * pxPerSecond}px`}>
-                <span class="tweakers-timeline-tick-label">{formatRulerSeconds(time, ticks.majorStep)}</span>
+              <div class="dialkit-timeline-tick" style:left={`${(time - safeViewStart) * pxPerSecond}px`}>
+                <span class="dialkit-timeline-tick-label">{formatRulerSeconds(time, ticks.majorStep)}</span>
               </div>
             {/each}
           </div>
         </div>
 
+        {#if singleTrack}
+          <div class="dialkit-timeline-row">
+            <div class="dialkit-timeline-label"></div>
+            <div class="dialkit-timeline-lane">
+              {#each singleClips as { clip, stat } (clip.key)}
+                <TimelineClip
+                  timelineId={meta.id}
+                  {clip}
+                  at={stat.at}
+                  duration={stat.duration}
+                  loop={stat.loop}
+                  fixedDuration={stat.isPhysics}
+                  single
+                  {pxPerSecond}
+                  viewStart={safeViewStart}
+                  timelineDuration={meta.duration}
+                  selected={selectedKey === clip.key || popover?.clip.key === clip.key}
+                  {getDragBounds}
+                  onSelect={(key: string) => { selectedKey = key; }}
+                  onClick={handleBarClick}
+                  onDrag={() => { popover = null; }}
+                />
+              {/each}
+            </div>
+          </div>
+        {/if}
+
         {#each rows as row (row.key)}
           {#if row.kind === 'group'}
-            <div class="tweakers-timeline-row tweakers-timeline-group-row">
-              <div class="tweakers-timeline-label">
+            <div class="dialkit-timeline-row dialkit-timeline-group-row">
+              <div class="dialkit-timeline-label">
                 <button
-                  class="tweakers-timeline-group-toggle"
+                  class="dialkit-timeline-group-toggle"
                   data-open={!row.collapsed}
                   onclick={() => toggleGroup(row.group)}
-                  title={row.collapsed ? 'Expand layer' : 'Collapse layer'}
+                  aria-label={row.collapsed ? 'Expand layer' : 'Collapse layer'}
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                     <path d={ICON_CHEVRON} />
@@ -784,20 +745,20 @@
                 </button>
                 <span>{formatLabel(row.group)}</span>
               </div>
-              <div class="tweakers-timeline-lane"></div>
+              <div class="dialkit-timeline-lane"></div>
             </div>
           {:else if row.kind === 'clip'}
-            <div class="tweakers-timeline-row" data-grouped={row.clip.group ? '' : undefined}>
-              <div class="tweakers-timeline-label">
+            <div class="dialkit-timeline-row" data-grouped={row.clip.group ? '' : undefined}>
+              <div class="dialkit-timeline-label">
                 {#if row.clip.tracks?.length}
                   <button
-                    class="tweakers-timeline-group-toggle"
+                    class="dialkit-timeline-group-toggle"
                     data-open={row.tracksOpen}
                     onclick={(event) => {
                       event.stopPropagation();
                       toggleTracks(row.clip.key);
                     }}
-                    title={row.tracksOpen ? 'Collapse properties' : 'Expand properties'}
+                    aria-label={row.tracksOpen ? 'Collapse properties' : 'Expand properties'}
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                       <path d={ICON_CHEVRON} />
@@ -806,7 +767,7 @@
                 {/if}
                 {row.clip.label}
               </div>
-              <div class="tweakers-timeline-lane">
+              <div class="dialkit-timeline-lane">
                 <TimelineClip
                   timelineId={meta.id}
                   clip={row.clip}
@@ -821,15 +782,16 @@
                   timelineDuration={meta.duration}
                   selected={row.selected}
                   selectedStepKey={row.selected ? popover?.stepKey : undefined}
+                  {getDragBounds}
                   onClick={handleBarClick}
                   onDrag={() => { popover = null; }}
                 />
               </div>
             </div>
           {:else}
-            <div class="tweakers-timeline-row tweakers-timeline-track-row" data-grouped={row.parent.group ? '' : undefined}>
-              <div class="tweakers-timeline-label">{formatLabel(row.track.prop ?? '')}</div>
-              <div class="tweakers-timeline-lane">
+            <div class="dialkit-timeline-row dialkit-timeline-track-row" data-grouped={row.parent.group ? '' : undefined}>
+              <div class="dialkit-timeline-label">{formatLabel(row.track.prop ?? '')}</div>
+              <div class="dialkit-timeline-lane">
                 <TimelineClip
                   timelineId={meta.id}
                   clip={row.clip}
@@ -845,6 +807,7 @@
                   timelineDuration={meta.duration}
                   selected={row.selected}
                   selectedStepKey={row.selected ? popover?.stepKey : undefined}
+                  {getDragBounds}
                   onClick={openClipPopover}
                   onDrag={() => { popover = null; }}
                 />
@@ -855,9 +818,9 @@
 
         {#if pxPerSecond > 0 && playheadVisible}
           <div
-            class="tweakers-timeline-playhead-control"
+            class="dialkit-timeline-playhead-control"
             data-edge={playheadEdge}
-            style={`left:calc(var(--tweak-timeline-label-w) + ${playheadX}px);--tweak-timeline-playhead-flag-offset:${playheadFlagOffset}px;`}
+            style={`left:calc(var(--dial-timeline-label-w) + ${playheadX}px);--dial-timeline-playhead-flag-offset:${playheadFlagOffset}px;`}
             onpointerdown={handlePlayheadPointerDown}
             onpointermove={(event) => playheadScrub && seek(playheadScrub, event.clientX)}
             onpointerup={finishPlayhead}
@@ -866,24 +829,24 @@
             role="slider"
             tabindex="0"
             aria-label="Timeline current time"
+            data-hint={TIMELINE_HINTS.playhead}
             aria-valuemin={0}
             aria-valuemax={meta.duration}
             aria-valuenow={transport.time}
-            title="Drag to scrub the timeline"
           >
-            <div class="tweakers-timeline-playhead-stem"></div>
-            <div class="tweakers-timeline-playhead-anchor">
-              <div class="tweakers-timeline-playhead-flag">{transport.time.toFixed(2)}</div>
+            <div class="dialkit-timeline-playhead-stem"></div>
+            <div class="dialkit-timeline-playhead-anchor">
+              <div class="dialkit-timeline-playhead-flag">{transport.time.toFixed(2)}</div>
             </div>
           </div>
         {/if}
       </div>
       {#if zoom > 1}
-        <div class="tweakers-timeline-scroll-row">
-          <div class="tweakers-timeline-label"></div>
+        <div class="dialkit-timeline-scroll-row">
+          <div class="dialkit-timeline-label"></div>
           <div
             bind:this={horizontalScrollElement}
-            class="tweakers-timeline-horizontal-scroll"
+            class="dialkit-timeline-horizontal-scroll"
             onscroll={handleHorizontalScroll}
             aria-label="Timeline horizontal scroll"
           >
@@ -895,6 +858,15 @@
   {/if}
 
   {#if popover}
-    <ClipPopover panelId={meta.id} {popover} {values} {theme} onClose={() => { popover = null; }} />
+    <ClipPopover
+      panelId={meta.id}
+      {popover}
+      {values}
+      {theme}
+      maxDuration={singleTrack && !popover.stepKey
+        ? getDragBounds(popover.clip.key).end - computeClipStaticFromValues(values, popover.clip, meta.duration).at
+        : undefined}
+      onClose={() => { popover = null; }}
+    />
   {/if}
 </div>

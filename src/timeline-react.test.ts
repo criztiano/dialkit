@@ -3,10 +3,10 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { useTweakTimeline } from './hooks/useTweakTimeline';
-import { TweakStore } from 'tweakers/store';
-import { TimelineStore } from 'tweakers/timeline';
-import type { TimelineConfig } from 'tweakers/timeline';
+import { useDialTimeline } from './hooks/useDialTimeline';
+import { DialStore } from './store/DialStore';
+import { TimelineStore } from './store/TimelineStore';
+import type { TimelineConfig } from './timeline-core';
 
 type TimelineSnapshot = {
   duration: number;
@@ -22,14 +22,46 @@ function TimelineHarness({
   id: string;
   config: TimelineConfig;
 }) {
-  latest = useTweakTimeline('React Timeline Test', config, {
+  latest = useDialTimeline('React Timeline Test', config, {
     id,
     autoplay: false,
   }) as unknown as TimelineSnapshot;
   return null;
 }
 
-describe('useTweakTimeline (React)', () => {
+describe('useDialTimeline (React)', () => {
+  it('does not recursively update when a loop region is passed inline', () => {
+    const id = 'react-timeline-inline-loop';
+    const config = {
+      intro: { at: 0, duration: 0.1 },
+      orbit: { at: 0.1, duration: 1, loop: true },
+    } as TimelineConfig;
+    let renderer: ReactTestRenderer | undefined;
+
+    function InlineLoopHarness() {
+      useDialTimeline('React Inline Loop Test', config, {
+        id,
+        autoplay: false,
+        loop: { from: 0.1 },
+        track: 'single',
+      });
+      return null;
+    }
+
+    try {
+      act(() => {
+        renderer = create(createElement(InlineLoopHarness));
+      });
+
+      assert.equal(TimelineStore.getTimeline(id)?.loop, true);
+      assert.equal(TimelineStore.getTimeline(id)?.loopStart, 0.1);
+      // A looping clip needs its own row, so a single track falls back.
+      assert.equal(TimelineStore.getTimeline(id)?.track, 'rows');
+    } finally {
+      act(() => renderer?.unmount());
+    }
+  });
+
   it('extends the registered transport when a live physics edit grows the final clip', () => {
     const id = 'react-timeline-live-duration';
     const config = {
@@ -52,7 +84,7 @@ describe('useTweakTimeline (React)', () => {
       assert.equal(TimelineStore.getTransport(id).duration, 2.15);
 
       act(() => {
-        TweakStore.updateValue(id, 'dismiss.transition', {
+        DialStore.updateValue(id, 'dismiss.transition', {
           type: 'spring',
           stiffness: 200,
           damping: 25,
@@ -87,11 +119,48 @@ describe('useTweakTimeline (React)', () => {
     });
 
     assert.equal(TimelineStore.getTimelines().filter((timeline) => timeline.id === id).length, 1);
-    assert.equal(TweakStore.getPanel(id)?.kind, 'timeline');
+    assert.equal(DialStore.getPanel(id)?.kind, 'timeline');
 
     act(() => renderer?.unmount());
 
     assert.equal(TimelineStore.getTimeline(id), undefined);
-    assert.equal(TweakStore.getPanel(id), undefined);
+    assert.equal(DialStore.getPanel(id), undefined);
+  });
+
+  it('passes the clip click and the start pin to the store, through one stable callback', () => {
+    const id = 'react-timeline-clip-click';
+    const config = {
+      a: { at: 0, duration: 1 },
+      b: { at: 1, duration: 1 },
+    } as TimelineConfig;
+    const clicks: string[] = [];
+    let renderer: ReactTestRenderer | undefined;
+
+    function ClickHarness({ round }: { round: number }) {
+      useDialTimeline('React Clip Click Test', config, {
+        id,
+        autoplay: false,
+        track: 'single',
+        pinStart: true,
+        // A new inline function on every render.
+        onClipClick: (key) => clicks.push(`${round}:${key}`),
+      });
+      return null;
+    }
+
+    try {
+      act(() => { renderer = create(createElement(ClickHarness, { round: 1 })); });
+      const first = TimelineStore.getTimeline(id);
+      assert.equal(first?.track, 'single');
+      assert.equal(first?.pinStart, true);
+      first?.onClipClick?.('a');
+      act(() => renderer?.update(createElement(ClickHarness, { round: 2 })));
+      // The meta did not change, and the click reaches the latest callback.
+      assert.equal(TimelineStore.getTimeline(id), first);
+      TimelineStore.getTimeline(id)?.onClipClick?.('b');
+      assert.deepEqual(clicks, ['1:a', '2:b']);
+    } finally {
+      act(() => renderer?.unmount());
+    }
   });
 });

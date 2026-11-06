@@ -1,20 +1,24 @@
+import { observeDropdownKeyboard } from '../../dropdown-keyboard';
+import { openDropdownOnKey } from '../../control-keyboard';
 import { Teleport, defineComponent, h, onMounted, ref, watch, type PropType } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
-
-type SelectOption = string | { value: string; label: string };
+import { getDialKitPortalRoot, getDropdownPosition, observeDropdownPosition, type DropdownPosition } from '../../dropdown-position';
+import { useHints } from '../useHints';
+import type { SelectConfig, SelectOption } from '../../store/DialStore';
+import { SegmentedControl } from './SegmentedControl';
 
 function toTitleCase(value: string): string {
   return value.replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function normalizeOptions(options: SelectOption[]): { value: string; label: string }[] {
+function normalizeOptions(options: SelectOption[]): Exclude<SelectOption, string>[] {
   return options.map((option) =>
     typeof option === 'string' ? { value: option, label: toTitleCase(option) } : option
   );
 }
 
-export const SelectControl = defineComponent({
-  name: 'TweakersSelectControl',
+const SelectDropdown = defineComponent({
+  name: 'DialKitSelectDropdown',
   props: {
     label: { type: String, required: true },
     value: { type: String, required: true },
@@ -22,11 +26,13 @@ export const SelectControl = defineComponent({
       type: Array as PropType<SelectOption[]>,
       required: true,
     },
+    hint: { type: String, required: false },
   },
   emits: ['change'],
   setup(props, { emit }) {
+    useHints(() => !!props.hint);
     const isOpen = ref(false);
-    const pos = ref<{ top: number; left: number; width: number; above: boolean } | null>(null);
+    const pos = ref<DropdownPosition | null>(null);
     const portalTarget = ref<HTMLElement | null>(null);
 
     const triggerRef = ref<HTMLElement | null>(null);
@@ -36,17 +42,9 @@ export const SelectControl = defineComponent({
     const selectedLabel = () => normalizedOptions().find((option) => option.value === props.value)?.label ?? props.value;
 
     const updatePos = () => {
-      if (!triggerRef.value) return;
-      const rect = triggerRef.value.getBoundingClientRect();
-      const dropdownHeight = 8 + normalizedOptions().length * 36;
-      const spaceBelow = window.innerHeight - rect.bottom - 4;
-      const above = spaceBelow < dropdownHeight && rect.top > spaceBelow;
-      pos.value = {
-        top: above ? rect.top - 4 : rect.bottom + 4,
-        left: rect.left,
-        width: rect.width,
-        above,
-      };
+      if (!triggerRef.value || !portalTarget.value) return;
+      const dropdownHeight = dropdownRef.value ? dropdownRef.value.scrollHeight + 2 : 10 + normalizedOptions().length * 36;
+      pos.value = getDropdownPosition(triggerRef.value, portalTarget.value, { dropdownHeight, fixed: true });
     };
 
     const openDropdown = () => {
@@ -88,12 +86,15 @@ export const SelectControl = defineComponent({
         closeDropdown();
       };
 
-      updatePos();
+      const stopPosition = observeDropdownPosition(triggerRef.value!, updatePos, () => dropdownRef.value);
+      const stopKeyboard = observeDropdownKeyboard(triggerRef.value!, () => dropdownRef.value, closeDropdown);
       document.addEventListener('mousedown', handleDocumentClick);
       window.addEventListener('resize', handleViewportChange);
       window.addEventListener('scroll', handleViewportChange, true);
 
       onCleanup(() => {
+        stopKeyboard();
+        stopPosition();
         document.removeEventListener('mousedown', handleDocumentClick);
         window.removeEventListener('resize', handleViewportChange);
         window.removeEventListener('scroll', handleViewportChange, true);
@@ -101,22 +102,23 @@ export const SelectControl = defineComponent({
     });
 
     onMounted(() => {
-      const root = triggerRef.value?.closest('.tweakers-root') as HTMLElement | null;
-      portalTarget.value = root ?? document.body;
+      portalTarget.value = getDialKitPortalRoot(triggerRef.value) ?? document.body;
     });
 
-    return () => h('div', { class: 'tweakers-select-row' }, [
+    return () => h('div', { class: 'dialkit-select-row', 'data-hint': props.hint }, [
       h('button', {
         ref: triggerRef,
-        class: 'tweakers-select-trigger',
+        class: 'dialkit-select-trigger',
         'data-open': String(isOpen.value),
+        type: 'button', 'aria-haspopup': 'listbox', 'aria-expanded': isOpen.value, disabled: !props.options.length,
+        onKeydown: (e: KeyboardEvent) => openDropdownOnKey(e, openDropdown),
         onClick: toggleDropdown,
       }, [
-        h('span', { class: 'tweakers-select-label' }, props.label),
-        h('div', { class: 'tweakers-select-right' }, [
-          h('span', { class: 'tweakers-select-value' }, selectedLabel()),
+        h('span', { class: 'dialkit-select-label' }, props.label),
+        h('div', { class: 'dialkit-select-right' }, [
+          h('span', { class: 'dialkit-select-value' }, selectedLabel()),
           h(motion.svg, {
-            class: 'tweakers-select-chevron',
+            class: 'dialkit-select-chevron',
             viewBox: '0 0 24 24',
             fill: 'none',
             stroke: 'currentColor',
@@ -133,9 +135,9 @@ export const SelectControl = defineComponent({
           h(AnimatePresence, null, {
             default: () => (isOpen.value && pos.value)
               ? [h(motion.div, {
-                key: 'tweakers-select-dropdown',
+                key: 'dialkit-select-dropdown',
                 ref: setDropdownRef,
-                class: 'tweakers-select-dropdown',
+                class: 'dialkit-select-dropdown',
                 initial: { opacity: 0, y: pos.value.above ? 8 : -8, scale: 0.95 },
                 animate: { opacity: 1, y: 0, scale: 1 },
                 exit: { opacity: 0, y: pos.value.above ? 8 : -8, scale: 0.95 },
@@ -143,20 +145,14 @@ export const SelectControl = defineComponent({
                 style: {
                   position: 'fixed',
                   left: `${pos.value.left}px`,
+                  top: `${pos.value.top}px`,
                   width: `${pos.value.width}px`,
-                  ...(pos.value.above
-                    ? {
-                      bottom: `${window.innerHeight - pos.value.top}px`,
-                      transformOrigin: 'bottom',
-                    }
-                    : {
-                      top: `${pos.value.top}px`,
-                      transformOrigin: 'top',
-                    }),
+                  maxHeight: `${pos.value.maxHeight}px`,
+                  transformOrigin: pos.value.above ? 'bottom' : 'top',
                 },
               }, normalizedOptions().map((option) => h('button', {
                 key: option.value,
-                class: 'tweakers-select-option',
+                class: 'dialkit-select-option',
                 'data-selected': String(option.value === props.value),
                 onClick: () => {
                   emit('change', option.value);
@@ -168,5 +164,35 @@ export const SelectControl = defineComponent({
         ])
         : null,
     ]);
+  },
+});
+
+export const SelectControl = defineComponent({
+  name: 'DialKitSelectControl',
+  props: {
+    label: { type: String, required: true },
+    value: { type: String, required: true },
+    options: {
+      type: Array as PropType<SelectOption[]>,
+      required: true,
+    },
+    display: { type: String as PropType<SelectConfig['display']>, default: undefined },
+    hideLabel: { type: Boolean, default: false },
+    hint: { type: String, required: false },
+  },
+  emits: ['change'],
+  setup(props, { emit }) {
+    const onChange = (value: string) => emit('change', value);
+    return () => props.display === 'segmented'
+      ? h('div', { class: 'dialkit-labeled-control', 'data-hide-label': props.hideLabel ? 'true' : undefined, 'data-hint': props.hint }, [
+        props.hideLabel ? null : h('span', { class: 'dialkit-labeled-control-label' }, props.label),
+        h(SegmentedControl, {
+          options: normalizeOptions(props.options),
+          value: props.value,
+          label: props.label,
+          onChange,
+        }),
+      ])
+      : h(SelectDropdown, { label: props.label, value: props.value, options: props.options, hint: props.hint, onChange });
   },
 });

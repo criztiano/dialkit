@@ -1,69 +1,14 @@
 // Main hook
-export { useTweakers } from './hooks/useTweakers';
-export type { UseTweakersOptions } from './hooks/useTweakers';
+export { useDialKit, useDialKitController } from './hooks/useDialKit';
+export type { DialKitController, UseDialOptions } from './hooks/useDialKit';
 
 // Root component (user mounts once)
-export { TweakRoot } from './components/TweakRoot';
-export type { TweakPosition, TweakMode, TweakTheme } from './components/TweakRoot';
-
-// The filter control — the kit's first 2-slot control (cutoff + resonance)
-export { resolveFilterAxis, normalizeFilterValue, defaultFilterResponse, filterShapeResponse, filterResponsePath, filterHand01, filterHandValue, FILTER_DB_FLOOR, FILTER_DB_CEIL } from 'tweakers/filter-core';
-export type { FilterAxis, FilterAxisConfig, FilterValue, FilterResponse, FilterShapeType } from 'tweakers/filter-core';
-export { FilterControl } from './components/FilterControl';
-
-// Modulation layer — slots, assignments, the engine, and the type registry
-export { ModulationStore, MOD_TOUCH_GRACE_MS } from 'tweakers/modulation-store';
-export type { ModulationSourceConfig, ModStepAction } from 'tweakers/modulation-store';
-export {
-  MOD_SLOTS,
-  MOD_COLORS,
-  MOD_SETTINGS_PANEL,
-  modColor,
-  modKey,
-  applyModulation,
-  registerModType,
-  getModType,
-  listModTypes,
-  LFO_DEF,
-  SH_DEF,
-  ADSR_DEF,
-  CURVE_DEF,
-  CURVE_LABELS,
-  CURVE_MAX_CLIPS,
-  CURVE_MIN_DURATION,
-  CURVE_MAX_DURATION,
-  curveComposition,
-  curveDuration,
-  modPageLayout,
-  visibleModControls,
-  MOD_PAGE_DIALS,
-  modRingArc,
-  MOD_RING_RADIUS,
-  MOD_RING_CIRCUMFERENCE,
-  LFO_SYNC_DIVISIONS,
-  lfoSyncedHz,
-  envelopePoints,
-  envelopeJoints,
-  envCurveParam,
-  ENV_BEND_STAGES,
-  modPageWidth,
-  ADSR_STAGE_MAX,
-} from 'tweakers/modulation-core';
-export type {
-  ModulationType,
-  EnvStage,
-  ModulationParams,
-  ModulationParamValue,
-  ModulationSlot,
-  ModulationAssignment,
-  ModTypeDef,
-  ModControlMeta,
-  ModPageLayout,
-  ModPageSlot,
-} from 'tweakers/modulation-core';
+export { DialRoot } from './components/DialRoot';
+export type { DialPosition, DialMode, DialTheme } from './components/DialRoot';
+export type { DialVersions } from './versions/gallery';
 
 // Timeline (prototype)
-export { useTweakTimeline } from './hooks/useTweakTimeline';
+export { useDialTimeline } from './hooks/useDialTimeline';
 export type {
   TimelineClipConfig,
   TimelineClipCss,
@@ -76,55 +21,75 @@ export type {
   TimelinePropStepConfig,
   TimelineStepConfig,
   TimelineStepValues,
-  TweakTimelineValues,
-  UseTweakTimelineOptions,
-} from './hooks/useTweakTimeline';
-export { TweakTimeline } from './components/Timeline/TweakTimeline';
-export type { TweakTimelineProps } from './components/Timeline/TweakTimeline';
-export { formatClock } from 'tweakers/timeline';
-export { TimelineStore } from 'tweakers/timeline';
+  DialTimelineValues,
+  UseDialTimelineOptions,
+} from './hooks/useDialTimeline';
+export { DialTimeline } from './components/Timeline/DialTimeline';
+export type { DialTimelineProps } from './components/Timeline/DialTimeline';
+export { formatClock } from './timeline-core';
+export { TimelineStore } from './store/TimelineStore';
 export type {
   TimelineMeta,
   TimelineClipMeta,
   TimelineClipTrackMeta,
   TimelineTransport,
-} from 'tweakers/timeline';
+} from './store/TimelineStore';
 
 // Individual components (for advanced usage)
 export { ControlRenderer } from './components/ControlRenderer';
 export { Slider } from './components/Slider';
-export { AngleDial } from './components/AngleDial';
-export { TransferCurve } from './components/TransferCurve';
-export { sampleTransfer, transferLut, normalizeTransfer, insertPoint, removePoint, movePoint, nearestPoint, isIdentityTransfer, DEFAULT_TRANSFER, TRANSFER_MIN_GAP, TRANSFER_MAX_POINTS } from 'tweakers/transfer-core';
-export type { TransferPoint, TransferValue } from 'tweakers/transfer-core';
-export { snapAngle, normalizeAngle, valueToBearing, bearingToValue, angleFromPointer, nudgeAngle, arcPath, ANGLE_DEAD_ZONE_PX } from 'tweakers/angle-core';
-export { NumberControl } from './components/NumberControl';
 export { RangeSlider } from './components/RangeSlider';
-export { Checkbox } from './components/Checkbox';
+export { NumberControl } from './components/NumberControl';
+export { AngleDial } from './components/AngleDial';
 export { Toggle } from './components/Toggle';
 export { Folder } from './components/Folder';
-export { ControlShell } from './components/ControlShell';
-export { Module } from './components/Module';
-export { SegmentedControl } from './components/SegmentedControl';
 export { ButtonGroup } from './components/ButtonGroup';
 export { SpringControl } from './components/SpringControl';
 export { SpringVisualization } from './components/SpringVisualization';
 export { TransitionControl } from './components/TransitionControl';
+export { TransitionCopyMenu } from './components/TransitionCopy';
+export type { TransitionCopyMenuProps } from './components/TransitionCopy';
+export { Section } from './components/Section';
+export type { SectionProps, SectionRow } from './components/Section';
 export { EasingVisualization } from './components/EasingVisualization';
-export { WaveformVisualization } from 'tweakers';
-export type { WaveformMode, WaveformLoop } from 'tweakers';
-export { AnalyserVisualization } from './components/AnalyserVisualization';
-export type {
-  AnalyserSource,
-  AnalyserVariant,
-  AnalyserMode,
-  AnalyserScale,
-  AnalyserSpring,
-  AnalyserTransferDraw,
-} from './components/AnalyserVisualization';
+export { TextControl } from './components/TextControl';
+export { SelectControl } from './components/SelectControl';
+export { ColorControl } from './components/ColorControl';
+export { ImageControl } from './components/ImageControl';
+export { DialPad } from './components/DialPad';
+export type { DialPadProps } from './dial-pad-control';
+export { AnchorControl } from './components/AnchorControl';
+export type { AnchorControlProps } from './anchor-control';
+export { BackgroundControl } from './components/BackgroundControl';
+export type { BackgroundControlProps } from './background-control';
+export { LayerListControl } from './components/LayerListControl';
+export type { LayerListControlProps } from './layer-list-control';
+export { FilterControl } from './components/FilterControl';
+export { filterShapeResponse } from './filter';
+export type { FilterShapeType } from './filter';
+export { TransferCurve } from './components/TransferCurve';
+export { sampleTransfer, transferLut } from './transfer';
+export { CurvePreview } from './components/CurvePreview';
 export { AnalyserRow } from './components/AnalyserRow';
-export { CurveComposer } from 'tweakers';
-export type { CurveType, CurveSegment, CurveDriver, CurveComposition, DriverDirection } from 'tweakers';
+export { layerAction, normalizeLayersValue, parseLayerAction } from './layers';
+export { ChipsControl } from './components/ChipsControl';
+export { MultiSelectControl } from './components/MultiSelectControl';
+export { SwatchControl } from './components/SwatchControl';
+export { FileControl } from './components/FileControl';
+export { ListControl } from './components/ListControl';
+export { defaultListItemParams, groupListFields, normalizeListItems, parseListItemSchema } from './list';
+export { backgroundGradientCss, backgroundMediaCss, paintGradient } from './background';
+export * from './background-api';
+export { PresetManager } from './components/PresetManager';
+export { VersionGallery } from './components/VersionGallery';
+export { ShortcutsMenu } from './components/ShortcutsMenu';
+
+// Component library: blocks an app can place in its own UI, outside a panel
+export { SegmentedControl } from './components/SegmentedControl';
+export { Module, ModuleFolder } from './components/Module';
+export { CurveComposer } from './components/CurveComposer';
+export type { CurveComposerProps } from './components/CurveComposer';
+export type { CurveType, CurveSegment, CurveDriver, CurveComposition, DriverDirection } from './curve-composer-core';
 export {
   CURVE_CYCLE,
   defaultComposition,
@@ -155,169 +120,103 @@ export {
   triggerLevels,
   triggersCrossed,
   DEFAULT_TRIGGER_STEPS,
-} from 'tweakers/curve-composer-core';
-export type { Sampler, SpringifyOptions, CompositionSamplers, CompositionRead } from 'tweakers/curve-composer-core';
-export {
-  clamp,
-  valueToPercent,
-  percentToValue,
-  orderRange,
-  clampRange,
-  setLow,
-  setHigh,
-  shiftSpan,
-  nearestHandle,
-  pickDragTarget,
-  isOutsideSpan,
-  handleLeftStyles,
-} from 'tweakers/range-slider-core';
-export { TextControl } from './components/TextControl';
-export { SelectControl } from './components/SelectControl';
-export { ColorControl } from './components/ColorControl';
-export { ColorPickerPanel } from './components/ColorPickerPanel';
-export {
-  COLOR_FORMATS,
-  parseHex,
-  formatHex,
-  normalizeHex,
-  displayHex,
-  opacityPercent,
-  rgbToHsv,
-  hsvToRgb,
-  rgbToHsl,
-  hslToRgb,
-  rgbToOklch,
-  oklchToRgb,
-  clampOklchToSrgb,
-} from 'tweakers/color-core';
-export type { RGBA, HSVA, HSLA, OKLCH, ColorFormat } from 'tweakers/color-core';
-export { GradientControl } from './components/GradientControl';
-export { GradientPanel } from './components/GradientPanel';
-export {
-  gradientToCss,
-  rampCss,
-  gradientToTransform,
-  gradientFillBox,
-  normalizeGradient,
-  colorAtPosition,
-  addStop,
-  removeStop,
-  moveStop,
-  setStopColor,
-  setGradientType,
-  setGradientAngle,
-  setGradientCenter,
-  setGradientScale,
-  setGradientSquash,
-  setGradientRotation,
-  DEFAULT_GRADIENT,
-  MIN_STOPS,
-} from 'tweakers/gradient-core';
-export type { GradientValue, GradientStop, GradientType, GradientTransform } from 'tweakers/gradient-core';
-export { XYPad } from './components/XYPad';
-export type { XYPadProps } from './components/XYPad';
-export { XYControl } from './components/XYControl';
-export {
-  XY_DETENT_PX,
-  XY_DEFAULT_STEP,
-  resolveAxis,
-  // `clamp` is re-exported once from 'tweakers/range-slider-core' above; xy-pad-core's
-  // identical `clamp` is intentionally not re-exported here to avoid a duplicate.
-  snapToStep,
-  valueToNorm,
-  normToValue,
-  invertY,
-  valueFromPoint,
-  pointFromValue,
-  applyDetentAxis,
-  nudge,
-  centerValue,
-  normalizeValue,
-} from 'tweakers/xy-pad-core';
-export type { XYValue, AxisSpec, Point } from 'tweakers/xy-pad-core';
-export { GalleryControl } from './components/GalleryControl';
-export { FileControl } from './components/FileControl';
-export { SwatchControl } from './components/SwatchControl';
-export { ChipsControl } from './components/ChipsControl';
-export { MultiSelectControl } from './components/MultiSelectControl';
-export { ListControl } from './components/ListControl';
-export { CurvePreview } from './components/CurvePreview';
-export {
-  CURVE_SAMPLE_COUNT,
-  CURVE_MIN_HEIGHT,
-  CURVE_MAX_HEIGHT,
-  CURVE_DEFAULT_HEIGHT,
-  CURVE_FIT_PADDING,
-  clampCurveHeight,
-  normalizeCurveMarkers,
-  plotCurve,
-  curveY,
-  curvePathData,
-} from 'tweakers/curve-preview-core';
-export type { CurvePoint, CurvePlot } from 'tweakers/curve-preview-core';
-export { PresetManager } from './components/PresetManager';
-export { ShortcutsMenu } from './components/ShortcutsMenu';
-export { AudioLevelMeter } from './components/AudioLevelMeter';
-export type {
-  AudioLevelMeterMode,
-  AudioLevelMeterColors,
-  AudioLevelMeterProps,
-  MonoAudioLevelMeterProps,
-  StereoAudioLevelMeterProps,
-  SpectrumAudioLevelMeterProps,
-} from './components/AudioLevelMeter';
+} from './curve-composer-core';
+export type { Sampler, SpringifyOptions, CompositionSamplers, CompositionRead } from './curve-composer-core';
+
+// Hints (hold H over a control to read what it does)
+export { HintStore } from './hints';
+export { HintTip, HintTooltip } from './components/Hint';
 
 // Store (for advanced usage)
-export { TweakStore, TAB_PATH, parseListItemSchema, groupListFields, defaultListItemParams, normalizeListItems, hintDomId } from 'tweakers/store';
+export { DialStore, withVisibility } from './store/DialStore';
 export type {
   SpringConfig,
   EasingConfig,
   TransitionConfig,
   ActionConfig,
   SelectConfig,
-  ToggleConfig,
+  SelectOption,
   ColorConfig,
-  GradientConfig,
-  XYConfig,
-  XYAxis,
+  ImageConfig,
+  ImageOption,
+  DialPadAxis,
+  DialPadConfig,
+  DialPadValue,
+  DialXYAxis,
+  DialXYConfig,
+  DialFilterAxisConfig,
+  DialFilterConfig,
+  DialFilterValue,
+  DialTransferConfig,
+  DialTransferValue,
+  TransferPoint,
+  DialCurveConfig,
+  DialAnalyserConfig,
+  AnalyserScale,
+  AnalyserSpring,
+  BackgroundConfig,
+  BackgroundValue,
+  BackgroundValueUpdate,
+  BackgroundGradient,
+  BackgroundMedia,
+  BackgroundMediaDisplay,
+  BackgroundMediaFit,
+  BackgroundMediaRatio,
+  BackgroundMode,
+  GradientHandles,
+  GradientPoint,
+  GradientStop,
+  GradientShape,
+  SavedGradient,
+  AnchorConfig,
+  AnchorValue,
   TextConfig,
-  GalleryConfig,
-  GalleryItem,
-  FileConfig,
-  SwatchConfig,
-  SwatchOption,
-  ChipsConfig,
-  ChipOption,
-  MultiSelectConfig,
-  MultiSelectOption,
-  SliderConfig,
-  NumberConfig,
-  RangeConfig,
-  FilterConfig,
-  RangeValue,
-  ListConfig,
-  ListItemValue,
-  CurveConfig,
-  AnalyserConfig,
-  AffordanceConfig,
-  AffordanceContext,
-  AffordanceStatus,
-  ListItemField,
-  ListItemType,
-  ListField,
-  ListFieldKind,
-  ListFieldGroup,
+  DialKitPersistOptions,
   ShortcutConfig,
   ShortcutMode,
   ShortcutInteraction,
   Preset,
-  PresetProvider,
-  PresetProviderPreset,
-  PresetItem,
-  TweakValue,
-  TweakEvent,
-  TweakConfig,
+  TransitionMode,
+  TransitionPreset,
+  CopiedTransition,
+  DialValue,
+  DialConfig,
+  DialKitValueUpdates,
   ResolvedValues,
+  SelectAddConfig,
+  RowConfig,
+  InlineLabelsConfig,
+  PadGroupConfig,
+  FieldsConfig,
+  RangeConfig,
+  RangeSliderConfig,
+  RangeValue,
+  NumberConfig,
+  SliderConfig,
+  LayerItem,
+  LayersConfig,
+  LayersValue,
+  LayerActionKind,
+  ChipOption,
+  ChipsConfig,
+  MultiSelectOption,
+  MultiSelectConfig,
+  SwatchOption,
+  SwatchConfig,
+  FileConfig,
+  GalleryItem,
+  GalleryConfig,
+  ListConfig,
+  ListField,
+  ListFieldKind,
+  ListItemField,
+  ListItemType,
+  ListItemValue,
+  DialEvent,
   ControlMeta,
   PanelConfig,
-} from 'tweakers/store';
+  FolderMode,
+  VisibleWhen,
+  VisibleWhenValue,
+  ControlWithVisibility,
+} from './store/DialStore';

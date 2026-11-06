@@ -1,5 +1,5 @@
 import { defineComponent, h, computed, type PropType } from 'vue';
-import type { SpringConfig } from 'tweakers/store';
+import type { SpringConfig } from '../../store/DialStore';
 
 function generateSpringCurve(
   stiffness: number,
@@ -31,7 +31,7 @@ function generateSpringCurve(
 }
 
 export const SpringVisualization = defineComponent({
-  name: 'TweakersSpringVisualization',
+  name: 'DialKitSpringVisualization',
   props: {
     spring: {
       type: Object as PropType<SpringConfig>,
@@ -81,7 +81,7 @@ export const SpringVisualization = defineComponent({
         .join(' ');
     });
 
-    return () => h('svg', { viewBox: `0 0 ${width} ${height}`, class: 'tweakers-spring-viz' }, [
+    return () => h('svg', { viewBox: `0 0 ${width} ${height}`, class: 'dialkit-spring-viz' }, [
       ...Array.from({ length: 3 }).flatMap((_, index) => {
         const lineIndex = index + 1;
         const x = (width / 4) * lineIndex;

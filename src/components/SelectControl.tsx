@@ -1,63 +1,89 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { observeDropdownKeyboard } from '../dropdown-keyboard';
+import { openDropdownOnKey } from '../control-keyboard';
+import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { PresenceMotionDiv } from './PresenceMotionDiv';
-import { ICON_CHEVRON } from 'tweakers/icons';
-
-type SelectOption = string | { value: string; label: string };
+import { getDialKitPortalRoot, getDropdownPosition, observeDropdownPosition, type DropdownPosition } from '../dropdown-position';
+import { ICON_CHEVRON, ICON_PLUS } from '../icons';
+import { useHints } from '../hooks/useHints';
+import type { SelectConfig, SelectOption } from '../store/DialStore';
+import { SegmentedControl } from './SegmentedControl';
+import { usePresenceResync } from '../hooks/usePresenceResync';
 
 interface SelectControlProps {
   label: string;
   value: string;
   options: SelectOption[];
   onChange: (value: string) => void;
+  display?: SelectConfig['display'];
+  hideLabel?: boolean;
+  hint?: string;
+  /** Dropdown only: the first row of the dropdown, which adds an option. See `SelectConfig.add`. */
+  add?: { label: string; hint?: string; onClick: () => void };
+  /** Dropdown only: drawn before an option's label, in the trigger and in each row (a swatch's colors). */
+  preview?: (value: string) => ReactNode;
 }
 
 function toTitleCase(s: string): string {
   return s.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function normalizeOptions(options: SelectOption[]): { value: string; label: string }[] {
+function normalizeOptions(options: SelectOption[]): Exclude<SelectOption, string>[] {
   return options.map((opt) =>
     typeof opt === 'string' ? { value: opt, label: toTitleCase(opt) } : opt
   );
 }
 
-export function SelectControl({ label, value, options, onChange }: SelectControlProps) {
+export function SelectControl(props: SelectControlProps) {
+  useHints(!!props.hint || !!props.add?.hint);
+  return props.display === 'segmented' ? <SegmentedSelect {...props} /> : <SelectDropdown {...props} />;
+}
+
+function SegmentedSelect({ label, value, options, onChange, hideLabel, hint }: SelectControlProps) {
+  return (
+    <div className="dialkit-labeled-control" data-hide-label={hideLabel ? 'true' : undefined} data-hint={hint}>
+      {!hideLabel && <span className="dialkit-labeled-control-label">{label}</span>}
+      <SegmentedControl
+        options={normalizeOptions(options)}
+        value={value}
+        onChange={onChange}
+        label={label}
+      />
+    </div>
+  );
+}
+
+function SelectDropdown({ label, value, options, onChange, hint, add, preview }: SelectControlProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const resyncPresence = usePresenceResync();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
-  const [pos, setPos] = useState<{ top: number; left: number; width: number; above: boolean } | null>(null);
+  const [pos, setPos] = useState<DropdownPosition | null>(null);
   const normalized = normalizeOptions(options);
   const selectedOption = normalized.find((o) => o.value === value);
 
   const updatePos = useCallback(() => {
     const el = triggerRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
+    if (!el || !portalTarget) return;
     // Estimate dropdown height: 8px padding + 36px per option
-    const dropdownHeight = 8 + normalized.length * 36;
-    const spaceBelow = window.innerHeight - rect.bottom - 4;
-    const above = spaceBelow < dropdownHeight && rect.top > spaceBelow;
-    setPos({
-      top: above ? rect.top - 4 : rect.bottom + 4,
-      left: rect.left,
-      width: rect.width,
-      above,
-    });
-  }, [normalized.length]);
+    const rows = normalized.length + (add ? 1 : 0);
+    const dropdownHeight = dropdownRef.current ? dropdownRef.current.scrollHeight + 2 : 10 + rows * 36;
+    setPos(getDropdownPosition(el, portalTarget, { dropdownHeight, fixed: true }));
+  }, [normalized.length, add, portalTarget]);
 
-  // Resolve portal target (closest .tweakers-root)
+  // Resolve portal target (closest .dialkit-root)
   useEffect(() => {
-    const root = triggerRef.current?.closest('.tweakers-root') as HTMLElement | null;
-    setPortalTarget(root ?? document.body);
+    setPortalTarget(getDialKitPortalRoot(triggerRef.current) ?? document.body);
   }, []);
 
   // Position dropdown when opening
   useEffect(() => {
     if (!isOpen) return;
-    updatePos();
+    if (!triggerRef.current) return;
+    const stopPosition = observeDropdownPosition(triggerRef.current, updatePos, () => dropdownRef.current);
+    const stopKeyboard = observeDropdownKeyboard(triggerRef.current, () => dropdownRef.current, () => setIsOpen(false));
+    return () => { stopKeyboard(); stopPosition(); };
   }, [isOpen, updatePos]);
 
   // Close on click outside
@@ -79,18 +105,21 @@ export function SelectControl({ label, value, options, onChange }: SelectControl
   }, [isOpen]);
 
   return (
-    <div className="tweakers-select-row">
+    <div className="dialkit-select-row" data-hint={hint}>
       <button
         ref={triggerRef}
-        className="tweakers-select-trigger"
+        className="dialkit-select-trigger"
         onClick={() => setIsOpen(!isOpen)}
         data-open={String(isOpen)}
+        type="button" aria-haspopup="listbox" aria-expanded={isOpen} disabled={!options.length && !add}
+        onKeyDown={(e) => openDropdownOnKey(e, () => setIsOpen(true))}
       >
-        <span className="tweakers-select-label">{label}</span>
-        <div className="tweakers-select-right">
-          <span className="tweakers-select-value">{selectedOption?.label ?? value}</span>
+        <span className="dialkit-select-label">{label}</span>
+        <div className="dialkit-select-right">
+          {preview && selectedOption && preview(selectedOption.value)}
+          <span className="dialkit-select-value">{selectedOption?.label ?? value}</span>
           <motion.svg
-            className="tweakers-select-chevron"
+            className="dialkit-select-chevron"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -106,11 +135,11 @@ export function SelectControl({ label, value, options, onChange }: SelectControl
       </button>
 
       {portalTarget && createPortal(
-        <AnimatePresence>
+        <AnimatePresence onExitComplete={resyncPresence}>
           {isOpen && pos && (
-            <PresenceMotionDiv
-              divRef={dropdownRef}
-              className="tweakers-select-dropdown"
+            <motion.div
+              ref={dropdownRef}
+              className="dialkit-select-dropdown"
               initial={{ opacity: 0, y: pos.above ? 8 : -8, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: pos.above ? 8 : -8, scale: 0.95 }}
@@ -118,26 +147,44 @@ export function SelectControl({ label, value, options, onChange }: SelectControl
               style={{
                 position: 'fixed',
                 left: pos.left,
+                top: pos.top,
                 width: pos.width,
-                ...(pos.above
-                  ? { bottom: window.innerHeight - pos.top, transformOrigin: 'bottom' }
-                  : { top: pos.top, transformOrigin: 'top' }),
+                maxHeight: pos.maxHeight,
+                transformOrigin: pos.above ? 'bottom' : 'top',
               }}
             >
+              {add && (
+                <button
+                  type="button"
+                  className="dialkit-select-option dialkit-select-add-option"
+                  data-hint={add.hint}
+                  onClick={() => {
+                    setIsOpen(false);
+                    add.onClick();
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    {ICON_PLUS.map((d) => <path key={d} d={d} />)}
+                  </svg>
+                  {add.label}
+                </button>
+              )}
               {normalized.map((option) => (
                 <button
                   key={option.value}
-                  className="tweakers-select-option"
+                  className="dialkit-select-option"
+                  data-preview={preview ? 'true' : undefined}
                   data-selected={String(option.value === value)}
                   onClick={() => {
                     onChange(option.value);
                     setIsOpen(false);
                   }}
                 >
+                  {preview?.(option.value)}
                   {option.label}
                 </button>
               ))}
-            </PresenceMotionDiv>
+            </motion.div>
           )}
         </AnimatePresence>,
         portalTarget

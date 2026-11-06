@@ -1,23 +1,25 @@
-import { useRef, useState, useEffect } from 'react';
-import { ICON_GRIP, ICON_PLUS, ICON_TRASH } from 'tweakers/icons';
+import { useEffect, useRef, useState } from 'react';
+import { ICON_GRIP, ICON_PLUS, ICON_TRASH } from '../icons';
+import { useHints } from '../hooks/useHints';
+import type { DialEvent } from '../choice';
+import {
+  defaultListItemParams,
+  groupListFields,
+  listDropIndex,
+  moveListItem,
+  parseListItemSchema,
+  renameListItem,
+  type ListField,
+  type ListItemType,
+  type ListItemValue,
+} from '../list';
 import { Folder } from './Folder';
-import { ControlShell } from './ControlShell';
 import { Slider } from './Slider';
 import { Toggle } from './Toggle';
 import { SelectControl } from './SelectControl';
 import { ColorControl } from './ColorControl';
-import { SwatchControl } from './SwatchControl';
 import { TextControl } from './TextControl';
-import {
-  parseListItemSchema,
-  groupListFields,
-  defaultListItemParams,
-  hintDomId,
-  type ListItemValue,
-  type ListItemType,
-  type ListField,
-  type TweakEvent,
-} from 'tweakers/store';
+import { SwatchControl } from './SwatchControl';
 
 interface ListControlProps {
   label: string;
@@ -26,86 +28,81 @@ interface ListControlProps {
   addLabel?: string;
   maxItems?: number;
   onChange: (value: ListItemValue[]) => void;
-  /** Structural signal for engines that bridge list ops imperatively. */
-  onEvent: (event: TweakEvent) => void;
+  /** What changed, for apps that apply list changes one at a time. Sent after each `onChange`. */
+  onEvent: (event: Extract<DialEvent, { kind: 'list' }>) => void;
+  hint?: string;
 }
 
 type Scalar = number | boolean | string;
 
-/** Renders one list-item field by reusing the matching primitive control. */
+const LIST_HINTS = {
+  drag: 'Drag to change the order. Alt+Up and Alt+Down move the row.',
+  title: 'Click to rename this row.',
+  remove: 'Removes this row.',
+  add: 'Adds a row.',
+};
+
+/** One field of a row, drawn with the panel's own control for its kind. */
 function FieldControl({ field, value, onChange }: { field: ListField; value: Scalar; onChange: (v: Scalar) => void }) {
   switch (field.kind) {
     case 'slider':
-      return <Slider label={field.label} value={value as number} min={field.min} max={field.max} step={field.step} onChange={onChange} />;
+      return <Slider label={field.label} hint={field.hint} value={value as number} min={field.min} max={field.max} step={field.step} onChange={onChange} />;
     case 'toggle':
-      return <Toggle label={field.label} checked={value as boolean} onChange={onChange} />;
+      return <Toggle label={field.label} hint={field.hint} checked={value as boolean} onChange={onChange} />;
     case 'select':
-      return <SelectControl label={field.label} value={value as string} options={field.options ?? []} onChange={onChange} />;
+      return <SelectControl label={field.label} hint={field.hint} value={value as string} options={field.options ?? []} onChange={onChange} />;
     case 'color':
-      return <ColorControl label={field.label} value={value as string} palette={field.palette} onChange={onChange} />;
+      return <ColorControl label={field.label} hint={field.hint} value={value as string} onChange={onChange} />;
     case 'swatch':
-      return <SwatchControl label={field.label} value={value as string} options={field.swatchOptions ?? []} onChange={onChange} />;
+      return <SwatchControl label={field.label} hint={field.hint} value={value as string} options={field.swatchOptions ?? []} onChange={onChange} />;
     case 'text':
-      return <TextControl label={field.label} value={value as string} onChange={onChange} placeholder={field.placeholder} />;
+      return <TextControl label={field.label} hint={field.hint} value={value as string} placeholder={field.placeholder} onChange={onChange} />;
     default:
       return null;
   }
 }
 
-/** A run of fields — the row's flat top area, or the body of one group. */
-function FieldList({
-  fields,
-  params,
-  rowId,
-  onChange,
-}: {
-  fields: ListField[];
-  params: Record<string, Scalar>;
-  rowId: string;
-  onChange: (key: string, value: Scalar) => void;
-}) {
+function FieldList({ fields, params, onChange }: { fields: ListField[]; params: Record<string, Scalar>; onChange: (key: string, value: Scalar) => void }) {
   return (
-    <div className="tweakers-list-item-fields">
+    <div className="dialkit-list-item-fields">
       {fields.map((field) => (
-        <ControlShell key={field.key} hint={field.hint} id={hintDomId(rowId, field.key)}>
-          <FieldControl
-            field={field}
-            value={params[field.key]}
-            onChange={(v) => onChange(field.key, v)}
-          />
-        </ControlShell>
+        <FieldControl key={field.key} field={field} value={params[field.key] ?? field.defaultValue} onChange={(v) => onChange(field.key, v)} />
       ))}
     </div>
   );
 }
 
-export function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, onEvent }: ListControlProps) {
+/**
+ * Rows the user adds, renames, drags into order and removes. Each row is one
+ * of the item types and shows that type's fields; fields in a section show
+ * in a folder under the row's own fields, the first section open.
+ */
+export function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, onEvent, hint }: ListControlProps) {
+  useHints(true);
   const idCounter = useRef(0);
-  const mkId = () => `li-${idCounter.current++}`;
-  // One stable key per row so the right node animates/reconciles on remove and
-  // reorder. Handlers keep `ids` in lockstep with `value`.
+  const mkId = () => `row-${idCounter.current++}`;
+  // A stable key per row, so the right row stays mounted through a remove
+  // or a reorder. The handlers keep `ids` in step with `value`.
   const [ids, setIds] = useState<string[]>(() => value.map(mkId));
   const [picking, setPicking] = useState(false);
-  // Index of the row whose title is being renamed in place, if any.
   const [editing, setEditing] = useState<number | null>(null);
 
-  // Drag-to-reorder. The row is only draggable once a drag starts from the
-  // handle (armedRef), so dragging a slider never reorders the list.
+  // A row drags only from its handle (armedRef), so a drag on a slider
+  // never moves the row.
   const armedRef = useRef<number | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [over, setOver] = useState<{ index: number; after: boolean } | null>(null);
 
-  // Reconcile only when the array length changes outside our handlers (preset
-  // load / reset). The guard converges, so React's adjust-state-on-render is safe.
+  // A value from outside (a preset, a reset) with another row count gets new keys.
   if (ids.length !== value.length) {
     setIds((cur) => value.map((_, i) => cur[i] ?? mkId()));
   }
 
-  // A press on the handle that doesn't become a drag must disarm the row.
+  // A press on the handle that does not become a drag disarms its row.
   useEffect(() => {
     const disarm = () => { armedRef.current = null; };
-    window.addEventListener('mouseup', disarm);
-    return () => window.removeEventListener('mouseup', disarm);
+    window.addEventListener('pointerup', disarm);
+    return () => window.removeEventListener('pointerup', disarm);
   }, []);
 
   const typeEntries = Object.entries(itemTypes);
@@ -127,31 +124,15 @@ export function ListControl({ label, value, itemTypes, addLabel, maxItems, onCha
 
   const moveItem = (from: number, to: number) => {
     if (from === to || to < 0 || to >= value.length) return;
-    const reorder = <T,>(arr: T[]): T[] => {
-      const out = arr.slice();
-      const [moved] = out.splice(from, 1);
-      out.splice(to, 0, moved);
-      return out;
-    };
-    setIds(reorder);
-    onChange(reorder(value));
+    setIds((cur) => moveListItem(cur, from, to));
+    onChange(moveListItem(value, from, to));
     onEvent({ kind: 'list', op: 'move', from, to });
   };
 
-  // A blank title is stored as absent, not as '', so clearing the field reverts
-  // the row to its item type's label.
   const commitTitle = (index: number, raw: string) => {
     setEditing(null);
-    const next = raw.trim();
-    if ((value[index]?.title ?? '') === next) return;
-    onChange(
-      value.map((item, i) => {
-        if (i !== index) return item;
-        const row: ListItemValue = { type: item.type, params: item.params };
-        if (next) row.title = next;
-        return row;
-      })
-    );
+    if ((value[index]?.title ?? '') === raw.trim()) return;
+    onChange(renameListItem(value, index, raw));
     onEvent({ kind: 'list', op: 'rename', index });
   };
 
@@ -160,44 +141,37 @@ export function ListControl({ label, value, itemTypes, addLabel, maxItems, onCha
     onEvent({ kind: 'list', op: 'set', index });
   };
 
-  const handleAdd = () => {
-    if (typeEntries.length === 1) addItem(typeEntries[0][0]);
-    else setPicking((p) => !p);
-  };
-
-  const onDrop = () => {
-    if (dragIndex !== null && over !== null) {
-      let to = over.after ? over.index + 1 : over.index;
-      if (dragIndex < to) to -= 1; // account for the dragged row being removed first
-      moveItem(dragIndex, to);
-    }
+  const endDrag = () => {
     armedRef.current = null;
     setDragIndex(null);
     setOver(null);
   };
 
+  const onDrop = () => {
+    if (dragIndex !== null && over !== null) moveItem(dragIndex, listDropIndex(dragIndex, over.index, over.after));
+    endDrag();
+  };
+
   return (
-    <Folder title={label} defaultOpen>
-      <div className="tweakers-list-items" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
+    <Folder title={label} defaultOpen hint={hint}>
+      <div className="dialkit-list" onDragOver={(e) => { if (dragIndex !== null) e.preventDefault(); }} onDrop={onDrop}>
         {value.map((item, index) => {
           const type = itemTypes[item.type];
           if (!type) return null;
           const { flat, groups } = groupListFields(parseListItemSchema(type.schema, type.hints, type.groups));
-          const overState = over?.index === index ? (over.after ? 'after' : 'before') : undefined;
           const rowTitle = item.title ?? type.label;
           return (
             <div
               key={ids[index]}
-              className="tweakers-list-item"
-              // A draggable ancestor swallows text selection, so the row stops
-              // being draggable while its title is being edited.
+              className="dialkit-list-item"
+              // A draggable parent blocks text selection, so a row being renamed does not drag.
               draggable={editing !== index}
               data-dragging={dragIndex === index ? 'true' : undefined}
-              data-over={overState}
+              data-over={over?.index === index ? (over.after ? 'after' : 'before') : undefined}
               onDragStart={(e) => {
                 if (armedRef.current !== index) { e.preventDefault(); return; }
                 e.dataTransfer.effectAllowed = 'move';
-                e.dataTransfer.setData('text/plain', String(index)); // Firefox needs payload
+                e.dataTransfer.setData('text/plain', String(index)); // Firefox needs a payload
                 setDragIndex(index);
               }}
               onDragOver={(e) => {
@@ -207,24 +181,30 @@ export function ListControl({ label, value, itemTypes, addLabel, maxItems, onCha
                 const after = e.clientY > rect.top + rect.height / 2;
                 setOver((o) => (o?.index === index && o.after === after ? o : { index, after }));
               }}
-              onDragEnd={() => { armedRef.current = null; setDragIndex(null); setOver(null); }}
+              onDragEnd={endDrag}
             >
-              <div className="tweakers-list-item-head">
+              <div className="dialkit-list-item-head">
                 <button
                   type="button"
-                  className="tweakers-list-drag"
-                  aria-label="Drag to reorder"
-                  onMouseDown={() => { armedRef.current = index; }}
+                  className="dialkit-list-icon-button dialkit-list-drag"
+                  aria-label={`Move ${rowTitle}`}
+                  data-hint={LIST_HINTS.drag}
+                  onPointerDown={() => { armedRef.current = index; }}
+                  onKeyDown={(e) => {
+                    if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+                    e.preventDefault();
+                    moveItem(index, index + (e.key === 'ArrowUp' ? -1 : 1));
+                  }}
                 >
                   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     {ICON_GRIP.map((c, i) => <circle key={i} cx={c.cx} cy={c.cy} r="1.5" />)}
                   </svg>
                 </button>
                 {editing === index ? (
-                  // Uncontrolled: the field owns the draft, so Escape can restore
-                  // the original and let the shared blur path no-op it away.
+                  // The field keeps its own draft, so Escape can put the old
+                  // title back and the blur that follows changes nothing.
                   <input
-                    className="tweakers-list-item-title"
+                    className="dialkit-list-item-title"
                     defaultValue={item.title ?? ''}
                     placeholder={type.label}
                     autoFocus
@@ -239,83 +219,56 @@ export function ListControl({ label, value, itemTypes, addLabel, maxItems, onCha
                     }}
                   />
                 ) : (
-                  <button
-                    type="button"
-                    className="tweakers-list-item-title"
-                    aria-label={`Rename ${rowTitle}`}
-                    onClick={() => setEditing(index)}
-                  >
+                  <button type="button" className="dialkit-list-item-title" aria-label={`Rename ${rowTitle}`} data-hint={LIST_HINTS.title} onClick={() => setEditing(index)}>
                     {rowTitle}
                   </button>
                 )}
-                <div className="tweakers-list-item-actions">
-                  <button
-                    type="button"
-                    className="tweakers-list-icon-btn tweakers-list-remove"
-                    onClick={() => removeItem(index)}
-                    aria-label={`Remove ${rowTitle}`}
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                      {ICON_TRASH.map((d, i) => <path key={i} d={d} />)}
-                    </svg>
-                  </button>
-                </div>
+                <button type="button" className="dialkit-list-icon-button dialkit-list-remove" aria-label={`Remove ${rowTitle}`} data-hint={LIST_HINTS.remove} onClick={() => removeItem(index)}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    {ICON_TRASH.map((d) => <path key={d} d={d} />)}
+                  </svg>
+                </button>
               </div>
-              {flat.length > 0 && (
-                <FieldList
-                  fields={flat}
-                  params={item.params}
-                  rowId={ids[index]}
-                  onChange={(key, v) => setParam(index, key, v)}
-                />
-              )}
-
-              {/* Only the first section starts open: the point of grouping is to
-                  stop a six-control row reading as a wall. */}
+              {flat.length > 0 && <FieldList fields={flat} params={item.params} onChange={(key, v) => setParam(index, key, v)} />}
+              {/* Only the first section starts open, so a deep row does not read as a wall of controls. */}
               {groups.map((group, groupIndex) => (
                 <Folder key={group.label} title={group.label} defaultOpen={groupIndex === 0}>
-                  <FieldList
-                    fields={group.fields}
-                    params={item.params}
-                    rowId={ids[index]}
-                    onChange={(key, v) => setParam(index, key, v)}
-                  />
+                  <FieldList fields={group.fields} params={item.params} onChange={(key, v) => setParam(index, key, v)} />
                 </Folder>
               ))}
             </div>
           );
         })}
 
-        {value.length === 0 && !picking && <div className="tweakers-list-empty">No items yet</div>}
-      </div>
+        {value.length === 0 && !picking && <div className="dialkit-list-empty">No items yet</div>}
 
-      {!atCapacity && (
-        <div className="tweakers-list-add">
-          <button type="button" className="tweakers-list-add-btn" data-open={String(picking)} onClick={handleAdd}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d={ICON_PLUS} />
-            </svg>
-            <span>{addLabel ?? 'Add'}</span>
-          </button>
-
-          {typeEntries.length > 1 && (
-            <div className="tweakers-list-picker" data-open={String(picking)}>
-              <div className="tweakers-list-picker-inner">
+        {!atCapacity && (
+          <div className="dialkit-list-add">
+            <button
+              type="button"
+              className="dialkit-list-add-button"
+              data-open={String(picking)}
+              aria-expanded={typeEntries.length > 1 ? picking : undefined}
+              data-hint={LIST_HINTS.add}
+              onClick={() => (typeEntries.length === 1 ? addItem(typeEntries[0][0]) : setPicking((p) => !p))}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                {ICON_PLUS.map((d) => <path key={d} d={d} />)}
+              </svg>
+              <span>{addLabel ?? 'Add'}</span>
+            </button>
+            {typeEntries.length > 1 && picking && (
+              <div className="dialkit-list-picker">
                 {typeEntries.map(([key, type]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    className="tweakers-list-picker-chip"
-                    onClick={() => { addItem(key); setPicking(false); }}
-                  >
+                  <button key={key} type="button" className="dialkit-list-picker-chip" onClick={() => { addItem(key); setPicking(false); }}>
                     {type.label}
                   </button>
                 ))}
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
+      </div>
     </Folder>
   );
 }

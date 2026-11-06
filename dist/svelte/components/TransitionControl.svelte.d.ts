@@ -1,4 +1,4 @@
-import type { TransitionConfig } from 'tweakers/store';
+import type { TransitionConfig } from 'dialkit/store';
 export type TransitionDurationControl = {
     value: number;
     onChange: (value: number) => void;
@@ -14,6 +14,10 @@ type $$ComponentProps = {
     onChange: (value: TransitionConfig) => void;
     hideDuration?: boolean;
     durationControl?: TransitionDurationControl;
+    /** Shows a reset button in the header. See Folder's onReset. */
+    onReset?: () => void;
+    changed?: boolean;
+    hint?: string;
 };
 declare const TransitionControl: import("svelte").Component<$$ComponentProps, {}, "">;
 type TransitionControl = ReturnType<typeof TransitionControl>;

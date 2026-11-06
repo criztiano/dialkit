@@ -1,10 +1,18 @@
-import { SpringConfig, EasingConfig, TransitionConfig, TweakStore } from 'tweakers/store';
+import { createEaseIntensity } from '../easing-geometry';
+import { clampPhysicsParam } from '../transition-math';
+import { mountEaseFields, type EaseFieldsProps } from '../easing-control';
+import { SpringConfig, EasingConfig, TransitionConfig, DialStore, type CopiedTransition } from '../store/DialStore';
+import { TRANSITION_HINTS, transitionPresetName } from '../transition-presets';
+import { mountTransitionPresets, type TransitionPresetsProps } from '../transition-presets-control';
 import { Folder } from './Folder';
+import { TransitionCopy } from './TransitionCopy';
 import { Slider } from './Slider';
 import { SegmentedControl } from './SegmentedControl';
 import { SpringVisualization } from './SpringVisualization';
 import { EasingVisualization } from './EasingVisualization';
-import { useSyncExternalStore, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { HINTS } from '../hints';
+import { useHints } from '../hooks/useHints';
 
 interface TransitionControlProps {
   panelId: string;
@@ -21,10 +29,31 @@ interface TransitionControlProps {
     min?: number;
     max?: number;
     step?: number;
+    /** Replaces the curve's own Duration hint. */
+    hint?: string;
   };
+  /**
+   * Longest settle (seconds) the physics values may give the spring. Each
+   * physics slider stops where the settle time meets it, worked out from
+   * the other two values as they are, so moving one moves where the others
+   * stop. A timeline clip passes the room before the next clip.
+   */
+  physicsSettleCap?: number;
+  /** Shows a reset button in the header. See Folder.onReset. */
+  onReset?: () => void;
+  changed?: boolean;
+  hint?: string;
+  /**
+   * Draw the editor without its own folder, for a section whose only row is
+   * this transition: the section's header carries the reset and the copy menu.
+   */
+  bare?: boolean;
 }
 
 type CurveMode = 'easing' | 'simple' | 'advanced';
+
+const subscribeTransitions = (callback: () => void) => DialStore.subscribeTransitions(callback);
+const getTransitionPresets = () => DialStore.getTransitionPresets();
 
 export function TransitionControl({
   panelId,
@@ -34,12 +63,23 @@ export function TransitionControl({
   onChange,
   hideDuration = false,
   durationControl,
+  physicsSettleCap,
+  onReset,
+  changed,
+  hint,
+  bare = false,
 }: TransitionControlProps) {
-  const mode = useSyncExternalStore(
-    (cb) => TweakStore.subscribe(panelId, cb),
-    () => TweakStore.getTransitionMode(panelId, path),
-    () => TweakStore.getTransitionMode(panelId, path)
+  const subscribe = useCallback(
+    (callback: () => void) => DialStore.subscribe(panelId, callback),
+    [panelId]
   );
+  const getSnapshot = useCallback(
+    () => DialStore.getTransitionMode(panelId, path),
+    [panelId, path]
+  );
+  const mode = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const savedPresets = useSyncExternalStore(subscribeTransitions, getTransitionPresets, getTransitionPresets);
+  useHints(true);
 
   const isEasing = mode === 'easing';
   const isSimpleSpring = mode === 'simple';
@@ -68,7 +108,7 @@ export function TransitionControl({
   const easing: EasingConfig = value.type === 'easing' ? value : cache.current.easing;
 
   const handleModeChange = (newMode: CurveMode) => {
-    TweakStore.updateTransitionMode(panelId, path, newMode);
+    DialStore.updateTransitionMode(panelId, path, newMode);
 
     if (newMode === 'easing') {
       onChange(cache.current.easing);
@@ -79,20 +119,25 @@ export function TransitionControl({
     }
   };
 
+  // Intensity scales the curve it started from; 50% is that curve.
+  const [intensity] = useState(createEaseIntensity);
+
+  const handlePaste = (copied: CopiedTransition) => {
+    DialStore.updateTransitionMode(panelId, path, copied.mode);
+    onChange(copied.value);
+  };
+
   const handleSpringUpdate = (key: keyof SpringConfig, val: number) => {
     if (isSimpleSpring) {
       const { stiffness, damping, mass, ...rest } = spring;
       onChange({ ...rest, [key]: val });
     } else {
       const { visualDuration, bounce, ...rest } = spring;
-      onChange({ ...rest, [key]: val });
+      const next = physicsSettleCap !== undefined && (key === 'stiffness' || key === 'damping' || key === 'mass')
+        ? clampPhysicsParam(rest, key, val, physicsSettleCap)
+        : val;
+      onChange({ ...rest, [key]: next });
     }
-  };
-
-  const updateEase = (index: number, val: number) => {
-    const newEase = [...easing.ease] as [number, number, number, number];
-    newEase[index] = val;
-    onChange({ ...easing, ease: newEase });
   };
 
   const durationSlider = !hideDuration && (isEasing || isSimpleSpring) ? (
@@ -104,23 +149,17 @@ export function TransitionControl({
         else handleSpringUpdate('visualDuration', next);
       })}
       min={durationControl?.min ?? 0.1}
-      max={durationControl?.max ?? (isEasing ? 2 : 1)}
+      max={durationControl?.max ?? 5}
       step={durationControl?.step ?? 0.05}
       unit="s"
+      hint={durationControl?.hint ?? (isEasing ? HINTS.easingDuration : HINTS.springDuration)}
     />
   ) : null;
 
-  return (
-    <Folder title={label} defaultOpen={true}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {isEasing ? (
-          <EasingVisualization easing={easing} />
-        ) : (
-          <SpringVisualization spring={spring} isSimpleMode={isSimpleSpring} />
-        )}
-
-        <div className="tweakers-labeled-control">
-          <span className="tweakers-labeled-control-label">Type</span>
+  const body = (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--dial-row-gap)' }}>
+        <div className="dialkit-labeled-control dialkit-transition-type" data-hint={HINTS.transitionType}>
+          <span className="dialkit-labeled-control-label">Type</span>
           <SegmentedControl
             options={[
               { value: 'easing' as const, label: 'Easing' },
@@ -133,74 +172,72 @@ export function TransitionControl({
         </div>
 
         {isEasing ? (
+          <EasingVisualization easing={easing} onChange={(ease) => onChange({ ...easing, ease })} />
+        ) : (
+          <SpringVisualization spring={spring} isSimpleMode={isSimpleSpring} />
+        )}
+
+        {isEasing ? (
           <>
-            <Slider label="x1" value={easing.ease[0]} onChange={(v) => updateEase(0, v)} min={0} max={1} step={0.01} />
-            <Slider label="y1" value={easing.ease[1]} onChange={(v) => updateEase(1, v)} min={-1} max={2} step={0.01} />
-            <Slider label="x2" value={easing.ease[2]} onChange={(v) => updateEase(2, v)} min={0} max={1} step={0.01} />
-            <Slider label="y2" value={easing.ease[3]} onChange={(v) => updateEase(3, v)} min={-1} max={2} step={0.01} />
-            <EaseTextInput ease={easing.ease} onChange={(newEase) => onChange({ ...easing, ease: newEase })} />
+            <EaseFields ease={easing.ease} onChange={(ease) => onChange({ ...easing, ease })} />
+            <Slider
+              label="Intensity"
+              value={intensity.read(easing.ease)}
+              onChange={(v) => onChange({ ...easing, ease: intensity.apply(easing.ease, v) })}
+              min={0}
+              max={100}
+              step={1}
+              unit="%"
+              hint={TRANSITION_HINTS.intensity}
+            />
           </>
         ) : isSimpleSpring ? (
-          <Slider label="Bounce" value={spring.bounce ?? 0.2} onChange={(v) => handleSpringUpdate('bounce', v)} min={0} max={1} step={0.05} />
+          <Slider label="Bounce" value={spring.bounce ?? 0.2} onChange={(v) => handleSpringUpdate('bounce', v)} min={0} max={1} step={0.05} hint={HINTS.bounce} />
         ) : (
           <>
-            <Slider label="Stiffness" value={spring.stiffness ?? 400} onChange={(v) => handleSpringUpdate('stiffness', v)} min={1} max={1000} step={10} />
-            <Slider label="Damping" value={spring.damping ?? 17} onChange={(v) => handleSpringUpdate('damping', v)} min={1} max={100} step={1} />
-            <Slider label="Mass" value={spring.mass ?? 1} onChange={(v) => handleSpringUpdate('mass', v)} min={0.1} max={10} step={0.1} />
+            <Slider label="Stiffness" value={spring.stiffness ?? 400} onChange={(v) => handleSpringUpdate('stiffness', v)} min={1} max={1000} step={10} hint={HINTS.stiffness} />
+            <Slider label="Damping" value={spring.damping ?? 17} onChange={(v) => handleSpringUpdate('damping', v)} min={1} max={100} step={1} hint={HINTS.damping} />
+            <Slider label="Mass" value={spring.mass ?? 1} onChange={(v) => handleSpringUpdate('mass', v)} min={0.1} max={10} step={0.1} hint={HINTS.mass} />
           </>
         )}
         {durationSlider}
+
+        <Folder title="Presets" defaultOpen={false} hint={TRANSITION_HINTS.presets} meta={transitionPresetName(isEasing ? easing : spring, mode, savedPresets)}>
+          <TransitionPresets mode={mode} value={isEasing ? easing : spring} onChange={onChange} />
+        </Folder>
       </div>
+  );
+
+  if (bare) return body;
+  return (
+    <Folder title={label} defaultOpen={true} hint={hint} onReset={onReset} changed={changed} actions={<TransitionCopy mode={mode} value={isEasing ? easing : spring} onPaste={handlePaste} />}>
+      {body}
     </Folder>
   );
 }
 
-function formatEase(ease: [number, number, number, number]): string {
-  return ease.map(v => parseFloat(v.toFixed(2))).join(', ');
+function TransitionPresets(props: TransitionPresetsProps) {
+  const host = useRef<HTMLDivElement>(null);
+  const control = useRef<ReturnType<typeof mountTransitionPresets>>();
+  const latest = useRef(props);
+  latest.current = props;
+  useEffect(() => {
+    control.current = mountTransitionPresets(host.current!, latest.current);
+    return () => control.current?.destroy();
+  }, []);
+  useEffect(() => { control.current?.update(props); });
+  return <div ref={host} />;
 }
 
-function parseEase(str: string): [number, number, number, number] | null {
-  const parts = str.split(',').map(s => parseFloat(s.trim()));
-  if (parts.length === 4 && parts.every(n => !isNaN(n))) {
-    return parts as [number, number, number, number];
-  }
-  return null;
-}
-
-function EaseTextInput({ ease, onChange }: { ease: [number, number, number, number]; onChange: (ease: [number, number, number, number]) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState('');
-
-  const handleFocus = () => {
-    setDraft(formatEase(ease));
-    setEditing(true);
-  };
-
-  const handleBlur = () => {
-    const parsed = parseEase(draft);
-    if (parsed) onChange(parsed);
-    setEditing(false);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      (e.target as HTMLInputElement).blur();
-    }
-  };
-
-  return (
-    <div className="tweakers-labeled-control">
-      <span className="tweakers-labeled-control-label">Ease</span>
-      <input
-        type="text"
-        className="tweakers-text-input"
-        value={editing ? draft : formatEase(ease)}
-        onChange={(e) => setDraft(e.target.value)}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
-        onKeyDown={handleKeyDown}
-        spellCheck={false}
-      />
-    </div>
-  );
+function EaseFields(props: EaseFieldsProps) {
+  const host = useRef<HTMLDivElement>(null);
+  const control = useRef<ReturnType<typeof mountEaseFields>>();
+  const latest = useRef(props);
+  latest.current = props;
+  useEffect(() => {
+    control.current = mountEaseFields(host.current!, latest.current);
+    return () => control.current?.destroy();
+  }, []);
+  useEffect(() => { control.current?.update(props); });
+  return <div ref={host} />;
 }

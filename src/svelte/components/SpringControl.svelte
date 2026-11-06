@@ -1,24 +1,29 @@
 <script lang="ts">
-  import { TweakStore } from 'tweakers/store';
-  import type { SpringConfig } from 'tweakers/store';
+  import { DialStore } from 'dialkit/store';
+  import type { SpringConfig } from 'dialkit/store';
+  import { HINTS } from '../../hints';
   import Folder from './Folder.svelte';
   import Slider from './Slider.svelte';
   import SegmentedControl from './SegmentedControl.svelte';
   import SpringVisualization from './SpringVisualization.svelte';
 
-  let { panelId, path, label, spring, onChange } = $props<{
+  let { panelId, path, label, spring, onChange, onReset, changed = false, hint } = $props<{
     panelId: string;
     path: string;
     label: string;
     spring: SpringConfig;
     onChange: (spring: SpringConfig) => void;
+    /** Shows a reset button in the header. See Folder's onReset. */
+    onReset?: () => void;
+    changed?: boolean;
+    hint?: string;
   }>();
 
-  let mode = $state<'simple' | 'advanced'>(TweakStore.getSpringMode(panelId, path));
+  let mode = $state<'simple' | 'advanced'>(DialStore.getSpringMode(panelId, path));
 
   $effect(() => {
-    const unsub = TweakStore.subscribe(panelId, () => {
-      mode = TweakStore.getSpringMode(panelId, path);
+    const unsub = DialStore.subscribe(panelId, () => {
+      mode = DialStore.getSpringMode(panelId, path);
     });
     return unsub;
   });
@@ -42,7 +47,7 @@
       cache.advanced = spring;
     }
 
-    TweakStore.updateSpringMode(panelId, path, typedMode);
+    DialStore.updateSpringMode(panelId, path, typedMode);
 
     if (typedMode === 'simple') {
       onChange(cache.simple);
@@ -62,12 +67,10 @@
   };
 </script>
 
-<Folder title={label} defaultOpen={true}>
+<Folder title={label} defaultOpen={true} {hint} {onReset} {changed}>
   <div style="display: flex; flex-direction: column; gap: 6px;">
-    <SpringVisualization {spring} isSimpleMode={isSimpleMode} />
-
-    <div class="tweakers-labeled-control">
-      <span class="tweakers-labeled-control-label">Type</span>
+    <div class="dialkit-labeled-control dialkit-transition-type">
+      <span class="dialkit-labeled-control-label">Type</span>
       <SegmentedControl
         options={[
           { value: 'simple', label: 'Time' },
@@ -78,15 +81,18 @@
       />
     </div>
 
+    <SpringVisualization {spring} isSimpleMode={isSimpleMode} />
+
     {#if isSimpleMode}
       <Slider
         label="Duration"
         value={spring.visualDuration ?? 0.3}
         onChange={(v) => handleUpdate('visualDuration', v)}
         min={0.1}
-        max={1}
+        max={5}
         step={0.05}
         unit="s"
+        hint={HINTS.springDuration}
       />
       <Slider
         label="Bounce"
@@ -95,6 +101,7 @@
         min={0}
         max={1}
         step={0.05}
+        hint={HINTS.bounce}
       />
     {:else}
       <Slider
@@ -104,6 +111,7 @@
         min={1}
         max={1000}
         step={10}
+        hint={HINTS.stiffness}
       />
       <Slider
         label="Damping"
@@ -112,6 +120,7 @@
         min={1}
         max={100}
         step={1}
+        hint={HINTS.damping}
       />
       <Slider
         label="Mass"
@@ -120,6 +129,7 @@
         min={0.1}
         max={10}
         step={0.1}
+        hint={HINTS.mass}
       />
     {/if}
   </div>

@@ -1,0 +1,985 @@
+// Behavior lock for the timeline core: parse → static → frame sampling.
+// Run with `npm test` (node:test via tsx). These tests define the grammar's
+// semantics — sequences with the hold rule, groups, independent property
+// tracks, wrap continuity, and the copy/persistence value schema.
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  parseTimelineConfig,
+  computeStaticClips,
+  computeStaticTimeline,
+  computeClipState,
+  computeClipStaticFromValues,
+  clampClipMove,
+  clampClipResizeEnd,
+  clampClipResizeStart,
+  clampStepResize,
+  clampTrackDelay,
+  canShareTrack,
+  dragTimelineClip,
+  formatClock,
+  formatStepLabel,
+  normalizeLoopMode,
+  parseClipSegments,
+  segmentedMinDuration,
+  segmentWidths,
+  singleTrackLanes,
+  normalizeTimelineValuesForCopy,
+  timelineClipDragBounds,
+  timelineClipProgress,
+  timelineClipSpans,
+  timelinePopoverDisplayValues,
+  pressTimelineSelection,
+  timelineBlockMove,
+  timelineReorderAts,
+  timelineReorderSlot,
+} from './timeline-core';
+import type { TimelineConfig } from './timeline-core';
+import { foldLoopTime, loopSpan } from './store/TimelineStore';
+import { buildTimelineMeta } from './timeline/adapter';
+
+const near = (actual: number, expected: number, eps = 1e-9) =>
+  assert.ok(Math.abs(actual - expected) < eps, `expected ${actual} ≈ ${expected}`);
+
+const captureWarnings = (fn: () => void): string[] => {
+  const warnings: string[] = [];
+  const original = console.warn;
+  console.warn = (...args: unknown[]) => {
+    warnings.push(args.map(String).join(' '));
+  };
+  try {
+    fn();
+  } finally {
+    console.warn = original;
+  }
+  return warnings;
+};
+
+// The TimelineTest1 scene: a triangle sequence and two independent tracks.
+const scene = {
+  duration: 4.8,
+  circle: {
+    path: {
+      at: 0,
+      loop: true,
+      from: { x: -70, y: 0 },
+      transition: { type: 'easing', duration: 0.8, ease: [0.65, 0, 0.35, 1] },
+      steps: [
+        { duration: 0.8, to: { x: 0, y: 36 } },
+        { duration: 0.8, to: { x: 70, y: 0 } },
+        { duration: 0.8, to: { x: -70 } },
+      ],
+    },
+    float: {
+      at: 0,
+      loop: true,
+      props: {
+        y: {
+          from: -9,
+          transition: { type: 'easing', duration: 0.6, ease: [0.45, 0, 0.55, 1] },
+          steps: [
+            { duration: 0.6, to: 9 },
+            { duration: 0.6, to: -9 },
+          ],
+        },
+        scale: {
+          from: 0.94,
+          delay: 0.12,
+          transition: { type: 'easing', duration: 0.6, ease: [0.8, 0, 0.2, 1] },
+          steps: [
+            { duration: 0.6, to: 1.06 },
+            { duration: 0.6, to: 0.94 },
+          ],
+        },
+      },
+    },
+  },
+} as unknown as TimelineConfig;
+
+const parsed = parseTimelineConfig(scene);
+const [path, float] = computeStaticClips(parsed, {});
+const current = (state: Record<string, unknown>) => state.current as Record<string, number>;
+
+describe('parse', () => {
+  it('labels clips with their label, or the formatted key', () => {
+    const parsed = parseTimelineConfig({ cardEnter: { at: 0, duration: 1 }, rec42: { at: 1, duration: 1, label: 'Title card' } });
+    assert.deepEqual(parsed.clips.map((clip) => clip.label), ['Card Enter', 'Title card']);
+  });
+
+  it('flattens groups into namespaced clips', () => {
+    assert.deepEqual(parsed.clips.map((c) => c.key), ['circle.path', 'circle.float']);
+    assert.equal(parsed.clips[0].group, 'circle');
+    assert.equal(parsed.clips[0].label, 'Path');
+  });
+
+  it('sequences get step keys, props clips get tracks', () => {
+    assert.deepEqual(parsed.clips[0].stepKeys, ['step1', 'step2', 'step3']);
+    assert.deepEqual(parsed.clips[1].tracks, [
+      { prop: 'y', stepKeys: ['step1', 'step2'] },
+      { prop: 'scale', stepKeys: ['step1', 'step2'] },
+    ]);
+  });
+
+  it('keeps loop behavior in code instead of the editable dial config', () => {
+    const circle = parsed.dialConfig.circle as Record<string, Record<string, unknown>>;
+    assert.equal(parsed.clips[0].loop, 'repeat');
+    assert.equal(parsed.clips[1].loop, 'repeat');
+    assert.ok(!('loop' in circle.path));
+    assert.ok(!('loop' in circle.float));
+  });
+
+  it('keeps the configured timeline duration', () => {
+    assert.equal(parsed.duration, 4.8);
+  });
+
+  it('infers an exact-fit duration when omitted — no dead tail', () => {
+    const inferred = parseTimelineConfig({
+      a: { at: 0.5, duration: 1.2, from: { x: 0 }, to: { x: 1 } },
+    } as unknown as TimelineConfig);
+    assert.equal(inferred.duration, 1.7);
+  });
+
+  it('track delays extend the inferred extent', () => {
+    const inferred = parseTimelineConfig({
+      a: { at: 0, props: { x: { from: 0, to: 1, duration: 1, delay: 0.6 } } },
+    } as unknown as TimelineConfig);
+    assert.equal(inferred.duration, 1.6); // 0 + 0.6 + 1
+  });
+
+  it('sanitizes malformed timing values before they reach the editor', () => {
+    const warnings = captureWarnings(() => {
+      const malformed = parseTimelineConfig({
+        duration: Number.POSITIVE_INFINITY,
+        skipped: { at: Number.NaN, duration: 10 },
+        clamped: {
+          at: -2,
+          props: {
+            x: { from: 0, to: 1, duration: -1, delay: Number.POSITIVE_INFINITY },
+          },
+        },
+      } as unknown as TimelineConfig);
+
+      assert.equal(malformed.duration, 0.05);
+      assert.deepEqual(malformed.clips.map((clip) => clip.key), ['clamped']);
+      assert.equal((malformed.dialConfig.clamped as Record<string, unknown>).at?.[0], 0);
+      const clamped = malformed.dialConfig.clamped as Record<string, Record<string, unknown>>;
+      assert.equal((clamped.x.delay as number[])[0], 0);
+      assert.equal((clamped.x.duration as number[])[0], 0.05);
+    });
+
+    assert.ok(warnings.some((warning) => warning.includes('skipped')));
+  });
+});
+
+describe('static pass', () => {
+  it('sequence duration is the sum of its legs', () => {
+    near(path.duration, 2.4);
+    assert.equal(path.loop, 'repeat');
+    assert.equal(path.end, 4.8); // looping → timeline end
+    assert.deepEqual([...(path.props ?? [])].sort(), ['x', 'y']);
+  });
+
+  it('props clip extent is the widest track (delay + cycle)', () => {
+    near(float.duration, 1.32);
+    assert.equal(float.tracks?.length, 2);
+    assert.equal(float.tracks?.[1].delay, 0.12);
+  });
+
+  it('legacy mirror loop values fold into repeat', () => {
+    assert.equal(normalizeLoopMode('mirror'), 'repeat');
+    assert.equal(normalizeLoopMode(true), 'repeat');
+    assert.equal(normalizeLoopMode('off'), 'off');
+  });
+});
+
+describe('sequences (shared timing)', () => {
+  it('starts at from', () => {
+    const s = computeClipState(path, 0);
+    assert.equal(current(s).x, -70);
+    assert.equal(s.step, 0);
+  });
+
+  it('lands each leg exactly', () => {
+    const s = computeClipState(path, 0.8 - 1e-9);
+    near(current(s).x, 0, 0.1);
+    near(current(s).y, 36, 0.1);
+  });
+
+  it('holds untouched properties through a leg (hold rule)', () => {
+    const s = computeClipState(path, 2.0); // mid leg 3 — only x animates
+    assert.equal(s.step, 2);
+    assert.equal(current(s).y, 0);
+  });
+
+  it('folds the cycle when looping', () => {
+    const s = computeClipState(path, 2.45); // just past 2.4 → back in leg 1
+    assert.equal(s.step, 0);
+    near(current(s).x, -70, 5);
+  });
+});
+
+describe('property tracks (independent timing)', () => {
+  it('each track runs its own curve', () => {
+    const s = computeClipState(float, 0.6 - 1e-9);
+    near(current(s).y, 9, 0.05);
+    assert.ok(current(s).scale < 1.06 - 0.001, 'delayed scale still catching up');
+  });
+
+  it('delay is a phase shift that persists across cycles', () => {
+    near(current(computeClipState(float, 0.72 - 1e-9)).scale, 1.06, 0.01);
+    near(current(computeClipState(float, 1.2 + 0.72 - 1e-9)).scale, 1.06, 0.01);
+  });
+
+  it('holds from before the delay elapses', () => {
+    near(current(computeClipState(float, 0.05)).scale, 0.94, 0.01);
+  });
+
+  it('tracks can have independent periods', () => {
+    const edited = computeStaticClips(parsed, { 'circle.float.scale.step1.duration': 0.7 });
+    const clip = edited[1];
+    near(clip.tracks?.[1].duration ?? 0, 1.3);
+    near(clip.tracks?.[0].duration ?? 0, 1.2);
+    const s = computeClipState(clip, 0, 6.0); // wrapped mid-flight
+    near(current(s).y, -9, 0.05); // y at its own cycle start (6 % 1.2 = 0)
+    assert.ok(Math.abs(current(s).scale - 0.94) > 0.005, 'scale desynced');
+  });
+});
+
+describe('loop wrap continuity', () => {
+  it('wrapped playback matches the equivalent first-pass phase', () => {
+    const wrapped = computeClipState(float, 0.0, 5.0); // 5.0 % 1.2 = 0.2
+    const firstPass = computeClipState(float, 0.2);
+    near(current(wrapped).y, current(firstPass).y, 1e-6);
+    assert.ok(Math.abs(current(wrapped).y - -9) > 1, 'not snapped to cycle start');
+  });
+
+  it('scrubbing pins the deterministic first-pass state', () => {
+    near(current(computeClipState(float, 0.0)).y, -9, 1e-6);
+  });
+});
+
+describe('simple clips and markers', () => {
+  const simple = parseTimelineConfig({
+    fade: { at: 0.5, duration: 1, from: { opacity: 0 }, to: { opacity: 1 } },
+    marker: { at: 2 },
+  } as unknown as TimelineConfig);
+  const [fade, marker] = computeStaticClips(simple, {});
+
+  it('from/to animates through the default curve', () => {
+    assert.equal(fade.duration, 1);
+    const mid = current(computeClipState(fade, 1.0)).opacity;
+    assert.ok(mid > 0 && mid <= 1.2);
+    near(current(computeClipState(fade, 3)).opacity, 1, 0.005);
+  });
+
+  it('markers carry timing state only', () => {
+    assert.equal(marker.duration, 0);
+    assert.equal(computeClipState(marker, 2.1).started, true);
+    assert.equal(computeClipState(marker, 1.9).started, false);
+    assert.equal(computeClipState(marker, 2.1).current, undefined);
+  });
+});
+
+describe('single resolver', () => {
+  it('does not mutate nested values while applying flat child overrides', () => {
+    const simple = parseTimelineConfig({
+      fade: { at: 0, duration: 1, from: { opacity: 0 }, to: { opacity: 1 } },
+    } as unknown as TimelineConfig);
+    const transition = {
+      type: 'easing' as const,
+      duration: 99,
+      ease: [0.4, 0, 0.2, 1] as [number, number, number, number],
+    };
+
+    computeClipStaticFromValues({
+      'fade.at': 0,
+      'fade.duration': 1,
+      'fade.transition': transition,
+      'fade.transition.duration': 1,
+      'fade.from.opacity': 0,
+      'fade.to.opacity': 1,
+    }, simple.clips[0], simple.duration);
+
+    assert.equal(transition.duration, 99);
+  });
+
+  it('dock statics built from flat values match hook statics', () => {
+    const simple = parseTimelineConfig({
+      fade: { at: 0.5, duration: 1, from: { opacity: 0 }, to: { opacity: 1 } },
+    } as unknown as TimelineConfig);
+    const values = {
+      'fade.at': 0.5,
+      'fade.duration': 1,
+      'fade.transition': { type: 'spring', bounce: 0.2 },
+      'fade.from.opacity': 0,
+      'fade.to.opacity': 1,
+    } as never;
+    const viaResolved = computeStaticClips(simple, {})[0];
+    const viaValues = computeClipStaticFromValues(values, simple.clips[0], simple.duration);
+    assert.equal(viaValues.at, viaResolved.at);
+    assert.equal(viaValues.duration, viaResolved.duration);
+    assert.equal(viaValues.loop, viaResolved.loop);
+    assert.equal(viaValues.tracks.length, viaResolved.tracks.length);
+    near(
+      current(computeClipState(viaValues, 1.0)).opacity,
+      current(computeClipState(viaResolved, 1.0)).opacity,
+      1e-9
+    );
+  });
+});
+
+describe('copy normalization', () => {
+  it('drops config defaults and pins easing durations', () => {
+    const copy = normalizeTimelineValuesForCopy(
+      {
+        'circle.float.y.delay': 0,
+        'circle.float.scale.delay': 0.12,
+        'circle.float.loop': 'repeat',
+        'circle.path.step1.duration': 0.5,
+        'circle.path.step1.transition': { type: 'easing', duration: 99, ease: [0.65, 0, 0.35, 1] },
+      },
+      parsed.clips
+    );
+    assert.ok(!('circle.float.y.delay' in copy), 'zero delay dropped');
+    assert.equal(copy['circle.float.scale.delay'], 0.12);
+    assert.ok(!('circle.float.loop' in copy), 'legacy loop value dropped');
+    assert.equal((copy['circle.path.step1.transition'] as { duration: number }).duration, 0.5);
+  });
+
+  it('removes editor mode state and exports the effective physics duration', () => {
+    const copy = normalizeTimelineValuesForCopy(
+      {
+        'circle.path.step1.duration': 0.2,
+        'circle.path.step1.transition': {
+          type: 'spring',
+          stiffness: 100,
+          damping: 10,
+          mass: 1,
+        },
+        'circle.path.step1.transition.__mode': 'advanced',
+      },
+      parsed.clips
+    );
+
+    assert.ok(!('circle.path.step1.transition.__mode' in copy));
+    assert.equal(copy['circle.path.step1.duration'], 1.06);
+  });
+});
+
+describe('popover display values', () => {
+  it('injects effective durations into stored shape-only transitions', () => {
+    const values = {
+      'circle.path.step1.duration': 0.8,
+      'circle.path.step1.transition': { type: 'easing', duration: 0, ease: [0.65, 0, 0.35, 1] },
+    };
+    const display = timelinePopoverDisplayValues(values as never, 'circle.path', ['step1'], 'step1');
+    assert.equal((display['circle.path.step1.transition'] as { duration: number }).duration, 0.8);
+  });
+});
+
+describe('edit clamps', () => {
+  it('keeps bars inside the timeline', () => {
+    assert.equal(clampClipMove(4.5, 1, 4.8), 3.8);
+    assert.equal(clampClipMove(-1, 1, 4.8), 0);
+    near(clampClipResizeEnd(10, 4, 4.8), 0.8);
+    assert.deepEqual(clampClipResizeStart(0.5, 0, 1), { at: 0.5, duration: 0.5 });
+    near(clampStepResize(10, 0, 1.6, 4.8), 3.2);
+    assert.equal(clampTrackDelay(-1, 0, 1.2, 4.8), 0);
+    assert.equal(clampTrackDelay(9, 0, 1.2, 4.8), 3.6);
+  });
+});
+
+describe('single track', () => {
+  // A [0,2] butted by B [2,4], a 1.5s gap, then C [5.5,7.5]; 10s timeline.
+  const spans = [
+    { key: 'a', at: 0, duration: 2 },
+    { key: 'b', at: 2, duration: 2 },
+    { key: 'c', at: 5.5, duration: 2 },
+  ];
+  const bounds = (key: string) => timelineClipDragBounds(spans, key, 10, { singleTrack: true });
+  const span = (key: string) => spans.find((candidate) => candidate.key === key)!;
+
+  it('a move stops at its neighbors and never pushes them', () => {
+    near(dragTimelineClip('move', span('c'), -3, bounds('c')).at, 4);
+    near(dragTimelineClip('move', span('b'), -1, bounds('b')).at, 2);
+    near(dragTimelineClip('move', span('b'), 9, bounds('b')).at, 3.5);
+    // The last clip runs past the timeline end, which grows to cover it.
+    near(dragTimelineClip('move', span('c'), 9, bounds('c')).at, 14.5);
+    assert.equal(bounds('c').end, Number.POSITIVE_INFINITY);
+  });
+
+  it('resizes stop at the neighbors, both edges', () => {
+    near(dragTimelineClip('end', span('a'), 1, bounds('a')).duration, 2);
+    assert.deepEqual(dragTimelineClip('start', span('c'), -3, bounds('c')), { at: 4, duration: 3.5 });
+    near(dragTimelineClip('end', span('c'), 9, bounds('c')).duration, 11);
+  });
+
+  it('names the start of the next clip on a single track only', () => {
+    assert.equal(bounds('a').next, 2);
+    assert.equal(bounds('b').next, 5.5);
+    assert.equal(bounds('c').next, undefined);
+    assert.equal(timelineClipDragBounds(spans, 'a', 10).next, undefined);
+  });
+
+  it('rows leave every clip the whole timeline', () => {
+    const rows = timelineClipDragBounds(spans, 'b', 10);
+    assert.equal(rows.start, 0);
+    assert.equal(rows.end, 10);
+    near(dragTimelineClip('move', span('b'), -5, rows).at, 0);
+  });
+
+  it('clips that start out overlapping can still move apart', () => {
+    const overlapping = [
+      { key: 'a', at: 0, duration: 2 },
+      { key: 'b', at: 1, duration: 2 },
+    ];
+    const b = timelineClipDragBounds(overlapping, 'b', 10, { singleTrack: true });
+    near(dragTimelineClip('move', overlapping[1], 3, b).at, 4);
+    near(dragTimelineClip('move', overlapping[1], -1, b).at, 1);
+  });
+
+  it('holds plain clips only', () => {
+    const plain = parseTimelineConfig({ a: { at: 0, duration: 1 }, b: { at: 1, from: { x: 0 }, to: { x: 1 } } });
+    assert.equal(canShareTrack(plain.clips), true);
+    for (const config of [
+      { a: { at: 0, duration: 1, loop: true } },
+      { a: { at: 0, steps: [{ to: { x: 1 } }], from: { x: 0 } } },
+      { a: { at: 0, props: { x: { from: 0, to: 1 } } } },
+      { layer: { a: { at: 0, duration: 1 } } },
+    ] as TimelineConfig[]) {
+      assert.equal(canShareTrack(parseTimelineConfig(config).clips), false);
+    }
+  });
+
+  it('falls back to rows, warning once, when a clip needs its own row', () => {
+    const plain = parseTimelineConfig({ a: { at: 0, duration: 1 } });
+    assert.equal(buildTimelineMeta('t', 'T', 1, plain, false, 'single').track, 'single');
+    const looping = parseTimelineConfig({ a: { at: 0, duration: 1, loop: true } });
+    const warnings = captureWarnings(() => {
+      assert.equal(buildTimelineMeta('t', 'T', 1, looping, false, 'single').track, 'rows');
+      buildTimelineMeta('t', 'T', 1, looping, false, 'single');
+    });
+    assert.equal(warnings.length, 1);
+  });
+
+  it('holds the opening bar\'s start only on a single track that asks for it', () => {
+    const plain = parseTimelineConfig({ a: { at: 0, duration: 1 } });
+    assert.equal(buildTimelineMeta('t', 'T', 1, plain, false, 'single', { pinStart: true }).pinStart, true);
+    assert.equal('pinStart' in buildTimelineMeta('t', 'T', 1, plain, false, 'single'), false);
+    assert.equal('pinStart' in buildTimelineMeta('t', 'T', 1, plain, false, 'rows', { pinStart: true }), false);
+    const looping = parseTimelineConfig({ a: { at: 0, duration: 1, loop: true } });
+    captureWarnings(() => {
+      assert.equal('pinStart' in buildTimelineMeta('t', 'T', 1, looping, false, 'single', { pinStart: true }), false);
+    });
+  });
+
+  it('a free drag over the whole timeline is the rows clamps, edge cases included', () => {
+    const rows = { start: 0, end: 4, targets: [] };
+    const cases: Array<[number, number, number]> = [
+      // [at, duration, delta]
+      [1, 1, 0.5], [1, 1, -3], [1, 1, 5], [0, 4, 1], [3.98, 0.02, 0.5],
+      [3.97, 0.03, -0.01], [0.5, 0.03, -1], [0, 0.02, 0.3], [2.004, 1.006, 0.333],
+    ];
+    for (const [at, duration, delta] of cases) {
+      const label = `at ${at}, duration ${duration}, delta ${delta}`;
+      assert.deepEqual(dragTimelineClip('move', { at, duration }, delta, rows), { at: clampClipMove(at + delta, duration, 4), duration }, label);
+      assert.deepEqual(dragTimelineClip('end', { at, duration }, delta, rows), { at, duration: clampClipResizeEnd(duration + delta, at, 4) }, label);
+      assert.deepEqual(dragTimelineClip('start', { at, duration }, delta, rows), clampClipResizeStart(Math.max(at + delta, 0), at, duration), label);
+    }
+  });
+
+  it('reads spans from stored values', () => {
+    const parsed = parseTimelineConfig({ a: { at: 0, duration: 1 }, b: { at: 1, duration: 0.5 } });
+    assert.deepEqual(timelineClipSpans({ 'a.at': 0.25, 'a.duration': 1, 'b.at': 1, 'b.duration': 0.5 }, parsed.clips, parsed.duration), [
+      { key: 'a', at: 0.25, duration: 1 },
+      { key: 'b', at: 1, duration: 0.5 },
+    ]);
+  });
+
+  it('fills a bar as the playhead crosses it', () => {
+    assert.equal(timelineClipProgress(0.5, 1, 2), 0);
+    assert.equal(timelineClipProgress(1.5, 1, 2), 0.25);
+    assert.equal(timelineClipProgress(4, 1, 2), 1);
+    // A marker has no length: played once the playhead reaches it.
+    assert.equal(timelineClipProgress(0.99, 1, 0), 0);
+    assert.equal(timelineClipProgress(1, 1, 0), 1);
+  });
+});
+
+describe('snapping drags', () => {
+  // A [0,2], B [3,5], C [8,10] on a 12s timeline.
+  const spans = [
+    { key: 'a', at: 0, duration: 2 },
+    { key: 'b', at: 3, duration: 2 },
+    { key: 'c', at: 8, duration: 2 },
+  ];
+
+  it('targets are the other clips\' edges and the playhead', () => {
+    assert.deepEqual(timelineClipDragBounds(spans, 'b', 12).targets, [0, 2, 8, 10]);
+    assert.deepEqual(timelineClipDragBounds(spans, 'b', 12, { playhead: 4.5 }).targets, [0, 2, 4.5, 8, 10]);
+  });
+
+  it('a move lands the start or the end on the closest target', () => {
+    const bounds = timelineClipDragBounds(spans, 'b', 12, { playhead: 6.2 });
+    // Start lands on A's end.
+    near(dragTimelineClip('move', spans[1], -0.7, bounds, true).at, 2);
+    // End lands on C's start.
+    near(dragTimelineClip('move', spans[1], 2.6, bounds, true).at, 6);
+    // Start lands on the playhead.
+    near(dragTimelineClip('move', spans[1], 3.2, bounds, true).at, 6.2);
+  });
+
+  it('a single track skips targets past a neighbor', () => {
+    const bounds = timelineClipDragBounds(spans, 'b', 12, { singleTrack: true });
+    // A's start is behind A: the closest reachable landing is A's end.
+    near(dragTimelineClip('move', spans[1], -3, bounds, true).at, 2);
+  });
+
+  it('edges land on targets, and fall back to a free drag when none is reachable', () => {
+    const bounds = timelineClipDragBounds(spans, 'b', 12, { playhead: 6.2 });
+    near(dragTimelineClip('end', spans[1], 1.5, bounds, true).duration, 3.2);
+    assert.deepEqual(dragTimelineClip('start', spans[1], -0.8, bounds, true), { at: 2, duration: 3 });
+    const none = { ...bounds, targets: [] };
+    near(dragTimelineClip('move', spans[1], 0.33, none, true).at, 3.33);
+  });
+});
+
+describe('clip panels', () => {
+  it('names the host panel a clip popover shows', () => {
+    const parsed = parseTimelineConfig({
+      text: { at: 0, duration: 1, panel: ' Text Settings ' },
+      blank: { at: 1, duration: 1, panel: ' ' },
+    } as unknown as TimelineConfig);
+    assert.equal(parsed.clips[0].panel, 'Text Settings');
+    assert.equal('panel' in parsed.clips[1], false);
+  });
+});
+
+describe('single track reorder', () => {
+  // A [0,2] butted by B [2,4], a 1.5s gap, then C [5.5,7.5].
+  const spans = [
+    { key: 'a', at: 0, duration: 2 },
+    { key: 'b', at: 2, duration: 2 },
+    { key: 'c', at: 5.5, duration: 2 },
+  ];
+
+  it('moves a clip to a slot and keeps the gap pattern by position', () => {
+    // B before A: slot 0 among the others [A, C].
+    assert.deepEqual(timelineReorderAts(spans, ['b'], 0), { b: 0, a: 2, c: 5.5 });
+    // A after C (slot 2): the gaps stay [0, 0, 1.5] by position.
+    assert.deepEqual(timelineReorderAts(spans, ['a'], 2), { b: 0, c: 2, a: 5.5 });
+    // Its own slot changes nothing.
+    assert.deepEqual(timelineReorderAts(spans, ['c'], 2), { a: 0, b: 2, c: 5.5 });
+  });
+
+  it('moves a selected run together, in its order', () => {
+    // A and C after B: the run keeps A before C.
+    assert.deepEqual(timelineReorderAts(spans, ['a', 'c'], 1), { b: 0, a: 2, c: 5.5 });
+    assert.deepEqual(timelineReorderAts(spans, ['b', 'c'], 0), { b: 0, c: 2, a: 5.5 });
+  });
+
+  it('lands before the first other clip whose middle lies past the pointer', () => {
+    assert.equal(timelineReorderSlot(spans, ['c'], 0.5), 0);
+    assert.equal(timelineReorderSlot(spans, ['c'], 1.5), 1);
+    assert.equal(timelineReorderSlot(spans, ['a'], 6), 1);
+    assert.equal(timelineReorderSlot(spans, ['a'], 7), 2);
+    assert.equal(timelineReorderSlot(spans, ['a', 'b'], 7), 1);
+  });
+});
+
+describe('single track selection', () => {
+  const none: ReadonlySet<string> = new Set();
+
+  it('Shift-click toggles a bar, a plain press selects it alone, an edge press changes nothing', () => {
+    const ab = pressTimelineSelection(pressTimelineSelection(none, 'a', 'toggle'), 'b', 'toggle');
+    assert.deepEqual([...ab], ['a', 'b']);
+    assert.deepEqual([...pressTimelineSelection(ab, 'a', 'toggle')], ['b']);
+    // A plain press on a selected bar keeps the selection, so a drag moves all of it.
+    assert.equal(pressTimelineSelection(ab, 'a', 'select'), ab);
+    assert.deepEqual([...pressTimelineSelection(ab, 'c', 'select')], ['c']);
+    assert.equal(pressTimelineSelection(ab, 'c', 'edge'), ab);
+  });
+});
+
+describe('single track block moves', () => {
+  // A [0,2] butted by B [2,4], a 1.5s gap, then C [5.5,7.5].
+  const spans = [
+    { key: 'a', at: 0, duration: 2 },
+    { key: 'b', at: 2, duration: 2 },
+    { key: 'c', at: 5.5, duration: 2 },
+  ];
+  const keys = (...selected: string[]) => new Set(selected);
+
+  it('a block moves as one, bounded by its unselected neighbors', () => {
+    // A+B together: the left bound is the timeline start, the right one the gap to C.
+    near(timelineBlockMove(spans, keys('a', 'b'), -1), 0);
+    near(timelineBlockMove(spans, keys('a', 'b'), 9), 1.5);
+    // A and C around unselected B: A's cap wins for the whole block.
+    near(timelineBlockMove(spans, keys('a', 'c'), 5), 0);
+    // B+C: C is the lane's last clip, so the block runs past the end.
+    near(timelineBlockMove(spans, keys('b', 'c'), 9), 9);
+    near(timelineBlockMove(spans, keys('b', 'c'), -1), 0);
+  });
+
+  it('a snapping block lands its start, bar end or tail end on a target', () => {
+    const tailed = [...spans.slice(0, 2), { key: 'c', at: 5.5, duration: 2, tail: 1 }, { key: 'd', at: 12, duration: 1 }];
+    // B+C moved 3: the tail end (8.5) lands on D's start (12) at 3.5.
+    near(timelineBlockMove(tailed, keys('b', 'c'), 3, { snap: true }), 3.5);
+    // The playhead is a target too: the block start (2) lands on 4.
+    near(timelineBlockMove(tailed, keys('b', 'c'), 1.8, { snap: true, playhead: 4 }), 2);
+    // No targets: the free move.
+    near(timelineBlockMove(spans.slice(0, 2), keys('a', 'b'), 0.7, { snap: true }), 0.7);
+    // A reachable target wins over the free move: A+B's end (4) lands on C's start.
+    near(timelineBlockMove(spans, keys('a', 'b'), 0.7, { snap: true }), 1.5);
+  });
+});
+
+describe('clip tails', () => {
+  it('extend the timeline end at parse and at live edit', () => {
+    const config = {
+      a: { at: 0, duration: 2, tail: 1.5, transition: { type: 'easing', ease: [0.4, 0, 0.2, 1], duration: 2 } },
+      b: { at: 2, duration: 2, tail: 0.6, transition: { type: 'easing', ease: [0.4, 0, 0.2, 1], duration: 2 } },
+    } as unknown as TimelineConfig;
+    const parsed = parseTimelineConfig(config);
+    near(parsed.duration, 4.6); // b ends at 4, tail 0.6
+    assert.equal(parsed.clips[0]?.tail, 1.5);
+    assert.equal('tail' in parseTimelineConfig({ c: { at: 0, duration: 1 } }).clips[0], false);
+    // Live edit: dragging b later grows the timeline to cover its tail.
+    near(computeStaticTimeline(parsed, { 'b.at': 3 } as never).duration, 5.6);
+    // Spans carry the tail for the dock's drags.
+    assert.deepEqual(timelineClipSpans({}, parsed.clips, parsed.duration).map((span) => span.tail), [1.5, 0.6]);
+  });
+
+  // A [0,2), B [3,5) with a 1s tail (tail end 6), C [8,10); 12s timeline.
+  const spans = [
+    { key: 'a', at: 0, duration: 2 },
+    { key: 'b', at: 3, duration: 2, tail: 1 },
+    { key: 'c', at: 8, duration: 2 },
+  ];
+  const bounds = (key: string, playhead?: number) =>
+    timelineClipDragBounds(spans, key, 12, { singleTrack: true, playhead });
+
+  it('add their end to a single track\'s snap targets, when they reach past the bar', () => {
+    assert.deepEqual(bounds('b').targets, [0, 2, 8, 10]);
+    assert.deepEqual(bounds('a').targets, [3, 5, 6, 8, 10]);
+    // Rows draw no tails, so they add no targets there.
+    assert.deepEqual(timelineClipDragBounds(spans, 'a', 12).targets, [3, 5, 8, 10]);
+  });
+
+  it('a snapping move can land the tail end on a target', () => {
+    // C dragged left by 1.7: its start lands on B's tail end (6), not on B's bar end.
+    near(dragTimelineClip('move', spans[2], -1.7, bounds('c'), true).at, 6);
+    // B dragged right by 1.8: its tail end lands on C's start (8), the bar end at 7.
+    near(dragTimelineClip('move', spans[1], 1.8, bounds('b'), true).at, 5);
+    // A target the neighbors rule out is skipped: B cannot reach A's start.
+    near(dragTimelineClip('move', spans[1], -5, bounds('b'), true).at, 2);
+  });
+
+  it('a snapping end edge lands the bar end or the tail end on a target', () => {
+    // Wanted 3.3s: the tail end on 8 needs 4s, the bar end on 8 needs 5s.
+    near(dragTimelineClip('end', spans[1], 1.3, bounds('b', 4.5), true).duration, 4);
+    // Nothing reachable: the free drag.
+    near(dragTimelineClip('end', spans[1], 1.3, { ...bounds('b'), targets: [20] }, true).duration, 3.3);
+  });
+});
+
+describe('single track lanes and segmented clips', () => {
+  // Theca's shape: versions on the main lane, one text clip per lane.
+  const config = {
+    v1: { at: 0, duration: 3, label: 'Version 1' },
+    v2: { at: 3, duration: 3, label: 'Version 2' },
+    t1: { at: 1, duration: 4, lane: 'text-a', laneLabel: 'Title', segments: { in: 0.5, out: 0.75 } },
+    t2: { at: 0, duration: 2, lane: 'text-b', label: 'Caption', segments: { in: 0.4, out: 0.4 } },
+    t3: { at: 6, duration: 1, lane: 'text-a', segments: { in: 0.2, out: 0.2 } },
+  } as unknown as TimelineConfig;
+  const parsed = parseTimelineConfig(config);
+  const meta = (key: string) => parsed.clips.find((clip) => clip.key === key)!;
+  // Spans as the dock reads them, from stored values.
+  const stored: Record<string, number> = {};
+  for (const [key, clip] of Object.entries(config)) {
+    const { at, duration } = clip as { at: number; duration: number };
+    stored[`${key}.at`] = at;
+    stored[`${key}.duration`] = duration;
+  }
+  const spans = timelineClipSpans(stored, parsed.clips, 12);
+  const span = (key: string) => spans.find((candidate) => candidate.key === key)!;
+  const bounds = (key: string) => timelineClipDragBounds(spans, key, 12, { singleTrack: true });
+
+  it('parses lane, laneLabel and segments into clip meta', () => {
+    assert.equal(meta('t1').lane, 'text-a');
+    assert.equal(meta('t1').laneLabel, 'Title');
+    assert.deepEqual(meta('t1').segments, { in: 0.5, out: 0.75 });
+    assert.equal(meta('t2').laneLabel, undefined);
+    for (const field of ['lane', 'laneLabel', 'segments']) {
+      assert.equal(field in meta('v1'), false, `v1 has ${field}`);
+    }
+    assert.deepEqual(singleTrackLanes(parsed.clips), ['text-a', 'text-b']);
+    assert.equal(span('t1').lane, 'text-a');
+    assert.equal(span('t1').minDuration, 1.25);
+    assert.equal('lane' in span('v1'), false);
+  });
+
+  it('rejects malformed segments', () => {
+    assert.equal(parseClipSegments(undefined), undefined);
+    assert.equal(parseClipSegments({ in: 0, out: 0 }), undefined);
+    assert.deepEqual(parseClipSegments({ in: -1, out: 0.3 }), { in: 0, out: 0.3 });
+  });
+
+  it('counts lane clips into the timeline duration', () => {
+    const laneLast = parseTimelineConfig({
+      v1: { at: 0, duration: 2 },
+      t1: { at: 1, duration: 4, lane: 'text', segments: { in: 0.5, out: 0.5 } },
+    } as unknown as TimelineConfig);
+    near(laneLast.duration, 5);
+    near(computeStaticTimeline(laneLast, { 't1.at': 3 } as never).duration, 7);
+  });
+
+  it('never makes a segmented bar shorter than in + out at parse time', () => {
+    const short = parseTimelineConfig({
+      t: { at: 0, duration: 0.5, lane: 'text', segments: { in: 0.4, out: 0.6 } },
+    } as unknown as TimelineConfig);
+    near(short.duration, 1);
+    near(((short.dialConfig.t as Record<string, unknown>).duration as number[])[0], 1);
+  });
+
+  it('a lane clip is bounded and snapped by its own lane only', () => {
+    // t1 overlaps both versions in time; on its own lane nothing blocks it
+    // to the left, and t3 (same lane, at 6) bounds it to the right.
+    const t1 = bounds('t1');
+    assert.equal(t1.start, 0);
+    assert.equal(t1.end, 6);
+    assert.equal(t1.next, 6);
+    assert.deepEqual(t1.targets, [6, 7]);
+    near(dragTimelineClip('move', span('t1'), -5, t1).at, 0);
+    // The main lane never sees lane clips either.
+    assert.deepEqual(bounds('v2').targets, [0, 3]);
+    // t3 moving left stops butted against t1's end (5).
+    near(dragTimelineClip('move', span('t3'), -2, bounds('t3')).at, 5);
+    // Rows ignore lanes.
+    assert.deepEqual(timelineClipDragBounds(spans, 'v2', 12).targets, [0, 1, 2, 3, 5, 6, 7]);
+  });
+
+  it('a segmented end resize floors at in + out', () => {
+    const min = segmentedMinDuration({ in: 0.5, out: 0.75 });
+    near(min, 1.25);
+    near(dragTimelineClip('end', span('t1'), -3.8, bounds('t1')).duration, 1.25);
+    near(dragTimelineClip('end', span('t1'), 0.5, bounds('t1')).duration, 4.5);
+    // A snapping end resize skips a target that would cut into in or out.
+    near(dragTimelineClip('end', span('t1'), -3.5, { ...bounds('t1'), targets: [1.5, 2.5] }, true).duration, 1.5);
+  });
+
+  it('a segmented start resize keeps the end fixed and floors at in + out', () => {
+    assert.deepEqual(dragTimelineClip('start', span('t1'), 3.9, bounds('t1')), { at: 3.75, duration: 1.25 });
+    assert.deepEqual(dragTimelineClip('start', span('t1'), -0.5, bounds('t1')), { at: 0.5, duration: 4.5 });
+    // Snapping: a target inside the in/out span is skipped.
+    assert.deepEqual(dragTimelineClip('start', span('t1'), 2, { ...bounds('t1'), targets: [4.5, 3] }, true), { at: 3, duration: 2 });
+  });
+
+  it('rounds in + out up to the bar step, so idle never goes negative', () => {
+    near(segmentedMinDuration({ in: 0.333, out: 0.333 }), 0.67);
+    near(segmentedMinDuration(undefined), 0.05);
+  });
+
+  it('splits a bar so only idle changes with its length', () => {
+    assert.deepEqual(segmentWidths(4, { in: 0.5, out: 0.75 }), { in: 0.5, idle: 2.75, out: 0.75 });
+    assert.deepEqual(segmentWidths(1.25, { in: 0.5, out: 0.75 }), { in: 0.5, idle: 0, out: 0.75 });
+    // A stale bar shorter than in + out: the parts shrink in proportion.
+    const squeezed = segmentWidths(0.625, { in: 0.5, out: 0.75 });
+    near(squeezed.in, 0.25);
+    near(squeezed.out, 0.375);
+    near(squeezed.idle, 0);
+  });
+});
+
+describe('loop region (intro-then-idle)', () => {
+  it('wraps back to the region start, not zero', () => {
+    assert.deepEqual(foldLoopTime(2.0, 4.8, 1.2), { time: 2.0, wraps: 0 }); // inside window
+    const folded = foldLoopTime(4.9, 4.8, 1.2);
+    near(folded.time, 1.3);
+    assert.equal(folded.wraps, 1);
+  });
+
+  it('continuous time (wraps × span + time) never jumps at the wrap', () => {
+    const span = loopSpan(4.8, 1.2); // 3.6
+    const folded = foldLoopTime(4.81, 4.8, 1.2);
+    near(folded.wraps * span + folded.time, 4.81);
+  });
+
+  it('a full-timeline loop is the region degenerate case', () => {
+    const folded = foldLoopTime(5.0, 4.8, 0);
+    near(folded.time, 0.2);
+    assert.equal(folded.wraps, 1);
+    assert.equal(loopSpan(4.8, 0), 4.8);
+  });
+
+  it('a bad region start falls back to whole-timeline looping', () => {
+    const folded = foldLoopTime(5.0, 4.8, 9); // start past the end
+    near(folded.time, 0.2);
+    assert.equal(folded.wraps, 1);
+  });
+
+  it('intro clips stay finished once the region loops', () => {
+    // A one-shot clip that ends before the region: on any wrapped pass the
+    // displayed time is past its end, so it rests at `to` and never replays.
+    const simple = parseTimelineConfig({
+      duration: 6,
+      intro: { at: 0.2, duration: 0.5, from: { opacity: 0 }, to: { opacity: 1 } },
+    } as unknown as TimelineConfig);
+    const [intro] = computeStaticClips(simple, {});
+    const wrapped = foldLoopTime(6.3, 6, 1.4); // playhead after one region pass
+    const state = computeClipState(intro, wrapped.time, wrapped.wraps * loopSpan(6, 1.4) + wrapped.time);
+    assert.equal(state.done, true);
+    near(current(state).opacity, 1, 0.005);
+  });
+});
+
+describe('config validation', () => {
+  it('warns and skips entries that are neither clips nor groups', () => {
+    let clips: string[] = [];
+    const warnings = captureWarnings(() => {
+      clips = parseTimelineConfig({
+        good: { at: 0, duration: 1 },
+        bad: { duration: 1 },
+      } as unknown as TimelineConfig).clips.map((c) => c.key);
+    });
+    assert.deepEqual(clips, ['good']);
+    assert.ok(warnings.some((w) => w.includes('"bad"')));
+  });
+
+  it('keeps valid clips in a group with a malformed sibling', () => {
+    let clips: string[] = [];
+    const warnings = captureWarnings(() => {
+      clips = parseTimelineConfig({
+        layer: { ok: { at: 0, duration: 1 }, broken: { duration: 1 } },
+      } as unknown as TimelineConfig).clips.map((c) => c.key);
+    });
+    assert.deepEqual(clips, ['layer.ok']);
+    assert.ok(warnings.some((w) => w.includes('layer.broken')));
+  });
+
+  it('warns when props conflicts with from/to/steps — props wins', () => {
+    const warnings = captureWarnings(() => {
+      const p = parseTimelineConfig({
+        a: { at: 0, from: { x: 0 }, props: { y: { from: 0, to: 1, duration: 1 } } },
+      } as unknown as TimelineConfig);
+      assert.deepEqual(p.clips[0].tracks?.map((t) => t.prop), ['y']);
+    });
+    assert.ok(warnings.some((w) => w.includes('mutually exclusive')));
+  });
+
+  it('warns when to is combined with steps', () => {
+    const warnings = captureWarnings(() => {
+      parseTimelineConfig({
+        a: { at: 0, from: { x: 0 }, to: { x: 5 }, steps: [{ duration: 0.3, to: { x: 1 } }] },
+      } as unknown as TimelineConfig);
+    });
+    assert.ok(warnings.some((w) => w.includes('"to" is ignored')));
+  });
+
+  it('warns when a step animates a property with no starting value', () => {
+    const warnings = captureWarnings(() => {
+      parseTimelineConfig({
+        a: { at: 0, from: { x: 0 }, steps: [{ duration: 0.3, to: { x: 1, y: 1 } }] },
+      } as unknown as TimelineConfig);
+    });
+    assert.ok(warnings.some((w) => w.includes('"y"') && w.includes('starting value')));
+  });
+
+  it('warns when a props track has steps but no from', () => {
+    const warnings = captureWarnings(() => {
+      parseTimelineConfig({
+        a: { at: 0, props: { y: { steps: [{ duration: 0.3, to: 1 }] } } },
+      } as unknown as TimelineConfig);
+    });
+    assert.ok(warnings.some((w) => w.includes('track "y"')));
+  });
+
+  it('a clean config parses without warnings', () => {
+    const warnings = captureWarnings(() => {
+      parseTimelineConfig(scene);
+    });
+    assert.deepEqual(warnings, []);
+  });
+});
+
+describe('duration defaults', () => {
+  it('a from/to clip with no duration or transition defaults to the default spring settle time', () => {
+    const p = parseTimelineConfig({
+      a: { at: 0, from: { x: 0 }, to: { x: 1 } },
+    } as unknown as TimelineConfig);
+    const [clip] = computeStaticClips(p, {});
+    assert.ok(
+      clip.duration > 0.2 && clip.duration < 1,
+      `expected settle-based duration, got ${clip.duration}`
+    );
+    near(p.duration, clip.duration, 0.011); // exact-fit inference follows
+  });
+
+  it('markers stay zero-length', () => {
+    const p = parseTimelineConfig({ mark: { at: 1 } } as unknown as TimelineConfig);
+    const [marker] = computeStaticClips(p, {});
+    assert.equal(marker.duration, 0);
+  });
+
+  it('uses physics settle time consistently even when an explicit duration is present', () => {
+    const p = parseTimelineConfig({
+      a: {
+        at: 0,
+        duration: 0.1,
+        from: { x: 0 },
+        to: { x: 1 },
+        transition: { type: 'spring', stiffness: 100, damping: 10, mass: 1 },
+      },
+    } as unknown as TimelineConfig);
+    const [clip] = computeStaticClips(p, {});
+
+    assert.equal(p.duration, 1.06);
+    assert.equal(clip.duration, 1.06);
+    assert.equal(((p.dialConfig.a as Record<string, unknown>).duration as number[])[0], 1.06);
+  });
+
+  it('extends a live timeline when an edited physics spring outgrows its authored window', () => {
+    const p = parseTimelineConfig({
+      dismiss: {
+        at: 1.8,
+        duration: 0.35,
+        from: { opacity: 1 },
+        to: { opacity: 0 },
+        transition: { type: 'easing', duration: 0.35, ease: [0.55, 0, 1, 0.45] },
+      },
+    } as unknown as TimelineConfig);
+    const resolved = computeStaticTimeline(p, {
+      'dismiss.transition': { type: 'spring', stiffness: 200, damping: 25, mass: 1 },
+    });
+
+    assert.equal(p.duration, 2.15);
+    assert.equal(resolved.clips[0].duration, 0.42);
+    assert.equal(resolved.duration, 2.22);
+    assert.equal(resolved.clips[0].end, 2.22);
+  });
+
+  it('enforces the minimum duration for animated clips while markers may remain instant', () => {
+    const p = parseTimelineConfig({
+      animated: {
+        at: 0,
+        duration: 0,
+        from: { opacity: 0 },
+        to: { opacity: 1 },
+        transition: { type: 'easing', duration: 0, ease: [0, 0, 1, 1] },
+      },
+      marker: { at: 1, duration: 0 },
+    } as unknown as TimelineConfig);
+    const [animated, marker] = computeStaticClips(p, {});
+
+    assert.equal(animated.duration, 0.05);
+    assert.equal(marker.duration, 0);
+  });
+});
+
+describe('formatting', () => {
+  it('formats clocks and step labels', () => {
+    assert.equal(formatClock(63.25, true), '01:03.3');
+    assert.equal(formatClock(5), '00:05');
+    assert.equal(formatStepLabel('step2'), 'Step 2');
+  });
+});

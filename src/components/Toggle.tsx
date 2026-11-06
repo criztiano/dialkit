@@ -1,6 +1,7 @@
-import { Checkbox } from './Checkbox';
-import type { ShortcutConfig } from 'tweakers/store';
-import { formatToggleShortcut } from 'tweakers/shortcut-utils';
+import { SegmentedControl } from './SegmentedControl';
+import type { ShortcutConfig } from '../store/DialStore';
+import { formatToggleShortcut } from '../shortcut-utils';
+import { useHints } from '../hooks/useHints';
 
 interface ToggleProps {
   label: string;
@@ -8,20 +9,29 @@ interface ToggleProps {
   onChange: (checked: boolean) => void;
   shortcut?: ShortcutConfig;
   shortcutActive?: boolean;
+  hint?: string;
 }
 
-export function Toggle({ label, checked, onChange, shortcut, shortcutActive }: ToggleProps) {
+export function Toggle({ label, checked, onChange, shortcut, shortcutActive, hint }: ToggleProps) {
+  useHints(!!hint);
   return (
-    <div className="tweakers-labeled-control tweakers-labeled-control-check">
-      <Checkbox checked={checked} onChange={onChange} label={label} />
-      <span className="tweakers-labeled-control-label">
+    <div className="dialkit-labeled-control" data-hint={hint}>
+      <span className="dialkit-labeled-control-label">
         {label}
         {shortcut && (
-          <span className={`tweakers-shortcut-pill${shortcutActive ? ' tweakers-shortcut-pill-active' : ''}`}>
+          <span className={`dialkit-shortcut-pill${shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`}>
             {formatToggleShortcut(shortcut)}
           </span>
         )}
       </span>
+      <SegmentedControl
+        options={[
+          { value: 'off' as const, label: 'Off' },
+          { value: 'on' as const, label: 'On' },
+        ]}
+        value={checked ? 'on' : 'off'}
+        onChange={(val) => onChange(val === 'on')}
+      />
     </div>
   );
 }

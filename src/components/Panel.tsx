@@ -1,114 +1,121 @@
-import { useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { TweakStore, PanelConfig, ControlMeta, TAB_PATH } from 'tweakers/store';
-import { splitPanelTabs } from '../panel-tabs';
-import { buildCopyInstruction } from 'tweakers/copy-instruction';
-import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from 'tweakers/icons';
-import { Folder } from './Folder';
+import { DialStore, PanelConfig } from '../store/DialStore';
+import { buildCopyInstruction } from '../copy-instruction';
+import { resolveOpenFolder } from '../accordion';
+import { HINTS } from '../hints';
+import { useHints } from '../hooks/useHints';
+import { ICON_CLIPBOARD_PLAIN, ICON_CHECK } from '../icons';
 import { ControlRenderer } from './ControlRenderer';
+import { Folder } from './Folder';
+import { HintTip } from './Hint';
 import { PresetManager } from './PresetManager';
-import { SegmentedControl } from './SegmentedControl';
+import { VersionGallery } from './VersionGallery';
+import type { DialVersions } from '../versions/gallery';
 
 interface PanelProps {
   panel: PanelConfig;
   defaultOpen?: boolean;
   inline?: boolean;
+  accordion?: boolean;
+  openFolder?: string | null;
+  onOpenFolderChange?: (path: string | null) => void;
+  onOpenChange?: (open: boolean) => void;
+  /** `'toolbar'` draws only the toolbar, for a group shell's header (`groupHeader`). */
+  variant?: 'root' | 'section' | 'toolbar';
   toolbarExtra?: ReactNode;
+  versions?: DialVersions;
+  theme?: 'light' | 'dark' | 'system';
+  /** A root panel with `beside`, placed next to the shell it names: the side of that shell it sits on. */
+  beside?: 'left' | 'right';
 }
 
-export function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }: PanelProps) {
+export function Panel({ panel, defaultOpen = true, inline = false, accordion = false, openFolder, onOpenFolderChange, onOpenChange, variant = 'root', toolbarExtra, versions = 'thumbnails', theme, beside }: PanelProps) {
   const [copied, setCopied] = useState(false);
-  const [, setIsPanelOpen] = useState(defaultOpen);
+  useHints(true);
+  const copyTimeout = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => clearTimeout(copyTimeout.current), []);
+  const subscribe = useCallback(
+    (callback: () => void) => DialStore.subscribe(panel.id, callback),
+    [panel.id]
+  );
+  const getSnapshot = useCallback(
+    () => DialStore.getValues(panel.id),
+    [panel.id]
+  );
+  const getOpenSnapshot = useCallback(
+    () => DialStore.getPanelOpen(panel.id),
+    [panel.id]
+  );
 
   // Subscribe to panel value changes
-  const values = useSyncExternalStore(
-    (cb) => TweakStore.subscribe(panel.id, cb),
-    () => TweakStore.getValues(panel.id),
-    () => TweakStore.getValues(panel.id)
-  );
+  const values = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
-  const presets = TweakStore.getPresetItems(panel.id);
-  const activePresetId = TweakStore.getActivePresetId(panel.id);
-  const providerMode = TweakStore.hasPresetProvider(panel.id);
+  // The store owns open/collapsed state so it can be driven programmatically.
+  const storeOpen = useSyncExternalStore(subscribe, getOpenSnapshot, getOpenSnapshot);
+  const isOpen = storeOpen ?? defaultOpen;
 
-  // Bumped per add: the preset manager opens and puts the fresh preset's
-  // name straight into inline edit.
-  const [presetEditSignal, setPresetEditSignal] = useState(0);
-  const handleAddPreset = () => {
-    TweakStore.createPreset(panel.id);
-    setPresetEditSignal((n) => n + 1);
-  };
+  useEffect(() => {
+    DialStore.initPanelOpen(panel.id, defaultOpen);
+  }, [panel.id, defaultOpen]);
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(buildCopyInstruction('useTweakers', panel.name, values));
+  const presets = DialStore.getPresets(panel.id);
+  const activePresetId = DialStore.getActivePresetId(panel.id);
+
+
+  const handleCopy = async () => {
+    try { await navigator.clipboard.writeText(buildCopyInstruction('useDialKit', panel.name, values)); }
+    catch { return; }
     setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    clearTimeout(copyTimeout.current);
+    copyTimeout.current = setTimeout(() => setCopied(false), 1500);
   };
 
-  const { tabs, activeTab, looseControls, pageControls } = splitPanelTabs(panel.controls, values[TAB_PATH]);
+  const handleOpenChange = useCallback((open: boolean) => {
+    DialStore.setPanelOpen(panel.id, open);
+    onOpenChange?.(open);
+  }, [onOpenChange, panel.id]);
 
-  const tabBar = activeTab ? (
-    <SegmentedControl
-      options={tabs.map((tab) => ({ value: tab.path, label: tab.label }))}
-      value={activeTab.path}
-      onChange={(v) => TweakStore.updateValue(panel.id, TAB_PATH, v)}
-    />
-  ) : undefined;
-
-  const renderRows = (controls: ControlMeta[]) => (
-    <ControlRenderer panelId={panel.id} controls={controls} values={values} />
+  const renderControls = () => (
+    <>
+      {versions !== 'menu' && (
+        <VersionGallery panelId={panel.id} theme={theme} />
+      )}
+      <ControlRenderer
+        panelId={panel.id}
+        controls={panel.controls}
+        values={values}
+        openFolder={accordion ? resolveOpenFolder(panel.controls, openFolder) : undefined}
+        onOpenFolderChange={onOpenFolderChange}
+        animateControls
+      />
+      <HintTip />
+    </>
   );
 
-  // The page is keyed by tab so switching swaps it outright, rather than
-  // reconciling one tab's rows into the next tab's.
-  const renderControls = () =>
-    activeTab ? (
-      <>
-        {renderRows(looseControls)}
-        <div key={activeTab.path} className="tweakers-panel-tab-page">
-          {renderRows(pageControls)}
-        </div>
-      </>
-    ) : (
-      renderRows(pageControls)
-    );
+  const iconTransition = { type: 'spring' as const, visualDuration: 0.4, bounce: 0.1 };
 
-  const presetsHidden = TweakStore.arePresetsHidden(panel.id);
-
-  const toolbar = presetsHidden ? toolbarExtra : (
+  const toolbar = (
     <>
-      <motion.button
-        className="tweakers-toolbar-add"
-        onClick={handleAddPreset}
-        title="Add preset"
-        whileTap={{ scale: 0.9 }}
-        transition={{ type: 'spring', visualDuration: 0.15, bounce: 0.3 }}
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          {ICON_ADD_PRESET.map((d, i) => (
-            <path key={i} d={d} />
-          ))}
-        </svg>
-      </motion.button>
-
-      <PresetManager
-        panelId={panel.id}
-        presets={presets}
-        activePresetId={activePresetId}
-        onAdd={handleAddPreset}
-        providerMode={providerMode}
-        editSignal={presetEditSignal}
-      />
+      {versions === 'menu' && (
+        <PresetManager
+          panelId={panel.id}
+          presets={presets}
+          activePresetId={activePresetId}
+        />
+      )}
 
       <motion.button
-        className="tweakers-toolbar-add"
+        className="dialkit-toolbar-add dialkit-toolbar-primary"
+        data-wide={versions !== 'menu' ? 'true' : undefined}
         onClick={handleCopy}
-        title="Copy parameters"
-        whileTap={{ scale: 0.9 }}
+        aria-label="Copy parameters"
+        data-hint={HINTS.copy}
+        whileTap={{ scale: versions !== 'menu' ? 0.98 : 0.9 }}
         transition={{ type: 'spring', visualDuration: 0.15, bounce: 0.3 }}
       >
-        <span style={{ position: 'relative', width: 14, height: 14 }}>
+        <span style={{ position: 'relative', width: 16, height: 16 }}>
           <AnimatePresence initial={false} mode="wait">
             {copied ? (
               <motion.svg
@@ -119,7 +126,7 @@ export function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra 
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                style={{ position: 'absolute', inset: 0, width: 14, height: 14, color: 'var(--tweak-text-label)' }}
+                style={{ position: 'absolute', inset: 0, width: 16, height: 16, color: 'inherit' }}
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.8, opacity: 0 }}
@@ -132,40 +139,39 @@ export function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra 
                 key="clipboard"
                 viewBox="0 0 24 24"
                 fill="none"
-                style={{ position: 'absolute', inset: 0, width: 14, height: 14, color: 'var(--tweak-text-label)' }}
+                style={{ position: 'absolute', inset: 0, width: 16, height: 16, color: 'inherit' }}
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.8, opacity: 0 }}
                 transition={{ duration: 0.08 }}
               >
-                <path d={ICON_CLIPBOARD.board} stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
-                <path d={ICON_CLIPBOARD.sparkle} fill="currentColor"/>
-                <path d={ICON_CLIPBOARD.body} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d={ICON_CLIPBOARD_PLAIN.board} stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
+                <path d={ICON_CLIPBOARD_PLAIN.body} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </motion.svg>
             )}
           </AnimatePresence>
         </span>
+        {versions !== 'menu' && <span>{copied ? 'Copied' : 'Copy parameters'}</span>}
       </motion.button>
 
       {toolbarExtra}
     </>
   );
 
+  // In a group shell's header (groupHeader): the toolbar alone, no section.
+  if (variant === 'toolbar') return toolbar;
+
+  if (variant === 'section') {
+    return (
+      <Folder title={panel.name} open={isOpen} onOpenChange={handleOpenChange} toolbar={toolbar} hint={panel.hint}>
+        {renderControls()}
+      </Folder>
+    );
+  }
+
   return (
-    <div className="tweakers-panel-wrapper">
-      <Folder
-        title={panel.name}
-        defaultOpen={defaultOpen}
-        isRoot={true}
-        inline={inline}
-        onOpenChange={setIsPanelOpen}
-        toolbar={toolbar}
-        tabs={tabBar}
-        enabled={panel.module ? (values['_enabled'] as boolean) : undefined}
-        onEnabledChange={
-          panel.module ? (v) => TweakStore.updateValue(panel.id, '_enabled', v) : undefined
-        }
-      >
+    <div className="dialkit-panel-wrapper" data-beside={beside}>
+      <Folder title={panel.name} open={isOpen} isRoot={true} inline={inline} onOpenChange={handleOpenChange} onClose={panel.onClose} toolbar={panel.toolbar === false ? undefined : toolbar} hint={panel.hint}>
         {renderControls()}
       </Folder>
     </div>

@@ -1,6 +1,6 @@
-import type { TweakValue } from 'tweakers/store';
-import type { TimelineClipMeta } from 'tweakers/timeline';
-import type { TweakTheme } from '../TweakRoot.svelte';
+import type { DialValue } from 'dialkit/store';
+import type { TimelineClipMeta } from 'dialkit/timeline';
+import type { DialTheme } from '../DialRoot.svelte';
 export type PopoverState = {
     clip: TimelineClipMeta;
     stepKey?: string;
@@ -16,8 +16,10 @@ export type PopoverState = {
 type $$ComponentProps = {
     panelId: string;
     popover: PopoverState;
-    values: Record<string, TweakValue>;
-    theme: TweakTheme;
+    values: Record<string, DialValue>;
+    theme: DialTheme;
+    /** On a single track a clip grows only up to the next one. */
+    maxDuration?: number;
     onClose: () => void;
 };
 declare const ClipPopover: import("svelte").Component<$$ComponentProps, {}, "">;

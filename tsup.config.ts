@@ -1,7 +1,105 @@
 import { defineConfig } from 'tsup';
 import { solidPlugin } from 'esbuild-plugin-solid';
 
+const externalPackageStorePlugin = {
+  name: 'external-package-store',
+  setup(build: { onResolve: (options: { filter: RegExp }, callback: () => { path: string; external: boolean }) => void }) {
+    build.onResolve({ filter: /^(\.\.?\/)+store\/DialStore$/ }, () => ({
+      path: 'dialkit/store',
+      external: true,
+    }));
+  },
+};
+
+// The shared controls mount hints too; they must reach the same hints module
+// as the packaged Svelte components, so a page keeps one set of hint listeners.
+const externalHintsPlugin = {
+  name: 'external-hints',
+  setup(build: { onResolve: (options: { filter: RegExp }, callback: () => { path: string; external: boolean }) => void }) {
+    build.onResolve({ filter: /^(\.\.?\/)+hints$/ }, () => ({
+      path: './hints.js',
+      external: true,
+    }));
+  },
+};
+
 export default defineConfig([
+  // Store build (shared across all framework entries)
+  {
+    entry: { index: 'src/store/DialStore.ts' },
+    outDir: 'dist/store',
+    format: ['esm', 'cjs'],
+    dts: true,
+    splitting: false,
+    sourcemap: true,
+  },
+  // Framework-neutral timeline runtime. Svelte consumes this as a package
+  // subpath because svelte-package preserves imports instead of bundling it.
+  {
+    entry: { index: 'src/timeline/index.ts' },
+    outDir: 'dist/timeline',
+    format: ['esm', 'cjs'],
+    dts: true,
+    splitting: false,
+    sourcemap: true,
+    esbuildPlugins: [externalPackageStorePlugin],
+  },
+  // Shared modules referenced by the packaged Svelte components.
+  {
+    entry: {
+      icons: 'src/icons.ts',
+      'copy-instruction': 'src/copy-instruction.ts',
+      'dropdown-position': 'src/dropdown-position.ts',
+      'panel-drag': 'src/panel-drag.ts',
+      'panel-size': 'src/panel-size.ts',
+      'color-control': 'src/color-control.ts',
+      'image-control': 'src/image-control.ts',
+      'dial-pad-control': 'src/dial-pad-control.ts',
+      'dial-pad': 'src/dial-pad.ts',
+      'anchor-control': 'src/anchor-control.ts',
+      anchor: 'src/anchor.ts',
+      'fields-control': 'src/fields-control.ts',
+      'background-control': 'src/background-control.ts',
+      background: 'src/background.ts',
+      'easing-control': 'src/easing-control.ts',
+      'easing-geometry': 'src/easing-geometry.ts',
+      'transition-presets': 'src/transition-presets.ts',
+      'transition-presets-control': 'src/transition-presets-control.ts',
+      'control-keyboard': 'src/control-keyboard.ts',
+      'dropdown-keyboard': 'src/dropdown-keyboard.ts',
+      'preset-menu': 'src/preset-menu.ts',
+      'text-autosize': 'src/text-autosize.ts',
+      'pointer-focus': 'src/pointer-focus.ts',
+      'transition-math': 'src/transition-math.ts',
+      'shortcut-utils': 'src/shortcut-utils.ts',
+      'version-gallery': 'src/version-gallery.ts',
+      accordion: 'src/accordion.ts',
+      hints: 'src/hints.ts',
+    },
+    format: ['esm'],
+    dts: true,
+    splitting: false,
+    sourcemap: true,
+    esbuildPlugins: [externalPackageStorePlugin, externalHintsPlugin],
+  },
+  // Dependency-free DOM adapter, including a single script for plain HTML.
+  {
+    entry: { index: 'src/vanilla/index.ts' },
+    outDir: 'dist/vanilla',
+    format: ['esm', 'cjs'],
+    dts: true,
+    splitting: false,
+    sourcemap: true,
+  },
+  {
+    entry: { browser: 'src/vanilla/index.ts' },
+    outDir: 'dist/vanilla',
+    format: ['iife'],
+    globalName: 'DialKit',
+    define: { 'import.meta': '{}' },
+    splitting: false,
+    sourcemap: true,
+  },
   // React build
   {
     entry: ['src/index.ts'],
@@ -15,13 +113,13 @@ export default defineConfig([
         js: '"use client";',
       };
     },
-    onSuccess: 'cp src/styles/theme.css dist/styles.css',
+    onSuccess: 'node scripts/copy-styles.mjs',
   },
   // Solid build
   {
     entry: { index: 'src/solid/index.ts' },
     outDir: 'dist/solid',
-    format: ['esm', 'cjs'],
+    format: ['esm'],
     dts: {
       compilerOptions: {
         jsx: 'preserve',
@@ -30,7 +128,7 @@ export default defineConfig([
     },
     splitting: false,
     sourcemap: true,
-    external: ['solid-js', 'solid-js/web', 'motion'],
+    external: ['solid-js', 'solid-js/web', 'solid-js/store', 'motion'],
     tsconfig: 'tsconfig.solid.json',
     esbuildPlugins: [solidPlugin()],
   },
@@ -38,7 +136,7 @@ export default defineConfig([
   {
     entry: { index: 'src/vue/index.ts' },
     outDir: 'dist/vue',
-    format: ['esm', 'cjs'],
+    format: ['esm'],
     dts: true,
     splitting: false,
     sourcemap: true,

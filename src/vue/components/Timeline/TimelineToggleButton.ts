@@ -1,9 +1,9 @@
 import { defineComponent, h, onMounted, onUnmounted, ref } from 'vue';
-import { ICON_TIMELINE } from 'tweakers/icons';
-import { TimelineUiStore } from 'tweakers/timeline';
+import { ICON_TIMELINE } from '../../../icons';
+import { TimelineUiStore } from '../../../store/TimelineUiStore';
 
 export const TimelineToggleButton = defineComponent({
-  name: 'TweakersTimelineToggleButton',
+  name: 'DialKitTimelineToggleButton',
   setup() {
     const visible = ref(TimelineUiStore.getVisible());
     let unsubscribe: (() => void) | undefined;
@@ -16,11 +16,10 @@ export const TimelineToggleButton = defineComponent({
     return () => {
       const label = visible.value ? 'Hide timeline' : 'Show timeline';
       return h('button', {
-        class: 'tweakers-toolbar-add tweakers-timeline-toolbar-toggle',
+        class: 'dialkit-toolbar-add dialkit-timeline-toolbar-toggle',
         'data-active': visible.value || undefined,
         'aria-pressed': visible.value,
         'aria-label': label,
-        title: label,
         onClick: () => TimelineUiStore.toggle(),
       }, [
         h('svg', { viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': 'true' },

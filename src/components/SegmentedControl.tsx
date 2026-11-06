@@ -1,40 +1,47 @@
+import { handleSegmentKey, labelSegmentedControl } from '../control-keyboard';
+import { iconPaths } from '../icons';
 import { useRef, useState, useLayoutEffect, useCallback } from 'react';
 
 interface SegmentedControlOption<T extends string> {
   value: T;
   label: string;
+  /** SVG path data in a 24 × 24 box, shown in place of the label. */
+  icon?: string | string[];
+  /** The icon's box: 24 (the default) or 16, drawn with a 1.5 stroke. */
+  iconSize?: 16 | 24;
 }
 
 interface SegmentedControlProps<T extends string> {
   options: SegmentedControlOption<T>[];
   value: T;
   onChange: (value: T) => void;
+  /** Accessible name for the group. */
+  label?: string;
 }
 
 export function SegmentedControl<T extends string>({
   options,
   value,
   onChange,
+  label,
 }: SegmentedControlProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const hasAnimated = useRef(false);
-  const [pillStyle, setPillStyle] = useState<{ left: number; width: number; top: number; height: number } | null>(null);
+  const [pillStyle, setPillStyle] = useState<{ left: string; width: string } | null>(null);
 
   const measure = useCallback(() => {
     const container = containerRef.current;
     if (!container) return;
+    labelSegmentedControl(container);
     const activeButton = container.querySelector('[data-active="true"]') as HTMLElement | null;
-    // A zero-width button means layout has not settled — the control is hidden,
-    // or its host is still sizing. Measuring then would pin the pill to the
-    // padding box for good; the resize observer calls back with a real box.
-    if (!activeButton || activeButton.offsetWidth === 0) return;
-    // All four edges, not just left/width: a host can let the control wrap onto
-    // several rows, and the pill must hug the active button's row.
+    if (!activeButton) return;
+    // Fractions of the row stay exact at fractional sizes and under transforms.
+    const containerRect = container.getBoundingClientRect();
+    const buttonRect = activeButton.getBoundingClientRect();
+    if (!containerRect.width) return;
     setPillStyle({
-      left: activeButton.offsetLeft,
-      width: activeButton.offsetWidth,
-      top: activeButton.offsetTop,
-      height: activeButton.offsetHeight,
+      left: `${(buttonRect.left - containerRect.left) / containerRect.width * 100}%`,
+      width: `${buttonRect.width / containerRect.width * 100}%`,
     });
   }, []);
 
@@ -42,12 +49,11 @@ export function SegmentedControl<T extends string>({
     measure();
   }, [value, options.length, measure]);
 
-  // Buttons that share the row (a full-width tab bar) resize with their host, so
-  // the pill has to follow rather than trust one reading taken at mount.
+  // Keep the pill aligned when the container itself resizes (e.g. panel width).
   useLayoutEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
-    const observer = new ResizeObserver(() => measure());
+    if (!container || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
     observer.observe(container);
     return () => observer.disconnect();
   }, [measure]);
@@ -57,18 +63,15 @@ export function SegmentedControl<T extends string>({
   hasAnimated.current = true;
 
   return (
-    <div className="tweakers-segmented" ref={containerRef}>
+    <div className="dialkit-segmented" ref={containerRef} role="radiogroup" aria-label={label} onKeyDown={handleSegmentKey}>
       {pillStyle && (
         <div
-          className="tweakers-segmented-pill"
+          className="dialkit-segmented-pill"
           style={{
             left: pillStyle.left,
             width: pillStyle.width,
-            top: pillStyle.top,
-            height: pillStyle.height,
-            bottom: 'auto',
             transition: shouldAnimate
-              ? 'left 0.2s cubic-bezier(0.25, 1, 0.5, 1), width 0.2s cubic-bezier(0.25, 1, 0.5, 1), top 0.2s cubic-bezier(0.25, 1, 0.5, 1), height 0.2s cubic-bezier(0.25, 1, 0.5, 1)'
+              ? 'left 0.2s cubic-bezier(0.25, 1, 0.5, 1), width 0.2s cubic-bezier(0.25, 1, 0.5, 1)'
               : 'none',
           }}
         />
@@ -80,10 +83,16 @@ export function SegmentedControl<T extends string>({
           <button
             key={option.value}
             onClick={() => onChange(option.value)}
-            className="tweakers-segmented-button"
+            className="dialkit-segmented-button"
             data-active={String(isActive)}
+            type="button" role="radio" aria-checked={isActive} tabIndex={isActive ? 0 : -1}
+            aria-label={option.icon ? option.label : undefined}
           >
-            {option.label}
+            {option.icon ? (
+              <svg className="dialkit-segmented-icon" viewBox={option.iconSize === 16 ? '0 0 16 16' : '0 0 24 24'} fill="none" stroke="currentColor" strokeWidth={option.iconSize === 16 ? 1.5 : 2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                {iconPaths(option.icon).map((d, i) => <path key={i} d={d} />)}
+              </svg>
+            ) : option.label}
           </button>
         );
       })}

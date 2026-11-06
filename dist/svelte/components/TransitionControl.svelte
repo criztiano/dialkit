@@ -1,16 +1,21 @@
 <script lang="ts">
-  import { TweakStore } from 'tweakers/store';
-  import type { EasingConfig, SpringConfig, TransitionConfig } from 'tweakers/store';
+  import { createEaseIntensity } from '../../easing-geometry';
+  import { TRANSITION_HINTS, transitionPresetName } from '../../transition-presets';
+  import { DialStore } from 'dialkit/store';
+  import type { CopiedTransition, EasingConfig, SpringConfig, TransitionConfig } from 'dialkit/store';
+  import { HINTS } from '../../hints';
+  import { createHints } from '../hints.svelte.js';
   import Folder from './Folder.svelte';
   import Slider from './Slider.svelte';
   import SegmentedControl from './SegmentedControl.svelte';
   import SpringVisualization from './SpringVisualization.svelte';
   import EasingVisualization from './EasingVisualization.svelte';
+  import EaseFields from './EaseFields.svelte';
+  import TransitionCopy from './TransitionCopy.svelte';
+  import TransitionPresets from './TransitionPresets.svelte';
 
   type CurveMode = 'easing' | 'simple' | 'advanced';
 
-  // A clip bar can own the transition duration (e.g. the timeline popover binds
-  // it to the clip's `.duration`); when provided the Duration slider defers to it.
   export type TransitionDurationControl = {
     value: number;
     onChange: (value: number) => void;
@@ -19,7 +24,7 @@
     step?: number;
   };
 
-  let { panelId, path, label, value, onChange, hideDuration, durationControl } = $props<{
+  let { panelId, path, label, value, onChange, hideDuration = false, durationControl, onReset, changed = false, hint } = $props<{
     panelId: string;
     path: string;
     label: string;
@@ -27,15 +32,28 @@
     onChange: (value: TransitionConfig) => void;
     hideDuration?: boolean;
     durationControl?: TransitionDurationControl;
+    /** Shows a reset button in the header. See Folder's onReset. */
+    onReset?: () => void;
+    changed?: boolean;
+    hint?: string;
   }>();
+  createHints(() => true);
 
-  let mode = $state<CurveMode>(TweakStore.getTransitionMode(panelId, path));
-  let editingEase = $state(false);
-  let easeDraft = $state('');
+  let mode = $state<CurveMode>(DialStore.getTransitionMode(panelId, path));
+  let savedPresets = $state.raw(DialStore.getTransitionPresets());
+  // Intensity scales the curve it started from; 50% is that curve.
+  const intensity = createEaseIntensity();
 
   $effect(() => {
-    const unsub = TweakStore.subscribe(panelId, () => {
-      mode = TweakStore.getTransitionMode(panelId, path);
+    const unsub = DialStore.subscribe(panelId, () => {
+      mode = DialStore.getTransitionMode(panelId, path);
+    });
+    return unsub;
+  });
+
+  $effect(() => {
+    const unsub = DialStore.subscribeTransitions(() => {
+      savedPresets = DialStore.getTransitionPresets();
     });
     return unsub;
   });
@@ -72,18 +90,9 @@
     }
   });
 
-  const formatEase = (ease: [number, number, number, number]) =>
-    ease.map((v) => Number(v.toFixed(2))).join(', ');
-
-  const parseEase = (text: string): [number, number, number, number] | null => {
-    const parts = text.split(',').map((s) => Number.parseFloat(s.trim()));
-    if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) return null;
-    return parts as [number, number, number, number];
-  };
-
   const handleModeChange = (nextMode: string) => {
     const typed = nextMode as CurveMode;
-    TweakStore.updateTransitionMode(panelId, path, typed);
+    DialStore.updateTransitionMode(panelId, path, typed);
 
     if (typed === 'easing') {
       onChange(cache.easing);
@@ -92,6 +101,11 @@
     } else {
       onChange(cache.advanced);
     }
+  };
+
+  const handlePaste = (copied: CopiedTransition) => {
+    DialStore.updateTransitionMode(panelId, path, copied.mode);
+    onChange(copied.value);
   };
 
   const handleSpringUpdate = (key: keyof SpringConfig, val: number) => {
@@ -103,53 +117,16 @@
       onChange({ ...rest, [key]: val });
     }
   };
-
-  const updateEase = (index: number, val: number) => {
-    const next = [...easing.ease] as [number, number, number, number];
-    next[index] = val;
-    onChange({ ...easing, ease: next });
-  };
-
-  const handleEaseFocus = () => {
-    easeDraft = formatEase(easing.ease);
-    editingEase = true;
-  };
-
-  const handleEaseBlur = () => {
-    const parsed = parseEase(easeDraft);
-    if (parsed) onChange({ ...easing, ease: parsed });
-    editingEase = false;
-  };
-
-  // Duration is meaningful only for easing/time curves; physics derives it.
-  const showDuration = $derived(!hideDuration && (isEasing || isSimpleSpring));
-  const durationValue = $derived(
-    durationControl?.value ?? (isEasing ? easing.duration : spring.visualDuration ?? 0.3)
-  );
-  const durationMin = $derived(durationControl?.min ?? 0.1);
-  const durationMax = $derived(durationControl?.max ?? (isEasing ? 2 : 1));
-  const durationStep = $derived(durationControl?.step ?? 0.05);
-
-  const handleDurationChange = (v: number) => {
-    if (durationControl) {
-      durationControl.onChange(v);
-      return;
-    }
-    if (isEasing) onChange({ ...easing, duration: v });
-    else handleSpringUpdate('visualDuration', v);
-  };
 </script>
 
-<Folder title={label} defaultOpen={true}>
-  <div style="display: flex; flex-direction: column; gap: 6px;">
-    {#if isEasing}
-      <EasingVisualization {easing} />
-    {:else}
-      <SpringVisualization spring={spring} isSimpleMode={isSimpleSpring} />
-    {/if}
+{#snippet copyActions()}
+  <TransitionCopy {mode} value={isEasing ? easing : spring} onPaste={handlePaste} />
+{/snippet}
 
-    <div class="tweakers-labeled-control">
-      <span class="tweakers-labeled-control-label">Type</span>
+<Folder title={label} defaultOpen={true} {hint} {onReset} {changed} actions={copyActions}>
+  <div style="display: flex; flex-direction: column; gap: var(--dial-row-gap);">
+    <div class="dialkit-labeled-control dialkit-transition-type" data-hint={HINTS.transitionType}>
+      <span class="dialkit-labeled-control-label">Type</span>
       <SegmentedControl
         options={[
           { value: 'easing', label: 'Easing' },
@@ -162,28 +139,23 @@
     </div>
 
     {#if isEasing}
-      <Slider label="x1" value={easing.ease[0]} onChange={(v) => updateEase(0, v)} min={0} max={1} step={0.01} />
-      <Slider label="y1" value={easing.ease[1]} onChange={(v) => updateEase(1, v)} min={-1} max={2} step={0.01} />
-      <Slider label="x2" value={easing.ease[2]} onChange={(v) => updateEase(2, v)} min={0} max={1} step={0.01} />
-      <Slider label="y2" value={easing.ease[3]} onChange={(v) => updateEase(3, v)} min={-1} max={2} step={0.01} />
+      <EasingVisualization {easing} onChange={(ease) => onChange({ ...easing, ease })} />
+    {:else}
+      <SpringVisualization spring={spring} isSimpleMode={isSimpleSpring} />
+    {/if}
 
-      <div class="tweakers-labeled-control">
-        <span class="tweakers-labeled-control-label">Ease</span>
-        <input
-          type="text"
-          class="tweakers-text-input"
-          value={editingEase ? easeDraft : formatEase(easing.ease)}
-          oninput={(e) => (easeDraft = (e.currentTarget as HTMLInputElement).value)}
-          onfocus={handleEaseFocus}
-          onblur={handleEaseBlur}
-          onkeydown={(e) => {
-            if (e.key === 'Enter') {
-              (e.currentTarget as HTMLInputElement).blur();
-            }
-          }}
-          spellcheck={false}
-        />
-      </div>
+    {#if isEasing}
+      <EaseFields ease={easing.ease} onChange={(ease) => onChange({ ...easing, ease })} />
+      <Slider
+        label="Intensity"
+        value={intensity.read(easing.ease)}
+        onChange={(v) => onChange({ ...easing, ease: intensity.apply(easing.ease, v) })}
+        min={0}
+        max={100}
+        step={1}
+        unit="%"
+        hint={TRANSITION_HINTS.intensity}
+      />
     {:else if isSimpleSpring}
       <Slider
         label="Bounce"
@@ -192,6 +164,7 @@
         min={0}
         max={1}
         step={0.05}
+        hint={HINTS.bounce}
       />
     {:else}
       <Slider
@@ -201,6 +174,7 @@
         min={1}
         max={1000}
         step={10}
+        hint={HINTS.stiffness}
       />
       <Slider
         label="Damping"
@@ -209,6 +183,7 @@
         min={1}
         max={100}
         step={1}
+        hint={HINTS.damping}
       />
       <Slider
         label="Mass"
@@ -217,19 +192,28 @@
         min={0.1}
         max={10}
         step={0.1}
+        hint={HINTS.mass}
       />
     {/if}
 
-    {#if showDuration}
+    {#if !hideDuration && (isEasing || isSimpleSpring)}
       <Slider
         label="Duration"
-        value={durationValue}
-        onChange={handleDurationChange}
-        min={durationMin}
-        max={durationMax}
-        step={durationStep}
+        value={durationControl?.value ?? (isEasing ? easing.duration : spring.visualDuration ?? 0.3)}
+        onChange={durationControl?.onChange ?? ((next) => {
+          if (isEasing) onChange({ ...easing, duration: next });
+          else handleSpringUpdate('visualDuration', next);
+        })}
+        min={durationControl?.min ?? 0.1}
+        max={durationControl?.max ?? 5}
+        step={durationControl?.step ?? 0.05}
         unit="s"
+        hint={isEasing ? HINTS.easingDuration : HINTS.springDuration}
       />
     {/if}
+
+    <Folder title="Presets" defaultOpen={false} hint={TRANSITION_HINTS.presets} meta={transitionPresetName(isEasing ? easing : spring, mode, savedPresets)}>
+      <TransitionPresets {mode} value={isEasing ? easing : spring} {onChange} />
+    </Folder>
   </div>
 </Folder>

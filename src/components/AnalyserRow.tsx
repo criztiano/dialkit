@@ -1,71 +1,75 @@
-import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { TweakStore, ControlMeta } from 'tweakers/store';
-import { clampCurveHeight } from 'tweakers/curve-preview-core';
-import { AnalyserVisualization } from './AnalyserVisualization';
+import { useEffect, useRef, useState } from 'react';
+import { useHints } from '../hooks/useHints';
+import { useLiveConfig } from '../hooks/useLiveConfig';
+import { clampCurveHeight } from '../curve-preview';
+import { createAnalyserEngine, type AnalyserRuntime } from '../analyser-engine';
+import type { ControlMeta } from '../store/DialStore';
 
 interface AnalyserRowProps {
   panelId: string;
   control: ControlMeta;
 }
 
-// The row's default surface height — shorter than the standalone component's
-// 140: inside a panel column this is a monitor, not a hero visual.
-const DEFAULT_HEIGHT = 56;
-
 /**
- * The read-only `{ type: 'analyser' }` row: the standalone
- * `AnalyserVisualization` embedded on a control surface. The whole row config
- * (including its two closures — the AnalyserNode getter and the live marker)
- * lives on the ControlMeta and is swapped in place by
- * `TweakStore.syncCurveConfigs`, exactly like the curve row's sampler; this
- * subscribes on the control-state channel and re-reads each swap, which is
- * also what picks up an AnalyserNode that only exists after the host's audio
- * context starts.
- *
- * The canvas engine needs a pixel width, and a panel column's width is the
- * layout's business — so the row measures itself and follows.
+ * The read-only `{ type: 'analyser' }` row: a live spectrum or oscilloscope.
+ * The canvas needs a pixel width, so the row measures itself.
  */
 export function AnalyserRow({ panelId, control }: AnalyserRowProps) {
-  const subscribe = useCallback(
-    (callback: () => void) => TweakStore.subscribeControlState(panelId, callback),
-    [panelId]
-  );
-  const row = useSyncExternalStore(subscribe, () => control.analyserRow, () => control.analyserRow);
-
-  const wrapRef = useRef<HTMLDivElement>(null);
+  useHints(!!control.hint);
+  const config = useLiveConfig(panelId, control, 'analyser');
+  const plotRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(0);
-  useLayoutEffect(() => {
-    const el = wrapRef.current;
+  const [live, setLive] = useState(false);
+  const height = clampCurveHeight(config?.height ?? 56);
+  const label = typeof config?.label === 'string' ? config.label : control.label;
+
+  // The engine reads the latest options every frame, so a change never restarts it.
+  // The node getter is called each frame too: a node that arrives once the
+  // app's audio context starts shows up without a rebuild.
+  const latest = useRef({ config, width, height });
+  latest.current = { config, width, height };
+
+  useEffect(() => {
+    const el = plotRef.current;
     if (!el) return;
     const measure = () => setWidth(Math.round(el.getBoundingClientRect().width));
     measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
   }, []);
 
-  const height = clampCurveHeight(row?.height ?? DEFAULT_HEIGHT);
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    const engine = createAnalyserEngine(canvasRef.current, (): AnalyserRuntime => {
+      const { config, width, height } = latest.current;
+      return {
+        analyser: config?.analyser() ?? null,
+        source: config?.source ?? 'frequency',
+        variant: config?.variant ?? 'area',
+        mode: config?.mode ?? 'smooth',
+        pixelSize: config?.pixelSize ?? 2,
+        scale: config?.scale ?? 'log',
+        spring: config?.spring ?? false,
+        rangeHz: config?.rangeHz,
+        marker: config?.marker,
+        width,
+        height,
+      };
+    }, setLive);
+    return () => engine.destroy();
+  }, []);
 
   return (
-    <div className="tweakers-analyser-row" ref={wrapRef}>
-      {!control.hideLabel && <span className="tweakers-curve-label">{control.label}</span>}
-      {row && width > 0 && (
-        <AnalyserVisualization
-          analyser={row.analyser() ?? null}
-          source={row.source ?? 'frequency'}
-          variant={row.variant ?? 'area'}
-          // Pixelated by default: on a control surface the row speaks the
-          // waveform visualizer's block language, not the hero smooth trace.
-          mode={row.mode ?? 'pixelated'}
-          pixelSize={row.pixelSize ?? 2}
-          scale={row.scale ?? 'log'}
-          spring={row.spring ?? false}
-          rangeHz={row.rangeHz ?? null}
-          marker={row.marker ?? null}
-          width={width}
-          height={height}
-        />
-      )}
+    <div className="dialkit-graph" data-hint={control.hint}>
+      {config?.label !== false && <div className="dialkit-graph-caption"><span className="dialkit-graph-label">{label}</span></div>}
+      <div className="dialkit-graph-surface dialkit-curve">
+        <div ref={plotRef} className="dialkit-analyser-plot" data-live={live || undefined} style={{ height }}>
+          <canvas ref={canvasRef} className="dialkit-analyser-canvas" style={{ width, height }} role="img" aria-label={label} />
+          {!live && <span className="dialkit-analyser-empty">Start audio to see the signal</span>}
+        </div>
+      </div>
     </div>
   );
 }

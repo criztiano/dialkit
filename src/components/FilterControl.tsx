@@ -1,57 +1,51 @@
 import { Slider } from './Slider';
-import type { ControlMeta } from 'tweakers/store';
-import { filterShapePath } from 'tweakers/move-layout';
-import { resolveFilterAxis, normalizeFilterValue, type FilterValue } from 'tweakers/filter-core';
+import { useHints } from '../hooks/useHints';
+import { useLiveConfig } from '../hooks/useLiveConfig';
+import { filterResponsePath, normalizeFilterValue, resolveFilterAxis, type DialFilterValue } from '../filter';
+import { inferStep, type ControlMeta } from '../store/DialStore';
 
 interface FilterControlProps {
+  panelId: string;
   control: ControlMeta;
-  value: FilterValue | undefined;
-  onChange: (value: FilterValue) => void;
+  value: DialFilterValue | undefined;
+  onChange: (value: DialFilterValue) => void;
 }
 
-/** The filter's inline row height — the curve rows' 56px convention. */
-const FILTER_SURFACE_HEIGHT = 56;
-
-/**
- * The filter control's inline face: the magnitude response drawn as a curve
- * row, with the two hands — cutoff and resonance — as sliders under it. One
- * control, one value; on the Move the same trio compresses into the 2-slot
- * picture.
- */
-export function FilterControl({ control, value, onChange }: FilterControlProps) {
-  const ca = resolveFilterAxis(control.cutoffAxis, 'cutoff');
-  const ra = resolveFilterAxis(control.resonanceAxis, 'resonance');
-  const v = normalizeFilterValue(value, ca, ra);
-  const shape = filterShapePath(control, v);
+/** The response the two hands make, with a slider for each hand under it. */
+export function FilterControl({ panelId, control, value, onChange }: FilterControlProps) {
+  useHints(!!control.hint);
+  const config = useLiveConfig(panelId, control, 'filter') ?? { type: 'filter' };
+  const cutoff = resolveFilterAxis(config.cutoff, 'cutoff');
+  const resonance = resolveFilterAxis(config.resonance, 'resonance');
+  const v = normalizeFilterValue(value, config);
+  const path = filterResponsePath(config, v);
   return (
-    <div className="tweakers-filter">
-      <div className="tweakers-curve">
-        <span className="tweakers-curve-label">{control.label}</span>
-        <div className="tweakers-curve-surface" style={{ height: FILTER_SURFACE_HEIGHT }}>
-          {shape && (
-            <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style={{ display: 'block', width: '100%', height: '100%' }}>
-              <path className="tweakers-curve-stroke" d={shape} fill="none" vectorEffect="non-scaling-stroke" />
-            </svg>
-          )}
-        </div>
+    <div className="dialkit-graph" data-hint={control.hint}>
+      <div className="dialkit-graph-caption"><span className="dialkit-graph-label">{control.label}</span></div>
+      <div className="dialkit-graph-surface dialkit-filter" data-disabled={config.enabled === false || undefined} role="img" aria-label={`${control.label} response`}>
+        {path && (
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            <path className="dialkit-graph-stroke" d={path} vectorEffect="non-scaling-stroke" />
+          </svg>
+        )}
       </div>
       <Slider
-        label={ca.label}
+        label={cutoff.label}
         value={v.cutoff}
-        min={ca.min}
-        max={ca.max}
-        step={ca.step || undefined}
-        formatValue={ca.formatValue}
-        onChange={(cutoff) => onChange({ ...v, cutoff })}
+        min={cutoff.min}
+        max={cutoff.max}
+        step={cutoff.step || inferStep(cutoff.min, cutoff.max)}
+        unit={cutoff.unit}
+        onChange={(next) => onChange({ ...v, cutoff: next })}
       />
       <Slider
-        label={ra.label}
+        label={resonance.label}
         value={v.resonance}
-        min={ra.min}
-        max={ra.max}
-        step={ra.step || undefined}
-        formatValue={ra.formatValue}
-        onChange={(resonance) => onChange({ ...v, resonance })}
+        min={resonance.min}
+        max={resonance.max}
+        step={resonance.step || inferStep(resonance.min, resonance.max)}
+        unit={resonance.unit}
+        onChange={(next) => onChange({ ...v, resonance: next })}
       />
     </div>
   );

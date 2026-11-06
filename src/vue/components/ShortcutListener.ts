@@ -1,13 +1,13 @@
-import { defineComponent, inject, onMounted, onUnmounted, provide, ref, type InjectionKey, type Ref } from 'vue';
-import { TweakStore } from 'tweakers/store';
-import { getEffectiveStep, applySliderDelta, findControl, isInputFocused, getActiveModifier, DRAG_SENSITIVITY } from 'tweakers/shortcut-utils';
+import { defineComponent, h, inject, onMounted, onUnmounted, provide, ref, type InjectionKey, type Ref } from 'vue';
+import { DialStore, ControlMeta, ShortcutConfig } from '../../store/DialStore';
+import { getEffectiveStep, applySliderDelta, findControl, isInputFocused, getActiveModifier, DRAG_SENSITIVITY } from '../../shortcut-utils';
 
 export interface ShortcutState {
   activePanelId: Ref<string | null>;
   activePath: Ref<string | null>;
 }
 
-export const ShortcutKey: InjectionKey<ShortcutState> = Symbol('TweakersShortcut');
+export const ShortcutKey: InjectionKey<ShortcutState> = Symbol('DialKitShortcut');
 
 export function useShortcutContext(): ShortcutState {
   return inject(ShortcutKey, {
@@ -17,7 +17,7 @@ export function useShortcutContext(): ShortcutState {
 }
 
 export const ShortcutListener = defineComponent({
-  name: 'TweakersShortcutListener',
+  name: 'DialKitShortcutListener',
   setup(_, { slots }) {
     const activePanelId = ref<string | null>(null);
     const activePath = ref<string | null>(null);
@@ -31,13 +31,13 @@ export const ShortcutListener = defineComponent({
 
     const resolveActiveTarget = (interaction: string) => {
       for (const key of activeKeys) {
-        const panels = TweakStore.getPanels();
+        const panels = DialStore.getPanels();
         for (const panel of panels) {
           for (const [path, shortcut] of Object.entries(panel.shortcuts)) {
             if (!shortcut.key) continue;
             if (shortcut.key.toLowerCase() !== key) continue;
             if ((shortcut.interaction ?? 'scroll') !== interaction) continue;
-            const control = TweakStore.getPanel(panel.id)?.controls
+            const control = DialStore.getPanel(panel.id)?.controls
               ? findControl(panel.controls, path)
               : null;
             if (control && control.type === 'slider') {
@@ -72,15 +72,15 @@ export const ShortcutListener = defineComponent({
       activeKeys.add(key);
 
       const modifier = getActiveModifier(e);
-      const target = TweakStore.resolveShortcutTarget(key, modifier);
+      const target = DialStore.resolveShortcutTarget(key, modifier);
       if (target) {
         activePanelId.value = target.panelId;
         activePath.value = target.path;
 
         // Toggle: flip on first keydown only (not on key repeat)
         if (!wasAlreadyHeld && target.control.type === 'toggle') {
-          const currentValue = TweakStore.getValue(target.panelId, target.path) as boolean;
-          TweakStore.updateValue(target.panelId, target.path, !currentValue);
+          const currentValue = DialStore.getValue(target.panelId, target.path) as boolean;
+          DialStore.updateValue(target.panelId, target.path, !currentValue);
         }
       }
 
@@ -107,7 +107,7 @@ export const ShortcutListener = defineComponent({
         let found = false;
         for (const remainingKey of activeKeys) {
           const modifier = getActiveModifier(e);
-          const target = TweakStore.resolveShortcutTarget(remainingKey, modifier);
+          const target = DialStore.resolveShortcutTarget(remainingKey, modifier);
           if (target) {
             activePanelId.value = target.panelId;
             activePath.value = target.path;
@@ -131,7 +131,7 @@ export const ShortcutListener = defineComponent({
       // Key+scroll shortcuts
       if (activeKeys.size > 0) {
         for (const key of activeKeys) {
-          const target = TweakStore.resolveShortcutTarget(key, modifier);
+          const target = DialStore.resolveShortcutTarget(key, modifier);
           if (!target) continue;
 
           const { panelId, path, control } = target;
@@ -140,20 +140,20 @@ export const ShortcutListener = defineComponent({
 
           e.preventDefault();
           const effectiveStep = getEffectiveStep(control, control.shortcut!);
-          const direction = e.deltaY > 0 ? 1 : -1;
+          const direction = e.deltaY > 0 ? -1 : 1;
           applySliderDelta(panelId, path, control, effectiveStep, direction);
           return;
         }
       }
 
       // Scroll-only shortcuts (no key needed)
-      const scrollOnlyTargets = TweakStore.resolveScrollOnlyTargets();
+      const scrollOnlyTargets = DialStore.resolveScrollOnlyTargets();
       for (const { panelId, path, control, shortcut } of scrollOnlyTargets) {
         if (control.type !== 'slider') continue;
 
         e.preventDefault();
         const effectiveStep = getEffectiveStep(control, shortcut);
-        const direction = e.deltaY > 0 ? 1 : -1;
+        const direction = e.deltaY > 0 ? -1 : 1;
         applySliderDelta(panelId, path, control, effectiveStep, direction);
         return;
       }

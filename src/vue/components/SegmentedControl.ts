@@ -1,13 +1,17 @@
+import { handleSegmentKey, labelSegmentedControl } from '../../control-keyboard';
 import { defineComponent, h, nextTick, onMounted, onUnmounted, ref, watch, type PropType } from 'vue';
 import { animate } from 'motion';
+import { iconPaths } from '../../icons';
 
 type SegmentedControlOption<T extends string> = {
   value: T;
   label: string;
+  /** SVG path data in a 24 × 24 box, shown in place of the label. */
+  icon?: string | string[];
 };
 
 export const SegmentedControl = defineComponent({
-  name: 'TweakersSegmentedControl',
+  name: 'DialKitSegmentedControl',
   props: {
     options: {
       type: Array as PropType<SegmentedControlOption<string>[]>,
@@ -17,6 +21,8 @@ export const SegmentedControl = defineComponent({
       type: String,
       required: true,
     },
+    /** Accessible name for the group. */
+    label: { type: String, default: undefined },
   },
   emits: ['change'],
   setup(props, { emit }) {
@@ -32,19 +38,22 @@ export const SegmentedControl = defineComponent({
       const button = buttonRefs.get(props.value);
       const container = containerRef.value;
       if (!button || !container) return null;
+      labelSegmentedControl(container);
 
+      // Fractions of the row stay exact at fractional sizes and under transforms.
       const containerRect = container.getBoundingClientRect();
       const buttonRect = button.getBoundingClientRect();
+      if (!containerRect.width) return null;
       return {
-        left: buttonRect.left - containerRect.left,
-        width: buttonRect.width,
+        left: `${(buttonRect.left - containerRect.left) / containerRect.width * 100}%`,
+        width: `${buttonRect.width / containerRect.width * 100}%`,
       };
     };
 
-    const setPillImmediate = (left: number, width: number) => {
+    const setPillImmediate = (left: string, width: string) => {
       if (!pillRef.value) return;
-      pillRef.value.style.left = `${left}px`;
-      pillRef.value.style.width = `${width}px`;
+      pillRef.value.style.left = left;
+      pillRef.value.style.width = width;
       pillRef.value.style.visibility = 'visible';
     };
 
@@ -110,13 +119,11 @@ export const SegmentedControl = defineComponent({
       { flush: 'post' }
     );
 
-    return () => h('div', { ref: containerRef, class: 'tweakers-segmented' }, [
+    return () => h('div', { ref: containerRef, class: 'dialkit-segmented', role: 'radiogroup', 'aria-label': props.label, onKeydown: handleSegmentKey }, [
       h('div', {
         ref: pillRef,
-        class: 'tweakers-segmented-pill',
+        class: 'dialkit-segmented-pill',
         style: {
-          left: '0px',
-          width: '0px',
           visibility: pillReady.value ? 'visible' : 'hidden',
         },
       }),
@@ -129,10 +136,23 @@ export const SegmentedControl = defineComponent({
 
           buttonRefs.delete(option.value);
         }) as any,
-        class: 'tweakers-segmented-button',
+        class: 'dialkit-segmented-button',
         'data-active': String(props.value === option.value),
+        type: 'button', role: 'radio', 'aria-checked': props.value === option.value, tabindex: props.value === option.value ? 0 : -1,
+        'aria-label': option.icon ? option.label : undefined,
         onClick: () => emit('change', option.value),
-      }, option.label)),
+      }, option.icon
+        ? h('svg', {
+          class: 'dialkit-segmented-icon',
+          viewBox: '0 0 24 24',
+          fill: 'none',
+          stroke: 'currentColor',
+          'stroke-width': '2',
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          'aria-hidden': 'true',
+        }, iconPaths(option.icon).map((d) => h('path', { d })))
+        : option.label)),
     ]);
   },
 });

@@ -1,13 +1,14 @@
 import { defineComponent, h, onMounted, onUnmounted, ref, type PropType } from 'vue';
-import { TweakStore } from 'tweakers/store';
-import type { SpringConfig } from 'tweakers/store';
+import { DialStore } from '../../store/DialStore';
+import type { SpringConfig } from '../../store/DialStore';
+import { HINTS } from '../../hints';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
 import { SegmentedControl } from './SegmentedControl';
 import { SpringVisualization } from './SpringVisualization';
 
 export const SpringControl = defineComponent({
-  name: 'TweakersSpringControl',
+  name: 'DialKitSpringControl',
   props: {
     panelId: { type: String, required: true },
     path: { type: String, required: true },
@@ -16,15 +17,19 @@ export const SpringControl = defineComponent({
       type: Object as PropType<SpringConfig>,
       required: true,
     },
+    /** Shows a reset button in the header. See Folder.onReset. */
+    onReset: Function as PropType<() => void>,
+    changed: { type: Boolean, default: false },
+    hint: { type: String, required: false },
   },
   emits: ['change'],
   setup(props, { emit }) {
-    const mode = ref<'simple' | 'advanced'>(TweakStore.getSpringMode(props.panelId, props.path));
+    const mode = ref<'simple' | 'advanced'>(DialStore.getSpringMode(props.panelId, props.path));
     let unsub: (() => void) | undefined;
 
     onMounted(() => {
-      unsub = TweakStore.subscribe(props.panelId, () => {
-        mode.value = TweakStore.getSpringMode(props.panelId, props.path);
+      unsub = DialStore.subscribe(props.panelId, () => {
+        mode.value = DialStore.getSpringMode(props.panelId, props.path);
       });
     });
 
@@ -46,7 +51,7 @@ export const SpringControl = defineComponent({
         cache.advanced = { ...props.spring };
       }
 
-      TweakStore.updateSpringMode(props.panelId, props.path, nextMode);
+      DialStore.updateSpringMode(props.panelId, props.path, nextMode);
 
       if (nextMode === 'simple') {
         emit('change', cache.simple);
@@ -65,12 +70,11 @@ export const SpringControl = defineComponent({
       }
     };
 
-    return () => h(Folder, { title: props.label, defaultOpen: true }, {
+    return () => h(Folder, { title: props.label, defaultOpen: true, hint: props.hint, onReset: props.onReset, changed: props.changed }, {
       default: () => [
         h('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } }, [
-          h(SpringVisualization, { spring: props.spring, isSimpleMode: isSimpleMode() }),
-          h('div', { class: 'tweakers-labeled-control' }, [
-            h('span', { class: 'tweakers-labeled-control-label' }, 'Type'),
+          h('div', { class: 'dialkit-labeled-control dialkit-transition-type' }, [
+            h('span', { class: 'dialkit-labeled-control-label' }, 'Type'),
             h(SegmentedControl, {
               options: [
                 { value: 'simple', label: 'Time' },
@@ -80,16 +84,18 @@ export const SpringControl = defineComponent({
               onChange: handleModeChange,
             }),
           ]),
+          h(SpringVisualization, { spring: props.spring, isSimpleMode: isSimpleMode() }),
           ...(isSimpleMode()
             ? [
               h(Slider, {
                 label: 'Duration',
                 value: props.spring.visualDuration ?? 0.3,
                 min: 0.1,
-                max: 1,
+                max: 5,
                 step: 0.05,
                 unit: 's',
                 onChange: (next: number) => handleUpdate('visualDuration', next),
+                hint: HINTS.springDuration,
               }),
               h(Slider, {
                 label: 'Bounce',
@@ -98,6 +104,7 @@ export const SpringControl = defineComponent({
                 max: 1,
                 step: 0.05,
                 onChange: (next: number) => handleUpdate('bounce', next),
+                hint: HINTS.bounce,
               }),
             ]
             : [
@@ -108,6 +115,7 @@ export const SpringControl = defineComponent({
                 max: 1000,
                 step: 10,
                 onChange: (next: number) => handleUpdate('stiffness', next),
+                hint: HINTS.stiffness,
               }),
               h(Slider, {
                 label: 'Damping',
@@ -116,6 +124,7 @@ export const SpringControl = defineComponent({
                 max: 100,
                 step: 1,
                 onChange: (next: number) => handleUpdate('damping', next),
+                hint: HINTS.damping,
               }),
               h(Slider, {
                 label: 'Mass',
@@ -124,6 +133,7 @@ export const SpringControl = defineComponent({
                 max: 10,
                 step: 0.1,
                 onChange: (next: number) => handleUpdate('mass', next),
+                hint: HINTS.mass,
               }),
             ]),
         ]),

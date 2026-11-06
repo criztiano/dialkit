@@ -5,5 +5,5 @@
     "types": ["svelte"],
     "allowArbitraryExtensions": true
   },
-  "include": ["src/svelte/**/*"]
+  "include": ["src/svelte/**/*", "src/store/**/*"]
 }

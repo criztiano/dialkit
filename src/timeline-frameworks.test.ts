@@ -7,11 +7,11 @@ import { pathToFileURL } from 'node:url';
 import { compileModule } from 'svelte/compiler';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 import { createRenderer, defineComponent, h } from 'vue';
-import { TweakTimeline as VueTweakTimeline } from './vue/components/Timeline/TweakTimeline';
-import { useTweakTimeline as useVueTweakTimeline } from './vue/useTweakTimeline';
-import { TweakStore } from 'tweakers/store';
-import { TimelineStore } from 'tweakers/timeline';
-import { TimelineUiStore } from 'tweakers/timeline';
+import { DialTimeline as VueDialTimeline } from './vue/components/Timeline/DialTimeline';
+import { useDialTimeline as useVueDialTimeline } from './vue/useDialTimeline';
+import { DialStore } from './store/DialStore';
+import { TimelineStore } from './store/TimelineStore';
+import { TimelineUiStore } from './store/TimelineUiStore';
 
 type HostNode = {
   parent: HostNode | null;
@@ -69,7 +69,7 @@ describe('framework timeline adapters', () => {
   it('leaves Vue timeline visibility uncontrolled when visible is omitted', () => {
     TimelineUiStore.requestVisible(true);
     const root: HostNode = { parent: null, children: [] };
-    const app = vueRenderer.createApp(VueTweakTimeline, { productionEnabled: true });
+    const app = vueRenderer.createApp(VueDialTimeline, { productionEnabled: true });
 
     app.mount(root);
     assert.equal(TimelineUiStore.getVisible(), true);
@@ -79,12 +79,12 @@ describe('framework timeline adapters', () => {
 
   it('registers, updates, and cleans up the Vue adapter', () => {
     const id = 'vue-timeline-lifecycle';
-    let timeline: ReturnType<typeof useVueTweakTimeline> | undefined;
+    let timeline: ReturnType<typeof useVueDialTimeline> | undefined;
     const App = defineComponent({
       setup() {
-        timeline = useVueTweakTimeline('Vue Timeline Test', {
+        timeline = useVueDialTimeline('Vue Timeline Test', {
           clip: { at: 0, duration: 1 },
-        }, { id, autoplay: false });
+        }, { id, autoplay: false, track: 'single' });
         return () => h('div');
       },
     });
@@ -93,15 +93,16 @@ describe('framework timeline adapters', () => {
 
     app.mount(root);
     assert.equal(TimelineStore.getTimeline(id)?.duration, 1);
-    assert.equal(TweakStore.getPanel(id)?.kind, 'timeline');
+    assert.equal(TimelineStore.getTimeline(id)?.track, 'single');
+    assert.equal(DialStore.getPanel(id)?.kind, 'timeline');
     assert.equal(timeline!.value.clip.duration, 1);
 
-    TweakStore.updateValue(id, 'clip.duration', 1.5);
+    DialStore.updateValue(id, 'clip.duration', 1.5);
     assert.equal(timeline!.value.clip.duration, 1.5);
 
     app.unmount();
     assert.equal(TimelineStore.getTimeline(id), undefined);
-    assert.equal(TweakStore.getPanel(id), undefined);
+    assert.equal(DialStore.getPanel(id), undefined);
   });
 
   it('registers, updates, and cleans up the Solid adapter in its browser condition', () => {
@@ -109,30 +110,32 @@ describe('framework timeline adapters', () => {
       globalThis.window = { document: {} };
       globalThis.document = globalThis.window.document;
       const { createRoot } = await import('solid-js');
-      const { createTweakTimeline } = await import('./src/solid/createTweakTimeline.ts');
-      const { TweakStore } = await import('tweakers/store');
-      const { TimelineStore } = await import('tweakers/timeline');
+      const { createDialTimeline } = await import('./src/solid/createDialTimeline.ts');
+      const { DialStore } = await import('./src/store/DialStore.ts');
+      const { TimelineStore } = await import('./src/store/TimelineStore.ts');
       const id = 'solid-timeline-lifecycle';
       let dispose;
       let timeline;
       createRoot((cleanup) => {
         dispose = cleanup;
-        timeline = createTweakTimeline('Solid Timeline Test', {
+        timeline = createDialTimeline('Solid Timeline Test', {
           clip: { at: 0, duration: 1 },
-        }, { id, autoplay: false });
+        }, { id, autoplay: false, track: 'single' });
       });
       await new Promise((resolve) => setTimeout(resolve, 0));
       const registered = TimelineStore.getTimeline(id)?.duration;
-      const kind = TweakStore.getPanel(id)?.kind;
-      TweakStore.updateValue(id, 'clip.duration', 1.5);
+      const track = TimelineStore.getTimeline(id)?.track;
+      const kind = DialStore.getPanel(id)?.kind;
+      DialStore.updateValue(id, 'clip.duration', 1.5);
       const edited = timeline().clip.duration;
       dispose();
       console.log(JSON.stringify({
         registered,
+        track,
         kind,
         edited,
         timelineRemoved: TimelineStore.getTimeline(id) === undefined,
-        panelRemoved: TweakStore.getPanel(id) === undefined,
+        panelRemoved: DialStore.getPanel(id) === undefined,
       }));
     `;
     const result = spawnSync(
@@ -144,6 +147,7 @@ describe('framework timeline adapters', () => {
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(JSON.parse(result.stdout.trim()), {
       registered: 1,
+      track: 'single',
       kind: 'timeline',
       edited: 1.5,
       timelineRemoved: true,
@@ -152,7 +156,10 @@ describe('framework timeline adapters', () => {
   });
 
   it('compiles and resolves the Svelte adapter value contract during SSR', async () => {
-    const source = readFileSync('src/svelte/createTweakTimeline.svelte.ts', 'utf8');
+    let source = readFileSync('src/svelte/createDialTimeline.svelte.ts', 'utf8');
+    source = source
+      .replaceAll("from 'dialkit/store'", "from '../src/store/DialStore.ts'")
+      .replaceAll("from 'dialkit/timeline'", "from '../src/timeline/index.ts'");
     const javascript = transpileModule(source, {
       compilerOptions: {
         module: ModuleKind.ESNext,
@@ -160,7 +167,7 @@ describe('framework timeline adapters', () => {
       },
     }).outputText;
     const compiled = compileModule(javascript, {
-      filename: 'createTweakTimeline.svelte.js',
+      filename: 'createDialTimeline.svelte.js',
       generate: 'server',
     });
     const tempDirectory = mkdtempSync(join(process.cwd(), '.svelte-timeline-test-'));
@@ -169,7 +176,7 @@ describe('framework timeline adapters', () => {
     try {
       writeFileSync(modulePath, compiled.js.code);
       const module = await import(pathToFileURL(modulePath).href);
-      const timeline = module.createTweakTimeline('Svelte Timeline Test', {
+      const timeline = module.createDialTimeline('Svelte Timeline Test', {
         clip: { at: 0.25, duration: 1 },
       }, { autoplay: false });
 

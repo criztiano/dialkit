@@ -1,124 +1,117 @@
-import { createSignal, createEffect, onMount, onCleanup, Show, For } from 'solid-js';
+import { observeDropdownKeyboard } from '../../dropdown-keyboard';
+import { openDropdownOnKey } from '../../control-keyboard';
+import { createSignal, createEffect, on, onMount, onCleanup, Show, For } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { animate } from 'motion';
-import { ICON_CHEVRON } from 'tweakers/icons';
-
-type SelectOption = string | { value: string; label: string };
+import { getDialKitPortalRoot, getDropdownPosition, observeDropdownPosition, type DropdownPosition } from '../../dropdown-position';
+import { ICON_CHEVRON } from '../../icons';
+import type { SelectConfig, SelectOption } from '../../store/DialStore';
+import { createDropdownDismiss, createDropdownPresence, createHints, type AnimationHandle } from '../primitives';
+import { SegmentedControl } from './SegmentedControl';
 
 interface SelectControlProps {
   label: string;
   value: string;
   options: SelectOption[];
   onChange: (value: string) => void;
+  display?: SelectConfig['display'];
+  hideLabel?: boolean;
+  hint?: string;
 }
 
 function toTitleCase(s: string): string {
   return s.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function normalizeOptions(options: SelectOption[]): { value: string; label: string }[] {
+function normalizeOptions(options: SelectOption[]): Exclude<SelectOption, string>[] {
   return options.map((opt) =>
     typeof opt === 'string' ? { value: opt, label: toTitleCase(opt) } : opt
   );
 }
 
 export function SelectControl(props: SelectControlProps) {
-  const [isOpen, setIsOpen] = createSignal(false);
-  const [mounted, setMounted] = createSignal(false);
-  const [pos, setPos] = createSignal<{ top: number; left: number; width: number; above: boolean } | null>(null);
+  createHints(() => !!props.hint);
+  return (
+    <Show when={props.display === 'segmented'} fallback={<SelectDropdown {...props} />}>
+      <SegmentedSelect {...props} />
+    </Show>
+  );
+}
+
+function SegmentedSelect(props: SelectControlProps) {
+  return (
+    <div class="dialkit-labeled-control" data-hide-label={props.hideLabel ? 'true' : undefined} data-hint={props.hint}>
+      <Show when={!props.hideLabel}>
+        <span class="dialkit-labeled-control-label">{props.label}</span>
+      </Show>
+      <SegmentedControl
+        options={normalizeOptions(props.options)}
+        value={props.value}
+        onChange={props.onChange}
+        label={props.label}
+      />
+    </div>
+  );
+}
+
+function SelectDropdown(props: SelectControlProps) {
+  const [pos, setPos] = createSignal<DropdownPosition | null>(null);
   const [portalTarget, setPortalTarget] = createSignal<HTMLElement | null>(null);
   let triggerRef!: HTMLButtonElement;
   let dropdownRef: HTMLDivElement | undefined;
   let chevronRef!: SVGSVGElement;
-  let closeAnim: any = null;
-  let chevronAnim: any = null;
+  let chevronAnim: AnimationHandle | null = null;
 
   const normalized = () => normalizeOptions(props.options);
   const selectedOption = () => normalized().find((o) => o.value === props.value);
 
+  const dropdown = createDropdownPresence((el, done) =>
+    animate(
+      el,
+      { opacity: 0, y: (pos()?.above ?? false) ? 8 : -8, scale: 0.95 },
+      { type: 'spring', visualDuration: 0.15, bounce: 0, onComplete: done }
+    )
+  );
+
   onMount(() => {
-    const root = triggerRef?.closest('.tweakers-root') as HTMLElement | null;
-    setPortalTarget(root ?? document.body);
-
-    if (chevronRef) {
-      chevronRef.style.transform = `rotate(${isOpen() ? 180 : 0}deg)`;
-    }
-
-    onCleanup(() => {
-      closeAnim?.stop();
-      chevronAnim?.stop();
-    });
+    setPortalTarget(getDialKitPortalRoot(triggerRef) ?? document.body);
+    onCleanup(() => chevronAnim?.stop());
   });
 
-  createEffect(() => {
+  // Chevron renders at its resting angle; only animate on changes.
+  createEffect(on(dropdown.isOpen, (open) => {
     if (!chevronRef) return;
-    const open = isOpen();
     chevronAnim?.stop();
     chevronAnim = animate(
       chevronRef,
       { rotate: open ? 180 : 0 },
       { type: 'spring', visualDuration: 0.2, bounce: 0.15 }
     );
-  });
+  }, { defer: true }));
 
   const updatePos = () => {
-    if (!triggerRef) return;
-    const rect = triggerRef.getBoundingClientRect();
-    const dropdownHeight = 8 + normalized().length * 36;
-    const spaceBelow = window.innerHeight - rect.bottom - 4;
-    const above = spaceBelow < dropdownHeight && rect.top > spaceBelow;
-    setPos({
-      top: above ? rect.top - 4 : rect.bottom + 4,
-      left: rect.left,
-      width: rect.width,
-      above,
-    });
+    const root = portalTarget();
+    if (!triggerRef || !root) return;
+    const dropdownHeight = dropdownRef?.isConnected ? dropdownRef.scrollHeight + 2 : 10 + normalized().length * 36;
+    setPos(getDropdownPosition(triggerRef, root, { dropdownHeight, fixed: true }));
   };
+
+  createEffect(() => {
+    if (!dropdown.isOpen() || !triggerRef) return;
+    onCleanup(observeDropdownPosition(triggerRef, updatePos, () => dropdownRef));
+    onCleanup(observeDropdownKeyboard(triggerRef, () => dropdownRef, dropdown.close));
+  });
 
   const openDropdown = () => {
-    closeAnim?.stop();
-    closeAnim = null;
     updatePos();
-    setMounted(true);
-    setIsOpen(true);
+    dropdown.open();
   };
 
-  const closeDropdown = () => {
-    setIsOpen(false);
-    if (!dropdownRef) { setMounted(false); return; }
-    const above = pos()?.above ?? false;
-    closeAnim?.stop();
-    closeAnim = animate(
-      dropdownRef,
-      { opacity: 0, y: above ? 8 : -8, scale: 0.95 },
-      { type: 'spring', visualDuration: 0.15, bounce: 0, onComplete: () => { setMounted(false); closeAnim = null; } }
-    );
-  };
-
-  // Close on click outside
-  createEffect(() => {
-    if (!isOpen()) return;
-    const handleViewportChange = () => updatePos();
-
-    const handleClick = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (
-        triggerRef && !triggerRef.contains(target) &&
-        dropdownRef && !dropdownRef.contains(target)
-      ) {
-        closeDropdown();
-      }
-    };
-
-    updatePos();
-    document.addEventListener('mousedown', handleClick);
-    window.addEventListener('resize', handleViewportChange);
-    window.addEventListener('scroll', handleViewportChange, true);
-    onCleanup(() => {
-      document.removeEventListener('mousedown', handleClick);
-      window.removeEventListener('resize', handleViewportChange);
-      window.removeEventListener('scroll', handleViewportChange, true);
-    });
+  createDropdownDismiss({
+    isOpen: dropdown.isOpen,
+    contains: (target) => triggerRef?.contains(target) || dropdown.contains(target),
+    onDismiss: dropdown.close,
+    onViewportChange: updatePos,
   });
 
   const dropdownStyle = () => {
@@ -127,27 +120,29 @@ export function SelectControl(props: SelectControlProps) {
     return {
       position: 'fixed' as const,
       left: `${p.left}px`,
+      top: `${p.top}px`,
       width: `${p.width}px`,
-      ...(p.above
-        ? { bottom: `${window.innerHeight - p.top}px`, 'transform-origin': 'bottom' }
-        : { top: `${p.top}px`, 'transform-origin': 'top' }),
+      'max-height': `${p.maxHeight}px`,
+      'transform-origin': p.above ? 'bottom' : 'top',
     };
   };
 
   return (
-    <div class="tweakers-select-row">
+    <div class="dialkit-select-row" data-hint={props.hint}>
       <button
         ref={triggerRef}
-        class="tweakers-select-trigger"
-        onClick={() => isOpen() ? closeDropdown() : openDropdown()}
-        data-open={String(isOpen())}
+        class="dialkit-select-trigger"
+        onClick={() => dropdown.isOpen() ? dropdown.close() : openDropdown()}
+        data-open={String(dropdown.isOpen())}
+        type="button" aria-haspopup="listbox" aria-expanded={dropdown.isOpen()} disabled={!props.options.length}
+        onKeyDown={(e) => openDropdownOnKey(e, openDropdown)}
       >
-        <span class="tweakers-select-label">{props.label}</span>
-        <div class="tweakers-select-right">
-          <span class="tweakers-select-value">{selectedOption()?.label ?? props.value}</span>
+        <span class="dialkit-select-label">{props.label}</span>
+        <div class="dialkit-select-right">
+          <span class="dialkit-select-value">{selectedOption()?.label ?? props.value}</span>
           <svg
             ref={chevronRef}
-            class="tweakers-select-chevron"
+            class="dialkit-select-chevron"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -162,10 +157,11 @@ export function SelectControl(props: SelectControlProps) {
 
       <Show when={!!portalTarget()}>
         <Portal mount={portalTarget()!}>
-          <Show when={mounted() && pos()}>
+          <Show when={dropdown.mounted() && pos()}>
             <div
               ref={(el) => {
                 dropdownRef = el;
+                dropdown.setRef(el);
                 const above = pos()?.above ?? false;
                 animate(
                   el,
@@ -173,17 +169,17 @@ export function SelectControl(props: SelectControlProps) {
                   { type: 'spring', visualDuration: 0.15, bounce: 0 }
                 );
               }}
-              class="tweakers-select-dropdown"
+              class="dialkit-select-dropdown"
               style={dropdownStyle()}
             >
               <For each={normalized()}>
                 {(option) => (
                   <button
-                    class="tweakers-select-option"
+                    class="dialkit-select-option"
                     data-selected={String(option.value === props.value)}
                     onClick={() => {
                       props.onChange(option.value);
-                      closeDropdown();
+                      dropdown.close();
                     }}
                   >
                     {option.label}

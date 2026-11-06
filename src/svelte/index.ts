@@ -1,34 +1,29 @@
 // Core API
-export { createTweakers } from './createTweakers.svelte';
-export type { CreateTweakersOptions, TweakersValues } from './createTweakers.svelte';
+export { createDialKit, createDialKitController } from './createDialKit.svelte.js';
+export type { CreateDialOptions, DialKitController, DialKitValues } from './createDialKit.svelte.js';
 
-// Root component
-export { default as TweakRoot } from './components/TweakRoot.svelte';
-export type { TweakPosition, TweakMode, TweakTheme } from './components/TweakRoot.svelte';
-
-// Timeline (prototype)
-export { createTweakTimeline } from './createTweakTimeline.svelte';
-export type { CreateTweakTimelineOptions } from './createTweakTimeline.svelte';
-export { default as TweakTimeline } from './components/Timeline/TweakTimeline.svelte';
-export { formatClock, TimelineStore } from 'tweakers/timeline';
+// Timeline
+export { createDialTimeline } from './createDialTimeline.svelte.js';
+export type { CreateDialTimelineOptions } from './createDialTimeline.svelte.js';
 export type {
+  DialTimelineValues,
   TimelineClipConfig,
   TimelineClipCss,
   TimelineClipLoop,
-  TimelineConfig,
   TimelineClipValues,
+  TimelineConfig,
   TimelineGroupConfig,
   TimelineGroupValues,
   TimelinePropConfig,
   TimelinePropStepConfig,
   TimelineStepConfig,
   TimelineStepValues,
-  TweakTimelineValues,
-  TimelineMeta,
-  TimelineClipMeta,
-  TimelineClipTrackMeta,
-  TimelineTransport,
-} from 'tweakers/timeline';
+} from 'dialkit/timeline';
+
+// Root component
+export { default as DialRoot } from './components/DialRoot.svelte';
+export type { DialPosition, DialMode, DialTheme } from './components/DialRoot.svelte';
+export type { DialVersions } from '../version-gallery';
 
 // Shortcut components
 export { default as ShortcutListener } from './components/ShortcutListener.svelte';
@@ -38,130 +33,74 @@ export { default as ShortcutsMenu } from './components/ShortcutsMenu.svelte';
 
 // Component exports
 export { default as Slider } from './components/Slider.svelte';
-export { default as NumberControl } from './components/NumberControl.svelte';
-export { default as RangeSlider } from './components/RangeSlider.svelte';
 export { default as Toggle } from './components/Toggle.svelte';
-export { default as Checkbox } from './components/Checkbox.svelte';
 export { default as Folder } from './components/Folder.svelte';
-export { default as ControlShell } from './components/ControlShell.svelte';
-export { default as Module } from './components/Module.svelte';
-export { default as SegmentedControl } from './components/SegmentedControl.svelte';
 export { default as ButtonGroup } from './components/ButtonGroup.svelte';
 export { default as SpringControl } from './components/SpringControl.svelte';
 export { default as SpringVisualization } from './components/SpringVisualization.svelte';
 export { default as TransitionControl } from './components/TransitionControl.svelte';
 export { default as EasingVisualization } from './components/EasingVisualization.svelte';
-export { default as WaveformVisualization } from './components/WaveformVisualization.svelte';
-export type { WaveformMode, WaveformLoop } from 'tweakers/waveform-engine';
-export { default as AnalyserVisualization } from './components/AnalyserVisualization.svelte';
-export type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, AnalyserSpring } from 'tweakers/analyser-engine';
-export { default as CurveComposer } from './components/CurveComposer.svelte';
-// The editing + sampling helpers, mirroring what is re-exported for gradients
-// below: a host app driving its own composition state needs them, and they are
-// otherwise reachable only from the React entry. `tweakers/curve-composer-core`
-// serves the same functions to code that must stay framework-free.
-export {
-  defaultComposition,
-  buildSamplers,
-  springify,
-  readComposition,
-  directionPhase,
-  splitSegment,
-  removeSegment,
-  cycleSegmentType,
-  flipSegment,
-  redistributeWeight,
-  setSegmentCurvature,
-  setSegmentSteepness,
-  setSegmentOvershoot,
-  setSegmentAnticipate,
-  addDriver,
-  removeDriver,
-  cycleDriverType,
-  flipDriver,
-  setDriverCurvature,
-  setDriverSteepness,
-  setDriverOvershoot,
-  setDriverAnticipate,
-} from 'tweakers/curve-composer-core';
-export type {
-  CurveType,
-  CurveSegment,
-  CurveDriver,
-  CurveComposition,
-  CompositionRead,
-  CompositionSamplers,
-  Sampler,
-  SpringifyOptions,
-  DriverDirection,
-} from 'tweakers/curve-composer-core';
 export { default as TextControl } from './components/TextControl.svelte';
 export { default as SelectControl } from './components/SelectControl.svelte';
 export { default as ColorControl } from './components/ColorControl.svelte';
-export { default as ColorPickerPanel } from './components/ColorPickerPanel.svelte';
-export { default as GradientControl } from './components/GradientControl.svelte';
-export { default as GradientPanel } from './components/GradientPanel.svelte';
-export {
-  gradientToCss,
-  normalizeGradient,
-  colorAtPosition,
-  addStop,
-  removeStop,
-  moveStop,
-  setStopColor,
-  setGradientType,
-  setGradientAngle,
-  DEFAULT_GRADIENT,
-  MIN_STOPS,
-} from 'tweakers/gradient-core';
-export type { GradientValue, GradientStop, GradientType } from 'tweakers/gradient-core';
-export { default as XYPad } from './components/XYPad.svelte';
-export { default as XYControl } from './components/XYControl.svelte';
-export type { XYValue, AxisSpec, Point } from 'tweakers/xy-pad-core';
-export { default as FileControl } from './components/FileControl.svelte';
-export { default as SwatchControl } from './components/SwatchControl.svelte';
-export { default as ChipsControl } from './components/ChipsControl.svelte';
-export { default as ListControl } from './components/ListControl.svelte';
+export { default as ImageControl } from './components/ImageControl.svelte';
+export { default as DialPad } from './components/DialPad.svelte';
+export type { DialPadProps } from '../dial-pad-control';
+export { default as AnchorControl } from './components/AnchorControl.svelte';
+export type { AnchorControlProps } from '../anchor-control';
+export { default as BackgroundControl } from './components/BackgroundControl.svelte';
+export type { BackgroundControlProps } from '../background-control';
+export { backgroundGradientCss, backgroundMediaCss, paintGradient } from '../background';
+export * from '../background-api';
 export { default as PresetManager } from './components/PresetManager.svelte';
+export { default as VersionGallery } from './components/VersionGallery.svelte';
+export { default as DialTimeline } from './components/Timeline/DialTimeline.svelte';
 
-// Store exports (via tweakers/store subpath — svelte-package doesn't bundle, so relative paths to src/store would break in dist)
-export { TweakStore, parseListItemSchema, groupListFields, defaultListItemParams, normalizeListItems, hintDomId } from 'tweakers/store';
+// Store exports (via dialkit/store subpath — svelte-package doesn't bundle, so relative paths to src/store would break in dist)
+export { DialStore, withVisibility } from 'dialkit/store';
 export type {
   SpringConfig,
   EasingConfig,
   TransitionConfig,
   ActionConfig,
   SelectConfig,
+  SelectOption,
   ColorConfig,
-  XYConfig,
-  XYAxis,
-  RangeConfig,
-  RangeValue,
+  ImageConfig,
+  ImageOption,
+  DialPadAxis,
+  DialPadConfig,
+  DialPadValue,
+  BackgroundConfig,
+  BackgroundValue,
+  BackgroundValueUpdate,
+  BackgroundGradient,
+  BackgroundMedia,
+  BackgroundMediaDisplay,
+  BackgroundMediaFit,
+  BackgroundMediaRatio,
+  BackgroundMode,
+  GradientHandles,
+  GradientPoint,
+  GradientStop,
+  GradientShape,
+  SavedGradient,
+  AnchorConfig,
+  AnchorValue,
   TextConfig,
-  FileConfig,
-  SwatchConfig,
-  SwatchOption,
-  ChipsConfig,
-  ChipOption,
-  ListConfig,
-  ListItemValue,
-  AffordanceConfig,
-  AffordanceContext,
-  AffordanceStatus,
-  ListItemField,
-  ListItemType,
-  ListField,
-  ListFieldKind,
-  ListFieldGroup,
   ShortcutConfig,
   Preset,
-  PresetProvider,
-  PresetProviderPreset,
-  PresetItem,
-  TweakValue,
-  TweakEvent,
-  TweakConfig,
+  TransitionMode,
+  TransitionPreset,
+  CopiedTransition,
+  DialValue,
+  DialConfig,
+  DialKitPersistOptions,
+  DialKitValueUpdates,
   ResolvedValues,
   ControlMeta,
   PanelConfig,
-} from 'tweakers/store';
+  VisibleWhen,
+  VisibleWhenValue,
+  ControlWithVisibility,
+} from 'dialkit/store';

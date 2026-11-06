@@ -1,40 +1,52 @@
-import { useContext } from 'react';
-import { TweakStore, hintDomId, ControlMeta, TweakValue, SpringConfig, TransitionConfig, ListItemValue, XYValue } from 'tweakers/store';
-import type { FilterValue } from 'tweakers/filter-core';
-import type { RangeValue, TransferValue } from 'tweakers/store';
-import type { GradientValue } from 'tweakers/gradient-core';
+import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { DialStore, ControlMeta, DialValue, SpringConfig, TransitionConfig } from '../store/DialStore';
+import { mergeControls } from '../control-presence';
 import { ShortcutContext } from './ShortcutListener';
 import { Folder } from './Folder';
-import { ModuleFolder } from './ModuleFolder';
-import { ControlShell } from './ControlShell';
 import { Slider } from './Slider';
 import { AngleDial } from './AngleDial';
-import { TransferCurve } from './TransferCurve';
 import { NumberControl } from './NumberControl';
 import { RangeSlider } from './RangeSlider';
+import type { RangeValue } from '../range';
 import { Toggle } from './Toggle';
-import { SegmentedControl } from './SegmentedControl';
 import { SpringControl } from './SpringControl';
 import { TransitionControl } from './TransitionControl';
+import { TransitionCopyMenu } from './TransitionCopy';
 import { TextControl } from './TextControl';
 import { SelectControl } from './SelectControl';
 import { ColorControl } from './ColorControl';
-import { GradientControl } from './GradientControl';
-import { XYControl } from './XYControl';
-import { GalleryControl } from './GalleryControl';
-import { FileControl } from './FileControl';
-import { SwatchControl } from './SwatchControl';
+import { ImageControl } from './ImageControl';
+import { DialPad } from './DialPad';
+import { PadGroup } from './PadGroup';
+import { AnchorControl } from './AnchorControl';
+import { Fields } from './Fields';
+import { BackgroundControl } from './BackgroundControl';
+import { LayerListControl } from './LayerListControl';
 import { ChipsControl } from './ChipsControl';
 import { MultiSelectControl } from './MultiSelectControl';
+import { SwatchControl } from './SwatchControl';
+import { FileControl } from './FileControl';
 import { ListControl } from './ListControl';
-import { CurvePreview } from './CurvePreview';
+import { galleryIdOf, galleryImageOptions, gallerySrcOf } from '../choice';
+import type { ListItemValue } from '../list';
 import { FilterControl } from './FilterControl';
+import { TransferCurve } from './TransferCurve';
+import { CurvePreview } from './CurvePreview';
 import { AnalyserRow } from './AnalyserRow';
+import type { DialPadValue } from '../dial-pad';
+import type { AnchorValue } from '../anchor';
+import { layerAction, type LayersValue } from '../layers';
+import { hasActionHints } from '../hints';
+import { useHints } from '../hooks/useHints';
+import type { BackgroundValue } from '../background';
+import type { DialFilterValue } from '../filter';
+import type { DialTransferValue } from '../transfer';
 
 interface ControlRendererProps {
   panelId: string;
   controls: ControlMeta[];
-  values: Record<string, TweakValue>;
+  values: Record<string, DialValue>;
   /** Optional timeline-owned duration rendered inside the transition editor. */
   transitionDuration?: {
     value: number;
@@ -42,38 +54,94 @@ interface ControlRendererProps {
     min?: number;
     max?: number;
     step?: number;
+    /** Replaces the curve's own Duration hint. */
+    hint?: string;
   };
+  /** Longest settle a physics spring may reach. See TransitionControl. */
+  physicsSettleCap?: number;
+  /** Path of the one open top-level folder in accordion mode, or null when all are closed. */
+  openFolder?: string | null;
+  onOpenFolderChange?: (path: string | null) => void;
+  /** Slide controls in and out as their visibility rules change. */
+  animateControls?: boolean;
 }
 
-// Renders a ControlMeta tree with the full Tweakers control set.
-// Shared by the panel dock and the timeline clip popover so every control type
-// (including this fork's extras: range, gradient, xy, gallery, file, swatch,
-// chips, list) renders identically in both surfaces.
-export function ControlRenderer({ panelId, controls, values, transitionDuration }: ControlRendererProps) {
+// A control fades with its height, and collapsing it also closes the row gap below it.
+// It clips only while sliding, so a settled control's popovers and focus rings are not cut off.
+const hiddenControl = { opacity: 0, height: 0, marginBottom: 'calc(var(--dial-row-gap) * -1)', overflowY: 'clip' as const };
+const shownControl = { opacity: 1, height: 'auto', marginBottom: 'calc(var(--dial-row-gap) * 0)', overflowY: 'clip' as const, transitionEnd: { overflowY: 'visible' as const } };
+
+/** Slides controls in as they appear, and out where they were as they leave. */
+function AnimatedControls({ controls, children }: { controls: ControlMeta[]; children: (control: ControlMeta) => ReactNode }) {
+  const [rows, setRows] = useState({ controls, rendered: controls });
+  const mounted = useRef(false);
+  useEffect(() => { mounted.current = true; }, []);
+
+  if (rows.controls !== controls) setRows({ controls, rendered: mergeControls(rows.rendered, controls) });
+  const present = new Set(controls.map(control => control.path));
+  const remove = (path: string) => setRows(current => ({
+    ...current,
+    rendered: current.rendered.filter(control => control.path !== path || current.controls.some(shown => shown.path === path)),
+  }));
+
+  return rows.rendered.map((control) => (
+    <AnimatePresence key={control.path} initial={mounted.current} onExitComplete={() => remove(control.path)}>
+      {present.has(control.path) && (
+        <motion.div
+          key={control.path}
+          className="dialkit-control-wrapper"
+          initial={hiddenControl}
+          animate={shownControl}
+          exit={hiddenControl}
+          transition={{ type: 'spring', visualDuration: 0.25, bounce: 0.1 }}
+        >
+          {children(control)}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  ));
+}
+
+/**
+ * A section whose only row is a transition shows one header, the section's:
+ * the transition draws no folder of its own, and its reset and copy menu
+ * move into the section's header.
+ */
+export function loneTransition(rows: ControlMeta[]): ControlMeta | undefined {
+  return rows.length === 1 && rows[0].type === 'transition' ? rows[0] : undefined;
+}
+
+// Renders a ControlMeta tree with the standard DialKit controls.
+// Shared by the panel and the timeline clip popover.
+export function ControlRenderer({ panelId, controls, values, transitionDuration, physicsSettleCap, openFolder, onOpenFolderChange, animateControls = false }: ControlRendererProps) {
   const shortcutCtx = useContext(ShortcutContext);
+  // The reset button of the folder a control draws: a `_reset` folder, a spring, a transition, or a background.
+  const resetProps = (control: ControlMeta) => control.reset ? {
+    changed: DialStore.isFolderChanged(panelId, control.path),
+    onReset: () => DialStore.resetFolder(panelId, control.path),
+  } : {};
 
-  const renderControlNode = (control: ControlMeta) => {
+  // Hinted action buttons are the renderer's own rows; each control mounts its own.
+  useHints(hasActionHints(controls));
+
+  // `bare` names a transition drawn without its own folder header.
+  const renderControls = (controls: ControlMeta[], topLevel = false, bare?: ControlMeta) => animateControls
+    ? <AnimatedControls controls={controls}>{(control) => renderControl(control, topLevel, control === bare)}</AnimatedControls>
+    : controls.map((control) => renderControl(control, topLevel, control === bare));
+
+  const renderControl = (control: ControlMeta, topLevel = false, bare = false) => {
     const value = values[control.path];
-
-    // Dynamic configs can drop a path's value one commit before the control
-    // list catches up (values ride the panel subscription, structure rides the
-    // global one). A value-bearing control with no value is that gap — skip it
-    // for the frame instead of handing undefined to a control.
-    if (value === undefined && control.type !== 'folder' && control.type !== 'action' && control.type !== 'curve' && control.type !== 'analyser') {
-      return null;
-    }
 
     switch (control.type) {
       case 'slider':
-        // A dial is a slider that draws itself as a needle — same value, same
-        // store type, same hardware knob.
-        if (control.display === 'dial') {
+        if (control.dial) {
           return (
             <AngleDial
               key={control.path}
               label={control.label}
+              hint={control.hint}
               value={value as number}
-              onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
+              onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
               min={control.min}
               max={control.max}
               step={control.step}
@@ -88,16 +156,14 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
           <Slider
             key={control.path}
             label={control.label}
+            hint={control.hint}
             value={value as number}
-            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
             min={control.min}
             max={control.max}
             step={control.step}
             unit={control.unit}
             formatValue={control.formatValue}
-            origin={control.origin}
-            bipolar={control.bipolar}
-            orientation={control.orientation}
             shortcut={control.shortcut}
             shortcutActive={shortcutCtx.activePanelId === panelId && shortcutCtx.activePath === control.path}
           />
@@ -108,8 +174,9 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
           <NumberControl
             key={control.path}
             label={control.label}
+            hint={control.hint}
             value={value as number}
-            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
             min={control.min}
             max={control.max}
             step={control.step}
@@ -119,30 +186,18 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
           />
         );
 
-      case 'transfer':
-        return (
-          <TransferCurve
-            key={control.path}
-            label={control.label}
-            value={value as TransferValue}
-            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
-            height={control.curveHeight}
-            grid={control.gridDivisions}
-            axisLabels={control.axisLabels}
-          />
-        );
-
       case 'range':
         return (
           <RangeSlider
             key={control.path}
             label={control.label}
+            hint={control.hint}
             value={value as RangeValue}
-            min={control.min ?? 0}
-            max={control.max ?? 1}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            min={control.min}
+            max={control.max}
             step={control.step}
             defaultValue={control.rangeDefault}
-            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
           />
         );
 
@@ -151,8 +206,9 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
           <Toggle
             key={control.path}
             label={control.label}
+            hint={control.hint}
             checked={value as boolean}
-            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
             shortcut={control.shortcut}
             shortcutActive={shortcutCtx.activePanelId === panelId && shortcutCtx.activePath === control.path}
           />
@@ -165,8 +221,10 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             panelId={panelId}
             path={control.path}
             label={control.label}
+            hint={control.hint}
             spring={value as SpringConfig}
-            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            {...resetProps(control)}
           />
         );
 
@@ -177,57 +235,71 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             panelId={panelId}
             path={control.path}
             label={control.label}
+            hint={control.hint}
             value={value as TransitionConfig}
-            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
             durationControl={transitionDuration}
+            physicsSettleCap={physicsSettleCap}
+            bare={bare}
+            {...resetProps(control)}
           />
         );
 
       case 'folder': {
-        // A folder that declared `_enabled` renders as a module: the header
-        // switch drives the `<path>._enabled` value through the store.
-        if (control.module) {
-          const enabledPath = `${control.path}._enabled`;
+        if (control.fields) {
           return (
-            <ModuleFolder
+            <Fields
               key={control.path}
-              title={control.label}
-              enabled={values[enabledPath] as boolean}
-              onEnabledChange={(v) => TweakStore.updateValue(panelId, enabledPath, v)}
-              defaultOpen={control.defaultOpen ?? true}
+              label={control.label}
+              controls={control.children ?? []}
+              values={values}
+              defaults={DialStore.getResetValues(panelId)}
               hint={control.hint}
-              hintId={hintDomId(panelId, control.path)}
-            >
-              {control.children?.map(renderControl)}
-            </ModuleFolder>
+              decimals={control.decimals}
+              trim={control.trim}
+              onChange={(v) => DialStore.updateValues(panelId, v)}
+            />
           );
         }
-        // A segmented select declared as the folder's FIRST row rides the
-        // header instead — the same idiom as the module switch, for folders
-        // whose body is viewed through a mode (tabs).
-        const [first, ...rest] = control.children ?? [];
-        const headerTabs = first && first.type === 'select' && first.display === 'segmented' ? first : null;
+        if (control.padGroup) {
+          return <PadGroup key={control.path} panelId={panelId} control={control} values={values} />;
+        }
+        // A row draws its two controls side by side. --dial-row-label-style
+        // picks where the labels sit (theme.css): 1, a title above each
+        // control; 2, inside the controls, with `_inlineLabels` names.
+        if (control.row) {
+          return (
+            <div key={control.path} className="dialkit-row-group">
+              {(control.children ?? []).slice(0, 2).map((child) => {
+                const inline = control.inlineLabels?.[child.path.slice(control.path.length + 1)];
+                // Segmented options fill their cell, as a row of their own does.
+                const shown = child.type === 'select' && child.display === 'segmented' ? { ...child, hideLabel: true } : child;
+                return (
+                  <div key={child.path} className="dialkit-row-cell" data-inline-label={inline === '' ? 'none' : undefined}>
+                    <span className="dialkit-row-label">{child.label}</span>
+                    {renderControl(inline ? { ...shown, label: inline } : shown)}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        }
+        // Accordion mode controls top-level folders; nested folders keep their own state.
+        const accordion = topLevel && openFolder !== undefined;
+        const rows = control.children ?? [];
+        const only = loneTransition(rows);
         return (
           <Folder
             key={control.path}
             title={control.label}
             defaultOpen={control.defaultOpen ?? true}
-            collapsible={control.collapsible ?? true}
-            hint={control.hint}
-            hintId={hintDomId(panelId, control.path)}
-            toolbar={
-              headerTabs ? (
-                <SegmentedControl
-                  options={(headerTabs.options ?? []).map((o) =>
-                    typeof o === 'string' ? { value: o, label: o } : o
-                  )}
-                  value={values[headerTabs.path] as string}
-                  onChange={(v) => TweakStore.updateValue(panelId, headerTabs.path, v)}
-                />
-              ) : undefined
-            }
+            hint={control.hint ?? only?.hint}
+            {...resetProps(control.reset || !only ? control : only)}
+            actions={only ? <TransitionCopyMenu panelId={panelId} path={only.path} value={values[only.path] as TransitionConfig} /> : undefined}
+            open={accordion ? openFolder === control.path : undefined}
+            onOpenChange={accordion ? (open) => onOpenFolderChange?.(open ? control.path : null) : undefined}
           >
-            {(headerTabs ? rest : control.children)?.map(renderControl)}
+            {renderControls(rows, false, only)}
           </Folder>
         );
       }
@@ -237,34 +309,25 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
           <TextControl
             key={control.path}
             label={control.label}
+            hint={control.hint}
             value={value as string}
-            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
             placeholder={control.placeholder}
           />
         );
 
       case 'select':
-        if (control.display === 'segmented') {
-          return (
-            <div key={control.path} className="tweakers-labeled-control">
-              <span className="tweakers-labeled-control-label">{control.label}</span>
-              <SegmentedControl
-                options={(control.options ?? []).map((o) =>
-                  typeof o === 'string' ? { value: o, label: o } : o
-                )}
-                value={value as string}
-                onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
-              />
-            </div>
-          );
-        }
         return (
           <SelectControl
             key={control.path}
             label={control.label}
+            hint={control.hint}
             value={value as string}
             options={control.options ?? []}
-            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            display={control.display}
+            hideLabel={control.hideLabel}
+            add={control.add ? { ...control.add, onClick: () => DialStore.triggerAction(panelId, `${control.path}.add`) } : undefined}
           />
         );
 
@@ -273,88 +336,79 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
           <ColorControl
             key={control.path}
             label={control.label}
+            hint={control.hint}
             value={value as string}
-            alpha={control.alpha}
-            palette={control.palette}
-            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
           />
         );
 
-      case 'gradient':
+      case 'image':
         return (
-          <GradientControl
+          <ImageControl
             key={control.path}
+            options={control.options}
             label={control.label}
-            value={value as GradientValue}
-            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
-            form={control.gradientForm}
-          />
-        );
-
-      case 'xy':
-        return (
-          <XYControl
-            key={control.path}
-            label={control.label}
-            value={value as XYValue}
-            x={control.xAxis}
-            y={control.yAxis}
-            grid={control.grid}
-            density={control.density}
-            snap={control.snap}
-            returnToCenter={control.returnToCenter}
-            showValues={control.showValues}
-            shortcut={control.shortcut}
-            shortcutActive={shortcutCtx.activePanelId === panelId && shortcutCtx.activePath === control.path}
-            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
-          />
-        );
-
-      case 'gallery':
-        return (
-          <GalleryControl
-            key={control.path}
-            label={control.label}
+            hint={control.hint}
             value={value as string}
-            items={control.items ?? []}
-            columns={control.columns}
-            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
           />
         );
 
-      case 'file':
+      case 'pad':
         return (
-          <FileControl
+          <DialPad
             key={control.path}
             label={control.label}
-            value={value as string}
-            accept={control.accept}
-            multiple={control.multiple}
-            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
-            onPick={(files) => TweakStore.emitEvent(panelId, control.path, { kind: 'file', files })}
+            hint={control.hint}
+            value={value as DialPadValue}
+            x={control.pad?.x}
+            y={control.pad?.y}
+            labels={control.pad?.labels}
+            mapping={control.pad?.mapping}
+            hideLabel={control.pad?.hideLabel}
+            dragLabels={control.pad?.dragLabels}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
           />
         );
 
-      case 'swatch':
+      case 'anchor':
         return (
-          <SwatchControl
+          <AnchorControl
             key={control.path}
             label={control.label}
-            value={value as string}
-            options={control.swatchOptions ?? []}
-            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
+            hint={control.hint}
+            value={value as AnchorValue | null}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
           />
         );
 
+      case 'layers':
+        return (
+          <LayerListControl
+            key={control.path}
+            label={control.label}
+            hint={control.hint}
+            value={value as LayersValue}
+            addLabel={control.layers?.addLabel}
+            addDisabled={control.layers?.addDisabled}
+            empty={control.layers?.empty}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            onAction={(kind, id) => DialStore.triggerAction(panelId, layerAction(control.path, kind, id))}
+          />
+        );
+
+      // The choice controls. A gallery is the image picker over its items'
+      // images, without upload or Remove; its value stays the item's id.
       case 'chips':
         return (
           <ChipsControl
             key={control.path}
             label={control.label}
+            hint={control.hint}
             value={value as string}
-            options={control.chipOptions ?? []}
-            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
-            onRemove={(v) => TweakStore.emitEvent(panelId, control.path, { kind: 'remove', value: v })}
+            options={control.chips ?? []}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            onRemove={(v) => DialStore.emitEvent(panelId, control.path, { kind: 'remove', value: v })}
           />
         );
 
@@ -363,33 +417,108 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
           <MultiSelectControl
             key={control.path}
             label={control.label}
+            hint={control.hint}
             value={(value as string[]) ?? []}
-            options={control.multiSelectOptions ?? []}
-            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
+            options={control.multiSelect ?? []}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
           />
         );
+
+      case 'swatch':
+        return (
+          <SwatchControl
+            key={control.path}
+            label={control.label}
+            hint={control.hint}
+            value={value as string}
+            options={control.swatches ?? []}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+          />
+        );
+
+      case 'file':
+        return (
+          <FileControl
+            key={control.path}
+            label={control.label}
+            hint={control.hint}
+            value={value as string}
+            accept={control.file?.accept}
+            multiple={control.file?.multiple}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            onPick={(files) => DialStore.emitEvent(panelId, control.path, { kind: 'file', files })}
+          />
+        );
+
+      case 'gallery': {
+        const items = control.gallery ?? [];
+        return (
+          <ImageControl
+            key={control.path}
+            label={control.label}
+            hint={control.hint}
+            options={galleryImageOptions(items)}
+            value={gallerySrcOf(items, value as string)}
+            upload={false}
+            clearable={false}
+            onChange={(src) => {
+              const id = galleryIdOf(items, src);
+              if (id !== undefined) DialStore.updateValue(panelId, control.path, id);
+            }}
+          />
+        );
+      }
 
       case 'list':
         return (
           <ListControl
             key={control.path}
             label={control.label}
-            value={value as ListItemValue[]}
-            itemTypes={control.itemTypes ?? {}}
-            addLabel={control.addLabel}
-            maxItems={control.maxItems}
-            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
-            onEvent={(event) => TweakStore.emitEvent(panelId, control.path, event)}
+            hint={control.hint}
+            value={(value as ListItemValue[]) ?? []}
+            itemTypes={control.list?.itemTypes ?? {}}
+            addLabel={control.list?.addLabel}
+            maxItems={control.list?.max}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            onEvent={(event) => DialStore.emitEvent(panelId, control.path, event)}
           />
+        );
+
+      case 'background':
+        return (
+          <Folder key={control.path} title={control.label} defaultOpen={true} hint={control.hint} {...resetProps(control)}>
+            <BackgroundControl
+              panelId={panelId}
+              label={control.label}
+              value={value as BackgroundValue}
+              upload={control.background?.upload}
+              onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+            />
+          </Folder>
         );
 
       case 'filter':
         return (
           <FilterControl
             key={control.path}
+            panelId={panelId}
             control={control}
-            value={value as FilterValue | undefined}
-            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
+            value={value as DialFilterValue}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+          />
+        );
+
+      case 'transfer':
+        return (
+          <TransferCurve
+            key={control.path}
+            label={control.label}
+            hint={control.hint}
+            value={value as DialTransferValue}
+            height={control.transfer?.height}
+            grid={control.transfer?.grid}
+            axisLabels={control.transfer?.axisLabels}
+            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
           />
         );
 
@@ -399,55 +528,22 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
       case 'analyser':
         return <AnalyserRow key={control.path} panelId={panelId} control={control} />;
 
-      case 'action': {
-        const button = (
+      case 'action':
+        return (
           <button
             key={control.path}
-            className="tweakers-button"
-            // The wrapper greys every control out, but only a real `disabled`
-            // takes a button out of the tab order too.
-            disabled={TweakStore.isDisabled(panelId, control.path)}
-            onClick={() => TweakStore.triggerAction(panelId, control.path)}
+            className="dialkit-button"
+            data-hint={control.hint}
+            onClick={() => DialStore.triggerAction(panelId, control.path)}
           >
             {control.label}
           </button>
         );
-        // A captioned action reads as a row like any other: what it acts on at
-        // the left, the button at the right.
-        if (control.caption === undefined) return button;
-        return (
-          <div key={control.path} className="tweakers-labeled-control tweakers-captioned-action">
-            <span className="tweakers-labeled-control-label">{control.caption}</span>
-            {button}
-          </div>
-        );
-      }
 
       default:
         return null;
     }
   };
 
-  // Wrap leaf controls so they can carry a hint. Without one the wrapper falls
-  // back to a native tooltip showing the config path — a quick dev reference for
-  // which key a control maps to. Folders manage their own rows.
-  const renderControl = (control: ControlMeta) => {
-    const node = renderControlNode(control);
-    if (control.type === 'folder') return node;
-    return (
-      <ControlShell
-        key={control.path}
-        hint={control.hint}
-        title={control.path}
-        id={hintDomId(panelId, control.path)}
-        affordance={control.affordance}
-        panelId={panelId}
-        path={control.path}
-      >
-        {node}
-      </ControlShell>
-    );
-  };
-
-  return <>{controls.map(renderControl)}</>;
+  return <>{renderControls(controls, true)}</>;
 }

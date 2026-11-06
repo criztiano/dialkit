@@ -1,363 +1,217 @@
-import { createSignal, createEffect, onCleanup, Show, JSX } from 'solid-js';
+import { activateOnKey } from '../../control-keyboard';
+import { createSignal, createEffect, on, onCleanup, Show, JSX } from 'solid-js';
 import { animate } from 'motion';
-import { ICON_PANEL, ICON_CHEVRON } from 'tweakers/icons';
-import { Checkbox } from './Checkbox';
+import { ICON_CHEVRON, ICON_RESET } from '../../icons';
+import { HINTS } from '../../hints';
+import { createHints, type AnimationHandle } from '../primitives';
+import { RootPanel } from './RootPanel';
+import { createPanelSectionTransition } from '../../panel-size';
 
 interface FolderProps {
   title: string;
   children: JSX.Element;
   defaultOpen?: boolean;
-  /** `false` renders a plain section header: no caret, no click-to-collapse, body always open. */
-  collapsible?: boolean;
-  isRoot?: boolean;
-  inline?: boolean;
+  open?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
+  /** @deprecated Use RootPanel instead; kept for backwards compatibility. */
+  isRoot?: boolean;
+  /** @deprecated Only meaningful with isRoot. */
+  inline?: boolean;
+  /** Optional panel actions that stay with the section title while scrolling. */
   toolbar?: JSX.Element;
-  /** One line of help for the section, revealed on hover over the header. */
+  /** Short text at the end of a nested folder's title row, such as the preset in use. */
+  meta?: string;
+  /** Buttons beside the title of a nested folder, such as a transition's copy and paste. */
+  actions?: JSX.Element;
+  /** @deprecated Only meaningful with isRoot. */
+  panelHeightOffset?: number;
+  /** Shows a reset button after the title, visible while `changed` is true. */
+  onReset?: () => void;
+  changed?: boolean;
   hint?: string;
-  hintId?: string;
-  /**
-   * Root only — the panel declared `_enabled`, so the whole panel is a module:
-   * the title carries the switch and the body goes away when it is off. Same
-   * idiom as ModuleFolder, one level up.
-   */
-  enabled?: boolean;
-  onEnabledChange?: (enabled: boolean) => void;
 }
 
+const sectionTransition = { type: 'spring' as const, visualDuration: 0.35, bounce: 0.1 };
+
+/** Collapsible section with animated height and rotating chevron. */
 export function Folder(props: FolderProps) {
-  const [isOpen, setIsOpen] = createSignal(props.defaultOpen ?? true);
-  const [isCollapsed, setIsCollapsed] = createSignal(!(props.defaultOpen ?? true));
-  const [contentHeight, setContentHeight] = createSignal<number | undefined>(undefined);
-  const [windowHeight, setWindowHeight] = createSignal(typeof window !== 'undefined' ? window.innerHeight : 800);
-
-  // A module panel's switch is the only thing that shows or hides its body —
-  // the rows below the title belong to a feature that is either on or off.
-  const isModule = () =>
-    !!props.isRoot && props.enabled !== undefined && props.onEnabledChange !== undefined;
-  const bodyOpen = () => isOpen() && (!isModule() || !!props.enabled);
-
+  createHints(() => !!props.hint || !!props.onReset);
+  // Root panels are a different component; delegate for old call sites.
   if (props.isRoot) {
-    const onResize = () => setWindowHeight(window.innerHeight);
-    window.addEventListener('resize', onResize);
-    onCleanup(() => window.removeEventListener('resize', onResize));
+    return <RootPanel {...props} />;
   }
 
-  // Section content animation state
-  const [contentMounted, setContentMounted] = createSignal(props.defaultOpen ?? true);
-  let skipFirstAnim = props.defaultOpen ?? true;
+  const [localOpen, setIsOpen] = createSignal(props.defaultOpen ?? true);
+  const isOpen = () => props.open ?? localOpen();
+  const isSection = !!props.toolbar;
+  let folderRef: HTMLDivElement | undefined;
+  let headerRef: HTMLDivElement | undefined;
+  let panelTransition: ReturnType<typeof createPanelSectionTransition> | undefined;
+  const [contentMounted, setContentMounted] = createSignal(props.open ?? props.defaultOpen ?? true);
+  let skipFirstAnim = props.open ?? props.defaultOpen ?? true;
   let sectionContentRef: HTMLDivElement | undefined;
-  let sectionAnim: any = null;
-  let folderChevronRef: SVGSVGElement | undefined;
-  let chevronAnim: any = null;
-  let chevronInitialized = false;
-  let panelTapAnim: any = null;
+  let sectionAnim: AnimationHandle | null = null;
+  let chevronRef: SVGSVGElement | undefined;
+  let chevronAnim: AnimationHandle | null = null;
 
-  let contentRef: HTMLDivElement | undefined;
-
-  // Track content height for root panel sizing
-  createEffect(() => {
-    if (!props.isRoot || !isOpen()) return;
-    const el = contentRef;
-    if (!el) return;
-    const ro = new ResizeObserver(() => {
-      const h = el.offsetHeight;
-      setContentHeight(prev => prev === h ? prev : h);
-    });
-    ro.observe(el);
-    onCleanup(() => ro.disconnect());
+  onCleanup(() => {
+    sectionAnim?.stop();
+    chevronAnim?.stop();
+    panelTransition?.destroy();
   });
 
   createEffect(() => {
-    if (props.isRoot || !folderChevronRef) return;
-    const open = isOpen();
+    if (!isSection || !folderRef) return;
+    if (!panelTransition) panelTransition = createPanelSectionTransition(folderRef, isOpen());
+    else panelTransition.setOpen(isOpen());
+  });
+
+  // Chevron renders at its resting angle; only animate on changes.
+  createEffect(on(isOpen, (open) => {
+    if (!chevronRef) return;
     chevronAnim?.stop();
-
-    if (!chevronInitialized) {
-      folderChevronRef.style.transform = `rotate(${open ? 0 : 180}deg)`;
-      chevronInitialized = true;
-      return;
-    }
-
     chevronAnim = animate(
-      folderChevronRef,
-      { rotate: open ? 0 : 180 },
+      chevronRef,
+      { rotate: open ? 180 : 0 },
       { type: 'spring', visualDuration: 0.35, bounce: 0.15 }
     );
+  }, { defer: true }));
 
-    onCleanup(() => chevronAnim?.stop());
-  });
+  // motion's stop() does not cancel an animation that has reached its end but
+  // not yet reported it, so a close may only unmount while it is the latest change.
+  let generation = 0;
+  createEffect(on(isOpen, (next) => {
+    if (isSection) return;
+    const current = ++generation;
+    if (next) {
+      sectionAnim?.stop();
+      sectionAnim = null;
+      if (sectionContentRef) {
+        // If close was interrupted, animate the section back open.
+        sectionAnim = animate(
+          sectionContentRef,
+          { height: 'auto' },
+          {
+            ...sectionTransition,
+            onComplete: () => {
+              sectionAnim = null;
+            },
+          }
+        );
+      } else {
+        // If fully unmounted, mount and let the ref callback run the enter animation.
+        setContentMounted(true);
+      }
+    } else if (sectionContentRef) {
+      const currentHeight = sectionContentRef.getBoundingClientRect().height;
+      sectionContentRef.style.height = `${currentHeight}px`;
+      sectionAnim?.stop();
+      sectionAnim = animate(
+        sectionContentRef,
+        { height: 0 },
+        {
+          ...sectionTransition,
+          onComplete: () => {
+            if (current !== generation) return;
+            setContentMounted(false);
+            sectionAnim = null;
+            sectionContentRef = undefined;
+          },
+        }
+      );
+    } else {
+      setContentMounted(false);
+    }
+  }, { defer: true }));
 
   const handleToggle = () => {
-    if (props.collapsible === false) return;
-    if (props.inline && props.isRoot) return;
     const next = !isOpen();
     setIsOpen(next);
-    if (next) {
-      setIsCollapsed(false);
-      if (!props.isRoot) {
-        sectionAnim?.stop();
-        sectionAnim = null;
-        if (sectionContentRef) {
-          // If close was interrupted, animate section back open.
-          sectionAnim = animate(
-            sectionContentRef,
-            { height: 'auto', opacity: 1 },
-            {
-              type: 'spring',
-              visualDuration: 0.35,
-              bounce: 0.1,
-              onComplete: () => {
-                sectionAnim = null;
-              },
-            }
-          );
-        } else {
-          // If fully unmounted, mount and let the ref callback run enter animation.
-          setContentMounted(true);
-        }
-      }
-    } else {
-      setIsCollapsed(true);
-      if (!props.isRoot) {
-        if (sectionContentRef) {
-          const currentHeight = sectionContentRef.getBoundingClientRect().height;
-          sectionContentRef.style.height = `${currentHeight}px`;
-          sectionAnim?.stop();
-          sectionAnim = animate(
-            sectionContentRef,
-            { height: 0, opacity: 0 },
-            {
-              type: 'spring', visualDuration: 0.35, bounce: 0.1,
-              onComplete: () => {
-                setContentMounted(false);
-                sectionAnim = null;
-                sectionContentRef = undefined;
-              },
-            }
-          );
-        } else {
-          setContentMounted(false);
-        }
-      }
-    }
     props.onOpenChange?.(next);
   };
 
-  const folderContent = () => (
-    <div
-      ref={(el) => { if (props.isRoot) contentRef = el; }}
-      class={`tweakers-folder ${props.isRoot ? 'tweakers-folder-root' : ''}`}
-    >
-      <div
-        class={`tweakers-folder-header ${props.isRoot ? 'tweakers-panel-header' : ''} ${props.collapsible === false ? 'tweakers-folder-header-static' : ''}`}
-        onClick={props.collapsible === false ? undefined : handleToggle}
-        data-hint={props.hint ? 'true' : undefined}
-        aria-describedby={props.hint ? props.hintId : undefined}
-      >
-        <div class="tweakers-folder-header-top">
-          {props.isRoot ? (
-            <Show when={isOpen()}>
-              <div class="tweakers-folder-title-row">
-                <Show when={isModule()}>
-                  <Checkbox
-                    checked={props.enabled!}
-                    onChange={props.onEnabledChange!}
-                    label={props.title}
-                  />
-                </Show>
-                <span class="tweakers-folder-title tweakers-folder-title-root">
-                  {props.title}
-                </span>
-              </div>
+  return (
+    <div ref={folderRef} class={`dialkit-folder${props.toolbar ? ' dialkit-folder-section' : ''}`} data-open={String(isOpen())}>
+      <div class="dialkit-folder-header" onClick={handleToggle}>
+        <div ref={headerRef} class="dialkit-folder-header-top" data-hint={props.hint} role={false ? undefined : "button"} tabIndex={false ? undefined : 0} aria-label={props.meta ? `${props.title}, ${props.meta}` : props.title} aria-expanded={isOpen()} onKeyDown={(e) => activateOnKey(e, handleToggle)}>
+          <div class="dialkit-folder-title-row">
+            <span class="dialkit-folder-title">{props.title}</span>
+            <Show when={props.meta}>
+              <span class="dialkit-folder-meta">{props.meta}</span>
             </Show>
-          ) : (
-            <div class="tweakers-folder-title-row">
-              <span class="tweakers-folder-title">{props.title}</span>
-            </div>
-          )}
-
-          {props.isRoot && !props.inline && (
-            <svg class="tweakers-panel-icon" viewBox="0 0 16 16" fill="none">
-              <path
-                opacity="0.5"
-                d={ICON_PANEL.path}
-                fill="currentColor"
-              />
-              <circle cx={ICON_PANEL.circles[0].cx} cy={ICON_PANEL.circles[0].cy} r={ICON_PANEL.circles[0].r} fill="currentColor" stroke="currentColor" stroke-width="1.25" />
-              <circle cx={ICON_PANEL.circles[1].cx} cy={ICON_PANEL.circles[1].cy} r={ICON_PANEL.circles[1].r} fill="currentColor" stroke="currentColor" stroke-width="1.25" />
-              <circle cx={ICON_PANEL.circles[2].cx} cy={ICON_PANEL.circles[2].cy} r={ICON_PANEL.circles[2].r} fill="currentColor" stroke="currentColor" stroke-width="1.25" />
-            </svg>
-          )}
-          {!props.isRoot && props.collapsible !== false && (
-            <svg
-              ref={folderChevronRef}
-              class="tweakers-folder-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d={ICON_CHEVRON} />
-            </svg>
-          )}
-        </div>
-
-        <Show when={props.isRoot && props.toolbar && isOpen()}>
-          <div class="tweakers-panel-toolbar" onClick={(e) => e.stopPropagation()}>
-            {props.toolbar}
           </div>
-        </Show>
 
-        <Show when={props.hint}>
-          <span class="tweakers-hint" id={props.hintId} role="tooltip">
-            {props.hint}
-          </span>
+          <svg
+            ref={chevronRef}
+            class="dialkit-folder-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            style={{ transform: `rotate(${(props.open ?? props.defaultOpen ?? true) ? 180 : 0}deg)` }}
+          >
+            <path d={ICON_CHEVRON} />
+          </svg>
+        </div>
+        <Show when={props.onReset}>
+          <button
+            type="button"
+            class="dialkit-folder-reset"
+            aria-label={`Reset ${props.title}`}
+            data-hint={HINTS.sectionReset}
+            data-changed={String(!!props.changed)}
+            onClick={(e) => {
+              e.stopPropagation();
+              // The button hides once the values are back; keep focus in the header.
+              headerRef?.focus();
+              props.onReset?.();
+            }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              {ICON_RESET.map((d) => <path d={d} />)}
+            </svg>
+          </button>
+        </Show>
+        <Show when={!props.isRoot && props.actions}>
+          {(actions) => <div class="dialkit-folder-actions">{actions()}</div>}
+        </Show>
+        <Show when={props.toolbar}>
+          <div class="dialkit-panel-section-toolbar-clip">
+            <div class="dialkit-panel-section-toolbar" onClick={(e) => e.stopPropagation()}>{props.toolbar}</div>
+          </div>
         </Show>
       </div>
 
-      <Show when={props.isRoot ? bodyOpen() : contentMounted()}>
+      <Show when={isSection || contentMounted()}>
         <div
           ref={(el) => {
-            if (props.isRoot) return;
             sectionContentRef = el;
-            if (skipFirstAnim) { skipFirstAnim = false; return; }
+            if (isSection) return;
+            if (skipFirstAnim) {
+              skipFirstAnim = false;
+              return;
+            }
 
             sectionAnim?.stop();
             el.style.height = '0px';
-            el.style.opacity = '0';
             sectionAnim = animate(
               el,
-              { height: 'auto', opacity: 1 },
+              { height: 'auto' },
               {
-                type: 'spring',
-                visualDuration: 0.35,
-                bounce: 0.1,
+                ...sectionTransition,
                 onComplete: () => {
                   sectionAnim = null;
                 },
               }
             );
           }}
-          class="tweakers-folder-content"
-          style={!props.isRoot ? { 'clip-path': 'inset(0 -20px)' } : undefined}
+          class="dialkit-folder-content"
         >
-          <div class="tweakers-folder-inner">{props.children}</div>
+          <div class="dialkit-folder-inner">{props.children}</div>
         </div>
       </Show>
     </div>
   );
-
-  if (props.isRoot) {
-    if (props.inline) {
-      return (
-        <div class="tweakers-panel-inner tweakers-panel-inline">
-          {folderContent()}
-        </div>
-      );
-    }
-    let panelRef!: HTMLDivElement;
-    let rootPanelAnim: any = null;
-    let rootPanelInitialized = false;
-    let lastRootOpen = isOpen();
-
-    createEffect(() => {
-      if (!panelRef || isOpen()) return;
-      const handler = (e: Event) => {
-        e.stopPropagation();
-        handleToggle();
-      };
-      panelRef.addEventListener('click', handler);
-      onCleanup(() => panelRef.removeEventListener('click', handler));
-    });
-
-    createEffect(() => {
-      if (!panelRef) return;
-
-      const open = isOpen();
-      const measuredOpenHeight = contentHeight() !== undefined
-        ? Math.min(contentHeight()! + 10, windowHeight() - 32)
-        : panelRef.getBoundingClientRect().height;
-
-      const target = {
-        width: open ? 280 : 42,
-        height: open ? measuredOpenHeight : 42,
-        borderRadius: open ? 14 : 21,
-        boxShadow: open
-          ? 'var(--tweak-shadow)'
-          : 'var(--tweak-shadow-collapsed)',
-      };
-
-      panelRef.style.cursor = open ? '' : 'pointer';
-      panelRef.style.overflow = open ? 'hidden auto' : 'hidden';
-
-      if (!rootPanelInitialized) {
-        rootPanelInitialized = true;
-        panelRef.style.width = `${target.width}px`;
-        panelRef.style.height = `${target.height}px`;
-        panelRef.style.borderRadius = `${target.borderRadius}px`;
-        panelRef.style.boxShadow = target.boxShadow;
-        lastRootOpen = open;
-        return;
-      }
-
-      if (open !== lastRootOpen) {
-        rootPanelAnim?.stop();
-        rootPanelAnim = animate(panelRef, target, {
-          type: 'spring',
-          visualDuration: 0.15,
-          bounce: 0.3,
-          onComplete: () => {
-            rootPanelAnim = null;
-          },
-        });
-        lastRootOpen = open;
-        return;
-      }
-
-      if (open) {
-        panelRef.style.height = `${target.height}px`;
-      }
-    });
-
-    onCleanup(() => {
-      rootPanelAnim?.stop();
-      panelTapAnim?.stop();
-    });
-
-    return (
-      <div
-        ref={panelRef}
-        class="tweakers-panel-inner"
-        data-collapsed={String(isCollapsed())}
-        onPointerDown={() => {
-          if (isOpen()) return;
-          (document.activeElement as HTMLElement)?.blur?.();
-          panelTapAnim?.stop();
-          panelTapAnim = animate(panelRef, { scale: 0.9 }, { type: 'spring', visualDuration: 0.15, bounce: 0.3 });
-        }}
-        onPointerUp={() => {
-          if (isOpen()) return;
-          panelTapAnim?.stop();
-          panelTapAnim = animate(panelRef, { scale: 1 }, { type: 'spring', visualDuration: 0.15, bounce: 0.3 });
-        }}
-        onPointerCancel={() => {
-          if (isOpen()) return;
-          panelTapAnim?.stop();
-          panelTapAnim = animate(panelRef, { scale: 1 }, { type: 'spring', visualDuration: 0.15, bounce: 0.3 });
-        }}
-        onPointerLeave={() => {
-          if (isOpen()) return;
-          panelTapAnim?.stop();
-          panelTapAnim = animate(panelRef, { scale: 1 }, { type: 'spring', visualDuration: 0.15, bounce: 0.3 });
-        }}
-      >
-        {folderContent()}
-      </div>
-    );
-  }
-
-  return folderContent();
 }

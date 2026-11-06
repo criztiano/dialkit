@@ -1,14 +1,35 @@
 # Dependencies
 node_modules/
 
-# Build output — dist/ is committed so `github:` installs work without a build step
+# Build output (regenerated on install)
+dist/
 .svelte-kit/
-/example/dist/
+*.tgz
 
 # Generated artifacts from svelte-package
-src/store/TweakStore.d.ts
-src/store/TweakStore.d.ts.map
+src/store/DialStore.d.ts
+src/store/DialStore.d.ts.map
 src/svelte/theme-css.ts
+
+# Local timeline demo fixtures
+example/src/TimelineDemo.tsx
+example/src/TimelineSolo.tsx
+example/src/TimelineTest1.tsx
+example/src/TimelineTest2.tsx
+example/public/
+
+# Local controls preview
+example/controls.html
+example/src/Controls.tsx
+example/src/controls.css
+
+# Local showcase page
+example/showcase.html
+example/src/Showcase.tsx
+example/src/showcase-entry.tsx
+example/src/showcase.css
+example/src/assets/showcase/
+example/src/vite-env.d.ts
 
 # IDE
 .vscode/
@@ -19,8 +40,9 @@ src/svelte/theme-css.ts
 
 # Claude notes
 .claude-plan.md
+.claude/launch.json
 CLAUDE.md
+AGENTS.md
 
-# Commercial typefaces — host-provided by license, never redistributed
-example/public/fonts/
-.worktrees/
+# Generated adapter browser fixtures
+.toolbar-fixtures/

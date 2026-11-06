@@ -1,12 +1,12 @@
 // Core API
-export { createTweakers } from './createTweakers';
-export type { CreateTweakersOptions } from './createTweakers';
+export { createDialKit, createDialKitController } from './createDialKit';
+export type { CreateDialOptions, DialKitController } from './createDialKit';
 
 // Timeline
-export { createTweakTimeline } from './createTweakTimeline';
-export type { CreateTweakTimelineOptions } from './createTweakTimeline';
+export { createDialTimeline } from './createDialTimeline';
+export type { CreateDialTimelineOptions } from './createDialTimeline';
 export type {
-  TweakTimelineValues,
+  DialTimelineValues,
   TimelineClipConfig,
   TimelineClipCss,
   TimelineClipLoop,
@@ -18,92 +18,87 @@ export type {
   TimelinePropStepConfig,
   TimelineStepConfig,
   TimelineStepValues,
-} from 'tweakers/timeline';
+} from '../timeline';
 
 // Root component
-export { TweakRoot } from './components/TweakRoot';
-export type { TweakPosition, TweakMode, TweakTheme } from './components/TweakRoot';
-export { TweakTimeline } from './components/Timeline/TweakTimeline';
-export type { TweakTimelineProps } from './components/Timeline/TweakTimeline';
-export { TimelineToggleButton } from './components/Timeline/TimelineToggleButton';
+export { DialRoot } from './components/DialRoot';
+export type { DialPosition, DialMode, DialTheme } from './components/DialRoot';
+export type { DialVersions } from '../versions/gallery';
+export { DialTimeline } from './components/Timeline/DialTimeline';
+export type { DialTimelineProps } from './components/Timeline/DialTimeline';
 
 // Component exports
 export { Slider } from './components/Slider';
-export { NumberControl } from './components/NumberControl';
-export { RangeSlider } from './components/RangeSlider';
 export { Toggle } from './components/Toggle';
-export { Checkbox } from './components/Checkbox';
 export { Folder } from './components/Folder';
-export { ControlShell } from './components/ControlShell';
-export { Module } from './components/Module';
-export { SegmentedControl } from './components/SegmentedControl';
+export { RootPanel } from './components/RootPanel';
 export { ButtonGroup } from './components/ButtonGroup';
 export { SpringControl } from './components/SpringControl';
 export { SpringVisualization } from './components/SpringVisualization';
-export { WaveformVisualization } from './components/WaveformVisualization';
-export type { WaveformMode, WaveformLoop } from './components/WaveformVisualization';
-export { AnalyserVisualization } from './components/AnalyserVisualization';
-export type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, AnalyserSpring } from './components/AnalyserVisualization';
-export { CurveComposer } from './components/CurveComposer';
-export type { CurveType, CurveSegment, CurveDriver, CurveComposition, DriverDirection } from './components/CurveComposer';
-export { springify } from 'tweakers/curve-composer-core';
-export type { Sampler, SpringifyOptions } from 'tweakers/curve-composer-core';
+export { TransitionControl } from './components/TransitionControl';
+export { EasingVisualization } from './components/EasingVisualization';
 export { TextControl } from './components/TextControl';
 export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';
-export { ColorPickerPanel } from './components/ColorPickerPanel';
-export { GradientControl } from './components/GradientControl';
-export { GradientPanel } from './components/GradientPanel';
-export { gradientToCss, DEFAULT_GRADIENT } from 'tweakers/gradient-core';
-export type { GradientValue, GradientStop, GradientType } from 'tweakers/gradient-core';
-export { XYPad } from './components/XYPad';
-export type { XYPadProps } from './components/XYPad';
-export { XYControl } from './components/XYControl';
-export {
-  XY_DETENT_PX,
-  XY_DEFAULT_STEP,
-  resolveAxis,
-  clamp,
-  snapToStep,
-  valueToNorm,
-  normToValue,
-  invertY,
-  valueFromPoint,
-  pointFromValue,
-  applyDetentAxis,
-  nudge,
-  centerValue,
-  normalizeValue,
-} from 'tweakers/xy-pad-core';
-export type { XYValue, AxisSpec, Point } from 'tweakers/xy-pad-core';
+export { ImageControl } from './components/ImageControl';
+export { DialPad } from './components/DialPad';
+export type { DialPadProps } from '../dial-pad-control';
+export { AnchorControl } from './components/AnchorControl';
+export type { AnchorControlProps } from '../anchor-control';
+export { BackgroundControl } from './components/BackgroundControl';
+export type { BackgroundControlProps } from '../background-control';
+export { backgroundGradientCss, backgroundMediaCss, paintGradient } from '../background';
+export * from '../background-api';
 export { PresetManager } from './components/PresetManager';
+export { VersionGallery } from './components/VersionGallery';
+export { ShortcutsMenu } from './components/ShortcutsMenu';
 export { ControlRenderer } from './components/ControlRenderer';
-export { TransitionControl } from './components/TransitionControl';
-export { EasingVisualization } from './components/EasingVisualization';
 
 // Store exports
-export { TweakStore } from 'tweakers/store';
+export { DialStore, withVisibility } from '../store/DialStore';
 export type {
   SpringConfig,
   EasingConfig,
   TransitionConfig,
   ActionConfig,
   SelectConfig,
+  SelectOption,
   ColorConfig,
-  XYConfig,
-  XYAxis,
+  ImageConfig,
+  ImageOption,
+  DialPadAxis,
+  DialPadConfig,
+  DialPadValue,
+  BackgroundConfig,
+  BackgroundValue,
+  BackgroundValueUpdate,
+  BackgroundGradient,
+  BackgroundMedia,
+  BackgroundMediaDisplay,
+  BackgroundMediaFit,
+  BackgroundMediaRatio,
+  BackgroundMode,
+  GradientHandles,
+  GradientPoint,
+  GradientStop,
+  GradientShape,
+  SavedGradient,
+  AnchorConfig,
+  AnchorValue,
   TextConfig,
-  AffordanceConfig,
-  AffordanceContext,
-  AffordanceStatus,
   ShortcutConfig,
   Preset,
-  PresetProvider,
-  PresetProviderPreset,
-  PresetItem,
-  TweakValue,
-  TweakConfig,
+  TransitionMode,
+  TransitionPreset,
+  CopiedTransition,
+  DialValue,
+  DialConfig,
+  DialKitPersistOptions,
+  DialKitValueUpdates,
   ResolvedValues,
   ControlMeta,
   PanelConfig,
-} from 'tweakers/store';
+  VisibleWhen,
+  VisibleWhenValue,
+  ControlWithVisibility,
+} from '../store/DialStore';

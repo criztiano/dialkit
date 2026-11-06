@@ -1,0 +1,257 @@
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { describe, it } from 'node:test';
+import { createElement, StrictMode } from 'react';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { createRenderer, defineComponent, h, nextTick, reactive } from 'vue';
+import { compileModule } from 'svelte/compiler';
+import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
+import { SelectControl } from './components/SelectControl';
+import { useDialKitController } from './hooks/useDialKit';
+import { useDialKitController as useVueDialKitController } from './vue/useDialKit';
+import { DialStore, withVisibility, type DialConfig } from './store/DialStore';
+import { defaultBackgroundValue } from './background';
+
+const config = { group: {
+  _hints: { amount: 'How much of the effect to apply.' },
+  _reset: true, position: { type: 'pad' }, origin: { type: 'anchor' }, amount: [0.25, 0, 1], enabled: true,
+  title: { type: 'text', default: 'Example' }, choice: { type: 'select', options: [] },
+  accent: { type: 'color' }, cover: { type: 'image' }, backdrop: { type: 'background', default: { mode: 'gradient' } },
+  spring: { type: 'spring', visualDuration: 0.3, bounce: 0.2 },
+  easing: { type: 'easing', duration: 0.5, ease: [0, 0, 1, 1] },
+  run: { type: 'action' }, shade: withVisibility([0.5, 0, 1], { field: 'group.enabled', is: true }),
+  scale: { _fields: true, uniform: false, x: [1, 0.1, 3, 0.01], y: [1, 0.1, 3, 0.01] },
+} } satisfies DialConfig;
+const backdrop = { ...defaultBackgroundValue(), mode: 'gradient' };
+const defaults = { position: { x: 0, y: 0 }, origin: { x: 'center', y: 'center' }, amount: 0.25, enabled: true, title: 'Example', choice: '',
+  accent: '#000000', cover: '', backdrop, spring: config.group.spring, easing: config.group.easing, run: config.group.run, shade: 0.5,
+  scale: { uniform: false, x: 1, y: 1 } };
+// A background update may name only the fields it changes.
+const updates = { position: { x: 0.75, y: -0.4 }, origin: { x: 'left', y: 'bottom' }, amount: 0.5, enabled: false, title: 'Changed', accent: '#ff0000', cover: '/cover.png', backdrop: { color: '#ff0000' },
+  scale: { uniform: true, x: 2, y: 1.5 } };
+const changed = { ...defaults, ...updates, backdrop: { ...backdrop, color: '#ff0000' } };
+
+describe('DialKit framework values', () => {
+  it('updates and resets the React controller under StrictMode', () => {
+    const id = 'pad-react';
+    let dial: ReturnType<typeof useDialKitController<typeof config>>;
+    let renderer: ReactTestRenderer | undefined;
+    function Harness() { dial = useDialKitController('Pad', config, { id }); return null; }
+    try {
+      act(() => { renderer = create(createElement(StrictMode, null, createElement(Harness))); });
+      assert.deepEqual(dial!.values.group, defaults);
+      act(() => dial.setValues({ group: updates }));
+      assert.deepEqual(dial!.values.group, changed);
+      act(() => dial.resetValues());
+      assert.deepEqual(dial!.values.group, defaults);
+    } finally { act(() => renderer?.unmount()); }
+    assert.equal(DialStore.getPanel(id), undefined);
+  });
+
+  it('calls the React onReset option before a folder reset writes its values', () => {
+    const id = 'reset-react';
+    const resetConfig = { camera: { _reset: true, distance: [10, 0, 50, 1] } } satisfies DialConfig;
+    const heard: Array<[string, unknown]> = [];
+    let dial: ReturnType<typeof useDialKitController<typeof resetConfig>>;
+    let renderer: ReactTestRenderer | undefined;
+    function Harness() {
+      dial = useDialKitController('Reset', resetConfig, {
+        id,
+        onReset: (folderPath) => heard.push([folderPath, DialStore.getValue(id, 'camera.distance')]),
+      });
+      return null;
+    }
+    try {
+      act(() => { renderer = create(createElement(StrictMode, null, createElement(Harness))); });
+      act(() => dial.setValue('camera.distance', 40));
+      act(() => DialStore.resetFolder(id, 'camera'));
+      assert.deepEqual(heard, [['camera', 40]]);
+      assert.equal(dial!.values.camera.distance, 10);
+    } finally { act(() => renderer?.unmount()); }
+  });
+
+  it('passes the React panel options to the store', () => {
+    const id = 'preset-options-react';
+    let renderer: ReactTestRenderer | undefined;
+    function Harness() {
+      useDialKitController('Options', { amount: [0.5, 0, 1] }, { id, presetsEditable: false, presetsLockable: false, hint: 'Options.', folderMode: 'accordion' });
+      return null;
+    }
+    try {
+      act(() => { renderer = create(createElement(Harness)); });
+      assert.equal(DialStore.isPresetsEditable(id), false);
+      assert.equal(DialStore.isPresetsLockable(id), false);
+      assert.equal(DialStore.getPanel(id)?.hint, 'Options.');
+      assert.equal(DialStore.getPanel(id)?.folderMode, 'accordion');
+    } finally { act(() => renderer?.unmount()); }
+  });
+
+  it('renders a segmented select as radios, naming the group and icon options', () => {
+    const changes: string[] = [];
+    const props = {
+      label: 'Ratio', value: '1:1', onChange: (value: string) => changes.push(value), display: 'segmented' as const,
+      options: ['1:1', { value: 'viewport', label: 'Viewport', icon: ['M4 4H20V20H4Z'] }],
+    };
+    let renderer: ReactTestRenderer | undefined;
+    try {
+      act(() => { renderer = create(createElement(SelectControl, props)); });
+      const labels = () => renderer!.root.findAll(node => node.props.className === 'dialkit-labeled-control-label');
+      const radios = () => renderer!.root.findAll(node => node.type === 'button' && node.props.role === 'radio');
+      const groupName = () => renderer!.root.findByProps({ role: 'radiogroup' }).props['aria-label'];
+      assert.equal(labels().length, 1);
+      assert.equal(groupName(), 'Ratio');
+      assert.deepEqual(radios().map(radio => [radio.props['aria-checked'], radio.props['aria-label']]), [[true, undefined], [false, 'Viewport']]);
+      assert.equal(radios()[1].findAllByType('path').length, 1);
+      act(() => radios()[1].props.onClick());
+      assert.deepEqual(changes, ['viewport']);
+      act(() => renderer!.update(createElement(SelectControl, { ...props, hideLabel: true })));
+      assert.equal(labels().length, 0);
+      assert.equal(renderer!.root.findByProps({ className: 'dialkit-labeled-control' }).props['data-hide-label'], 'true');
+      assert.equal(groupName(), 'Ratio');
+      act(() => renderer!.update(createElement(SelectControl, { ...props, hideLabel: false })));
+      assert.equal(labels().length, 1);
+      assert.equal(groupName(), 'Ratio');
+    } finally { act(() => renderer?.unmount()); }
+  });
+
+  it('draws a segmented icon in the box its option names', () => {
+    let renderer: ReactTestRenderer | undefined;
+    const props = {
+      label: 'Align', value: 'start', onChange: () => {}, display: 'segmented' as const,
+      options: [
+        { value: 'start', label: 'Left', icon: 'M2.5 4h11M2.5 8h7M2.5 12h9', iconSize: 16 as const },
+        { value: 'end', label: 'Right', icon: ['M4 4H20V20H4Z'] },
+      ],
+    };
+    try {
+      act(() => { renderer = create(createElement(SelectControl, props)); });
+      const icons = renderer!.root.findAll(node => node.type === 'svg');
+      assert.deepEqual(icons.map(icon => [icon.props.viewBox, icon.props.strokeWidth]), [['0 0 16 16', 1.5], ['0 0 24 24', 2]]);
+      const radios = renderer!.root.findAll(node => node.type === 'button' && node.props.role === 'radio');
+      assert.deepEqual(radios.map(radio => radio.props['aria-label']), ['Left', 'Right']);
+    } finally { act(() => renderer?.unmount()); }
+  });
+
+  it('updates and resets the Vue computed controller values', () => {
+    const id = 'pad-vue';
+    let dial: ReturnType<typeof useVueDialKitController<typeof config>>;
+    // The hook needs a mounted owner but no browser DOM or rendered controls.
+    const renderer = createRenderer<object, object>({
+      patchProp() {}, insert() {}, remove() {},
+      createElement: () => ({}), createText: () => ({}), createComment: () => ({}),
+      setText() {}, setElementText() {}, parentNode: () => null, nextSibling: () => null,
+      querySelector: () => null, setScopeId() {}, insertStaticContent: () => [{}, {}],
+    });
+    const app = renderer.createApp(defineComponent({
+      setup() { dial = useVueDialKitController('Pad', config, { id }); return () => h('div'); },
+    }));
+    try {
+      app.mount({});
+      assert.deepEqual(dial!.values.value.group, defaults);
+      dial!.setValues({ group: updates });
+      assert.deepEqual(dial!.values.value.group, changed);
+      dial!.resetValues();
+      assert.deepEqual(dial!.values.value.group, defaults);
+    } finally { app.unmount(); }
+    assert.equal(DialStore.getPanel(id), undefined);
+  });
+
+  it('tracks Vue config changes and the current action callback without replacing the controller', async () => {
+    const id = 'vue-live-config';
+    const config = reactive({ amount: [0.5, 0, 1, 0.1], run: { type: 'action' } } satisfies DialConfig);
+    const actions: string[] = [];
+    const options = reactive({ id, shortcuts: { amount: { key: 'r' } }, onAction: (path: string) => actions.push(`first:${path}`) });
+    let dial: ReturnType<typeof useVueDialKitController<typeof config>>;
+    const renderer = createRenderer<object, object>({
+      patchProp() {}, insert() {}, remove() {},
+      createElement: () => ({}), createText: () => ({}), createComment: () => ({}),
+      setText() {}, setElementText() {}, parentNode: () => null, nextSibling: () => null,
+      querySelector: () => null, setScopeId() {}, insertStaticContent: () => [{}, {}],
+    });
+    const app = renderer.createApp(defineComponent({
+      setup() { dial = useVueDialKitController('Live config', config, options); return () => h('div'); },
+    }));
+    try {
+      app.mount({});
+      dial!.setValue('amount', 0.8);
+      config.amount[2] = 0.6;
+      options.shortcuts.amount.key = 't';
+      options.onAction = path => actions.push(`latest:${path}`);
+      await nextTick();
+      assert.equal(dial!.values.value.amount, 0.6);
+      assert.equal(DialStore.resolveShortcutTarget('t')?.panelId, id);
+      DialStore.triggerAction(id, 'run');
+      assert.deepEqual(actions, ['latest:run']);
+    } finally { app.unmount(); }
+    assert.equal(DialStore.getPanel(id), undefined);
+  });
+
+  it('updates the Solid store in its browser condition', () => {
+    const script = `
+      import assert from 'node:assert/strict';
+      import { createRoot } from 'solid-js';
+      import { createDialKitController } from './src/solid/createDialKit.ts';
+      import { DialStore } from './src/store/DialStore.ts';
+      let dispose, dial;
+      createRoot(cleanup => {
+        dispose = cleanup;
+        dial = createDialKitController('Pad', ${JSON.stringify(config)}, { id: 'pad-solid' });
+      });
+      await new Promise(resolve => queueMicrotask(resolve));
+      assert.deepEqual(JSON.parse(JSON.stringify(dial.values().group)), ${JSON.stringify(defaults)});
+      dial.setValues({ group: ${JSON.stringify(updates)} });
+      assert.deepEqual(JSON.parse(JSON.stringify(dial.values().group)), ${JSON.stringify(changed)});
+      dial.resetValues();
+      assert.deepEqual(JSON.parse(JSON.stringify(dial.values().group)), ${JSON.stringify(defaults)});
+      // The store keeps its own copies, so an edited spring leaves its default alone.
+      dial.setValues({ group: { spring: { type: 'spring', visualDuration: 0.6, bounce: 0.2 } } });
+      assert.equal(DialStore.isFolderChanged('pad-solid', 'group.spring'), true);
+      DialStore.resetFolder('pad-solid', 'group.spring');
+      assert.deepEqual(DialStore.getValue('pad-solid', 'group.spring'), ${JSON.stringify(config.group.spring)});
+      dispose();
+      assert.equal(DialStore.getPanel('pad-solid'), undefined);
+    `;
+    const result = spawnSync(process.execPath, ['--conditions=browser', '--import', 'tsx', '--input-type=module', '-e', script], { encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+  });
+
+  it('keeps all Svelte control values reactive without exposing their config', () => {
+    const source = readFileSync('src/svelte/createDialKit.svelte.ts', 'utf8')
+      .replaceAll("from 'dialkit/store'", `from '${pathToFileURL(join(process.cwd(), 'src/store/DialStore.ts')).href}'`);
+    const harness = `
+      import { flushSync } from 'svelte';
+      import assert from 'node:assert/strict';
+      export function verify() {
+        let dial;
+        const dispose = $effect.root(() => {
+          dial = createDialKitController('Pad', ${JSON.stringify(config)}, { id: 'pad-svelte' });
+        });
+        try {
+          flushSync();
+          assert.deepEqual(JSON.parse(JSON.stringify(dial.values.group)), ${JSON.stringify(defaults)});
+          assert.equal('_reset' in dial.values.group, false);
+          dial.setValues({ group: ${JSON.stringify(updates)} });
+          flushSync();
+          assert.deepEqual(JSON.parse(JSON.stringify(dial.values.group)), ${JSON.stringify(changed)});
+          dial.resetValues();
+          flushSync();
+          assert.deepEqual(JSON.parse(JSON.stringify(dial.values.group)), ${JSON.stringify(defaults)});
+        } finally { dispose(); }
+        assert.equal(DialStore.getPanel('pad-svelte'), undefined);
+      }
+    `;
+    const javascript = transpileModule(source + harness, { compilerOptions: { module: ModuleKind.ESNext, target: ScriptTarget.ES2020 } }).outputText;
+    const compiled = compileModule(javascript, { filename: 'pad-test.svelte.js', generate: 'client' });
+    const directory = mkdtempSync(join(process.cwd(), '.dial-pad-test-'));
+    const file = join(directory, 'pad.mjs');
+    try {
+      writeFileSync(file, compiled.js.code);
+      const script = `const { verify } = await import(${JSON.stringify(pathToFileURL(file).href)}); verify();`;
+      const result = spawnSync(process.execPath, ['--conditions=browser', '--import', 'tsx', '--input-type=module', '-e', script], { encoding: 'utf8' });
+      assert.equal(result.status, 0, result.stderr);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+});

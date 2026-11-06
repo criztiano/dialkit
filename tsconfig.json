@@ -6,9 +6,6 @@
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "strict": true,
-    // A helper written but never wired up is the failure mode this library
-    // is most prone to: the renderers are big, and dead code typechecks.
-    "noUnusedLocals": true,
     "noEmit": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -17,12 +14,18 @@
     "declarationMap": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "baseUrl": "."
+    "baseUrl": ".",
+    "paths": {
+      "dialkit/store": ["src/store/DialStore.ts"],
+      "dialkit/timeline": ["src/timeline/index.ts"]
+    }
   },
   "include": [
     "src/index.ts",
     "src/components/**/*",
-    "src/hooks/**/*"
+    "src/hooks/**/*",
+    "src/store/**/*",
+    "src/vanilla/**/*"
   ],
   "exclude": ["node_modules", "dist", "example"]
 }

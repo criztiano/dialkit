@@ -1,7 +1,7 @@
 import { useCallback, useSyncExternalStore } from 'react';
 import { motion } from 'motion/react';
-import { ICON_TIMELINE } from 'tweakers/icons';
-import { TimelineUiStore } from 'tweakers/timeline';
+import { ICON_TIMELINE } from '../../icons';
+import { TimelineUiStore } from '../../store/TimelineUiStore';
 
 export function TimelineToggleButton() {
   const subscribe = useCallback(
@@ -14,11 +14,10 @@ export function TimelineToggleButton() {
 
   return (
     <motion.button
-      className="tweakers-toolbar-add tweakers-timeline-toolbar-toggle"
+      className="dialkit-toolbar-add dialkit-timeline-toolbar-toggle"
       data-active={visible || undefined}
       aria-pressed={visible}
       aria-label={label}
-      title={label}
       onClick={() => TimelineUiStore.toggle()}
       whileTap={{ scale: 0.9 }}
       transition={{ type: 'spring', visualDuration: 0.15, bounce: 0.3 }}

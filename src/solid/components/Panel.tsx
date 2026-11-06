@@ -1,85 +1,87 @@
-import { createSignal, createEffect, onMount, onCleanup, JSX } from 'solid-js';
+import { buildCopyInstruction } from '../../copy-instruction';
+import { resolveOpenFolder } from '../../accordion';
+import { batch, createSignal, createEffect, on, onMount, onCleanup, Show, type JSX } from 'solid-js';
 import { animate } from 'motion';
-import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from 'tweakers/icons';
-import { TweakStore } from 'tweakers/store';
-import type { PanelConfig, TweakValue } from 'tweakers/store';
+import { ICON_CLIPBOARD_PLAIN, ICON_CHECK } from '../../icons';
+import { DialStore } from '../../store/DialStore';
+import type { PanelConfig, DialValue } from '../../store/DialStore';
+import { HINTS, HintStore } from '../../hints';
+import { createHints, fromStore, type AnimationHandle } from '../primitives';
 import { Folder } from './Folder';
+import { RootPanel } from './RootPanel';
 import { ControlRenderer } from './ControlRenderer';
 import { PresetManager } from './PresetManager';
+import { VersionGallery } from './VersionGallery';
+import type { DialVersions } from '../../versions/gallery';
 
 interface PanelProps {
   panel: PanelConfig;
   defaultOpen?: boolean;
   inline?: boolean;
+  accordion?: boolean;
+  openFolder?: string | null;
+  onOpenFolderChange?: (path: string | null) => void;
+  onOpenChange?: (open: boolean) => void;
+  variant?: 'root' | 'section';
   toolbarExtra?: JSX.Element;
+  versions?: DialVersions;
+  theme?: 'light' | 'dark' | 'system';
 }
 
 export function Panel(props: PanelProps) {
   const [copied, setCopied] = createSignal(false);
-  const [, setIsPanelOpen] = createSignal(props.defaultOpen ?? true);
-  const [values, setValues] = createSignal<Record<string, TweakValue>>(
-    TweakStore.getValues(props.panel.id)
+  let copyTimeout: ReturnType<typeof setTimeout> | undefined;
+  const [values, setValues] = createSignal<Record<string, DialValue>>(
+    DialStore.getValues(props.panel.id)
   );
-  const [presets, setPresets] = createSignal(TweakStore.getPresetItems(props.panel.id));
-  const [activePresetId, setActivePresetId] = createSignal(TweakStore.getActivePresetId(props.panel.id));
-  const [providerMode, setProviderMode] = createSignal(TweakStore.hasPresetProvider(props.panel.id));
-  let addButtonRef!: HTMLButtonElement;
+  const [presets, setPresets] = createSignal(DialStore.getPresets(props.panel.id));
+  const [activePresetId, setActivePresetId] = createSignal(DialStore.getActivePresetId(props.panel.id));
+  // Visibility rules swap the panel's controls in place.
+  const [controls, setControls] = createSignal(props.panel.controls);
+  // The store owns open/collapsed state so it can be driven programmatically.
+  const [storeOpen, setStoreOpen] = createSignal(DialStore.getPanelOpen(props.panel.id));
+  const isOpen = () => storeOpen() ?? props.defaultOpen ?? true;
+  const versions = () => props.versions ?? 'thumbnails';
+  const hintTipSeen = fromStore(() => HintStore.isTipSeen(), (notify) => HintStore.subscribe(notify));
+  createHints(() => true);
   let copyButtonRef!: HTMLButtonElement;
   let copyClipboardIconRef!: HTMLSpanElement;
   let copyCheckIconRef!: HTMLSpanElement;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let addTapAnim: any = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let copyTapAnim: any = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let copyClipboardAnim: any = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let copyCheckAnim: any = null;
-  let didInitCopyIcons = false;
+  let copyTapAnim: AnimationHandle | null = null;
+  let copyClipboardAnim: AnimationHandle | null = null;
+  let copyCheckAnim: AnimationHandle | null = null;
 
   const tapTransition = { type: 'spring' as const, visualDuration: 0.15, bounce: 0.3 };
 
   onMount(() => {
-    const unsub = TweakStore.subscribe(props.panel.id, () => {
-      setValues(TweakStore.getValues(props.panel.id));
-      setPresets(TweakStore.getPresetItems(props.panel.id));
-      setActivePresetId(TweakStore.getActivePresetId(props.panel.id));
-      setProviderMode(TweakStore.hasPresetProvider(props.panel.id));
+    const unsub = DialStore.subscribe(props.panel.id, () => {
+      batch(() => {
+        setValues(DialStore.getValues(props.panel.id));
+        setPresets(DialStore.getPresets(props.panel.id));
+        setActivePresetId(DialStore.getActivePresetId(props.panel.id));
+        setStoreOpen(DialStore.getPanelOpen(props.panel.id));
+        setControls(props.panel.controls);
+      });
     });
-
-    if (copyClipboardIconRef && copyCheckIconRef) {
-      copyClipboardIconRef.style.transformOrigin = '50% 50%';
-      copyClipboardIconRef.style.opacity = '1';
-      copyClipboardIconRef.style.transform = 'scale(1)';
-      copyClipboardIconRef.style.filter = 'blur(0px)';
-      copyCheckIconRef.style.transformOrigin = '50% 50%';
-      copyCheckIconRef.style.opacity = '0';
-      copyCheckIconRef.style.transform = 'scale(0.5)';
-      copyCheckIconRef.style.filter = 'blur(4px)';
-      didInitCopyIcons = true;
-    }
-
+    DialStore.initPanelOpen(props.panel.id, props.defaultOpen ?? true);
     onCleanup(unsub);
   });
 
-  const handleAddPreset = () => TweakStore.createPreset(props.panel.id);
-
-  const handleCopy = () => {
-    const jsonStr = JSON.stringify(values(), null, 2);
-    const instruction = `Update the createTweakers configuration for "${props.panel.name}" with these values:\n\n\`\`\`json\n${jsonStr}\n\`\`\`\n\nApply these values as the new defaults in the createTweakers call.`;
-    navigator.clipboard.writeText(instruction);
+  const handleCopy = async () => {
+    const instruction = buildCopyInstruction('createDialKit', props.panel.name, values());
+    try { await navigator.clipboard.writeText(instruction); }
+    catch { return; }
     setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    clearTimeout(copyTimeout);
+    copyTimeout = setTimeout(() => setCopied(false), 1500);
   };
 
-  createEffect(() => {
-    const isCopied = copied();
+  // Icons render with their resting styles inline; only animate on changes.
+  createEffect(on(copied, (isCopied) => {
     if (!copyClipboardIconRef || !copyCheckIconRef) return;
 
     copyClipboardAnim?.stop();
     copyCheckAnim?.stop();
-
-    if (!didInitCopyIcons) return;
 
     const transition = { type: 'spring' as const, visualDuration: 0.3, bounce: 0.2 };
     copyClipboardAnim = animate(copyClipboardIconRef, {
@@ -92,26 +94,14 @@ export function Panel(props: PanelProps) {
       scale: isCopied ? 1 : 0.5,
       filter: isCopied ? 'blur(0px)' : 'blur(4px)',
     }, transition);
-  });
+  }, { defer: true }));
 
   onCleanup(() => {
-    addTapAnim?.stop();
+    clearTimeout(copyTimeout);
     copyTapAnim?.stop();
     copyClipboardAnim?.stop();
     copyCheckAnim?.stop();
   });
-
-  const handleAddTapStart = () => {
-    if (!addButtonRef) return;
-    addTapAnim?.stop();
-    addTapAnim = animate(addButtonRef, { scale: 0.9 }, tapTransition);
-  };
-
-  const handleAddTapEnd = () => {
-    if (!addButtonRef) return;
-    addTapAnim?.stop();
-    addTapAnim = animate(addButtonRef, { scale: 1 }, tapTransition);
-  };
 
   const handleCopyTapStart = () => {
     if (!copyButtonRef) return;
@@ -125,97 +115,99 @@ export function Panel(props: PanelProps) {
     copyTapAnim = animate(copyButtonRef, { scale: 1 }, tapTransition);
   };
 
-  const renderControls = () => (
-    <ControlRenderer panelId={props.panel.id} controls={props.panel.controls} values={values()} />
-  );
+  const handleOpenChange = (open: boolean) => {
+    DialStore.setPanelOpen(props.panel.id, open);
+    props.onOpenChange?.(open);
+  };
 
-  const presetsHidden = () => TweakStore.arePresetsHidden(props.panel.id);
-
-  const toolbar = presetsHidden() ? props.toolbarExtra : (
+  const toolbar = (
     <>
-      <button
-        ref={addButtonRef}
-        class="tweakers-toolbar-add"
-        onClick={handleAddPreset}
-        onPointerDown={handleAddTapStart}
-        onPointerUp={handleAddTapEnd}
-        onPointerCancel={handleAddTapEnd}
-        onPointerLeave={handleAddTapEnd}
-        title="Add preset"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d={ICON_ADD_PRESET[0]} />
-          <path d={ICON_ADD_PRESET[1]} />
-          <path d={ICON_ADD_PRESET[2]} />
-          <path d={ICON_ADD_PRESET[3]} />
-          <path d={ICON_ADD_PRESET[4]} />
-        </svg>
-      </button>
-
-      <PresetManager
-        panelId={props.panel.id}
-        presets={presets()}
-        activePresetId={activePresetId()}
-        onAdd={handleAddPreset}
-        providerMode={providerMode()}
-      />
+      {versions() === 'menu' && (
+        <PresetManager
+          panelId={props.panel.id}
+          presets={presets()}
+          activePresetId={activePresetId()}
+        />
+      )}
 
       <button
         ref={copyButtonRef}
-        class="tweakers-toolbar-copy"
+        class="dialkit-toolbar-add dialkit-toolbar-primary"
+        data-wide={versions() !== 'menu' ? 'true' : undefined}
         onClick={handleCopy}
         onPointerDown={handleCopyTapStart}
         onPointerUp={handleCopyTapEnd}
         onPointerCancel={handleCopyTapEnd}
         onPointerLeave={handleCopyTapEnd}
-        title="Copy parameters"
+        aria-label="Copy parameters" data-hint={HINTS.copy}
       >
-        <span class="tweakers-toolbar-copy-icon-wrap">
+        <span class="dialkit-toolbar-copy-icon-wrap">
           <span
             ref={copyClipboardIconRef}
-            class="tweakers-toolbar-copy-icon"
-            style={{ opacity: 1, transform: 'scale(1)', filter: 'blur(0px)' }}
+            class="dialkit-toolbar-copy-icon"
+            style={{ opacity: 1, transform: 'scale(1)', filter: 'blur(0px)', 'transform-origin': '50% 50%' }}
           >
             <svg viewBox="0 0 24 24" fill="none" width="16" height="16">
-              <path d={ICON_CLIPBOARD.board} stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
-              <path d={ICON_CLIPBOARD.sparkle} fill="currentColor" />
-              <path d={ICON_CLIPBOARD.body} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              <path d={ICON_CLIPBOARD_PLAIN.board} stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+              <path d={ICON_CLIPBOARD_PLAIN.body} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </span>
           <span
             ref={copyCheckIconRef}
-            class="tweakers-toolbar-copy-icon"
-            style={{ opacity: 0, transform: 'scale(0.5)', filter: 'blur(4px)' }}
+            class="dialkit-toolbar-copy-icon"
+            style={{ opacity: 0, transform: 'scale(0.5)', filter: 'blur(4px)', 'transform-origin': '50% 50%' }}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
               <path d={ICON_CHECK} />
             </svg>
           </span>
         </span>
+        {versions() !== 'menu' && <span>{copied() ? 'Copied' : 'Copy parameters'}</span>}
       </button>
 
       {props.toolbarExtra}
+
     </>
   );
 
-  return (
-    <div class="tweakers-panel-wrapper">
-      <Folder
-        title={props.panel.name}
-        defaultOpen={props.defaultOpen ?? true}
-        isRoot={true}
-        inline={props.inline ?? false}
-        onOpenChange={setIsPanelOpen}
-        toolbar={toolbar}
-        enabled={props.panel.module ? (values()['_enabled'] as boolean) : undefined}
-        onEnabledChange={
-          props.panel.module
-            ? (v) => TweakStore.updateValue(props.panel.id, '_enabled', v)
-            : undefined
-        }
-      >
-        {renderControls()}
+  const hintTip = () => (
+    <Show when={!hintTipSeen()}>
+      <p class="dialkit-hint-tip">
+        Hold <kbd class="dialkit-hint-tip-key">H</kbd> over a control to see what it does.
+      </p>
+    </Show>
+  );
+
+  const content = () => (
+    <>
+      {versions() !== 'menu' && (
+        <VersionGallery panelId={props.panel.id} theme={props.theme} />
+      )}
+      <ControlRenderer
+        panelId={props.panel.id}
+        controls={controls()}
+        values={values()}
+        openFolder={props.accordion ? resolveOpenFolder(controls(), props.openFolder) : undefined}
+        onOpenFolderChange={props.onOpenFolderChange}
+        animateControls
+      />
+      {hintTip()}
+    </>
+  );
+
+  if (props.variant === 'section') {
+    return (
+      <Folder title={props.panel.name} open={isOpen()} onOpenChange={handleOpenChange} toolbar={toolbar}>
+        {content()}
       </Folder>
+    );
+  }
+
+  return (
+    <div class="dialkit-panel-wrapper">
+      <RootPanel title={props.panel.name} open={isOpen()} inline={props.inline ?? false} onOpenChange={handleOpenChange} toolbar={toolbar}>
+        {content()}
+      </RootPanel>
     </div>
   );
 }

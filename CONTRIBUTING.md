@@ -1,4 +1,4 @@
-# Contributing to Tweakers
+# Contributing to DialKit
 
 Thanks for contributing.
 
@@ -8,10 +8,24 @@ Thanks for contributing.
 2. Install dependencies with `npm i`.
 3. Run `npm run typecheck` and `npm run build` before opening a PR.
 
+## Toolbar browser checks
+
+After `npm run build`, run `node scripts/build-toolbar-fixtures.mjs` and serve `.toolbar-fixtures` on port 3011 (for example, `python3 -m http.server 3011 --directory .toolbar-fixtures`). The fixtures cover panels and timelines in all five frameworks; append `?theme=dark` to inspect dark mode.
+
+With Playwright and Chrome installed, run `node scripts/test-toolbar-browser.mjs` to check version creation, selection, deletion, numbering, keyboard focus, and accordion folders. `DIALKIT_PLAYWRIGHT` can point to an existing Playwright installation, and `DIALKIT_FIXTURE_URL` overrides the server URL.
+
+Run `node scripts/test-versions-browser.mjs` to check the version gallery (capture flash, thumbnails, rename, and the all-versions grid) in the plain-HTML bundle and, when the fixtures are served, all five frameworks.
+
+For sticky headers, run `node scripts/build-control-fixtures.mjs` and open `/control-fixtures/react.html?multiple&scroll` in the example app (or use `solid`, `vue`, `svelte`, or `vanilla`). Open the panel, then scroll through both sections: the root header stays visible, each section's title and toolbar pin below it, and the next section pushes the previous one away. Property folder headers pin below their section, the nested Spacing folder stacks below Layout, and each header leaves once its folder has passed. Rows fade under the pinned headers and into the bottom edge, but only while there is more to scroll that way; CSS scroll-state queries drive the fades, with a fallback in `observeScrollFades` (`src/panel-size.ts`) that sets `data-stuck` and `data-more` where the queries are missing, so check them in a browser with the queries (Chrome) and in one without. The version gallery sits above the first folder and scrolls under the title like any row; append `&versions=menu` to check the panel with the version menu instead. Append `&inline` to check an embedded panel in the page's scroll area.
+
+Collapse the second section, scroll the first to its top, then collapse it. The version/copy toolbar should fold with the properties, and the visible panel should start shrinking on the same frame, even when its contents exceed the viewport. The bottom edge stays fixed by default; append `&position=top-right` to check that the top edge stays fixed instead. Controls remain opaque and the title rows remain visible, with no empty intermediate panel.
+
+Also collapse both sections while scrolled down, reverse a collapse before it finishes, and toggle the other section during a collapse. Each transition should continue from its current size and settle without a delayed scroll reset. Collapse the section while Layout is pinned: the headers below should follow its folding toolbar without gaps or overlaps. Collapse Spacing while it is pinned: Layout stays pinned and the rows below move up.
+
 ## Project notes
 
 - `src/styles/theme.css` is copied to `dist/styles.css` during build via `tsup` `onSuccess`.
-- `example/photostack` imports `tweakers/styles.css`, which resolves to `dist/styles.css`.
+- `example/photostack` imports `dialkit/styles.css`, which resolves to `dist/styles.css`.
 - `ButtonGroup` actions should remain vertically stacked.
 
 ## Pull request guidelines
@@ -20,10 +34,3 @@ Thanks for contributing.
 - Include a short summary of what changed and why.
 - Add validation notes (for example: `npm run typecheck`, `npm run build`).
 - Update `README.md` when behavior or API docs change.
-
-## Shared component standards
-
-Follow the [component checklist](docs/contributing-components.md) and keep the
-[control dictionary](docs/controls.md) current. Consumer updates follow the
-[snapshot workflow](docs/integration.md); reusable fixes belong in source, not
-in app-owned copies of `dist`. Run both `npm test` and `npm run test:timeline`.

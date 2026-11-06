@@ -1,6 +1,12 @@
-import { defineComponent, h, onMounted, onUnmounted, ref, type PropType } from 'vue';
-import { TweakStore } from 'tweakers/store';
-import type { EasingConfig, SpringConfig, TransitionConfig } from 'tweakers/store';
+import { createEaseIntensity } from '../../easing-geometry';
+import { mountEaseFields } from '../../easing-control';
+import { defineComponent, h, onMounted, onUnmounted, ref, shallowRef, watchEffect, type PropType } from 'vue';
+import { DialStore } from '../../store/DialStore';
+import type { CopiedTransition, EasingConfig, SpringConfig, TransitionConfig, TransitionMode } from '../../store/DialStore';
+import { TRANSITION_HINTS, transitionPresetName } from '../../transition-presets';
+import { mountTransitionCopy, mountTransitionPresets } from '../../transition-presets-control';
+import { HINTS } from '../../hints';
+import { useHints } from '../useHints';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
 import { SegmentedControl } from './SegmentedControl';
@@ -17,71 +23,61 @@ export interface TransitionDurationControl {
   step?: number;
 }
 
-function formatEase(ease: [number, number, number, number]): string {
-  return ease.map((value) => Number(value.toFixed(2))).join(', ');
-}
-
-function parseEase(value: string): [number, number, number, number] | null {
-  const parts = value.split(',').map((part) => Number.parseFloat(part.trim()));
-  if (parts.length === 4 && parts.every((part) => Number.isFinite(part))) {
-    return parts as [number, number, number, number];
-  }
-  return null;
-}
-
-const EaseTextInput = defineComponent({
-  name: 'TweakersEaseTextInput',
+const EaseFields = defineComponent({
+  name: 'DialKitEaseFields',
   props: {
-    ease: {
-      type: Array as unknown as PropType<[number, number, number, number]>,
-      required: true,
-    },
-    onChange: {
-      type: Function as PropType<(ease: [number, number, number, number]) => void>,
-      required: true,
-    },
+    ease: { type: Array as unknown as PropType<[number, number, number, number]>, required: true },
+    onChange: { type: Function as PropType<(ease: [number, number, number, number]) => void>, required: true },
   },
   setup(props) {
-    const editing = ref(false);
-    const draft = ref('');
+    const host = ref<HTMLElement>();
+    let control: ReturnType<typeof mountEaseFields> | undefined;
+    const options = () => ({ ease: props.ease, onChange: props.onChange });
+    onMounted(() => { control = mountEaseFields(host.value!, options()); });
+    watchEffect(() => { const next = options(); control?.update(next); });
+    onUnmounted(() => control?.destroy());
+    return () => h('div', { ref: host });
+  },
+});
 
-    const handleFocus = () => {
-      draft.value = formatEase(props.ease);
-      editing.value = true;
-    };
+const TransitionPresets = defineComponent({
+  name: 'DialKitTransitionPresets',
+  props: {
+    mode: { type: String as PropType<TransitionMode>, required: true },
+    value: { type: Object as PropType<TransitionConfig>, required: true },
+    onChange: { type: Function as PropType<(value: TransitionConfig) => void>, required: true },
+  },
+  setup(props) {
+    const host = ref<HTMLElement>();
+    let control: ReturnType<typeof mountTransitionPresets> | undefined;
+    const options = () => ({ mode: props.mode, value: props.value, onChange: props.onChange });
+    onMounted(() => { control = mountTransitionPresets(host.value!, options()); });
+    watchEffect(() => { const next = options(); control?.update(next); });
+    onUnmounted(() => control?.destroy());
+    return () => h('div', { ref: host });
+  },
+});
 
-    const handleBlur = () => {
-      const parsed = parseEase(draft.value);
-      if (parsed) props.onChange(parsed);
-      editing.value = false;
-    };
-
-    const handleKeydown = (event: KeyboardEvent) => {
-      if (event.key === 'Enter') {
-        (event.target as HTMLInputElement).blur();
-      }
-    };
-
-    return () => h('div', { class: 'tweakers-labeled-control' }, [
-      h('span', { class: 'tweakers-labeled-control-label' }, 'Ease'),
-      h('input', {
-        type: 'text',
-        class: 'tweakers-text-input',
-        value: editing.value ? draft.value : formatEase(props.ease),
-        spellcheck: false,
-        onInput: (event: Event) => {
-          draft.value = (event.target as HTMLInputElement).value;
-        },
-        onFocus: handleFocus,
-        onBlur: handleBlur,
-        onKeydown: handleKeydown,
-      }),
-    ]);
+const TransitionCopy = defineComponent({
+  name: 'DialKitTransitionCopy',
+  props: {
+    mode: { type: String as PropType<TransitionMode>, required: true },
+    value: { type: Object as PropType<TransitionConfig>, required: true },
+    onPaste: { type: Function as PropType<(copied: CopiedTransition) => void>, required: true },
+  },
+  setup(props) {
+    const host = ref<HTMLElement>();
+    let control: ReturnType<typeof mountTransitionCopy> | undefined;
+    const options = () => ({ mode: props.mode, value: props.value, onPaste: props.onPaste });
+    onMounted(() => { control = mountTransitionCopy(host.value!, options()); });
+    watchEffect(() => { const next = options(); control?.update(next); });
+    onUnmounted(() => control?.destroy());
+    return () => h('div', { ref: host });
   },
 });
 
 export const TransitionControl = defineComponent({
-  name: 'TweakersTransitionControl',
+  name: 'DialKitTransitionControl',
   props: {
     panelId: { type: String, required: true },
     path: { type: String, required: true },
@@ -92,19 +88,32 @@ export const TransitionControl = defineComponent({
     },
     hideDuration: { type: Boolean, default: false },
     durationControl: Object as PropType<TransitionDurationControl>,
+    /** Shows a reset button in the header. See Folder.onReset. */
+    onReset: Function as PropType<() => void>,
+    changed: { type: Boolean, default: false },
+    hint: { type: String, required: false },
   },
   emits: ['change'],
   setup(props, { emit }) {
-    const mode = ref<CurveMode>(TweakStore.getTransitionMode(props.panelId, props.path));
+    useHints(() => true);
+    const mode = ref<CurveMode>(DialStore.getTransitionMode(props.panelId, props.path));
+    const savedPresets = shallowRef(DialStore.getTransitionPresets());
     let unsub: (() => void) | undefined;
+    let unsubPresets: (() => void) | undefined;
 
     onMounted(() => {
-      unsub = TweakStore.subscribe(props.panelId, () => {
-        mode.value = TweakStore.getTransitionMode(props.panelId, props.path);
+      unsub = DialStore.subscribe(props.panelId, () => {
+        mode.value = DialStore.getTransitionMode(props.panelId, props.path);
+      });
+      unsubPresets = DialStore.subscribeTransitions(() => {
+        savedPresets.value = DialStore.getTransitionPresets();
       });
     });
 
-    onUnmounted(() => unsub?.());
+    onUnmounted(() => {
+      unsub?.();
+      unsubPresets?.();
+    });
 
     const cache = {
       easing: (props.value.type === 'easing' ? { ...props.value } : { type: 'easing' as const, duration: 0.3, ease: [1, -0.4, 0.5, 1] as [number, number, number, number] }) as EasingConfig,
@@ -131,7 +140,7 @@ export const TransitionControl = defineComponent({
     };
 
     const handleModeChange = (nextMode: CurveMode) => {
-      TweakStore.updateTransitionMode(props.panelId, props.path, nextMode);
+      DialStore.updateTransitionMode(props.panelId, props.path, nextMode);
 
       if (nextMode === 'easing') {
         emit('change', cache.easing);
@@ -142,11 +151,12 @@ export const TransitionControl = defineComponent({
       }
     };
 
-    const updateEase = (index: number, value: number) => {
-      const current = easing();
-      const next = [...current.ease] as [number, number, number, number];
-      next[index] = value;
-      emit('change', { ...current, ease: next });
+    // Intensity scales the curve it started from; 50% is that curve.
+    const intensity = createEaseIntensity();
+
+    const handlePaste = (copied: CopiedTransition) => {
+      DialStore.updateTransitionMode(props.panelId, props.path, copied.mode);
+      emit('change', copied.value);
     };
 
     const handleSpringUpdate = (key: keyof SpringConfig, value: number) => {
@@ -170,9 +180,10 @@ export const TransitionControl = defineComponent({
           label: 'Duration',
           value: props.durationControl?.value ?? (isEasing ? currentEasing.duration : currentSpring.visualDuration ?? 0.3),
           min: props.durationControl?.min ?? 0.1,
-          max: props.durationControl?.max ?? (isEasing ? 2 : 1),
+          max: props.durationControl?.max ?? 5,
           step: props.durationControl?.step ?? 0.05,
           unit: 's',
+          hint: isEasing ? HINTS.easingDuration : HINTS.springDuration,
           onChange: props.durationControl?.onChange ?? ((next: number) => {
             if (isEasing) emit('change', { ...currentEasing, duration: next });
             else handleSpringUpdate('visualDuration', next);
@@ -180,14 +191,20 @@ export const TransitionControl = defineComponent({
         })
         : null;
 
-      return h(Folder, { title: props.label, defaultOpen: true }, {
+      const current = isEasing ? currentEasing : currentSpring;
+
+      return h(Folder, {
+        title: props.label,
+        defaultOpen: true,
+        hint: props.hint,
+        onReset: props.onReset,
+        changed: props.changed,
+        actions: () => h(TransitionCopy, { mode: mode.value, value: current, onPaste: handlePaste }),
+      }, {
         default: () => [
-          h('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } }, [
-            isEasing
-              ? h(EasingVisualization, { easing: currentEasing })
-              : h(SpringVisualization, { spring: currentSpring, isSimpleMode: isSimpleSpring }),
-            h('div', { class: 'tweakers-labeled-control' }, [
-              h('span', { class: 'tweakers-labeled-control-label' }, 'Type'),
+          h('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--dial-row-gap)' } }, [
+            h('div', { class: 'dialkit-labeled-control dialkit-transition-type', 'data-hint': HINTS.transitionType }, [
+              h('span', { class: 'dialkit-labeled-control-label' }, 'Type'),
               h(SegmentedControl, {
                 options: [
                   { value: 'easing', label: 'Easing' },
@@ -198,15 +215,24 @@ export const TransitionControl = defineComponent({
                 onChange: handleModeChange,
               }),
             ]),
+            isEasing
+              ? h(EasingVisualization, { easing: currentEasing, onChange: (ease: EasingConfig['ease']) => emit('change', { ...currentEasing, ease }) })
+              : h(SpringVisualization, { spring: currentSpring, isSimpleMode: isSimpleSpring }),
             ...(isEasing
               ? [
-                h(Slider, { label: 'x1', value: currentEasing.ease[0], min: 0, max: 1, step: 0.01, onChange: (next: number) => updateEase(0, next) }),
-                h(Slider, { label: 'y1', value: currentEasing.ease[1], min: -1, max: 2, step: 0.01, onChange: (next: number) => updateEase(1, next) }),
-                h(Slider, { label: 'x2', value: currentEasing.ease[2], min: 0, max: 1, step: 0.01, onChange: (next: number) => updateEase(2, next) }),
-                h(Slider, { label: 'y2', value: currentEasing.ease[3], min: -1, max: 2, step: 0.01, onChange: (next: number) => updateEase(3, next) }),
-                h(EaseTextInput, {
+                h(EaseFields, {
                   ease: currentEasing.ease,
-                  onChange: (next: [number, number, number, number]) => emit('change', { ...currentEasing, ease: next }),
+                  onChange: (ease: EasingConfig['ease']) => emit('change', { ...currentEasing, ease }),
+                }),
+                h(Slider, {
+                  label: 'Intensity',
+                  value: intensity.read(currentEasing.ease),
+                  min: 0,
+                  max: 100,
+                  step: 1,
+                  unit: '%',
+                  hint: TRANSITION_HINTS.intensity,
+                  onChange: (next: number) => emit('change', { ...currentEasing, ease: intensity.apply(currentEasing.ease, next) }),
                 }),
               ]
               : isSimpleSpring
@@ -218,6 +244,7 @@ export const TransitionControl = defineComponent({
                     max: 1,
                     step: 0.05,
                     onChange: (next: number) => handleSpringUpdate('bounce', next),
+                    hint: HINTS.bounce,
                   }),
                 ]
                 : [
@@ -228,6 +255,7 @@ export const TransitionControl = defineComponent({
                     max: 1000,
                     step: 10,
                     onChange: (next: number) => handleSpringUpdate('stiffness', next),
+                    hint: HINTS.stiffness,
                   }),
                   h(Slider, {
                     label: 'Damping',
@@ -236,6 +264,7 @@ export const TransitionControl = defineComponent({
                     max: 100,
                     step: 1,
                     onChange: (next: number) => handleSpringUpdate('damping', next),
+                    hint: HINTS.damping,
                   }),
                   h(Slider, {
                     label: 'Mass',
@@ -244,9 +273,15 @@ export const TransitionControl = defineComponent({
                     max: 10,
                     step: 0.1,
                     onChange: (next: number) => handleSpringUpdate('mass', next),
+                    hint: HINTS.mass,
                   }),
                 ]),
             durationSlider,
+            h(Folder, { title: 'Presets', defaultOpen: false, hint: TRANSITION_HINTS.presets, meta: transitionPresetName(current, mode.value, savedPresets.value) }, {
+              default: () => [
+                h(TransitionPresets, { mode: mode.value, value: current, onChange: (next: TransitionConfig) => emit('change', next) }),
+              ],
+            }),
           ]),
         ],
       });

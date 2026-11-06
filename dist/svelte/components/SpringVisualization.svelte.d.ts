@@ -1,4 +1,4 @@
-import type { SpringConfig } from 'tweakers/store';
+import type { SpringConfig } from 'dialkit/store';
 type $$ComponentProps = {
     spring: SpringConfig;
     isSimpleMode: boolean;

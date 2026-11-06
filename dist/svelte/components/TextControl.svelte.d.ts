@@ -3,6 +3,7 @@ type $$ComponentProps = {
     value: string;
     onChange: (value: string) => void;
     placeholder?: string;
+    hint?: string;
 };
 declare const TextControl: import("svelte").Component<$$ComponentProps, {}, "">;
 type TextControl = ReturnType<typeof TextControl>;

@@ -1,32 +1,38 @@
 import { defineComponent, h, type PropType } from 'vue';
-import { Checkbox } from './Checkbox';
-import type { ShortcutConfig } from 'tweakers/store';
-import { formatToggleShortcut } from 'tweakers/shortcut-utils';
+import { SegmentedControl } from './SegmentedControl';
+import type { ShortcutConfig } from '../../store/DialStore';
+import { formatToggleShortcut } from '../../shortcut-utils';
+import { useHints } from '../useHints';
 
 export const Toggle = defineComponent({
-  name: 'TweakersToggle',
+  name: 'DialKitToggle',
   props: {
     label: { type: String, required: true },
     checked: { type: Boolean, required: true },
     shortcut: { type: Object as PropType<ShortcutConfig>, default: undefined },
     shortcutActive: { type: Boolean, default: false },
+    hint: { type: String, required: false },
   },
   emits: ['change'],
   setup(props, { emit }) {
-    return () => h('div', { class: 'tweakers-labeled-control tweakers-labeled-control-check' }, [
-      h(Checkbox, {
-        checked: props.checked,
-        label: props.label,
-        onChange: (next: boolean) => emit('change', next),
-      }),
-      h('span', { class: 'tweakers-labeled-control-label' }, [
+    useHints(() => !!props.hint);
+    return () => h('div', { class: 'dialkit-labeled-control', 'data-hint': props.hint }, [
+      h('span', { class: 'dialkit-labeled-control-label' }, [
         props.label,
         props.shortcut
           ? h('span', {
-              class: `tweakers-shortcut-pill${props.shortcutActive ? ' tweakers-shortcut-pill-active' : ''}`,
+              class: `dialkit-shortcut-pill${props.shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`,
             }, formatToggleShortcut(props.shortcut))
           : null,
       ]),
+      h(SegmentedControl, {
+        options: [
+          { value: 'off', label: 'Off' },
+          { value: 'on', label: 'On' },
+        ],
+        value: props.checked ? 'on' : 'off',
+        onChange: (value: string) => emit('change', value === 'on'),
+      }),
     ]);
   },
 });

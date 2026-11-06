@@ -1,47 +1,59 @@
-import { defineComponent, h, onMounted, onUnmounted, ref, type PropType } from 'vue';
+import { activateOnKey } from '../../control-keyboard';
+import { createPanelSectionTransition, measurePanelHeight, observePanelHeader, observeScrollFades } from '../../panel-size';
+import { computed, defineComponent, h, onMounted, onUnmounted, ref, watch, type PropType, type VNodeChild } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
-import { ICON_CHEVRON, ICON_PANEL } from 'tweakers/icons';
-import { Checkbox } from './Checkbox';
+import { ICON_CLOSE, ICON_CHEVRON, ICON_PANEL, ICON_RESET } from '../../icons';
+import { HINTS } from '../../hints';
+import { useHints } from '../useHints';
 
 export const Folder = defineComponent({
-  name: 'TweakersFolder',
+  name: 'DialKitFolder',
   props: {
     title: { type: String, required: true },
+    open: { type: Boolean, default: undefined },
     defaultOpen: { type: Boolean, default: true },
-    /** `false` renders a plain section header: no caret, no click-to-collapse, body always open. */
-    collapsible: { type: Boolean, default: true },
     isRoot: { type: Boolean, default: false },
     inline: { type: Boolean, default: false },
     toolbar: {
-      type: null as unknown as PropType<(() => ReturnType<typeof h>) | null>,
+      type: null as unknown as PropType<(() => VNodeChild) | null>,
       required: false,
       default: null,
     },
-    /**
-     * Root only — the panel declared `_enabled`, so the whole panel is a
-     * module: the title carries the switch and the body goes away when it is
-     * off. Same idiom as ModuleFolder, one level up.
-     */
-    enabled: { type: Boolean, default: undefined },
-    onEnabledChange: {
-      type: Function as PropType<(enabled: boolean) => void>,
-      default: undefined,
+    /** Short text at the end of a nested folder's title row, such as the preset in use. */
+    meta: { type: String, default: '' },
+    /** Buttons beside the title of a nested folder, such as a transition's copy and paste. */
+    actions: {
+      type: null as unknown as PropType<(() => VNodeChild) | null>,
+      required: false,
+      default: null,
     },
-    /** One line of help for the section, revealed on hover over the header. */
-    hint: { type: String, default: undefined },
-    hintId: { type: String, default: undefined },
+    panelHeightOffset: {
+      type: Number,
+      default: 0,
+    },
+    /** Shows a reset button after the title, visible while `changed` is true. */
+    onReset: Function as PropType<() => void>,
+    changed: { type: Boolean, default: false },
+    hint: { type: String, required: false },
   },
   emits: ['openChange'],
   setup(props, { emit, slots }) {
-    const isOpen = ref(props.collapsible ? props.defaultOpen : true);
-
-    // A module panel's switch is the only thing that shows or hides its body —
-    // the rows below the title belong to a feature that is either on or off.
-    const isModule = () =>
-      props.isRoot && props.enabled !== undefined && props.onEnabledChange !== undefined;
-    const bodyOpen = () => isOpen.value && (!isModule() || !!props.enabled);
-    const isCollapsed = ref(props.collapsible ? !props.defaultOpen : false);
+    // A panel's own header, which closes the panel, has a hint by default.
+    const headerHint = computed(() => props.hint ?? (props.isRoot && !props.inline ? HINTS.panel : undefined));
+    useHints(() => !!headerHint.value || (!props.isRoot && !!props.onReset));
+    const localOpen = ref(props.defaultOpen);
+    const isOpen = computed(() => props.open ?? localOpen.value);
+    const isCollapsed = computed(() => !isOpen.value);
     const contentRef = ref<HTMLElement | null>(null);
+    const headerRef = ref<HTMLElement | null>(null);
+    const sectionRef = ref<HTMLElement | null>(null);
+    let sectionTransition: ReturnType<typeof createPanelSectionTransition> | undefined;
+
+    onMounted(() => {
+      if (sectionRef.value) sectionTransition = createPanelSectionTransition(sectionRef.value, isOpen.value);
+    });
+    watch(isOpen, open => sectionTransition?.setOpen(open), { flush: 'post' });
+    onUnmounted(() => sectionTransition?.destroy());
     const contentHeight = ref<number | undefined>(undefined);
     const windowHeight = ref(typeof window !== 'undefined' ? window.innerHeight : 800);
 
@@ -56,24 +68,26 @@ export const Folder = defineComponent({
     });
 
     const handleToggle = () => {
-      if (!props.collapsible) return;
       if (props.inline && props.isRoot) return;
       const next = !isOpen.value;
-      isOpen.value = next;
-      isCollapsed.value = !next;
+      localOpen.value = next;
       emit('openChange', next);
     };
 
     let ro: ResizeObserver | null = null;
+    let stopHeader: (() => void) | undefined;
+    let stopFades: (() => void) | undefined;
 
     onMounted(() => {
       if (!props.isRoot || typeof ResizeObserver === 'undefined') return;
       const el = contentRef.value;
       if (!el) return;
+      stopHeader = observePanelHeader(el);
+      stopFades = observeScrollFades(el);
 
       ro = new ResizeObserver(() => {
         if (isOpen.value) {
-          const next = el.offsetHeight;
+          const next = measurePanelHeight(el);
           if (contentHeight.value !== next) {
             contentHeight.value = next;
           }
@@ -83,39 +97,33 @@ export const Folder = defineComponent({
       ro.observe(el);
 
       if (isOpen.value) {
-        contentHeight.value = el.offsetHeight;
+        contentHeight.value = measurePanelHeight(el);
       }
     });
 
     onUnmounted(() => {
       ro?.disconnect();
+      stopHeader?.();
+      stopFades?.();
     });
 
     const renderHeader = () => h('div', {
-      class: `tweakers-folder-header ${props.isRoot ? 'tweakers-panel-header' : ''} ${props.collapsible ? '' : 'tweakers-folder-header-static'}`,
-      onClick: props.collapsible ? handleToggle : undefined,
-      'data-hint': props.hint ? 'true' : undefined,
-      'aria-describedby': props.hint ? props.hintId : undefined,
+      class: `dialkit-folder-header ${props.isRoot ? 'dialkit-panel-header' : ''}`,
+      onClick: handleToggle,
     }, [
-      h('div', { class: 'tweakers-folder-header-top' }, [
+      h('div', { ref: headerRef, class: 'dialkit-folder-header-top', 'data-hint': headerHint.value, role: props.inline && props.isRoot ? undefined : 'button', tabindex: props.inline && props.isRoot ? undefined : 0, 'aria-label': !props.isRoot && props.meta ? `${props.title}, ${props.meta}` : props.title, 'aria-expanded': isOpen.value, onKeydown: (e: KeyboardEvent) => activateOnKey(e, handleToggle) }, [
         props.isRoot
           ? (isOpen.value
-              ? h('div', { class: 'tweakers-folder-title-row' }, [
-                isModule()
-                  ? h(Checkbox, {
-                    checked: !!props.enabled,
-                    onChange: props.onEnabledChange!,
-                    label: props.title,
-                  })
-                  : null,
-                h('span', { class: 'tweakers-folder-title tweakers-folder-title-root' }, props.title),
+              ? h('div', { class: 'dialkit-folder-title-row' }, [
+                h('span', { class: 'dialkit-folder-title dialkit-folder-title-root' }, props.title),
               ])
               : null)
-          : h('div', { class: 'tweakers-folder-title-row' }, [
-            h('span', { class: 'tweakers-folder-title' }, props.title),
+          : h('div', { class: 'dialkit-folder-title-row' }, [
+            h('span', { class: 'dialkit-folder-title' }, props.title),
+            props.meta ? h('span', { class: 'dialkit-folder-meta' }, props.meta) : null,
           ]),
         props.isRoot && !props.inline
-          ? h('svg', { class: 'tweakers-panel-icon', viewBox: '0 0 16 16', fill: 'none' }, [
+          ? h('svg', { class: 'dialkit-panel-icon', viewBox: isOpen.value ? '0 0 24 24' : '0 0 16 16', fill: 'none' }, isOpen.value ? [h('path', { d: ICON_CLOSE, stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round' })] : [
             h('path', {
               opacity: '0.5',
               d: ICON_PANEL.path,
@@ -124,9 +132,9 @@ export const Folder = defineComponent({
             ...ICON_PANEL.circles.map((c) => h('circle', { cx: c.cx, cy: c.cy, r: c.r, fill: 'currentColor', stroke: 'currentColor', 'stroke-width': '1.25' })),
           ])
           : null,
-        !props.isRoot && props.collapsible
+        !props.isRoot
           ? h(motion.svg, {
-            class: 'tweakers-folder-icon',
+            class: 'dialkit-folder-icon',
             viewBox: '0 0 24 24',
             fill: 'none',
             stroke: 'currentColor',
@@ -134,46 +142,68 @@ export const Folder = defineComponent({
             'stroke-linecap': 'round',
             'stroke-linejoin': 'round',
             initial: false,
-            animate: { rotate: isOpen.value ? 0 : 180 },
+            animate: { rotate: isOpen.value ? 180 : 0 },
             transition: { type: 'spring', visualDuration: 0.35, bounce: 0.15 },
           }, [h('path', { d: ICON_CHEVRON })])
           : null,
       ]),
-      props.isRoot && props.toolbar && isOpen.value
-        ? h('div', { class: 'tweakers-panel-toolbar', onClick: (event: Event) => event.stopPropagation() }, [props.toolbar()])
+      !props.isRoot && props.onReset
+        ? h('button', {
+          type: 'button',
+          class: 'dialkit-folder-reset',
+          'aria-label': `Reset ${props.title}`,
+          'data-hint': HINTS.sectionReset,
+          'data-changed': String(props.changed),
+          onClick: (event: Event) => {
+            event.stopPropagation();
+            // The button hides once the values are back; keep focus in the header.
+            headerRef.value?.focus();
+            props.onReset?.();
+          },
+        }, [
+          h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' }, ICON_RESET.map((d) => h('path', { d }))),
+        ])
         : null,
-      props.hint
-        ? h('span', { class: 'tweakers-hint', id: props.hintId, role: 'tooltip' }, props.hint)
+      props.actions && !props.isRoot
+        ? h('div', { class: 'dialkit-folder-actions' }, [props.actions()])
+        : null,
+      props.toolbar && !props.isRoot
+        ? h('div', { class: 'dialkit-panel-section-toolbar-clip' }, [
+          h('div', { class: 'dialkit-panel-section-toolbar', onClick: (event: Event) => event.stopPropagation() }, [props.toolbar()]),
+        ])
+        : props.toolbar && isOpen.value
+        ? h('div', { class: 'dialkit-panel-toolbar', onClick: (event: Event) => event.stopPropagation() }, [props.toolbar()])
         : null,
     ]);
 
-    const renderChildren = () => h('div', { class: 'tweakers-folder-inner' }, slots.default ? slots.default() : []);
+    const renderChildren = () => h('div', { class: 'dialkit-folder-inner' }, slots.default ? slots.default() : []);
 
     const renderContent = () => {
+      if (!props.isRoot && props.toolbar) return h('div', { class: 'dialkit-folder-content' }, [renderChildren()]);
       if (props.isRoot) {
-        return bodyOpen()
-          ? h('div', { class: 'tweakers-folder-content' }, [renderChildren()])
+        return isOpen.value
+          ? h('div', { class: 'dialkit-folder-content' }, [renderChildren()])
           : null;
       }
 
       return h(AnimatePresence, { initial: false }, {
         default: () => isOpen.value
           ? [h(motion.div, {
-            key: 'tweakers-folder-content',
-            class: 'tweakers-folder-content',
-            initial: { height: 0, opacity: 0 },
-            animate: { height: 'auto', opacity: 1 },
-            exit: { height: 0, opacity: 0 },
+            key: 'dialkit-folder-content',
+            class: 'dialkit-folder-content',
+            initial: { height: 0 },
+            animate: { height: 'auto' },
+            exit: { height: 0 },
             transition: { type: 'spring', visualDuration: 0.35, bounce: 0.1 },
-            style: { clipPath: 'inset(0 -20px)' },
           }, [renderChildren()])]
           : [],
       });
     };
 
     const folderContent = () => h('div', {
-      ref: props.isRoot ? contentRef : undefined,
-      class: `tweakers-folder ${props.isRoot ? 'tweakers-folder-root' : ''}`,
+      ref: props.isRoot ? contentRef : props.toolbar ? sectionRef : undefined,
+      class: `dialkit-folder ${props.isRoot ? 'dialkit-folder-root' : props.toolbar ? 'dialkit-folder-section' : ''}`,
+      'data-open': String(isOpen.value),
     }, [
       renderHeader(),
       renderContent(),
@@ -182,15 +212,15 @@ export const Folder = defineComponent({
     return () => {
       if (props.isRoot) {
         if (props.inline) {
-          return h('div', { class: 'tweakers-panel-inner tweakers-panel-inline' }, [folderContent()]);
+          return h('div', { class: 'dialkit-panel-inner dialkit-panel-inline' }, [folderContent()]);
         }
 
         const panelStyle = isOpen.value
           ? {
             width: 280,
-            height: contentHeight.value !== undefined ? Math.min(contentHeight.value + 10, windowHeight.value - 32) : 'auto',
+            height: contentHeight.value !== undefined ? Math.min(contentHeight.value + props.panelHeightOffset, windowHeight.value - 32) : 'auto',
             borderRadius: 14,
-            boxShadow: 'var(--tweak-shadow)',
+            boxShadow: 'var(--dial-shadow)',
             cursor: undefined as string | undefined,
             overflowY: 'auto' as const,
           }
@@ -198,13 +228,14 @@ export const Folder = defineComponent({
             width: 42,
             height: 42,
             borderRadius: 21,
-            boxShadow: 'var(--tweak-shadow-collapsed)',
+            boxShadow: 'var(--dial-shadow-collapsed)',
             overflow: 'hidden',
             cursor: 'pointer',
           };
 
         return h(motion.div, {
-          class: 'tweakers-panel-inner',
+          class: 'dialkit-panel-inner',
+          tabindex: -1,
           style: panelStyle,
           onClick: !isOpen.value ? handleToggle : undefined,
           'data-collapsed': String(isCollapsed.value),

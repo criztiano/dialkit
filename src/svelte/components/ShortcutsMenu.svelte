@@ -1,6 +1,8 @@
 <script lang="ts">
-  import { TweakStore } from 'tweakers/store';
-  import type { ShortcutConfig } from 'tweakers/store';
+  import { observeDropdownKeyboard } from '../../dropdown-keyboard';
+
+  import { DialStore } from 'dialkit/store';
+  import type { ShortcutConfig } from 'dialkit/store';
   import Portal from '../Portal.svelte';
 
   let { panelId } = $props<{ panelId: string }>();
@@ -56,39 +58,41 @@
       close();
     };
 
+    const stopKeyboard = observeDropdownKeyboard(triggerEl!, () => dropdownEl, close, 'help');
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    return () => { stopKeyboard(); document.removeEventListener('mousedown', handler); };
   });
 
-  const panel = $derived(TweakStore.getPanel(panelId));
+  let panel = $state<ReturnType<typeof DialStore.getPanel>>();
+  $effect(() => {
+    const id = panelId;
+    const update = () => { panel = DialStore.getPanel(id); };
+    const stop = DialStore.subscribeGlobal(update);
+    update();
+    return stop;
+  });
 
   const rows = $derived.by(() => {
-    if (!panel) return [];
-    const shortcuts = Object.entries(panel.shortcuts);
+    const currentPanel = panel;
+    if (!currentPanel) return [];
+    const shortcuts = Object.entries(currentPanel.shortcuts);
     if (shortcuts.length === 0) return [];
 
-    return shortcuts.map(([path, shortcut]) => {
-      const findLabel = (controls: typeof panel.controls): string => {
-        for (const c of controls) {
-          if (c.path === path) return c.label;
-          if (c.type === 'folder' && c.children) {
-            const found = findLabel(c.children);
-            if (found) return found;
-          }
-        }
-        return path;
-      };
-      return { path, shortcut, label: findLabel(panel.controls) };
-    });
+    return shortcuts.map(([path, shortcut]) => ({
+      path,
+      shortcut,
+      label: DialStore.getControl(currentPanel.id, path)?.label ?? path,
+    }));
   });
 </script>
 
 {#if panel && rows.length > 0}
   <button
     bind:this={triggerEl}
-    class="tweakers-shortcuts-trigger"
+    class="dialkit-shortcuts-trigger"
     onclick={toggle}
-    title="Keyboard shortcuts"
+    aria-label="Keyboard shortcuts"
+    type="button" aria-haspopup="dialog" aria-expanded={isOpen}
   >
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <rect x="2" y="6" width="20" height="12" rx="2" />
@@ -104,24 +108,24 @@
     {#if isOpen}
       <div
         bind:this={dropdownEl}
-        class="tweakers-root tweakers-shortcuts-dropdown"
+        class="dialkit-root dialkit-shortcuts-dropdown"
         style:position="fixed"
         style:top="{pos.top}px"
         style:right="{pos.right}px"
       >
-        <div class="tweakers-shortcuts-title">Keyboard Shortcuts</div>
-        <div class="tweakers-shortcuts-list">
+        <div class="dialkit-shortcuts-title">Keyboard Shortcuts</div>
+        <div class="dialkit-shortcuts-list">
           {#each rows as row (row.path)}
-            <div class="tweakers-shortcuts-row">
-              <span class="tweakers-shortcuts-row-key">
+            <div class="dialkit-shortcuts-row">
+              <span class="dialkit-shortcuts-row-key">
                 {formatShortcutKey(row.shortcut)}
               </span>
-              <span class="tweakers-shortcuts-row-label">{row.label}</span>
-              <span class="tweakers-shortcuts-row-mode">{formatInteraction(row.shortcut)}</span>
+              <span class="dialkit-shortcuts-row-label">{row.label}</span>
+              <span class="dialkit-shortcuts-row-mode">{formatInteraction(row.shortcut)}</span>
             </div>
           {/each}
         </div>
-        <div class="tweakers-shortcuts-hint">See pill badges on controls for keys</div>
+        <div class="dialkit-shortcuts-hint">See pill badges on controls for keys</div>
       </div>
     {/if}
   </Portal>

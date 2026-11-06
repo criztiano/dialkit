@@ -1,21 +1,19 @@
-import { Fragment, defineComponent, h, inject, type PropType } from 'vue';
-import { TweakStore, hintDomId } from 'tweakers/store';
-import type {
-  ControlMeta,
-  TweakValue,
-  RangeValue,
-  SpringConfig,
-  TransitionConfig,
-  XYValue,
-} from 'tweakers/store';
-import type { GradientValue } from 'tweakers/gradient-core';
+import { Fragment, defineComponent, h, type PropType } from 'vue';
+import { AnimatePresence, motion } from 'motion-v';
+import { DialStore } from '../../store/DialStore';
+import type { ControlMeta, DialValue, SpringConfig, TransitionConfig } from '../../store/DialStore';
 import { ColorControl } from './ColorControl';
+import { ImageControl } from './ImageControl';
+import { DialPad } from './DialPad';
+import { AnchorControl } from './AnchorControl';
+import { Fields } from './Fields';
+import { BackgroundControl } from './BackgroundControl';
+import type { DialPadValue } from '../../dial-pad';
+import type { AnchorValue } from '../../anchor';
+import { hasActionHints } from '../../hints';
+import { useHints } from '../useHints';
+import type { BackgroundValue } from '../../background';
 import { Folder } from './Folder';
-import { ModuleFolder } from './ModuleFolder';
-import { NumberControl } from './NumberControl';
-import { ControlShell } from './ControlShell';
-import { GradientControl } from './GradientControl';
-import { RangeSlider } from './RangeSlider';
 import { SelectControl } from './SelectControl';
 import { ShortcutKey } from './ShortcutListener';
 import { Slider } from './Slider';
@@ -23,72 +21,79 @@ import { SpringControl } from './SpringControl';
 import { TextControl } from './TextControl';
 import { Toggle } from './Toggle';
 import { TransitionControl, type TransitionDurationControl } from './TransitionControl';
-import { XYControl } from './XYControl';
+import { inject, ref } from 'vue';
 
-// Single control switch shared by the settings Panel and the timeline clip
-// popover, so every Tweakers control type renders identically in both places.
+// A control fades with its height, and collapsing it also closes the row gap below it.
+// It clips only while sliding, so a settled control's popovers and focus rings are not cut off.
+const hiddenControl = { opacity: 0, height: 0, marginBottom: 'calc(var(--dial-row-gap) * -1)', overflowY: 'clip' as const };
+const shownControl = { opacity: 1, height: 'auto', marginBottom: 'calc(var(--dial-row-gap) * 0)', overflowY: 'clip' as const, transitionEnd: { overflowY: 'visible' as const } };
+
 export const ControlRenderer = defineComponent({
-  name: 'TweakersControlRenderer',
+  name: 'DialKitControlRenderer',
   props: {
     panelId: { type: String, required: true },
     controls: { type: Array as PropType<ControlMeta[]>, required: true },
-    values: { type: Object as PropType<Record<string, TweakValue>>, required: true },
+    values: { type: Object as PropType<Record<string, DialValue>>, required: true },
     transitionDuration: Object as PropType<TransitionDurationControl>,
+    /** Path of the one open top-level folder in accordion mode, or null when all are closed. */
+    openFolder: { type: String as PropType<string | null>, default: undefined },
+    /** Slide controls in and out as their visibility rules change. */
+    animateControls: Boolean,
   },
-  setup(props) {
+  emits: ['openFolderChange'],
+  setup(props, { emit }) {
     const shortcut = inject(ShortcutKey, undefined);
-    const isShortcutActive = (path: string) =>
-      shortcut?.activePanelId.value === props.panelId && shortcut.activePath.value === path;
-    // Panel id and path are both stable and unique, so no id generator is needed.
-    const hintId = (control: ControlMeta) => hintDomId(props.panelId, control.path);
-    const renderControlNode = (control: ControlMeta): ReturnType<typeof h> | null => {
+    // Counts folder resets, so sliders can spring to the values a reset sets.
+    const resetCount = ref(0);
+    // The reset button of the folder a control draws: a `_reset` folder, a spring, a transition, or a background.
+    const resetProps = (control: ControlMeta) => control.reset ? {
+      changed: DialStore.isFolderChanged(props.panelId, control.path),
+      onReset: () => {
+        resetCount.value++;
+        DialStore.resetFolder(props.panelId, control.path);
+      },
+    } : {};
+    const renderControls = (controls: ControlMeta[], topLevel = false) => props.animateControls
+      ? [h(AnimatePresence, { initial: false }, {
+        default: () => controls.map((control) => h(motion.div, {
+          key: control.path,
+          class: 'dialkit-control-wrapper',
+          initial: hiddenControl,
+          animate: shownControl,
+          exit: hiddenControl,
+          transition: { type: 'spring', visualDuration: 0.25, bounce: 0.1 },
+        }, () => [renderControl(control, topLevel)])),
+      })]
+      : controls.map((control) => renderControl(control, topLevel));
+    // Hinted action buttons are the renderer's own rows; each control mounts its own.
+    useHints(() => hasActionHints(props.controls));
+    const renderControl = (control: ControlMeta, topLevel = false): ReturnType<typeof h> | null => {
       const value = props.values[control.path];
       switch (control.type) {
         case 'slider':
           return h(Slider, {
             key: control.path,
             label: control.label,
-            value: value as number,
-            min: control.min,
-            max: control.max,
-            step: control.step,
-            orientation: control.orientation,
-            shortcut: control.shortcut,
-            shortcutActive: isShortcutActive(control.path),
-            onChange: (next: number) => TweakStore.updateValue(props.panelId, control.path, next),
-          });
-        case 'number':
-          return h(NumberControl, {
-            key: control.path,
-            label: control.label,
+            hint: control.hint,
             value: value as number,
             min: control.min,
             max: control.max,
             step: control.step,
             unit: control.unit,
-            formatValue: control.formatValue,
-            orientation: control.orientation,
-            onChange: (next: number) => TweakStore.updateValue(props.panelId, control.path, next),
-          });
-        case 'range':
-          return h(RangeSlider, {
-            key: control.path,
-            label: control.label,
-            value: value as RangeValue,
-            min: control.min ?? 0,
-            max: control.max ?? 1,
-            step: control.step,
-            defaultValue: control.rangeDefault,
-            onChange: (next: RangeValue) => TweakStore.updateValue(props.panelId, control.path, next),
+            shortcut: control.shortcut,
+            shortcutActive: shortcut?.activePanelId.value === props.panelId && shortcut.activePath.value === control.path,
+            resetCount: resetCount.value,
+            onChange: (next: number) => DialStore.updateValue(props.panelId, control.path, next),
           });
         case 'toggle':
           return h(Toggle, {
             key: control.path,
             label: control.label,
+            hint: control.hint,
             checked: value as boolean,
             shortcut: control.shortcut,
-            shortcutActive: isShortcutActive(control.path),
-            onChange: (next: boolean) => TweakStore.updateValue(props.panelId, control.path, next),
+            shortcutActive: shortcut?.activePanelId.value === props.panelId && shortcut.activePath.value === control.path,
+            onChange: (next: boolean) => DialStore.updateValue(props.panelId, control.path, next),
           });
         case 'spring':
           return h(SpringControl, {
@@ -96,8 +101,10 @@ export const ControlRenderer = defineComponent({
             panelId: props.panelId,
             path: control.path,
             label: control.label,
+            hint: control.hint,
             spring: value as SpringConfig,
-            onChange: (next: SpringConfig) => TweakStore.updateValue(props.panelId, control.path, next),
+            onChange: (next: SpringConfig) => DialStore.updateValue(props.panelId, control.path, next),
+            ...resetProps(control),
           });
         case 'transition':
           return h(TransitionControl, {
@@ -105,112 +112,121 @@ export const ControlRenderer = defineComponent({
             panelId: props.panelId,
             path: control.path,
             label: control.label,
+            hint: control.hint,
             value: value as TransitionConfig,
             durationControl: props.transitionDuration,
-            onChange: (next: TransitionConfig) => TweakStore.updateValue(props.panelId, control.path, next),
+            onChange: (next: TransitionConfig) => DialStore.updateValue(props.panelId, control.path, next),
+            ...resetProps(control),
           });
-        case 'folder':
-          // A folder that declared `_enabled` renders as a module: the header
-          // switch drives the `<path>._enabled` value through the store.
-          if (control.module) {
-            const enabledPath = `${control.path}._enabled`;
-            return h(ModuleFolder, {
+        case 'folder': {
+          if (control.fields) {
+            return h(Fields, {
               key: control.path,
-              title: control.label,
-              enabled: props.values[enabledPath] as boolean,
-              onEnabledChange: (next: boolean) => TweakStore.updateValue(props.panelId, enabledPath, next),
-              defaultOpen: control.defaultOpen ?? true,
+              label: control.label,
+              controls: control.children ?? [],
+              values: props.values,
+              defaults: DialStore.getDefaultValues(props.panelId),
               hint: control.hint,
-              hintId: hintId(control),
-            }, { default: () => (control.children ?? []).map(renderControl) });
+              onChange: (next: Record<string, DialValue>) => DialStore.updateValues(props.panelId, next),
+            });
           }
+          // Accordion mode controls top-level folders; nested folders keep their own state.
+          const accordion = topLevel && props.openFolder !== undefined;
           return h(Folder, {
             key: control.path,
             title: control.label,
             defaultOpen: control.defaultOpen ?? true,
-            collapsible: control.collapsible ?? true,
             hint: control.hint,
-            hintId: hintId(control),
-          }, { default: () => (control.children ?? []).map(renderControl) });
+            ...resetProps(control),
+            open: accordion ? props.openFolder === control.path : undefined,
+            onOpenChange: accordion ? (open: boolean) => emit('openFolderChange', open ? control.path : null) : undefined,
+          }, { default: () => renderControls(control.children ?? []) });
+        }
         case 'text':
           return h(TextControl, {
             key: control.path,
             label: control.label,
+            hint: control.hint,
             value: value as string,
             placeholder: control.placeholder,
-            onChange: (next: string) => TweakStore.updateValue(props.panelId, control.path, next),
+            onChange: (next: string) => DialStore.updateValue(props.panelId, control.path, next),
           });
         case 'select':
           return h(SelectControl, {
             key: control.path,
             label: control.label,
+            hint: control.hint,
             value: value as string,
             options: control.options ?? [],
-            onChange: (next: string) => TweakStore.updateValue(props.panelId, control.path, next),
+            display: control.display,
+            hideLabel: control.hideLabel,
+            onChange: (next: string) => DialStore.updateValue(props.panelId, control.path, next),
           });
         case 'color':
           return h(ColorControl, {
             key: control.path,
             label: control.label,
+            hint: control.hint,
             value: value as string,
-            alpha: control.alpha,
-            palette: control.palette,
-            onChange: (next: string) => TweakStore.updateValue(props.panelId, control.path, next),
+            onChange: (next: string) => DialStore.updateValue(props.panelId, control.path, next),
           });
-        case 'gradient':
-          return h(GradientControl, {
+        case 'image':
+          return h(ImageControl, {
+            key: control.path,
+            options: control.options,
+            label: control.label,
+            hint: control.hint,
+            value: value as string,
+            onChange: (next: string) => DialStore.updateValue(props.panelId, control.path, next),
+          });
+        case 'pad':
+          return h(DialPad, {
             key: control.path,
             label: control.label,
-            value: value as GradientValue,
-            onChange: (next: GradientValue) => TweakStore.updateValue(props.panelId, control.path, next),
+            hint: control.hint,
+            value: value as DialPadValue,
+            x: control.pad?.x,
+            y: control.pad?.y,
+            labels: control.pad?.labels,
+            hideLabel: control.pad?.hideLabel,
+            dragLabels: control.pad?.dragLabels,
+            onChange: (next: DialPadValue) => DialStore.updateValue(props.panelId, control.path, next),
           });
-        case 'xy':
-          return h(XYControl, {
+        case 'background':
+          return h(Folder, {
+            key: control.path,
+            title: control.label,
+            defaultOpen: true,
+            hint: control.hint,
+            ...resetProps(control),
+          }, {
+            default: () => h(BackgroundControl, {
+              panelId: props.panelId,
+              label: control.label,
+              value: value as BackgroundValue,
+              upload: control.background?.upload,
+              onChange: (next: BackgroundValue) => DialStore.updateValue(props.panelId, control.path, next),
+            }),
+          });
+        case 'anchor':
+          return h(AnchorControl, {
             key: control.path,
             label: control.label,
-            value: value as XYValue,
-            x: control.xAxis,
-            y: control.yAxis,
-            grid: control.grid,
-            density: control.density,
-            snap: control.snap,
-            returnToCenter: control.returnToCenter,
-            showValues: control.showValues,
-            shortcut: control.shortcut,
-            shortcutActive: isShortcutActive(control.path),
-            onChange: (next: XYValue) => TweakStore.updateValue(props.panelId, control.path, next),
+            hint: control.hint,
+            value: value as AnchorValue,
+            onChange: (next: AnchorValue) => DialStore.updateValue(props.panelId, control.path, next),
           });
         case 'action':
           return h('button', {
             key: control.path,
-            class: 'tweakers-button',
-            // The wrapper greys every control out, but only a real `disabled`
-            // takes a button out of the tab order too.
-            disabled: TweakStore.isDisabled(props.panelId, control.path),
-            onClick: () => TweakStore.triggerAction(props.panelId, control.path),
+            class: 'dialkit-button',
+            'data-hint': control.hint,
+            onClick: () => DialStore.triggerAction(props.panelId, control.path),
           }, control.label);
         default:
           return null;
       }
     };
-
-    // Wrap leaf controls so they can carry a hint. Without one the wrapper falls
-    // back to a native tooltip showing the config path — a quick dev reference
-    // for which key a control maps to. Folders manage their own rows.
-    const renderControl = (control: ControlMeta): ReturnType<typeof h> | null => {
-      const node = renderControlNode(control);
-      if (control.type === 'folder') return node;
-      return h(ControlShell, {
-        key: control.path,
-        hint: control.hint,
-        title: control.path,
-        id: hintId(control),
-        affordance: control.affordance,
-        panelId: props.panelId,
-        path: control.path,
-      }, { default: () => node });
-    };
-
-    return () => h(Fragment, null, props.controls.map(renderControl));
+    return () => h(Fragment, null, renderControls(props.controls, true));
   },
 });

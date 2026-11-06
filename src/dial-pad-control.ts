@@ -1,0 +1,305 @@
+import { PAD_GRID_DIVISIONS, normalizePadValue, padAxisLabel, padFraction, padGridIntersection, padValueFromDrag, padValueFromKey, padValueFromPoint, resolvePadAxis, snapPadAxis, type DialPadConfig, type DialPadValue } from './dial-pad';
+import { setHint } from './hints';
+
+export type DialPadProps = Omit<DialPadConfig, 'type'> & {
+  label: string;
+  value: DialPadValue;
+  onChange: (value: DialPadValue) => void;
+  hint?: string;
+};
+
+let nextId = 0;
+
+// The number keeps room for all its characters; the axis name gives way first, and only as far as it must.
+const fitValue = (input: HTMLInputElement) => input.style.setProperty('--dial-pad-value-chars', String(Math.max(1, input.value.length)));
+
+function element<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
+  const el = document.createElement(tag);
+  el.className = className;
+  if (text) el.textContent = text;
+  return el;
+}
+
+/** Shared pointer, keyboard, and numeric editing behavior for all four frameworks. */
+export function mountDialPad(host: HTMLElement, initial: DialPadProps) {
+  let props = initial;
+  let value = normalizePadValue(props.value, props);
+  let drag: {
+    id: number;
+    start: { x: number; y: number };
+    value: DialPadValue;
+    offset: { x: number; y: number };
+    moved: boolean;
+    lock?: 'x' | 'y';
+    lockValue?: DialPadValue;
+  } | undefined;
+  let labelDrag: {
+    axis: 'x' | 'y';
+    name: HTMLElement;
+    field: HTMLElement;
+    id: number;
+    x: number;
+    start: number;
+    value: number;
+    moved: boolean;
+    cancelled: boolean;
+  } | undefined;
+  let suppressClick = false;
+
+  const root = element('div', 'dialkit-pad');
+  const fields = element('div', 'dialkit-pad-fields');
+  const caption = element('div', 'dialkit-pad-caption');
+  const label = element('span', 'dialkit-pad-label');
+  caption.append(label);
+  fields.append(caption);
+  const surface = element('div', 'dialkit-pad-surface');
+  surface.tabIndex = 0;
+  surface.setAttribute('role', 'group');
+  const plane = element('div', 'dialkit-pad-plane');
+  plane.setAttribute('aria-hidden', 'true');
+  // Grid spacing is based on the whole square, independently of the point's inset.
+  const grid = element('div', 'dialkit-pad-grid');
+  grid.setAttribute('aria-hidden', 'true');
+  for (let index = 1; index < PAD_GRID_DIVISIONS; index++) {
+    const vertical = element('span', 'dialkit-pad-grid-line dialkit-pad-grid-vertical');
+    const horizontal = element('span', 'dialkit-pad-grid-line dialkit-pad-grid-horizontal');
+    vertical.style.left = `${index / PAD_GRID_DIVISIONS * 100}%`;
+    horizontal.style.top = `${index / PAD_GRID_DIVISIONS * 100}%`;
+    grid.append(vertical, horizontal);
+  }
+  const center = element('span', 'dialkit-pad-center');
+  const point = element('span', 'dialkit-pad-point');
+  plane.append(center, point);
+  surface.append(grid, plane);
+  const instructions = element('span', 'dialkit-pad-instructions', 'Arrow keys adjust each axis. Shift adjusts by ten steps. Home resets both axes. Hold Shift while dragging to lock an axis.');
+  instructions.id = `dialkit-pad-help-${++nextId}`;
+  surface.setAttribute('aria-describedby', instructions.id);
+  const inputs = (['x', 'y'] as const).map(axis => {
+    const field = element('label', 'dialkit-pad-field');
+    const name = element('span', 'dialkit-pad-axis');
+    const input = element('input', 'dialkit-pad-value');
+    input.type = 'text';
+    input.inputMode = 'decimal';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    input.setAttribute('role', 'spinbutton');
+    field.append(name, input);
+    fields.append(field);
+    input.addEventListener('focus', () => input.select());
+    input.addEventListener('input', () => fitValue(input));
+    // With dragLabels, the axis label drags the value. A click without a drag
+    // still opens the number for typing.
+    name.addEventListener('pointerdown', event => {
+      suppressClick = false;
+      if (!props.dragLabels || event.button !== 0 || labelDrag) return;
+      event.preventDefault();
+      // Commit a typed draft first, so the drag starts from the value shown.
+      if (document.activeElement === input) input.blur();
+      labelDrag = { axis, name, field, id: event.pointerId, x: event.clientX, start: value[axis], value: value[axis], moved: false, cancelled: false };
+      name.setPointerCapture(event.pointerId);
+      window.addEventListener('keydown', cancelLabelDrag, true);
+    });
+    name.addEventListener('pointermove', event => {
+      if (event.pointerId !== labelDrag?.id || labelDrag.cancelled) return;
+      if (!labelDrag.moved && Math.abs(event.clientX - labelDrag.x) < 3) return;
+      labelDrag.moved = true;
+      field.dataset.dragging = 'true';
+      labelDrag.value = padValueFromDrag(labelDrag.value, event.clientX - labelDrag.x, event.shiftKey, props[axis]);
+      labelDrag.x = event.clientX;
+      commit({ ...value, [axis]: labelDrag.value });
+    });
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) {
+      name.addEventListener(type, event => { if (event.pointerId === labelDrag?.id) endLabelDrag(); });
+    }
+    // The field is a label element, so a click on the axis label would otherwise focus the number.
+    name.addEventListener('click', event => {
+      if (suppressClick) event.preventDefault();
+      suppressClick = false;
+    });
+    input.addEventListener('blur', () => {
+      const number = input.value.trim() === '' ? NaN : Number(input.value);
+      if (Number.isFinite(number)) commit({ ...value, [axis]: number });
+      input.value = String(value[axis]);
+      fitValue(input);
+    });
+    input.addEventListener('keydown', event => {
+      event.stopPropagation();
+      if (event.key === 'Enter' || event.key === 'Escape') {
+        event.preventDefault();
+        if (event.key === 'Escape') input.value = String(value[axis]);
+        input.blur();
+        surface.focus({ preventScroll: true });
+      } else if (!event.altKey && !event.metaKey && !event.ctrlKey && ['ArrowUp', 'ArrowDown'].includes(event.key)) {
+        event.preventDefault();
+        const range = resolvePadAxis(props[axis]);
+        const draft = input.value.trim() === '' ? NaN : Number(input.value);
+        const current = Number.isFinite(draft) ? draft : value[axis];
+        const direction = event.key === 'ArrowUp' ? 1 : -1;
+        commit({ ...value, [axis]: snapPadAxis(current + direction * range.step * (event.shiftKey ? 10 : 1), range) });
+        input.value = String(value[axis]);
+        fitValue(input);
+      }
+    });
+    return { axis, name, input };
+  });
+  root.append(fields, surface, instructions);
+  host.append(root);
+
+  function render() {
+    label.textContent = props.label;
+    setHint(root, props.hint);
+    if (props.hideLabel) root.dataset.hideLabel = 'true';
+    else delete root.dataset.hideLabel;
+    if (props.dragLabels) root.dataset.dragLabels = 'true';
+    else delete root.dataset.dragLabels;
+    const names = { x: props.labels?.x ?? 'X', y: props.labels?.y ?? 'Y' };
+    const axes = `${names.x} ${value.x}, ${names.y} ${value.y}`;
+    // Axis labels that already carry the pad label name the pad on their own.
+    const named = padAxisLabel(props.label, names.x) === names.x && padAxisLabel(props.label, names.y) === names.y;
+    surface.setAttribute('aria-label', named ? axes : `${props.label}: ${axes}`);
+    inputs.forEach(({ axis, name, input }) => {
+      const range = resolvePadAxis(props[axis]);
+      name.textContent = names[axis];
+      input.setAttribute('aria-label', padAxisLabel(props.label, names[axis]));
+      input.setAttribute('aria-valuemin', String(range.min));
+      input.setAttribute('aria-valuemax', String(range.max));
+      input.setAttribute('aria-valuenow', String(value[axis]));
+      if (document.activeElement !== input) input.value = String(value[axis]);
+      fitValue(input);
+      const fraction = padFraction(value[axis], range, props.mapping);
+      point.style[axis === 'x' ? 'left' : 'top'] = `${(axis === 'x' ? fraction : 1 - fraction) * 100}%`;
+    });
+  }
+
+  function commit(next: DialPadValue) {
+    const normalized = normalizePadValue(next, props);
+    if (normalized.x === value.x && normalized.y === value.y) return;
+    value = normalized;
+    render();
+    props.onChange({ ...value });
+  }
+
+  function endLabelDrag() {
+    if (!labelDrag) return;
+    const { name, field, id, moved, cancelled } = labelDrag;
+    labelDrag = undefined;
+    suppressClick = moved || cancelled;
+    delete field.dataset.dragging;
+    window.removeEventListener('keydown', cancelLabelDrag, true);
+    if (name.hasPointerCapture(id)) name.releasePointerCapture(id);
+  }
+
+  // Escape restores the starting value. The pointer stays captured until it's
+  // released, so the release can't click the number open.
+  function cancelLabelDrag(event: KeyboardEvent) {
+    if (event.key !== 'Escape' || !labelDrag) return;
+    event.preventDefault();
+    event.stopPropagation();
+    labelDrag.cancelled = true;
+    delete labelDrag.field.dataset.dragging;
+    window.removeEventListener('keydown', cancelLabelDrag, true);
+    commit({ ...value, [labelDrag.axis]: labelDrag.start });
+  }
+
+  function endDrag() {
+    const id = drag?.id;
+    drag = undefined;
+    delete surface.dataset.dragging;
+    if (id !== undefined && surface.hasPointerCapture(id)) surface.releasePointerCapture(id);
+  }
+
+  function move(event: PointerEvent, released = false) {
+    if (!drag || event.pointerId !== drag.id) return;
+    if (Math.max(Math.abs(event.clientX - drag.start.x), Math.abs(event.clientY - drag.start.y)) >= 3) {
+      drag.moved = true;
+      surface.dataset.dragging = 'true';
+    }
+    const bounds = plane.getBoundingClientRect();
+    if (!bounds.width || !bounds.height) return;
+    let x = event.clientX - drag.offset.x;
+    let y = event.clientY - drag.offset.y;
+    // Snap clicks on release, including clicks on the point itself. Once a drag
+    // begins, never snap it, even if it ends back inside the starting snap area.
+    if (released && !drag.moved && !event.shiftKey) {
+      const gridBounds = grid.getBoundingClientRect();
+      const intersection = padGridIntersection(event.clientX - gridBounds.left, event.clientY - gridBounds.top, gridBounds.width, gridBounds.height);
+      if (intersection) {
+        x = gridBounds.left + intersection.x;
+        y = gridBounds.top + intersection.y;
+      }
+    }
+    const next = padValueFromPoint(
+      (x - bounds.left) / bounds.width,
+      (y - bounds.top) / bounds.height,
+      props,
+    );
+    if (event.shiftKey) {
+      if (!drag.lock) {
+        const dx = Math.abs(event.clientX - drag.start.x);
+        const dy = Math.abs(event.clientY - drag.start.y);
+        if (Math.max(dx, dy) < 3) return;
+        drag.lock = dx >= dy ? 'x' : 'y';
+        drag.lockValue = { ...value };
+      }
+      const fixed = drag.lock === 'x' ? 'y' : 'x';
+      next[fixed] = drag.lockValue![fixed];
+    } else {
+      drag.lock = undefined;
+      drag.lockValue = undefined;
+    }
+    commit(next);
+  }
+
+  surface.addEventListener('dblclick', () => commit(normalizePadValue(undefined, props)));
+  surface.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || drag) return;
+    event.preventDefault();
+    surface.focus({ preventScroll: true });
+    const bounds = point.getBoundingClientRect();
+    const onPoint = event.target === point;
+    drag = {
+      id: event.pointerId,
+      start: { x: event.clientX, y: event.clientY },
+      value: { ...value },
+      offset: onPoint ? { x: event.clientX - bounds.left - bounds.width / 2, y: event.clientY - bounds.top - bounds.height / 2 } : { x: 0, y: 0 },
+      moved: false,
+    };
+    surface.setPointerCapture(event.pointerId);
+    move(event);
+  });
+  surface.addEventListener('pointermove', move);
+  surface.addEventListener('pointerup', event => {
+    if (event.pointerId !== drag?.id) return;
+    move(event, true);
+    endDrag();
+  });
+  surface.addEventListener('pointercancel', event => { if (event.pointerId === drag?.id) endDrag(); });
+  surface.addEventListener('lostpointercapture', event => { if (event.pointerId === drag?.id) endDrag(); });
+  surface.addEventListener('keydown', event => {
+    if (event.altKey || event.metaKey || event.ctrlKey) return;
+    const next = padValueFromKey(value, event.key, event.shiftKey, props);
+    if (next || event.key === 'Home' || (event.key === 'Escape' && drag)) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (next) commit(next);
+      else if (event.key === 'Home') { endDrag(); commit(normalizePadValue(undefined, props)); }
+      else if (drag) { const start = drag.value; endDrag(); commit(start); }
+    }
+  });
+
+  render();
+  return {
+    update(next: DialPadProps) {
+      props = next;
+      const incoming = normalizePadValue(next.value, props);
+      if (labelDrag && !props.dragLabels) endLabelDrag();
+      // A value set from outside during a label drag becomes its new start.
+      if (labelDrag && incoming[labelDrag.axis] !== value[labelDrag.axis]) {
+        labelDrag.start = labelDrag.value = incoming[labelDrag.axis];
+      }
+      value = incoming;
+      render();
+    },
+    destroy() { endDrag(); endLabelDrag(); setHint(root, undefined); root.remove(); },
+  };
+}

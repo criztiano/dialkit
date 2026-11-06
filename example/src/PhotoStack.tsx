@@ -1,91 +1,23 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useTweakers, TweakStore, Slider, Toggle } from 'dialkit';
-import type { AffordanceContext, ChipOption, ListItemType } from 'dialkit';
-
-const PANEL_NAME = 'Photo Stack';
+import { useDialKit } from 'dialkit';
 
 const PHOTOS = [
-  { id: 1, key: 'one', src: '/photos/one.avif', color: '#c41e3a' },
-  { id: 2, key: 'two', src: '/photos/two.avif', color: '#1a1a2e' },
-  { id: 3, key: 'three', src: '/photos/three.avif', color: '#e8d5b7' },
-  { id: 4, key: 'four', src: '/photos/four.avif', color: '#2d5a27' },
+  { id: 1, src: '/photos/one.avif', color: '#c41e3a' },
+  { id: 2, src: '/photos/two.avif', color: '#1a1a2e' },
+  { id: 3, src: '/photos/three.avif', color: '#e8d5b7' },
+  { id: 4, src: '/photos/four.avif', color: '#2d5a27' },
 ];
-
-// Demo data for the new Svelte-ported controls (swatch + chips).
-const PALETTES = [
-  { value: 'sunset', label: 'Sunset', colors: ['#ff5a3c', '#ffb38a', '#6366f1'] },
-  { value: 'forest', label: 'Forest', colors: ['#10b981', '#6ee7b7'] },
-  { value: 'ocean', label: 'Ocean', colors: ['#0ea5e9', '#67e8f9'] },
-  { value: 'mono', label: 'Mono', colors: ['#1a1a1a'] },
-];
-
-const INITIAL_LOOKS: ChipOption[] = [
-  { value: 'calm', label: 'Calm' },
-  { value: 'bold', label: 'Bold' },
-  { value: 'warm', label: 'Warm', removable: true },
-  { value: 'cool', label: 'Cool', removable: true },
-];
-
-// Effect-stack item types for the `list` control — each composes into the front
-// photo's live CSS filter (or a tint overlay), the way a layer stack would.
-const EFFECT_TYPES: Record<string, ListItemType> = {
-  blur: { label: 'Blur', schema: { radius: [4, 0, 24] } },
-  brightness: { label: 'Brightness', schema: { amount: [1.15, 0.2, 2, 0.05] } },
-  saturate: { label: 'Saturate', schema: { amount: [1.5, 0, 3, 0.05] } },
-  hueRotate: { label: 'Hue Rotate', schema: { angle: [0, 0, 360, 1] } },
-  tint: {
-    label: 'Tint',
-    schema: {
-      strength: [0.35, 0, 1, 0.01],
-      // Palette mode, so a row's colour looks like colour everywhere else.
-      color: { type: 'color' as const, default: '#ff5a3c', palette: true },
-      scheme: { type: 'swatch' as const, options: PALETTES, default: 'sunset' },
-    },
-    // Per-field help, keyed the same way as the schema.
-    hints: { strength: 'How far the tint pulls the photo toward that colour.' },
-    // Sections, also keyed by param name. Ungrouped fields stay flat on top.
-    groups: { color: 'Appearance', scheme: 'Appearance' },
-  },
-};
-
-/**
- * What the host app puts inside an affordance popover — tweakers renders only the
- * dot and the shell. This one stands in for Pixture's ♪ music binding: a toggle
- * plus a depth amount, pushing status back so the dot lights up.
- */
-function MusicBind({ setStatus }: AffordanceContext) {
-  const [bound, setBound] = useState(false);
-  const [depth, setDepth] = useState(0.5);
-
-  const bind = (next: boolean) => {
-    setBound(next);
-    // The dot reflects whatever the app says: lit while bound, pulsing once the
-    // binding is actually driving the value.
-    setStatus(next ? 'active' : 'off');
-  };
-
-  return (
-    <>
-      <Toggle label="Bound" checked={bound} onChange={bind} />
-      <Slider label="Depth" value={depth} min={0} max={1} step={0.01} onChange={setDepth} />
-    </>
-  );
-}
 
 export function PhotoStack() {
   const [step, setStep] = useState(0);
   const currentIndex = step % PHOTOS.length;
 
-  // State for the new controls' events (file pick, chip removal).
-  const [textureUrl, setTextureUrl] = useState<string | null>(null);
-  const [looks, setLooks] = useState<ChipOption[]>(INITIAL_LOOKS);
-
   const next = () => {
     setStep((s) => s + 1);
   };
 
-  const params = useTweakers(PANEL_NAME, {
+  const params = useDialKit('Photo Stack', {
     title: 'Japan',
     subtitle: { type: 'text' as const, default: 'December 2025', placeholder: 'Enter subtitle...' },
     shadowTint: '#000000',
@@ -97,26 +29,6 @@ export function PhotoStack() {
         { value: 'landscape', label: 'Landscape' },
       ],
       default: 'portrait',
-    },
-    texture: { type: 'file' as const, accept: 'image/*' },
-    palette: { type: 'swatch' as const, default: 'sunset', options: PALETTES },
-    look: { type: 'chips' as const, default: 'calm', options: looks },
-    effects: {
-      type: 'list' as const,
-      addLabel: 'Add effect',
-      itemTypes: EFFECT_TYPES,
-      default: [
-        // A row can carry its own name; untitled rows fall back to the type label.
-        { type: 'brightness', params: { amount: 1.1 }, title: 'Lift shadows' },
-        { type: 'saturate', params: { amount: 1.5 } },
-      ],
-    },
-    cover: {
-      type: 'gallery' as const,
-      default: 'one',
-      // aspect reserves each tile's space so the skeleton sizes correctly and the
-      // masonry doesn't reflow as photos load (all four are 750×1124).
-      items: PHOTOS.map((photo) => ({ id: photo.key, src: photo.src, alt: `Photo ${photo.key}`, aspect: 750 / 1124 })),
     },
     backPhoto: {
       _collapsed: true,
@@ -132,11 +44,6 @@ export function PhotoStack() {
       blur: [14, 0, 60],
       yOffset: [8, 0, 60],
     },
-    finish: {
-      _collapsed: true,
-      fan: [0, -15, 15],
-      cornerRadius: [2, 0, 24],
-    },
     transitionSpring: {
       type: 'spring' as const,
       visualDuration: 0.5,
@@ -144,81 +51,23 @@ export function PhotoStack() {
     },
     darkMode: false,
     next: { type: 'action' as const },
-    reset: { type: 'action' as const, label: 'Reset (disabled)' },
   }, {
     shortcuts: {
       'backPhoto.offsetX': { key: 'x', mode: 'coarse' },
       'shadow.opacity': { key: 'o', mode: 'fine' },
     },
-    // Help text is keyed by control path — most controls are bare shorthand
-    // (`scale: [0.7, 0.5, 0.95]`) with nowhere to hang a property.
-    // tweakers draws the dot and the popover shell; the app fills the inside.
-    affordances: {
-      'backPhoto.offsetX': { label: 'Bind to music', content: MusicBind },
-      'shadow.opacity': { label: 'Bind to music', content: MusicBind },
-    },
-    hints: {
-      shadowTint: 'Tints the drop shadow under the stack, not the photo itself.',
-      texture: 'Overlays a grain or paper image. Stays on your machine.',
-      backPhoto: 'The photo peeking out behind the top one.',
-      'backPhoto.overlayOpacity': 'Darkens the back photo so the front one reads first.',
-      'shadow.blur': 'Soft edges read as distance; tight edges sit the stack flat.',
-    },
     onAction: (action) => {
       if (action === 'next') next();
     },
-    onEvent: (_path, event) => {
-      if (event.kind === 'file' && event.files[0]) {
-        setTextureUrl((prev) => {
-          if (prev) URL.revokeObjectURL(prev);
-          return URL.createObjectURL(event.files[0]);
-        });
-      } else if (event.kind === 'remove') {
-        setLooks((ls) => ls.filter((l) => l.value !== event.value));
-      }
-    },
   });
 
-  // Picking a cover springs the stack so that photo sits on top.
-  useEffect(() => {
-    const coverIndex = PHOTOS.findIndex((photo) => photo.key === params.cover);
-    if (coverIndex >= 0) setStep(coverIndex);
-  }, [params.cover]);
-
-  // Resolve this panel's id so the gallery selection can be written back in sync.
-  const [panelId, setPanelId] = useState<string | null>(null);
-  useEffect(() => {
-    const sync = () => setPanelId(TweakStore.getPanels().find((p) => p.name === PANEL_NAME)?.id ?? null);
-    sync();
-    return TweakStore.subscribeGlobal(sync);
-  }, []);
-
-  // Availability is app state, so it's pushed at runtime rather than declared.
-  useEffect(() => {
-    if (!panelId) return;
-    TweakStore.setDisabled(panelId, 'reset', true);
-  }, [panelId]);
-
-  // Keep the "cover" gallery and the photo on top of the stack as one selection, so
-  // the gallery's checkmark always matches the front photo — whichever drives it.
-
-  // Stack → cover: reflect the current front photo as the selected cover.
-  useEffect(() => {
-    if (!panelId) return;
-    const frontKey = PHOTOS[currentIndex].key;
-    if (params.cover !== frontKey) TweakStore.updateValue(panelId, 'cover', frontKey);
-    // Only react to the stack moving (not the pick itself), so this can't clobber a
-    // fresh selection before `step` has advanced to it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentIndex, panelId]);
-
-  // Cover → stack: advance forward to the picked photo. Forward-only keeps `step`
-  // monotonic so the entrance-animation keys (which use the lap count) stay stable.
-  useEffect(() => {
-    const coverIndex = PHOTOS.findIndex((photo) => photo.key === params.cover);
-    if (coverIndex < 0) return;
-    setStep((s) => s + ((coverIndex - (s % PHOTOS.length) + PHOTOS.length) % PHOTOS.length));
-  }, [params.cover]);
+  const stage = useDialKit('Stage', {
+    pagePadding: [40, 16, 96],
+    stackGap: [24, 8, 72],
+    titleInset: [8, 0, 48],
+    lightBackground: { type: 'color' as const, default: '#ffffff' },
+    darkBackground: { type: 'color' as const, default: '#0d0d0d' },
+  });
 
   const visibleCount = 2;
   const visiblePhotos = [];
@@ -235,34 +84,9 @@ export function PhotoStack() {
   };
   const shape = shapeSizes[params.photoShape as keyof typeof shapeSizes] ?? shapeSizes.portrait;
 
-  const bgColor = params.darkMode ? '#0d0d0d' : '#ffffff';
+  const bgColor = params.darkMode ? stage.darkBackground : stage.lightBackground;
   const textColor = params.darkMode ? '#ffffff' : '#1a1a1a';
   const subtextColor = params.darkMode ? '#666' : '#888';
-  const transition = params.transitionSpring.type === 'easing'
-    ? { ...params.transitionSpring, type: 'tween' as const }
-    : params.transitionSpring;
-
-  // Visible wiring for the new controls so they can be tested at a glance.
-  const palette = PALETTES.find((p) => p.value === params.palette);
-  const titleAccent = palette?.colors[0] ?? textColor;
-  const activeLook = looks.find((l) => l.value === params.look)?.label ?? params.look;
-
-  // Compose the effect stack into a live CSS filter + tint overlays for the front photo.
-  const effects = params.effects;
-  const photoFilter = effects
-    .map((fx) => {
-      const p = fx.params;
-      switch (fx.type) {
-        case 'blur': return `blur(${p.radius}px)`;
-        case 'brightness': return `brightness(${p.amount})`;
-        case 'saturate': return `saturate(${p.amount})`;
-        case 'hueRotate': return `hue-rotate(${p.angle}deg)`;
-        default: return '';
-      }
-    })
-    .filter(Boolean)
-    .join(' ');
-  const tints = effects.filter((fx) => fx.type === 'tint');
 
   useEffect(() => {
     document.documentElement.style.background = bgColor;
@@ -278,18 +102,18 @@ export function PhotoStack() {
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'flex-start',
-      gap: 24,
+      gap: stage.stackGap,
       height: '100vh',
       width: '100%',
-      padding: 40,
+      padding: stage.pagePadding,
       background: bgColor,
       transition: 'background 0.3s ease',
     }}>
-      <div style={{ paddingLeft: 8 }}>
+      <div style={{ paddingLeft: stage.titleInset }}>
         <h1 style={{
           fontSize: 48,
           fontWeight: 600,
-          color: titleAccent,
+          color: textColor,
           margin: 0,
           letterSpacing: '-0.02em',
           fontFamily: 'system-ui, -apple-system, sans-serif',
@@ -306,32 +130,6 @@ export function PhotoStack() {
         }}>
           {params.subtitle}
         </p>
-        {/* Readouts so the new controls are testable at a glance */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          marginTop: 12,
-          fontSize: 13,
-          color: subtextColor,
-          fontFamily: 'system-ui, -apple-system, sans-serif',
-        }}>
-          <span>palette <strong style={{ color: titleAccent }}>{palette?.label ?? params.palette}</strong></span>
-          <span>·</span>
-          <span>look <strong style={{ color: textColor }}>{activeLook}</strong></span>
-          <span>·</span>
-          <span>fx <strong style={{ color: textColor }}>{effects.length}</strong></span>
-          {textureUrl && (
-            <>
-              <span>·</span>
-              <img
-                src={textureUrl}
-                alt="texture"
-                style={{ width: 28, height: 28, objectFit: 'cover', borderRadius: 6, border: `1px solid ${subtextColor}` }}
-              />
-            </>
-          )}
-        </div>
       </div>
 
       <div style={{
@@ -361,7 +159,6 @@ export function PhotoStack() {
                     x: targetX,
                     y: targetY,
                     scale: targetScale,
-                    rotate: stackIndex * params.finish.fan,
                     zIndex: visibleCount - stackIndex,
                   }}
                   exit={{
@@ -371,7 +168,7 @@ export function PhotoStack() {
                     opacity: 0,
                     zIndex: visibleCount + 1,
                   }}
-                  transition={transition}
+                  transition={params.transitionSpring}
                   style={{
                     position: 'absolute',
                     width: shape.width,
@@ -382,7 +179,7 @@ export function PhotoStack() {
                   <motion.div
                     initial={false}
                     animate={{ opacity: shadowOpacity }}
-                    transition={transition}
+                    transition={params.transitionSpring}
                     style={{
                       position: 'absolute',
                       inset: 0,
@@ -427,7 +224,6 @@ export function PhotoStack() {
                     x: targetX,
                     y: targetY,
                     scale: targetScale,
-                    rotate: stackIndex * params.finish.fan,
                     zIndex: visibleCount - stackIndex,
                   }}
                   exit={{
@@ -436,7 +232,7 @@ export function PhotoStack() {
                     scale: 1,
                     zIndex: visibleCount + 1,
                   }}
-                  transition={transition}
+                  transition={params.transitionSpring}
                   style={{
                     position: 'absolute',
                     width: shape.width,
@@ -451,32 +247,19 @@ export function PhotoStack() {
                   <div style={{
                     position: 'absolute',
                     inset: 0,
-                    borderRadius: params.finish.cornerRadius,
+                    borderRadius: 2,
                     overflow: 'hidden',
                     background: photo.color,
                   }}>
                     <img
                       src={photo.src}
                       alt=""
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', filter: isTop && photoFilter ? photoFilter : undefined }}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     />
-                    {isTop && tints.map((fx, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          position: 'absolute',
-                          inset: 0,
-                          background: String(fx.params.color),
-                          opacity: Number(fx.params.strength),
-                          mixBlendMode: 'color',
-                          pointerEvents: 'none',
-                        }}
-                      />
-                    ))}
                     <motion.div
                       initial={false}
                       animate={{ opacity: overlayOpacity }}
-                      transition={transition}
+                      transition={params.transitionSpring}
                       style={{
                         position: 'absolute',
                         inset: 0,

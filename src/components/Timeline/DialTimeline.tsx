@@ -1,0 +1,2221 @@
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { AnimatePresence, motion } from 'motion/react';
+import { DialStore, formatLabel } from '../../store/DialStore';
+import type { ControlMeta, DialValue } from '../../store/DialStore';
+import { TimelineStore } from '../../store/TimelineStore';
+import type { TimelineClipMeta, TimelineMeta } from '../../store/TimelineStore';
+import { TimelineUiStore } from '../../store/TimelineUiStore';
+import {
+  clampClipResizeEnd,
+  clampClipResizeStart,
+  clampStepResize,
+  clampTrackDelay,
+  formatClock,
+  formatSeconds,
+  formatStepLabel,
+  computeClipStaticFromValues,
+  dragTimelineClip,
+  normalizeTimelineValuesForCopy,
+  segmentedMinDuration,
+  segmentWidths,
+  singleTrackLanes,
+  TIMELINE_MIN_CLIP_DURATION,
+  timelineClipDragBounds,
+  timelineClipProgress,
+  timelineClipSpans,
+  timelinePopoverDisplayValues,
+  pressTimelineSelection,
+  timelineBlockMove,
+  timelineReorderAts,
+  timelineReorderSlot,
+} from '../../timeline-core';
+import type { TimelineClipDragBounds, TimelineClipLoop, TimelineClipSpan, TimelineStepStatic } from '../../timeline-core';
+import { clamp, round2 } from '../../transition-math';
+import { buildCopyInstruction } from '../../copy-instruction';
+import { isDevDefault } from '../../env';
+import { ICON_CHEVRON, ICON_CHECK, ICON_CLIPBOARD_PLAIN, ICON_LOOP, ICON_PAUSE, ICON_PLAY, ICON_REPLAY } from '../../icons';
+import { findControl } from '../../shortcut-utils';
+import { isAccordionPanel, resolveOpenFolder } from '../../accordion';
+import { observePointerFocus } from '../../pointer-focus';
+import { ControlRenderer } from '../ControlRenderer';
+import { PresetManager } from '../PresetManager';
+import { TIMELINE_HINTS } from '../../hints';
+import { useHints } from '../../hooks/useHints';
+import type { DialTheme } from '../DialRoot';
+
+const DRAG_THRESHOLD_PX = 3;
+/** Vertical travel that turns a single-track move into a reorder. Once
+ * lifted, the drag stays a reorder until the pointer is released. */
+const LIFT_PX = 12;
+/** A tail starts this far under its bar's rounded end (it draws behind the
+ * bar), so it comes out of the bar with no notch. */
+const TAIL_TUCK_PX = 8;
+const MAJOR_TICK_TARGET_PX = 140;
+const MILLISECOND_STEP = 0.001;
+const SECOND_TICK_STEPS = [
+  0.001, 0.002, 0.005,
+  0.01, 0.02, 0.05,
+  0.1, 0.2, 0.5,
+  1, 2, 5, 10, 15, 30, 60, 120, 300, 600,
+];
+const MIN_TIMELINE_MAX_ZOOM = 8;
+// The flag hugs its digits; the edge clamp keeps its widest (five
+// characters) inside the lane.
+const PLAYHEAD_FLAG_WIDTH = 38;
+const PLAYHEAD_FLAG_EDGE_OVERHANG = 1;
+const POPOVER_WIDTH = 280;
+const ZOOM_DRAG_DISTANCE = 180;
+/** Wheel pixels per e-fold of Option-scroll zoom: a mouse wheel notch
+ * (about 100px) is a clear step, a trackpad flick a smooth one. */
+const ZOOM_WHEEL_DISTANCE = 240;
+const DEFAULT_DOCK_MAX_HEIGHT = 400;
+const MIN_DOCK_MAX_HEIGHT = 120;
+
+const NO_SELECTION: ReadonlySet<string> = new Set();
+
+const subscribeGlobalTimelines = (callback: () => void) => TimelineStore.subscribeGlobal(callback);
+const getTimelines = () => TimelineStore.getTimelines();
+const subscribeTimelineVisibility = (callback: () => void) => TimelineUiStore.subscribe(callback);
+const getTimelineVisibility = () => TimelineUiStore.getVisible();
+
+export interface DialTimelineProps {
+  theme?: DialTheme;
+  /** Initial dock visibility. Expansion is controlled separately by defaultOpen. */
+  defaultVisible?: boolean;
+  /** Controlled dock visibility. */
+  visible?: boolean;
+  onVisibilityChange?: (visible: boolean) => void;
+  defaultOpen?: boolean;
+  productionEnabled?: boolean;
+  /** Draws an Export button in the timeline bar; the host decides what
+   * exporting means. */
+  onExport?: () => void;
+}
+
+const EXPORT_HINT = 'Exports the timeline.';
+
+// Memoized: hosts that bind `current` re-render every frame, and the dock
+// must not reconcile with them — only its transport leaves tick.
+// The production gate is a hook-free wrapper so its conditional return can
+// never change hook order in the component that actually uses hooks.
+export const DialTimeline = memo(function DialTimeline({
+  theme = 'system',
+  defaultVisible = true,
+  visible,
+  onVisibilityChange,
+  defaultOpen = true,
+  productionEnabled = isDevDefault,
+  onExport,
+}: DialTimelineProps) {
+  if (!productionEnabled) return null;
+  return (
+    <DialTimelineDock
+      theme={theme}
+      defaultVisible={defaultVisible}
+      visible={visible}
+      onVisibilityChange={onVisibilityChange}
+      defaultOpen={defaultOpen}
+      onExport={onExport}
+    />
+  );
+});
+
+function DialTimelineDock({
+  theme,
+  defaultVisible,
+  visible,
+  onVisibilityChange,
+  defaultOpen,
+  onExport,
+}: {
+  theme: DialTheme;
+  defaultVisible: boolean;
+  visible?: boolean;
+  onVisibilityChange?: (visible: boolean) => void;
+  defaultOpen: boolean;
+  onExport?: () => void;
+}) {
+  const [mounted, setMounted] = useState(false);
+  useHints(true);
+  const [dockMaxHeight, setDockMaxHeight] = useState(DEFAULT_DOCK_MAX_HEIGHT);
+  const visibilityControllerId = useRef(Symbol('dialkit-timeline-visibility'));
+  const dockRef = useRef<HTMLDivElement>(null);
+  const resizeCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => TimelineUiStore.registerController(visibilityControllerId.current, {
+    visible,
+    defaultVisible,
+    onVisibilityChange,
+  }), []);
+
+  useEffect(() => {
+    TimelineUiStore.updateController(visibilityControllerId.current, {
+      visible,
+      defaultVisible,
+      onVisibilityChange,
+    });
+  }, [defaultVisible, onVisibilityChange, visible]);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => observePointerFocus(), []);
+
+  useEffect(() => () => resizeCleanupRef.current?.(), []);
+
+  const handleResizePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const dock = dockRef.current;
+    if (!dock) return;
+    e.preventDefault();
+    e.stopPropagation();
+    resizeCleanupRef.current?.();
+
+    const pointerY = e.clientY;
+    const startHeight = dock.getBoundingClientRect().height;
+    const handlePointerMove = (event: PointerEvent) => {
+      event.preventDefault();
+      const viewportMax = Math.max(MIN_DOCK_MAX_HEIGHT, window.innerHeight - 24);
+      setDockMaxHeight(clamp(startHeight + pointerY - event.clientY, MIN_DOCK_MAX_HEIGHT, viewportMax));
+    };
+    const finishResize = () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', finishResize);
+      window.removeEventListener('pointercancel', finishResize);
+      resizeCleanupRef.current = null;
+    };
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: false });
+    window.addEventListener('pointerup', finishResize);
+    window.addEventListener('pointercancel', finishResize);
+    resizeCleanupRef.current = finishResize;
+  }, []);
+
+  const timelines = useSyncExternalStore(subscribeGlobalTimelines, getTimelines, getTimelines);
+  const dockVisible = useSyncExternalStore(
+    subscribeTimelineVisibility,
+    getTimelineVisibility,
+    getTimelineVisibility
+  );
+
+  // Publishes the room the dock takes at the bottom of the viewport (its
+  // height and the gap below it) as --dialkit-timeline-clearance on <html>,
+  // so a host can float its own UI above the dock in CSS. 0 while hidden.
+  const hasTimelines = timelines.length > 0;
+  useEffect(() => {
+    const dock = dockRef.current;
+    if (!dock || typeof ResizeObserver === 'undefined') return;
+    const root = document.documentElement;
+    const publish = () => {
+      const rect = dock.getBoundingClientRect();
+      const clearance = rect.height > 0 ? Math.round(window.innerHeight - rect.top) : 0;
+      root.style.setProperty('--dialkit-timeline-clearance', `${Math.max(0, clearance)}px`);
+    };
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(dock);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty('--dialkit-timeline-clearance');
+    };
+  }, [dockVisible, hasTimelines, mounted]);
+
+  if (!mounted || typeof window === 'undefined' || timelines.length === 0) {
+    return null;
+  }
+
+  return createPortal(
+    <div className="dialkit-root dialkit-timeline" data-theme={theme} hidden={!dockVisible}>
+      <div
+        className="dialkit-timeline-resize-handle"
+        onPointerDown={handleResizePointerDown}
+        role="separator"
+        aria-label="Resize timeline height"
+        data-hint={TIMELINE_HINTS.resize}
+        aria-orientation="horizontal"
+      />
+      <div
+        ref={dockRef}
+        className="dialkit-timeline-dock"
+        style={{ maxHeight: `min(${dockMaxHeight}px, calc(100vh - 24px))` }}
+      >
+        {timelines.map((timeline) => (
+          <TimelineSection
+            key={timeline.id}
+            meta={timeline}
+            defaultOpen={defaultOpen}
+            theme={theme}
+            dockVisible={dockVisible}
+            onExport={onExport}
+          />
+        ))}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// ── Transport leaves ──
+// The 60Hz clock is consumed only by these leaf components (and the per-clip
+// active flag), each with a snapshot that changes identity exactly as often
+// as its output — the section itself stays static during playback.
+
+function useTransportSubscribe(id: string) {
+  return useCallback((callback: () => void) => TimelineStore.subscribe(id, callback), [id]);
+}
+
+function PlayPauseButton({ id }: { id: string }) {
+  const subscribe = useTransportSubscribe(id);
+  // Boolean snapshot: re-renders only when play state flips
+  const getPlaying = useCallback(() => TimelineStore.getTransport(id).playing, [id]);
+  const playing = useSyncExternalStore(subscribe, getPlaying, getPlaying);
+
+  return (
+    <motion.button
+      className="dialkit-toolbar-add"
+      onClick={() => (playing ? TimelineStore.pause(id) : TimelineStore.play(id))}
+      aria-label={playing ? 'Pause' : 'Play'}
+      data-hint={TIMELINE_HINTS.play}
+      whileTap={{ scale: 0.9 }}
+      transition={{ type: 'spring', visualDuration: 0.15, bounce: 0.3 }}
+    >
+      <span style={{ position: 'relative', width: 16, height: 16 }}>
+        <AnimatePresence initial={false} mode="wait">
+          {playing ? (
+            <motion.svg
+              key="pause"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+              style={{ position: 'absolute', inset: 0, width: 16, height: 16, color: 'var(--dial-text-label)' }}
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              transition={{ duration: 0.08 }}
+            >
+              {ICON_PAUSE.map((d, i) => <path key={i} d={d} fill="currentColor" />)}
+            </motion.svg>
+          ) : (
+            <motion.svg
+              key="play"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+              style={{ position: 'absolute', inset: 0, width: 16, height: 16, color: 'var(--dial-text-label)' }}
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              transition={{ duration: 0.08 }}
+            >
+              <path d={ICON_PLAY} fill="currentColor" />
+            </motion.svg>
+          )}
+        </AnimatePresence>
+      </span>
+    </motion.button>
+  );
+}
+
+function ReplayButton({ onReplay }: { onReplay: () => void }) {
+  return (
+    <motion.button
+      className="dialkit-toolbar-add"
+      onClick={onReplay}
+      aria-label="Replay"
+      data-hint={TIMELINE_HINTS.replay}
+      whileTap={{ scale: 0.9 }}
+      transition={{ type: 'spring', visualDuration: 0.15, bounce: 0.3 }}
+    >
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        {ICON_REPLAY.map((d, i) => <path key={i} d={d} fill="currentColor" />)}
+      </svg>
+    </motion.button>
+  );
+}
+
+function LoopButton({ id, loop }: { id: string; loop: boolean }) {
+  return (
+    <motion.button
+      className="dialkit-toolbar-add dialkit-timeline-toolbar-toggle dialkit-timeline-loop"
+      data-active={loop || undefined}
+      aria-pressed={loop}
+      aria-label="Toggle loop"
+      data-hint={TIMELINE_HINTS.loop}
+      onClick={() => TimelineStore.setLoop(id, !loop)}
+      whileTap={{ scale: 0.9 }}
+      transition={{ type: 'spring', visualDuration: 0.15, bounce: 0.3 }}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {ICON_LOOP.map((d, i) => <path key={i} d={d} />)}
+      </svg>
+    </motion.button>
+  );
+}
+
+// The part of a single-track bar the playhead has crossed. Re-renders only
+// while the playhead is inside the bar: before and after, the width holds.
+function ClipFill({ id, at, duration }: { id: string; at: number; duration: number }) {
+  const subscribe = useTransportSubscribe(id);
+  const getProgress = useCallback(
+    () => timelineClipProgress(TimelineStore.getTransport(id).time, at, duration),
+    [at, duration, id]
+  );
+  const progress = useSyncExternalStore(subscribe, getProgress, getProgress);
+  return <span className="dialkit-timeline-clip-fill" style={{ width: `${progress * 100}%` }} aria-hidden="true" />;
+}
+
+// A single-track clip's tail: the settle window past its bar. It lights once
+// the playhead reaches the clip, as a played bar stays filled, and while the
+// bar is hovered or selected. Re-renders only when the played state flips.
+function ClipTail({ id, at, left, width, lit }: { id: string; at: number; left: number; width: number; lit: boolean }) {
+  const subscribe = useTransportSubscribe(id);
+  const getPlayed = useCallback(() => TimelineStore.getTransport(id).time >= at, [at, id]);
+  const played = useSyncExternalStore(subscribe, getPlayed, getPlayed);
+  return <span className="dialkit-timeline-clip-tail" data-lit={lit || played || undefined} style={{ left, width }} aria-hidden="true" />;
+}
+
+function TimelinePlayheadFlag({
+  id,
+  duration,
+  pxPerSecond,
+  viewStart,
+  viewEnd,
+  laneWidth,
+  rulerRef,
+  onResetView,
+}: {
+  id: string;
+  duration: number;
+  pxPerSecond: number;
+  viewStart: number;
+  viewEnd: number;
+  laneWidth: number;
+  rulerRef: React.RefObject<HTMLDivElement>;
+  onResetView: () => void;
+}) {
+  const subscribe = useTransportSubscribe(id);
+  const getTime = useCallback(() => TimelineStore.getTransport(id).time, [id]);
+  const time = useSyncExternalStore(subscribe, getTime, getTime);
+  const scrubRef = useRef<{
+    wasPlaying: boolean;
+    rect: DOMRect;
+    viewStart: number;
+    viewEnd: number;
+  } | null>(null);
+  const cleanupScrubRef = useRef<(() => void) | null>(null);
+
+  const seekFromClientX = useCallback((clientX: number) => {
+    const rect = scrubRef.current?.rect;
+    const scrub = scrubRef.current;
+    const contentWidth = rect?.width ?? 0;
+    if (!rect || !scrub || contentWidth <= 0) return;
+    const nextTime = clamp(
+      scrub.viewStart + ((clientX - rect.left) / contentWidth) * (scrub.viewEnd - scrub.viewStart),
+      scrub.viewStart,
+      scrub.viewEnd
+    );
+    TimelineStore.seek(id, nextTime);
+  }, [id]);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const rect = rulerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    e.preventDefault();
+    e.stopPropagation();
+    cleanupScrubRef.current?.();
+    const resetView = e.shiftKey;
+    scrubRef.current = {
+      wasPlaying: TimelineStore.getTransport(id).playing,
+      rect,
+      viewStart: resetView ? 0 : viewStart,
+      viewEnd: resetView ? duration : viewEnd,
+    };
+    if (resetView) onResetView();
+    TimelineStore.pause(id);
+    seekFromClientX(e.clientX);
+
+    const handleWindowPointerMove = (event: PointerEvent) => {
+      event.preventDefault();
+      seekFromClientX(event.clientX);
+    };
+    const finishWindowScrub = () => {
+      window.removeEventListener('pointermove', handleWindowPointerMove);
+      window.removeEventListener('pointerup', finishWindowScrub);
+      window.removeEventListener('pointercancel', finishWindowScrub);
+      if (scrubRef.current?.wasPlaying) TimelineStore.play(id);
+      scrubRef.current = null;
+      cleanupScrubRef.current = null;
+    };
+
+    window.addEventListener('pointermove', handleWindowPointerMove, { passive: false });
+    window.addEventListener('pointerup', finishWindowScrub);
+    window.addEventListener('pointercancel', finishWindowScrub);
+    cleanupScrubRef.current = finishWindowScrub;
+  }, [duration, id, onResetView, rulerRef, seekFromClientX, viewEnd, viewStart]);
+
+  useEffect(() => () => cleanupScrubRef.current?.(), []);
+
+  if (time < viewStart || time > viewEnd || laneWidth <= 0) return null;
+
+  const x = clamp(
+    (time - viewStart) * pxPerSecond,
+    0,
+    laneWidth
+  );
+  const flagCenter = clamp(
+    x,
+    PLAYHEAD_FLAG_WIDTH / 2 - PLAYHEAD_FLAG_EDGE_OVERHANG,
+    laneWidth - PLAYHEAD_FLAG_WIDTH / 2 + PLAYHEAD_FLAG_EDGE_OVERHANG
+  );
+  const flagOffset = flagCenter - x;
+  const edge = flagOffset > 0.5 ? 'start' : flagOffset < -0.5 ? 'end' : 'center';
+
+  return (
+    <div
+      className="dialkit-timeline-playhead-control"
+      data-edge={edge}
+      style={{
+        left: `calc(var(--dial-timeline-label-w) + ${x}px)`,
+        '--dial-timeline-playhead-flag-offset': `${flagOffset}px`,
+      } as CSSProperties}
+      onPointerDown={handlePointerDown}
+      role="slider"
+      aria-label="Timeline current time"
+      data-hint={TIMELINE_HINTS.playhead}
+      aria-valuemin={0}
+      aria-valuemax={duration}
+      aria-valuenow={time}
+    >
+      <div className="dialkit-timeline-playhead-stem" />
+      <div className="dialkit-timeline-playhead-anchor">
+        <div className="dialkit-timeline-playhead-flag">{time.toFixed(2)}</div>
+      </div>
+    </div>
+  );
+}
+
+function TimelineOverview({
+  id,
+  duration,
+  viewStart,
+  viewEnd,
+  onNavigate,
+}: {
+  id: string;
+  duration: number;
+  viewStart: number;
+  viewEnd: number;
+  onNavigate: (time: number) => void;
+}) {
+  const subscribe = useTransportSubscribe(id);
+  const getTime = useCallback(() => TimelineStore.getTransport(id).time, [id]);
+  const time = useSyncExternalStore(subscribe, getTime, getTime);
+  const scrubRef = useRef<{ wasPlaying: boolean; rect: DOMRect } | null>(null);
+
+  const seekFromClientX = useCallback((clientX: number) => {
+    const rect = scrubRef.current?.rect;
+    if (!rect || rect.width <= 0 || duration <= 0) return;
+    const nextTime = clamp(((clientX - rect.left) / rect.width) * duration, 0, duration);
+    TimelineStore.seek(id, nextTime);
+    onNavigate(nextTime);
+  }, [duration, id, onNavigate]);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    scrubRef.current = {
+      wasPlaying: TimelineStore.getTransport(id).playing,
+      rect: e.currentTarget.getBoundingClientRect(),
+    };
+    TimelineStore.pause(id);
+    seekFromClientX(e.clientX);
+  }, [id, seekFromClientX]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (scrubRef.current) seekFromClientX(e.clientX);
+  }, [seekFromClientX]);
+
+  const finishScrub = useCallback(() => {
+    if (scrubRef.current?.wasPlaying) TimelineStore.play(id);
+    scrubRef.current = null;
+  }, [id]);
+
+  const viewportLeft = duration > 0 ? (viewStart / duration) * 100 : 0;
+  const viewportWidth = duration > 0 ? ((viewEnd - viewStart) / duration) * 100 : 100;
+  const playheadLeft = duration > 0 ? (time / duration) * 100 : 0;
+
+  return (
+    <div
+      className="dialkit-timeline-overview"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={finishScrub}
+      onPointerCancel={finishScrub}
+      onLostPointerCapture={finishScrub}
+      data-hint={TIMELINE_HINTS.overview}
+    >
+      <div
+        className="dialkit-timeline-overview-viewport"
+        data-zoomed={viewportWidth < 99.999 || undefined}
+        style={{ left: `${viewportLeft}%`, width: `${viewportWidth}%` }}
+      />
+      <div className="dialkit-timeline-overview-progress" style={{ width: `${playheadLeft}%` }} />
+      <div className="dialkit-timeline-overview-playhead" style={{ left: `${playheadLeft}%` }} />
+    </div>
+  );
+}
+
+// ── Section ──
+
+type PopoverState = {
+  clip: TimelineClipMeta;
+  /** Set when the popover edits one leg of a sequence. */
+  stepKey?: string;
+  anchor: { left: number; top: number; right: number; bottom: number; width: number; height: number };
+};
+
+type ZoomDragState = {
+  pointerX: number;
+  rect: DOMRect;
+  zoom: number;
+  viewStart: number;
+  anchorRatio: number;
+  anchorTime: number;
+  moved: boolean;
+};
+
+function clampViewStart(start: number, duration: number, visibleDuration: number): number {
+  return clamp(start, 0, Math.max(0, duration - visibleDuration));
+}
+
+function formatRulerSeconds(time: number, step: number): string {
+  if (step >= 1 && Number.isInteger(time)) return formatClock(time);
+  const decimals = Math.min(3, Math.max(1, Math.ceil(-Math.log10(step))));
+  return `${time.toFixed(decimals)}s`;
+}
+
+const TimelineSection = memo(function TimelineSection({
+  meta,
+  defaultOpen,
+  theme,
+  dockVisible,
+  onExport,
+}: {
+  meta: TimelineMeta;
+  defaultOpen: boolean;
+  theme: DialTheme;
+  dockVisible: boolean;
+  onExport?: () => void;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const [copied, setCopied] = useState(false);
+  const [popover, setPopover] = useState<PopoverState | null>(null);
+  // Single track: the selected bars. A press selects a bar alone, Shift-click
+  // adds or removes one, and a press anywhere but a bar or the popover
+  // clears them.
+  const [selectedKeys, setSelectedKeys] = useState<ReadonlySet<string>>(NO_SELECTION);
+  const selectedRef = useRef(selectedKeys);
+  selectedRef.current = selectedKeys;
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
+  const [expandedTracks, setExpandedTracks] = useState<Set<string>>(() => new Set());
+  const [zoom, setZoom] = useState(1);
+  const [viewStart, setViewStart] = useState(0);
+  // The fold clips only while it moves. Motion writes its own values back on
+  // every render, so this rides in the animated values, not a hand-set style.
+  const [foldSettled, setFoldSettled] = useState(false);
+  if (!open && foldSettled) setFoldSettled(false);
+
+  const subscribeValues = useCallback(
+    (callback: () => void) => DialStore.subscribe(meta.id, callback),
+    [meta.id]
+  );
+  const getValues = useCallback(() => DialStore.getValues(meta.id), [meta.id]);
+  const values = useSyncExternalStore(subscribeValues, getValues, getValues);
+  const presets = DialStore.getPresets(meta.id);
+  const activePresetId = DialStore.getActivePresetId(meta.id);
+
+  // Measure the shared ruler/track span so seconds map to pixels.
+  const laneAreaRef = useRef<HTMLDivElement>(null);
+  const horizontalScrollRef = useRef<HTMLDivElement>(null);
+  const [laneWidth, setLaneWidth] = useState(0);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const ruler = laneAreaRef.current;
+    if (!ruler) return;
+    // Layout sizes, which a host's zoom (a scale on a parent) leaves alone:
+    // a scaled screen width would place every clip as far out as the zoom.
+    const measure = (entries?: ResizeObserverEntry[]) => {
+      setLaneWidth(entries?.[0]?.borderBoxSize?.[0]?.inlineSize ?? ruler.offsetWidth);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(ruler);
+    return () => observer.disconnect();
+  }, [open]);
+
+  const visibleDuration = meta.duration > 0 ? meta.duration / zoom : meta.duration;
+  const safeViewStart = clampViewStart(viewStart, meta.duration, visibleDuration);
+  const viewEnd = safeViewStart + visibleDuration;
+  const pxPerSecond = visibleDuration > 0 && laneWidth > 0 ? laneWidth / visibleDuration : 0;
+  const millisecondReadableZoom = laneWidth > 0 && meta.duration > 0
+    ? (MAJOR_TICK_TARGET_PX * meta.duration) / (MILLISECOND_STEP * 10 * laneWidth)
+    : MIN_TIMELINE_MAX_ZOOM;
+  const maxZoom = Math.max(MIN_TIMELINE_MAX_ZOOM, millisecondReadableZoom);
+
+  useEffect(() => {
+    setZoom((current) => clamp(current, 1, maxZoom));
+  }, [maxZoom]);
+
+  useEffect(() => {
+    setViewStart((current) => clampViewStart(current, meta.duration, meta.duration / zoom));
+  }, [meta.duration, zoom]);
+
+  useLayoutEffect(() => {
+    const scroller = horizontalScrollRef.current;
+    if (!scroller || pxPerSecond <= 0) return;
+    const nextScrollLeft = safeViewStart * pxPerSecond;
+    if (Math.abs(scroller.scrollLeft - nextScrollLeft) > 0.5) {
+      scroller.scrollLeft = nextScrollLeft;
+    }
+  }, [open, pxPerSecond, safeViewStart]);
+
+  useEffect(() => {
+    if (!dockVisible) setPopover(null);
+  }, [dockVisible]);
+
+  const centerViewAt = useCallback((time: number) => {
+    if (zoom <= 1 || meta.duration <= 0) return;
+    const windowDuration = meta.duration / zoom;
+    setViewStart(clampViewStart(time - windowDuration / 2, meta.duration, windowDuration));
+  }, [meta.duration, zoom]);
+
+  const resetView = useCallback(() => {
+    setZoom(1);
+    setViewStart(0);
+  }, []);
+
+  const handleReplay = useCallback(() => {
+    setViewStart(0);
+    TimelineStore.replay(meta.id);
+  }, [meta.id]);
+
+  const handleHorizontalScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    if (pxPerSecond <= 0) return;
+    setViewStart(clampViewStart(
+      e.currentTarget.scrollLeft / pxPerSecond,
+      meta.duration,
+      visibleDuration
+    ));
+  }, [meta.duration, pxPerSecond, visibleDuration]);
+
+  /** Zooms to `nextZoom`, keeping the time at `anchorRatio` (0 to 1 across
+   * the lane) in place. Option-drag on the ruler and Option-scroll share it. */
+  const applyAnchoredZoom = useCallback((nextZoom: number, anchorRatio: number, anchorTime: number) => {
+    const nextVisibleDuration = meta.duration / nextZoom;
+    setZoom(nextZoom);
+    setViewStart(clampViewStart(anchorTime - anchorRatio * nextVisibleDuration, meta.duration, nextVisibleDuration));
+  }, [meta.duration]);
+
+  // The wheel over the open timeline. Option-scroll zooms around the
+  // pointer; a sideways scroll (or Shift-scroll) pans a zoomed view. The
+  // listener is native and not passive: React's wheel listener is passive,
+  // so preventDefault there would let the page scroll along.
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const wheelRef = useRef<(e: WheelEvent) => void>(() => {});
+  wheelRef.current = (e: WheelEvent) => {
+    if (e.altKey) {
+      const lane = laneAreaRef.current;
+      if (!lane || meta.duration <= 0) return;
+      // deltaMode 1 is lines (Firefox with a mouse wheel), about 16px each.
+      const delta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+      if (delta === 0) return;
+      e.preventDefault();
+      const rect = lane.getBoundingClientRect();
+      const anchorRatio = rect.width > 0 ? clamp((e.clientX - rect.left) / rect.width, 0, 1) : 0.5;
+      applyAnchoredZoom(
+        clamp(zoom * Math.exp(-delta / ZOOM_WHEEL_DISTANCE), 1, maxZoom),
+        anchorRatio,
+        safeViewStart + anchorRatio * visibleDuration
+      );
+      return;
+    }
+    const scroller = horizontalScrollRef.current;
+    if (!scroller || zoom <= 1) return;
+    const horizontalDelta = Math.abs(e.deltaX) > Math.abs(e.deltaY)
+      ? e.deltaX
+      : e.shiftKey
+        ? e.deltaY
+        : 0;
+    if (horizontalDelta === 0) return;
+    // A host that smooths the pan bar with Lenis (it marks the bar with the
+    // "lenis" class) moves it from this same wheel; moving it here too would
+    // jump past the smooth scroll.
+    if (scroller.classList.contains('lenis')) return;
+    e.preventDefault();
+    scroller.scrollLeft += horizontalDelta;
+  };
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!open || !body) return;
+    const onWheel = (e: WheelEvent) => wheelRef.current(e);
+    body.addEventListener('wheel', onWheel, { passive: false });
+    return () => body.removeEventListener('wheel', onWheel);
+  }, [open]);
+
+  // Dragging scrubs. Option/Alt-drag preserves detailed zooming, while
+  // Shift-drag first restores the full 1x range.
+  const zoomDragRef = useRef<ZoomDragState | null>(null);
+  const rulerScrubRef = useRef<{
+    wasPlaying: boolean;
+    rect: DOMRect;
+    viewStart: number;
+    visibleDuration: number;
+  } | null>(null);
+
+  const seekRulerFromClientX = useCallback((clientX: number) => {
+    const scrub = rulerScrubRef.current;
+    const contentWidth = scrub?.rect.width ?? 0;
+    if (!scrub || contentWidth <= 0) return;
+    TimelineStore.seek(
+      meta.id,
+      clamp(
+        scrub.viewStart + ((clientX - scrub.rect.left) / contentWidth) * scrub.visibleDuration,
+        scrub.viewStart,
+        scrub.viewStart + scrub.visibleDuration
+      )
+    );
+  }, [meta.id]);
+
+  const handleRulerPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const contentWidth = rect.width;
+    if (contentWidth <= 0) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+
+    if (!e.altKey) {
+      const resetView = e.shiftKey;
+      rulerScrubRef.current = {
+        wasPlaying: TimelineStore.getTransport(meta.id).playing,
+        rect,
+        viewStart: resetView ? 0 : safeViewStart,
+        visibleDuration: resetView ? meta.duration : visibleDuration,
+      };
+      if (resetView) {
+        setZoom(1);
+        setViewStart(0);
+      }
+      TimelineStore.pause(meta.id);
+      seekRulerFromClientX(e.clientX);
+      return;
+    }
+
+    const anchorRatio = clamp((e.clientX - rect.left) / contentWidth, 0, 1);
+    zoomDragRef.current = {
+      pointerX: e.clientX,
+      rect,
+      zoom,
+      viewStart: safeViewStart,
+      anchorRatio,
+      anchorTime: safeViewStart + anchorRatio * visibleDuration,
+      moved: false,
+    };
+  }, [meta.duration, meta.id, safeViewStart, seekRulerFromClientX, visibleDuration, zoom]);
+
+  const handleRulerPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (rulerScrubRef.current) {
+      seekRulerFromClientX(e.clientX);
+      return;
+    }
+    const drag = zoomDragRef.current;
+    if (!drag || meta.duration <= 0) return;
+    const dx = e.clientX - drag.pointerX;
+    if (!drag.moved && Math.abs(dx) <= DRAG_THRESHOLD_PX) return;
+    drag.moved = true;
+
+    applyAnchoredZoom(
+      clamp(drag.zoom * Math.exp(dx / ZOOM_DRAG_DISTANCE), 1, maxZoom),
+      drag.anchorRatio,
+      drag.anchorTime
+    );
+  }, [applyAnchoredZoom, maxZoom, meta.duration, seekRulerFromClientX]);
+
+  const handleRulerPointerUp = useCallback(() => {
+    if (rulerScrubRef.current?.wasPlaying) TimelineStore.play(meta.id);
+    rulerScrubRef.current = null;
+    zoomDragRef.current = null;
+  }, [meta.id]);
+
+  const handleRulerPointerCancel = useCallback(() => {
+    if (rulerScrubRef.current?.wasPlaying) TimelineStore.play(meta.id);
+    rulerScrubRef.current = null;
+    zoomDragRef.current = null;
+  }, [meta.id]);
+
+  const trackScrubRef = useRef<{
+    wasPlaying: boolean;
+    rect: DOMRect;
+    viewStart: number;
+    visibleDuration: number;
+  } | null>(null);
+
+  const seekTrackFromClientX = useCallback((clientX: number) => {
+    const scrub = trackScrubRef.current;
+    const contentWidth = scrub?.rect.width ?? 0;
+    if (!scrub || contentWidth <= 0) return;
+    const nextTime = clamp(
+      scrub.viewStart + ((clientX - scrub.rect.left) / contentWidth) * scrub.visibleDuration,
+      scrub.viewStart,
+      scrub.viewStart + scrub.visibleDuration
+    );
+    TimelineStore.seek(meta.id, nextTime);
+  }, [meta.id]);
+
+  const handleTrackPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('.dialkit-timeline-label, button')) return;
+    // The pan bar sits inside the body too; a press on it pans, never seeks.
+    if (target.closest('.dialkit-timeline-scroll-row')) return;
+    if (!e.shiftKey && target.closest('.dialkit-timeline-clip')) return;
+    setSelectedKeys(NO_SELECTION);
+    const rect = laneAreaRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const resetView = e.shiftKey;
+    trackScrubRef.current = {
+      wasPlaying: TimelineStore.getTransport(meta.id).playing,
+      rect,
+      viewStart: resetView ? 0 : safeViewStart,
+      visibleDuration: resetView ? meta.duration : visibleDuration,
+    };
+    if (resetView) {
+      setZoom(1);
+      setViewStart(0);
+    }
+    setPopover(null);
+    TimelineStore.pause(meta.id);
+    seekTrackFromClientX(e.clientX);
+  }, [meta.duration, meta.id, safeViewStart, seekTrackFromClientX, visibleDuration]);
+
+  const handleTrackPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (trackScrubRef.current) seekTrackFromClientX(e.clientX);
+  }, [seekTrackFromClientX]);
+
+  const finishTrackScrub = useCallback(() => {
+    if (trackScrubRef.current?.wasPlaying) TimelineStore.play(meta.id);
+    trackScrubRef.current = null;
+  }, [meta.id]);
+
+  const handleCopy = useCallback(() => {
+    const normalized = normalizeTimelineValuesForCopy(DialStore.getValues(meta.id), meta.clips);
+    navigator.clipboard.writeText(buildCopyInstruction('useDialTimeline', meta.name, normalized));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }, [meta.clips, meta.id, meta.name]);
+
+  const closePopover = useCallback(() => setPopover(null), []);
+
+  // The host panel the popover shows (`panel` on the clip) leaves its own
+  // place meanwhile.
+  const popoverPanel = popover?.clip.panel;
+  useEffect(() => {
+    if (!popoverPanel) return;
+    DialStore.setPanelInPopover(popoverPanel, true);
+    return () => DialStore.setPanelInPopover(popoverPanel, false);
+  }, [popoverPanel]);
+
+  // When the popover stops showing that panel, the panel closes, as its own
+  // close button would; otherwise it would come back in its own place. A
+  // panel without an onClose stays open.
+  const shownPanelRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const previous = shownPanelRef.current;
+    shownPanelRef.current = popoverPanel;
+    if (!previous || previous === popoverPanel) return;
+    const shown = DialStore.getPanels('panel').find((panel) => panel.name === previous);
+    if (shown && 'onClose' in shown && typeof shown.onClose === 'function') shown.onClose();
+  }, [popoverPanel]);
+
+  const openClipPopover = useCallback(
+    (clip: TimelineClipMeta, rect: DOMRect, stepKey?: string) => {
+      const targetPath = stepKey ? `${clip.key}.${stepKey}` : clip.key;
+      const exclude = stepKey ? undefined : clipPopoverExclusions(clip);
+      // Guard clips whose folder has not registered yet. A clip that shows a
+      // host panel opens at once: the panel may register only after the
+      // click (the host's onClipClick), and the popover waits for it.
+      if (!clip.panel && getClipControls(meta.id, targetPath, exclude).length === 0) return;
+      setPopover((prev) =>
+        prev?.clip.key === clip.key && prev?.stepKey === stepKey
+          ? null
+          : {
+              clip,
+              stepKey,
+              anchor: {
+                left: rect.left,
+                top: rect.top,
+                right: rect.right,
+                bottom: rect.bottom,
+                width: rect.width,
+                height: rect.height,
+              },
+            }
+      );
+    },
+    [meta.id]
+  );
+
+  const toggleTracks = useCallback((clipKey: string) => {
+    setExpandedTracks((prev) => {
+      const next = new Set(prev);
+      if (next.has(clipKey)) next.delete(clipKey);
+      else next.add(clipKey);
+      return next;
+    });
+  }, []);
+
+  // A props clip's bar is a read-only composite — clicking it expands the
+  // tracks instead of opening an editor.
+  const onClipClick = meta.onClipClick;
+  const handleBarClick = useCallback(
+    (clip: TimelineClipMeta, rect: DOMRect, stepKey?: string) => {
+      onClipClick?.(clip.key);
+      if (!stepKey && clip.tracks?.length) {
+        toggleTracks(clip.key);
+        return;
+      }
+      openClipPopover(clip, rect, stepKey);
+    },
+    [onClipClick, openClipPopover, toggleTracks]
+  );
+
+  // Where a dragged bar may go: the whole timeline, or the gap between its
+  // neighbors on a single track. The playhead is a snap target while paused.
+  const singleTrack = meta.track === 'single';
+  const getDragBounds = useCallback((clipKey: string) => {
+    const transport = TimelineStore.getTransport(meta.id);
+    return timelineClipDragBounds(
+      timelineClipSpans(DialStore.getValues(meta.id), meta.clips, meta.duration),
+      clipKey,
+      meta.duration,
+      { singleTrack, playhead: transport.playing ? undefined : transport.time }
+    );
+  }, [meta.clips, meta.duration, meta.id, singleTrack]);
+
+  // A press outside every bar and the popover (whose root also holds the
+  // menus its controls open) clears the selection. Capture, because a bar
+  // stops its own press from bubbling.
+  useEffect(() => {
+    if (!singleTrack) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest?.('.dialkit-timeline-clip, [data-timeline-popover]')) return;
+      setSelectedKeys((prev) => (prev.size ? NO_SELECTION : prev));
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+  }, [singleTrack]);
+
+  // Single track: a press on a selected bar moves every selected bar of its
+  // lane together. The block is read once, at the press.
+  const blockRef = useRef<{ key: string; spans: TimelineClipSpan[]; keys: ReadonlySet<string>; locked: boolean } | null>(null);
+  const pressClip = (key: string, press: 'toggle' | 'select' | 'edge') => {
+    const next = pressTimelineSelection(selectedRef.current, key, press);
+    if (next !== selectedRef.current) {
+      selectedRef.current = next;
+      setSelectedKeys(next);
+    }
+    blockRef.current = null;
+    const clip = meta.clips.find((candidate) => candidate.key === key);
+    if (press !== 'select' || !clip) return;
+    const laneClips = meta.clips.filter((other) => other.lane === clip.lane);
+    const keys = new Set(laneClips.filter((other) => next.has(other.key)).map((other) => other.key));
+    if (keys.size < 2) return;
+    const spans = timelineClipSpans(DialStore.getValues(meta.id), laneClips, meta.duration);
+    // A block that holds the pinned opening bar holds still, as that bar does.
+    const opening = clip.lane === undefined && meta.pinStart && spans.length
+      ? spans.reduce((a, b) => (b.at < a.at ? b : a)).key
+      : null;
+    blockRef.current = { key, spans, keys, locked: opening !== null && keys.has(opening) };
+  };
+  const moveBlock = (key: string, dt: number, snap: boolean) => {
+    const block = blockRef.current;
+    if (!block || block.key !== key) return false;
+    if (block.locked) return true;
+    const transport = TimelineStore.getTransport(meta.id);
+    const delta = timelineBlockMove(block.spans, block.keys, dt, {
+      snap,
+      playhead: transport.playing ? undefined : transport.time,
+    });
+    const writes: Record<string, DialValue> = {};
+    for (const span of block.spans) {
+      if (block.keys.has(span.key)) writes[`${span.key}.at`] = round2(span.at + delta);
+    }
+    DialStore.updateValues(meta.id, writes);
+    return true;
+  };
+
+  // Single track: lifting a bar past LIFT_PX turns its move into a reorder.
+  // The bar (or the selected bars it belongs to) goes back to where it was
+  // pressed, a cue marks where it would land among the other bars of its
+  // lane, and the drop moves it there.
+  const [reorderCue, setReorderCue] = useState<{ keys: string[]; lane: string | undefined; time: number | null } | null>(null);
+  const reorderRef = useRef<{ keys: string[]; spans: TimelineClipSpan[]; slot: number | null } | null>(null);
+  const liftClip = (clip: TimelineClipMeta) => {
+    const block = blockRef.current?.key === clip.key ? blockRef.current : null;
+    if (block) {
+      const restore: Record<string, DialValue> = {};
+      for (const span of block.spans) if (block.keys.has(span.key)) restore[`${span.key}.at`] = span.at;
+      DialStore.updateValues(meta.id, restore);
+    }
+    const laneClips = meta.clips.filter((other) => other.lane === clip.lane);
+    const spans = timelineClipSpans(DialStore.getValues(meta.id), laneClips, meta.duration).sort((a, b) => a.at - b.at);
+    const keys = block ? spans.filter((span) => block.keys.has(span.key)).map((span) => span.key) : [clip.key];
+    reorderRef.current = { keys, spans, slot: null };
+    setReorderCue({ keys, lane: clip.lane, time: null });
+  };
+  const hoverReorder = (clientX: number) => {
+    const reorder = reorderRef.current;
+    const rect = laneAreaRef.current?.getBoundingClientRect();
+    if (!reorder || !rect || pxPerSecond <= 0) return;
+    const time = safeViewStart + (clientX - rect.left) / pxPerSecond;
+    const slot = timelineReorderSlot(reorder.spans, reorder.keys, time);
+    reorder.slot = slot;
+    const others = reorder.spans.filter((span) => !reorder.keys.includes(span.key));
+    const last = others[others.length - 1];
+    const cueTime = others[slot]?.at ?? (last ? last.at + last.duration : 0);
+    setReorderCue((prev) => (prev && prev.time !== cueTime ? { ...prev, time: cueTime } : prev));
+  };
+  const dropReorder = () => {
+    const reorder = reorderRef.current;
+    reorderRef.current = null;
+    setReorderCue(null);
+    if (!reorder || reorder.slot === null) return;
+    const writes: Record<string, DialValue> = {};
+    for (const [key, at] of Object.entries(timelineReorderAts(reorder.spans, reorder.keys, reorder.slot))) {
+      writes[`${key}.at`] = at;
+    }
+    DialStore.updateValues(meta.id, writes);
+  };
+
+  const toggleGroup = useCallback((group: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(group)) next.delete(group);
+      else next.add(group);
+      return next;
+    });
+  }, []);
+
+  // Ruler ticks
+  const rawStep = pxPerSecond > 0 ? MAJOR_TICK_TARGET_PX / pxPerSecond : 1;
+  const adaptiveMajorStep = SECOND_TICK_STEPS.find((step) => step >= rawStep) ?? SECOND_TICK_STEPS[SECOND_TICK_STEPS.length - 1];
+  const majorStep = zoom < 1.5 && meta.duration >= 1 ? Math.max(1, adaptiveMajorStep) : adaptiveMajorStep;
+  const fineTickStep = majorStep / 10;
+  const majorTicks: number[] = [];
+  const mediumTicks: number[] = [];
+  const fineTicks: number[] = [];
+  const firstMajorTick = Math.ceil((safeViewStart - 1e-6) / majorStep) * majorStep;
+  for (let t = firstMajorTick; t <= viewEnd + 1e-6; t += majorStep) {
+    majorTicks.push(Number(t.toFixed(4)));
+  }
+  const firstFineIndex = Math.ceil((safeViewStart - 1e-6) / fineTickStep);
+  const lastFineIndex = Math.floor((viewEnd + 1e-6) / fineTickStep);
+  for (let index = firstFineIndex; index <= lastFineIndex; index++) {
+    if (index % 10 === 0) continue;
+    const tick = Number((index * fineTickStep).toFixed(6));
+    if (index % 5 === 0) mediumTicks.push(tick);
+    else fineTicks.push(tick);
+  }
+
+  // Rows: clips in config order, grouped clips under a collapsible header,
+  // props clips expandable into full per-property track rows. A single
+  // track puts every clip on one lane, named inside its bar, and each
+  // `lane` on a row of its own below it, labeled.
+  const rows: ReactNode[] = [];
+  let lastGroup: string | undefined;
+  const lanes = singleTrack ? singleTrackLanes(meta.clips) : [];
+  if (singleTrack) for (const lane of [undefined, ...lanes]) {
+    const laneClips = meta.clips.filter((clip) => clip.lane === lane);
+    const label = lane === undefined
+      ? null
+      : laneClips.find((clip) => clip.laneLabel)?.laneLabel ?? laneClips[0]?.label ?? lane;
+    const stats = laneClips.map((clip) => ({ clip, stat: computeClipStaticFromValues(values, clip, meta.duration) }));
+    // The bar that opens the timeline: the earliest, not the first in the
+    // config, so a reorder hands the pin to whichever bar is first now.
+    const pinnedKey = lane === undefined && meta.pinStart && stats.length
+      ? stats.reduce((a, b) => (b.stat.at < a.stat.at ? b : a)).clip.key
+      : null;
+    rows.push(
+      <div key={lane === undefined ? 'single' : `lane:${lane}`} className="dialkit-timeline-row" data-lane={lane === undefined ? undefined : ''}>
+        <div className="dialkit-timeline-label">{label}</div>
+        <div className="dialkit-timeline-lane">
+          {stats.map(({ clip, stat }) => {
+            return (
+              <TimelineClip
+                key={clip.key}
+                timelineId={meta.id}
+                clip={clip}
+                at={stat.at}
+                duration={stat.duration}
+                loop={stat.loop}
+                fixedDuration={stat.isPhysics}
+                single
+                pinned={clip.key === pinnedKey}
+                highlighted={clip.key === meta.highlightedClip}
+                lifted={reorderCue?.keys.includes(clip.key) ?? false}
+                onLift={liftClip}
+                onReorderHover={hoverReorder}
+                onReorderDrop={dropReorder}
+                pxPerSecond={pxPerSecond}
+                viewStart={safeViewStart}
+                timelineDuration={meta.duration}
+                selected={selectedKeys.has(clip.key) || popover?.clip.key === clip.key}
+                getDragBounds={getDragBounds}
+                onPress={pressClip}
+                onBlockMove={moveBlock}
+                onClick={handleBarClick}
+                onDrag={closePopover}
+              />
+            );
+          })}
+          {reorderCue && reorderCue.time !== null && reorderCue.lane === lane && (
+            <div className="dialkit-timeline-reorder-cue" style={{ left: (reorderCue.time - safeViewStart) * pxPerSecond }} aria-hidden="true" />
+          )}
+        </div>
+      </div>
+    );
+  } else for (const clip of meta.clips) {
+    if (clip.group !== lastGroup) {
+      lastGroup = clip.group;
+      if (clip.group) {
+        const group = clip.group;
+        const isCollapsed = collapsedGroups.has(group);
+        rows.push(
+          <div key={`group:${group}`} className="dialkit-timeline-row dialkit-timeline-group-row">
+            <div className="dialkit-timeline-label">
+              <button
+                className="dialkit-timeline-group-toggle"
+                data-open={!isCollapsed}
+                onClick={() => toggleGroup(group)}
+                aria-label={isCollapsed ? 'Expand layer' : 'Collapse layer'}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d={ICON_CHEVRON} />
+                </svg>
+              </button>
+              <span>{formatLabel(group)}</span>
+            </div>
+            <div className="dialkit-timeline-lane" />
+          </div>
+        );
+      }
+    }
+    if (clip.group && collapsedGroups.has(clip.group)) continue;
+
+    const isProps = Boolean(clip.tracks?.length);
+    const tracksOpen = isProps && expandedTracks.has(clip.key);
+    const stat = computeClipStaticFromValues(values, clip, meta.duration);
+
+    rows.push(
+      <div key={clip.key} className="dialkit-timeline-row" data-grouped={clip.group ? '' : undefined}>
+        <div className="dialkit-timeline-label">
+          {isProps ? (
+            <button
+              className="dialkit-timeline-group-toggle"
+              data-open={tracksOpen}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleTracks(clip.key);
+              }}
+              aria-label={tracksOpen ? 'Collapse properties' : 'Expand properties'}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d={ICON_CHEVRON} />
+              </svg>
+            </button>
+          ) : null}
+          {clip.label}
+        </div>
+        <div className="dialkit-timeline-lane">
+          <TimelineClip
+            timelineId={meta.id}
+            clip={clip}
+            at={stat.at}
+            duration={stat.duration}
+            loop={stat.loop}
+            steps={clip.stepKeys?.length ? stat.tracks[0]?.steps : undefined}
+            fixedDuration={isProps ? true : stat.isPhysics}
+            composite={isProps}
+            pxPerSecond={pxPerSecond}
+            viewStart={safeViewStart}
+            timelineDuration={meta.duration}
+            selected={popover?.clip.key === clip.key}
+            selectedStepKey={popover?.clip.key === clip.key ? popover.stepKey : undefined}
+            getDragBounds={getDragBounds}
+            onClick={handleBarClick}
+            onDrag={closePopover}
+          />
+        </div>
+      </div>
+    );
+
+    // Expanded tracks: each property is a full clip row of its own — its
+    // values, curve, and duration are all editable; the bar position is the
+    // track's delay (its phase offset from the clip's `at`).
+    if (tracksOpen) {
+      for (const trackRef of clip.tracks ?? []) {
+        const track = stat.tracks.find((candidate) => candidate.prop === trackRef.prop);
+        if (!track) continue;
+        const trackKey = `${clip.key}.${trackRef.prop}`;
+        const trackMeta: TimelineClipMeta = {
+          key: trackKey,
+          label: `${clip.label} · ${formatLabel(trackRef.prop)}`,
+          color: clip.color,
+          loop: clip.loop,
+          group: clip.group,
+          stepKeys: trackRef.stepKeys,
+        };
+        rows.push(
+          <div
+            key={trackKey}
+            className="dialkit-timeline-row dialkit-timeline-track-row"
+            data-grouped={clip.group ? '' : undefined}
+          >
+            <div className="dialkit-timeline-label">{formatLabel(trackRef.prop)}</div>
+            <div className="dialkit-timeline-lane">
+              <TimelineClip
+                timelineId={meta.id}
+                clip={trackMeta}
+                at={stat.at + track.delay}
+                duration={track.duration}
+                loop={stat.loop}
+                steps={trackRef.stepKeys?.length ? track.steps : undefined}
+                fixedDuration={!trackRef.stepKeys?.length && track.steps[0]?.isPhysics === true}
+                baseAt={stat.at}
+                delayMode
+                pxPerSecond={pxPerSecond}
+                viewStart={safeViewStart}
+                timelineDuration={meta.duration}
+                selected={popover?.clip.key === trackKey}
+                selectedStepKey={popover?.clip.key === trackKey ? popover.stepKey : undefined}
+                getDragBounds={getDragBounds}
+                onClick={openClipPopover}
+                onDrag={closePopover}
+              />
+            </div>
+          </div>
+        );
+      }
+    }
+  }
+
+  return (
+    <div
+      className="dialkit-timeline-section"
+      role="group"
+      aria-label={meta.name}
+      data-track={singleTrack ? 'single' : undefined}
+      data-lanes={lanes.length > 0 || undefined}
+    >
+      <div className="dialkit-timeline-header" data-open={open || undefined}>
+        <div className="dialkit-timeline-transport">
+          <PlayPauseButton id={meta.id} />
+          <ReplayButton onReplay={handleReplay} />
+          <LoopButton id={meta.id} loop={meta.loop} />
+        </div>
+        {!open && (
+          <TimelineOverview
+            id={meta.id}
+            duration={meta.duration}
+            viewStart={safeViewStart}
+            viewEnd={viewEnd}
+            onNavigate={centerViewAt}
+          />
+        )}
+        <div className="dialkit-timeline-actions">
+          <PresetManager
+            panelId={meta.id}
+            presets={presets}
+            activePresetId={activePresetId}
+            noun="sequence"
+          />
+          <motion.button
+            className="dialkit-toolbar-add"
+            onClick={handleCopy}
+            aria-label={copied ? 'Copied parameters' : 'Copy parameters'}
+            data-hint={TIMELINE_HINTS.copy}
+            whileTap={{ scale: 0.9 }}
+            transition={{ type: 'spring', visualDuration: 0.15, bounce: 0.3 }}
+          >
+            <span style={{ position: 'relative', width: 16, height: 16 }}>
+              <AnimatePresence initial={false} mode="wait">
+                {copied ? (
+                  <motion.svg
+                    key="check"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    style={{ position: 'absolute', inset: 0, width: 16, height: 16 }}
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.8, opacity: 0 }}
+                    transition={{ duration: 0.08 }}
+                  >
+                    <path d={ICON_CHECK} />
+                  </motion.svg>
+                ) : (
+                  <motion.svg
+                    key="clipboard"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    aria-hidden="true"
+                    style={{ position: 'absolute', inset: 0, width: 16, height: 16 }}
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.8, opacity: 0 }}
+                    transition={{ duration: 0.08 }}
+                  >
+                    <path d={ICON_CLIPBOARD_PLAIN.board} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                    <path d={ICON_CLIPBOARD_PLAIN.body} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </motion.svg>
+                )}
+              </AnimatePresence>
+            </span>
+          </motion.button>
+          {onExport && (
+            <motion.button
+              className="dialkit-toolbar-add dialkit-timeline-export"
+              onClick={onExport}
+              aria-label="Export"
+              data-hint={EXPORT_HINT}
+              whileTap={{ scale: 0.9 }}
+              transition={{ type: 'spring', visualDuration: 0.15, bounce: 0.3 }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 3v12" />
+                <path d="m7 10 5 5 5-5" />
+                <path d="M5 21h14" />
+              </svg>
+              <span>Export</span>
+            </motion.button>
+          )}
+          <button
+            className="dialkit-timeline-chevron"
+            data-open={open}
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+            aria-label={open ? 'Collapse timeline' : 'Expand timeline'}
+            data-hint={TIMELINE_HINTS.toggle}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d={ICON_CHEVRON} />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* The body folds open and shut with the panel folders' spring. It
+          clips only while it moves, so once open the pan bar and the
+          playhead flag can hang past its edges. */}
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="body"
+            className="dialkit-timeline-fold"
+            initial={{ height: 0, overflow: 'clip' }}
+            animate={{ height: 'auto', overflow: foldSettled ? 'visible' : 'clip' }}
+            exit={{ height: 0, overflow: 'clip' }}
+            transition={{ type: 'spring', visualDuration: 0.35, bounce: 0.1 }}
+            onAnimationComplete={(definition) => {
+              if (open && (definition as { height?: unknown }).height === 'auto') setFoldSettled(true);
+            }}
+          >
+            <div
+              ref={bodyRef}
+              className="dialkit-timeline-body"
+              onPointerDown={handleTrackPointerDown}
+              onPointerMove={handleTrackPointerMove}
+              onPointerUp={finishTrackScrub}
+              onPointerCancel={finishTrackScrub}
+              onLostPointerCapture={finishTrackScrub}
+            >
+              <div className="dialkit-timeline-grid">
+                <div className="dialkit-timeline-row dialkit-timeline-ruler-row">
+                  <div className="dialkit-timeline-label" />
+                  <div
+                    ref={laneAreaRef}
+                    className="dialkit-timeline-ruler"
+                    onPointerDown={handleRulerPointerDown}
+                    onPointerMove={handleRulerPointerMove}
+                    onPointerUp={handleRulerPointerUp}
+                    onPointerCancel={handleRulerPointerCancel}
+                    onLostPointerCapture={handleRulerPointerCancel}
+                    data-hint={TIMELINE_HINTS.ruler}
+                  >
+                    {fineTicks.map((t) => (
+                      <div key={`fine:${t}`} className="dialkit-timeline-tick dialkit-timeline-tick-fine" style={{ left: (t - safeViewStart) * pxPerSecond }} />
+                    ))}
+                    {mediumTicks.map((t) => (
+                      <div key={`medium:${t}`} className="dialkit-timeline-tick dialkit-timeline-tick-medium" style={{ left: (t - safeViewStart) * pxPerSecond }} />
+                    ))}
+                    {majorTicks.map((t) => (
+                      <div key={t} className="dialkit-timeline-tick" style={{ left: (t - safeViewStart) * pxPerSecond }}>
+                        <span className="dialkit-timeline-tick-label">{formatRulerSeconds(t, majorStep)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {rows}
+
+                {pxPerSecond > 0 && (
+                  <TimelinePlayheadFlag
+                    id={meta.id}
+                    duration={meta.duration}
+                    pxPerSecond={pxPerSecond}
+                    viewStart={safeViewStart}
+                    viewEnd={viewEnd}
+                    laneWidth={laneWidth}
+                    rulerRef={laneAreaRef}
+                    onResetView={resetView}
+                  />
+                )}
+              </div>
+              {zoom > 1 && (
+                <div className="dialkit-timeline-scroll-row">
+                  <div className="dialkit-timeline-label" />
+                  <div
+                    ref={horizontalScrollRef}
+                    className="dialkit-timeline-horizontal-scroll"
+                    onScroll={handleHorizontalScroll}
+                    aria-label="Timeline horizontal scroll"
+                  >
+                    <div style={{ width: laneWidth * zoom }} />
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {popover && (
+        <ClipPopover
+          panelId={meta.id}
+          popover={popover}
+          values={values}
+          theme={theme}
+          maxDuration={singleTrack && !popover.stepKey
+            ? singleTrackMaxDuration(getDragBounds(popover.clip.key), computeClipStaticFromValues(values, popover.clip, meta.duration).at)
+            : undefined}
+          physicsSettleCap={singleTrack && !popover.stepKey
+            ? physicsSettleCapFor(getDragBounds(popover.clip.key), computeClipStaticFromValues(values, popover.clip, meta.duration).at)
+            : undefined}
+          onClose={closePopover}
+        />
+      )}
+    </div>
+  );
+});
+
+// ── Clip popover ──
+
+// Popover anchored above a clip (or one leg of a sequence), reusing the
+// standard DialKit controls for the target's transition/from/to values.
+// Portaled to <body> because the dock's backdrop-filter creates a containing
+// block for fixed positioning.
+function ClipPopover({
+  panelId,
+  popover,
+  values,
+  theme,
+  maxDuration,
+  physicsSettleCap,
+  onClose,
+}: {
+  panelId: string;
+  popover: PopoverState;
+  values: Record<string, DialValue>;
+  theme: DialTheme;
+  /** On a single track a clip grows only up to the next one. */
+  maxDuration?: number;
+  /** On a single track a physics spring settles before the next clip starts. */
+  physicsSettleCap?: number;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [naturalHeight, setNaturalHeight] = useState(0);
+  const [viewport, setViewport] = useState(() => ({
+    width: window.visualViewport?.width ?? window.innerWidth,
+    height: window.visualViewport?.height ?? window.innerHeight,
+    offsetLeft: window.visualViewport?.offsetLeft ?? 0,
+    offsetTop: window.visualViewport?.offsetTop ?? 0,
+  }));
+
+  // A clip that shows a host panel: that panel, once it has registered.
+  const hostPanels = useSyncExternalStore(subscribePanels, readPanels, readPanels);
+  const hostPanel = popover.clip.panel
+    ? hostPanels.find((panel) => panel.name === popover.clip.panel)
+    : undefined;
+
+  // Measures again when the host panel arrives, before that frame paints,
+  // so the popover is never placed for its title alone.
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const measure = () => setNaturalHeight(element.scrollHeight + 2);
+    measure();
+    const observer = new ResizeObserver(measure);
+    const body = element.querySelector('.dialkit-timeline-popover-body');
+    observer.observe(body ?? element);
+    return () => observer.disconnect();
+  }, [popover.clip.key, popover.stepKey, hostPanel?.id]);
+
+  useEffect(() => {
+    const updateViewport = () => setViewport({
+      width: window.visualViewport?.width ?? window.innerWidth,
+      height: window.visualViewport?.height ?? window.innerHeight,
+      offsetLeft: window.visualViewport?.offsetLeft ?? 0,
+      offsetTop: window.visualViewport?.offsetTop ?? 0,
+    });
+    window.addEventListener('resize', updateViewport);
+    window.visualViewport?.addEventListener('resize', updateViewport);
+    window.visualViewport?.addEventListener('scroll', updateViewport);
+    return () => {
+      window.removeEventListener('resize', updateViewport);
+      window.visualViewport?.removeEventListener('resize', updateViewport);
+      window.visualViewport?.removeEventListener('scroll', updateViewport);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handlePointerDown = (e: PointerEvent) => {
+      const target = e.target as HTMLElement;
+      // The popover's root also holds the menus its controls open.
+      if (target.closest?.('[data-timeline-popover]')) return;
+      // Let clip clicks handle their own toggle/switch
+      if (target.closest?.('.dialkit-timeline-clip')) return;
+      if (target.closest?.('.dialkit-timeline-label')) return;
+      onClose();
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
+
+  const { clip, stepKey } = popover;
+  let controls: ControlMeta[];
+  let title: string;
+  if (clip.panel) {
+    controls = [];
+    title = clip.label;
+  } else if (stepKey) {
+    controls = getClipControls(panelId, `${clip.key}.${stepKey}`);
+    // The first leg starts from the clip's `from` — show it where you edit
+    // the leg, just above its targets.
+    if (stepKey === clip.stepKeys?.[0]) {
+      const from = getControlAt(panelId, `${clip.key}.from`);
+      if (from) {
+        const toIndex = controls.findIndex((control) => control.path === `${clip.key}.${stepKey}.to`);
+        controls = toIndex >= 0
+          ? [...controls.slice(0, toIndex), from, ...controls.slice(toIndex)]
+          : [...controls, from];
+      }
+    }
+    title = `${clip.label} · ${formatStepLabel(stepKey)}`;
+  } else {
+    controls = getClipControls(panelId, clip.key, clipPopoverExclusions(clip));
+    title = clip.label;
+  }
+  if (!clip.panel && controls.length === 0) return null;
+
+  const targetPath = stepKey ? `${clip.key}.${stepKey}` : clip.key;
+  const durationMeta = getControlAt(panelId, `${targetPath}.duration`);
+  const durationValue = durationMeta ? values[durationMeta.path] : undefined;
+  // A segmented clip's bar never drops below its in and out parts.
+  const durationMin = Math.max(stepKey ? TIMELINE_MIN_CLIP_DURATION : segmentedMinDuration(clip.segments), durationMeta?.min ?? 0);
+  const durationMax = maxDuration === undefined
+    ? durationMeta?.max
+    : Math.max(durationMin, Math.min(durationMeta?.max ?? maxDuration, maxDuration));
+  const transitionDuration = durationMeta?.type === 'slider' && typeof durationValue === 'number'
+    ? {
+        value: durationValue,
+        onChange: (next: number) => DialStore.updateValue(
+          panelId,
+          durationMeta.path,
+          // A typed value skips the slider's own bounds.
+          clamp(next, durationMin, durationMax ?? Number.POSITIVE_INFINITY)
+        ),
+        min: durationMin,
+        max: durationMax,
+        step: durationMeta.step,
+        hint: durationMeta.hint,
+      }
+    : undefined;
+
+  // The bar owns the durations, so show transitions as they actually run:
+  // swap in the effective configs (durations injected from the clip/segment
+  // lengths) for the visualization while edits still write through.
+  const displayValues = timelinePopoverDisplayValues(values, clip.key, clip.stepKeys, stepKey);
+
+  const viewportRight = viewport.offsetLeft + viewport.width;
+  const viewportBottom = viewport.offsetTop + viewport.height;
+  const popoverWidth = Math.min(POPOVER_WIDTH, Math.max(220, viewport.width - 24));
+  const left = clamp(
+    popover.anchor.left + popover.anchor.width / 2 - popoverWidth / 2,
+    viewport.offsetLeft + 12,
+    Math.max(viewport.offsetLeft + 12, viewportRight - popoverWidth - 12)
+  );
+  const spaceAbove = Math.max(0, popover.anchor.top - viewport.offsetTop - 22);
+  const spaceBelow = Math.max(0, viewportBottom - popover.anchor.bottom - 22);
+  const placeAbove = naturalHeight === 0
+    ? spaceAbove >= spaceBelow
+    : naturalHeight <= spaceAbove || (naturalHeight > spaceBelow && spaceAbove >= spaceBelow);
+  const availableHeight = placeAbove ? spaceAbove : spaceBelow;
+  const renderedHeight = Math.min(naturalHeight || availableHeight, availableHeight);
+  const unclampedTop = placeAbove
+    ? popover.anchor.top - 10 - renderedHeight
+    : popover.anchor.bottom + 10;
+  const top = clamp(
+    unclampedTop,
+    viewport.offsetTop + 12,
+    Math.max(viewport.offsetTop + 12, viewportBottom - renderedHeight - 12)
+  );
+
+  return createPortal(
+    <div className="dialkit-root" data-theme={theme} data-timeline-popover="">
+      <div
+        ref={ref}
+        className="dialkit-timeline-popover"
+        data-placement={placeAbove ? 'above' : 'below'}
+        style={{
+          left,
+          top,
+          width: popoverWidth,
+          maxHeight: availableHeight,
+          // Hidden until measured and, for a host panel, until it has
+          // registered and filled the popover.
+          visibility: naturalHeight > 0 && (!clip.panel || hostPanel) ? 'visible' : 'hidden',
+        }}
+        role="dialog"
+        aria-label={`Edit ${title}`}
+      >
+        <div className="dialkit-timeline-popover-header">
+          <span className="dialkit-timeline-popover-title">{title}</span>
+          <button className="dialkit-timeline-popover-close" onClick={onClose} aria-label="Close editor" data-hint={TIMELINE_HINTS.closeEditor}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M6 6L18 18M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+        <div className="dialkit-timeline-popover-body">
+          {clip.panel ? (
+            hostPanel && <PopoverPanelControls key={hostPanel.id} panelId={hostPanel.id} />
+          ) : (
+            <ControlRenderer
+              panelId={panelId}
+              controls={controls}
+              values={displayValues}
+              transitionDuration={transitionDuration}
+              physicsSettleCap={physicsSettleCap}
+            />
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+const subscribePanels = (listener: () => void) => DialStore.subscribeGlobal(listener);
+const readPanels = () => DialStore.getPanels('panel');
+
+/**
+ * A host panel's controls in a clip popover (`panel` on the clip), drawn as
+ * the panel draws them, its folder mode included. A config change registers
+ * the panel again, so this reads the panel, not only its values.
+ */
+function PopoverPanelControls({ panelId }: { panelId: string }) {
+  const subscribe = useCallback((listener: () => void) => DialStore.subscribe(panelId, listener), [panelId]);
+  const readPanel = useCallback(() => DialStore.getPanel(panelId), [panelId]);
+  const readValues = useCallback(() => DialStore.getValues(panelId), [panelId]);
+  const panel = useSyncExternalStore(subscribe, readPanel, readPanel);
+  const values = useSyncExternalStore(subscribe, readValues, readValues);
+  const [openFolder, setOpenFolder] = useState<string | null | undefined>(undefined);
+  if (!panel) return null;
+  const accordion = isAccordionPanel(panel, false);
+  return (
+    <ControlRenderer
+      panelId={panelId}
+      controls={panel.controls}
+      values={values}
+      openFolder={accordion ? resolveOpenFolder(panel.controls, openFolder) : undefined}
+      onOpenFolderChange={accordion ? setOpenFolder : undefined}
+      animateControls
+    />
+  );
+}
+
+// On a single track a clip grows up to the next clip of its lane. The last
+// one has no cap: growing it grows the timeline.
+function singleTrackMaxDuration(bounds: TimelineClipDragBounds, at: number): number | undefined {
+  return Number.isFinite(bounds.end) ? bounds.end - at : undefined;
+}
+
+// A physics spring sets its own bar length, so its sliders stop where the
+// settle time meets the next clip. The last clip has no cap: a spring that
+// outgrows the timeline extends it.
+function physicsSettleCapFor(bounds: TimelineClipDragBounds, at: number): number | undefined {
+  return bounds.next === undefined ? undefined : Math.max(TIMELINE_MIN_CLIP_DURATION, bounds.next - at);
+}
+
+// A clip-level popover hides its step folders (each leg has its own popover)
+// and its track folders (each track is its own row).
+function clipPopoverExclusions(clip: TimelineClipMeta): Set<string> {
+  return new Set([
+    ...(clip.stepKeys ?? []),
+    ...(clip.tracks?.map((track) => track.prop) ?? []),
+  ]);
+}
+
+// A target's non-timing properties. The timeline bars own clip and segment
+// timing, so their start and duration controls stay out of the popover.
+function getClipControls(
+  panelId: string,
+  controlPath: string,
+  excludeChildren?: Set<string>
+): ControlMeta[] {
+  const panel = DialStore.getPanel(panelId);
+  const folder = panel ? findControl(panel.controls, controlPath) : null;
+  if (!folder?.children) return [];
+  return folder.children
+    .filter((control) => {
+      const childKey = control.path.slice(controlPath.length + 1);
+      if (childKey === 'at' || childKey === 'duration') return false;
+      return !excludeChildren?.has(childKey);
+    });
+}
+
+function getControlAt(panelId: string, path: string): ControlMeta | null {
+  const panel = DialStore.getPanel(panelId);
+  return panel ? findControl(panel.controls, path) : null;
+}
+
+// ── Clip bar ──
+
+type DragState = {
+  mode: 'move' | 'start' | 'end' | 'boundary';
+  boundaryIndex?: number;
+  pointerX: number;
+  pointerY: number;
+  at: number;
+  duration: number;
+  bounds: TimelineClipDragBounds;
+  stepDurations?: number[];
+  clickEl: HTMLElement | null;
+  moved: boolean;
+  /** A pinned bar's press: the bar holds still, and the press still opens
+   * its popover on release. */
+  locked?: boolean;
+  /** Single track: the move became a reorder. */
+  lifted?: boolean;
+};
+
+function TimelineClip({
+  timelineId,
+  clip,
+  at,
+  duration,
+  loop,
+  steps,
+  fixedDuration,
+  composite = false,
+  single = false,
+  pinned = false,
+  highlighted = false,
+  lifted = false,
+  onLift,
+  onReorderHover,
+  onReorderDrop,
+  baseAt = 0,
+  delayMode = false,
+  pxPerSecond,
+  viewStart,
+  timelineDuration,
+  selected,
+  selectedStepKey,
+  getDragBounds,
+  onPress,
+  onBlockMove,
+  onClick,
+  onDrag,
+}: {
+  timelineId: string;
+  clip: TimelineClipMeta;
+  at: number;
+  duration: number;
+  loop: TimelineClipLoop;
+  steps?: TimelineStepStatic[];
+  fixedDuration: boolean;
+  /** Read-only composite bar of a props clip — no handles, no editor. */
+  composite?: boolean;
+  /** Single track: the bar carries its name and fills as the playhead crosses it. */
+  single?: boolean;
+  /** Single track: this bar opens the timeline and holds its start (the
+   * `pinStart` option): it does not move along the lane and has no start
+   * handle. */
+  pinned?: boolean;
+  /** Single track: the clip the host is editing (see
+   * `TimelineStore.setHighlight`), marked with a moving dashed ring. */
+  highlighted?: boolean;
+  /** Single track: this bar is being lifted to a new place. */
+  lifted?: boolean;
+  /** Single track: a move lifted past LIFT_PX becomes a reorder. */
+  onLift?: (clip: TimelineClipMeta) => void;
+  onReorderHover?: (clientX: number) => void;
+  onReorderDrop?: () => void;
+  /** Track rows: position = baseAt + delay; dragging edits the delay. */
+  baseAt?: number;
+  delayMode?: boolean;
+  pxPerSecond: number;
+  viewStart: number;
+  timelineDuration: number;
+  selected: boolean;
+  selectedStepKey?: string;
+  getDragBounds: (clipKey: string) => TimelineClipDragBounds;
+  /** Single track: a press on the bar. `toggle` is a Shift-click on its
+   * body, `select` a plain press on it, `edge` a press on a resize handle. */
+  onPress?: (clipKey: string, press: 'toggle' | 'select' | 'edge') => void;
+  /** Single track: moves the selected bars together when this bar belongs
+   * to a selection of two or more on its lane. Returns false otherwise. */
+  onBlockMove?: (clipKey: string, dt: number, snap: boolean) => boolean;
+  onClick: (clip: TimelineClipMeta, rect: DOMRect, stepKey?: string) => void;
+  onDrag: () => void;
+}) {
+  const dragRef = useRef<DragState | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const isSteps = Boolean(steps?.length);
+  const tail = single ? clip.tail ?? 0 : 0;
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      // Rows: Shift-press scrubs, so it reaches the track.
+      if (e.shiftKey && !onPress) return;
+      e.stopPropagation();
+      const target = e.target as HTMLElement;
+      let mode: DragState['mode'] = 'move';
+      let boundaryIndex: number | undefined;
+      const boundary = target.dataset?.boundary;
+      if (boundary !== undefined) {
+        mode = 'boundary';
+        boundaryIndex = Number(boundary);
+      } else if (!fixedDuration) {
+        const edge = target.dataset?.edge as 'start' | 'end' | undefined;
+        if (edge) mode = edge;
+      }
+      // Single track: Shift-click toggles the bar in the selection, with no
+      // drag and no popover.
+      if (e.shiftKey) {
+        if (mode === 'move') onPress?.(clip.key, 'toggle');
+        return;
+      }
+      onPress?.(clip.key, mode === 'move' ? 'select' : 'edge');
+      dragRef.current = {
+        mode,
+        boundaryIndex,
+        pointerX: e.clientX,
+        pointerY: e.clientY,
+        at,
+        duration,
+        bounds: getDragBounds(clip.key),
+        stepDurations: steps?.map((step) => step.duration),
+        clickEl: target.closest?.('[data-step]') ?? null,
+        moved: false,
+        locked: pinned && mode === 'move',
+      };
+      e.currentTarget.setPointerCapture(e.pointerId);
+    },
+    [at, clip.key, duration, fixedDuration, getDragBounds, onPress, pinned, steps]
+  );
+
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const drag = dragRef.current;
+      if (!drag || pxPerSecond <= 0 || drag.locked) return;
+
+      const dx = e.clientX - drag.pointerX;
+      const dy = e.clientY - drag.pointerY;
+      const liftable = drag.mode === 'move' && onLift !== undefined;
+      if (!drag.moved) {
+        if (Math.abs(dx) <= DRAG_THRESHOLD_PX && !(liftable && Math.abs(dy) > DRAG_THRESHOLD_PX)) return;
+        drag.moved = true;
+        setDragging(true);
+        onDrag();
+      }
+      if (liftable) {
+        // A lift puts the bar back where it was pressed; from then on only
+        // the cue follows the pointer.
+        if (!drag.lifted && Math.abs(dy) > LIFT_PX) {
+          drag.lifted = true;
+          DialStore.updateValue(timelineId, `${clip.key}.at`, drag.at);
+          onLift(clip);
+        }
+        if (drag.lifted) {
+          onReorderHover?.(e.clientX);
+          return;
+        }
+      }
+
+      const dt = dx / pxPerSecond;
+      if (drag.mode === 'boundary' && steps && drag.stepDurations) {
+        // Trimming a leg ripples the later legs — the bar grows or shrinks.
+        const index = drag.boundaryIndex ?? 0;
+        const others = drag.stepDurations.reduce((sum, d, j) => (j === index ? sum : sum + d), 0);
+        DialStore.updateValue(
+          timelineId,
+          `${clip.key}.${steps[index].key ?? ''}.duration`,
+          clampStepResize(drag.stepDurations[index] + dt, drag.at, others, timelineDuration)
+        );
+      } else if (drag.mode === 'move' && onBlockMove?.(clip.key, dt, e.metaKey || e.ctrlKey)) {
+        // The selected bars moved together.
+      } else if (!delayMode && drag.mode !== 'boundary' && !(drag.mode === 'start' && steps)) {
+        // Clip bars. Cmd (Ctrl elsewhere) snaps to other clips and the playhead.
+        const next = dragTimelineClip(
+          drag.mode,
+          { at: drag.at, duration: drag.duration, tail, minDuration: segmentedMinDuration(clip.segments) },
+          dt,
+          drag.bounds,
+          e.metaKey || e.ctrlKey
+        );
+        DialStore.updateValues(timelineId, {
+          ...(drag.mode !== 'end' && { [`${clip.key}.at`]: next.at }),
+          ...(drag.mode !== 'move' && { [`${clip.key}.duration`]: next.duration }),
+        });
+      } else if (drag.mode === 'move' && delayMode) {
+        // Track rows: moving the bar shifts the property's phase.
+        DialStore.updateValue(
+          timelineId,
+          `${clip.key}.delay`,
+          clampTrackDelay(drag.at + dt - baseAt, baseAt, drag.duration, timelineDuration)
+        );
+      } else if (drag.mode === 'end') {
+        DialStore.updateValue(
+          timelineId,
+          `${clip.key}.duration`,
+          clampClipResizeEnd(drag.duration + dt, drag.at, timelineDuration)
+        );
+      } else if (steps && drag.stepDurations) {
+        // Start edge of a sequence: trade time between position and the
+        // first leg.
+        const limit = Math.max(baseAt, 0);
+        const next = clampClipResizeStart(Math.max(drag.at + dt, limit), drag.at, drag.stepDurations[0]);
+        DialStore.updateValues(timelineId, {
+          [delayMode ? `${clip.key}.delay` : `${clip.key}.at`]: delayMode ? Math.max(0, next.at - baseAt) : next.at,
+          [`${clip.key}.${steps[0].key ?? ''}.duration`]: next.duration,
+        });
+      } else {
+        const limit = Math.max(baseAt, 0);
+        const next = clampClipResizeStart(Math.max(drag.at + dt, limit), drag.at, drag.duration);
+        DialStore.updateValues(timelineId, {
+          [delayMode ? `${clip.key}.delay` : `${clip.key}.at`]: delayMode ? Math.max(0, next.at - baseAt) : next.at,
+          [`${clip.key}.duration`]: next.duration,
+        });
+      }
+    },
+    [baseAt, clip, delayMode, onBlockMove, onDrag, onLift, onReorderHover, pxPerSecond, steps, tail, timelineId, timelineDuration]
+  );
+
+  const handlePointerUp = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const drag = dragRef.current;
+      dragRef.current = null;
+      setDragging(false);
+      if (drag?.lifted) {
+        onReorderDrop?.();
+        return;
+      }
+      if (drag && !drag.moved) {
+        const stepKey = drag.clickEl?.dataset?.step;
+        const anchorEl = drag.clickEl ?? e.currentTarget;
+        onClick(clip, anchorEl.getBoundingClientRect(), stepKey);
+      }
+    },
+    [clip, onClick, onReorderDrop]
+  );
+
+  const handlePointerCancel = useCallback(() => {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    setDragging(false);
+    if (drag?.lifted) onReorderDrop?.();
+  }, [onReorderDrop]);
+
+  const width = Math.max(duration * pxPerSecond, 14);
+  const resizable = duration > 0 && !fixedDuration && !composite;
+  const durationText = `${fixedDuration && !composite ? '~' : ''}${formatSeconds(duration)}`;
+  const looping = loop === 'repeat' && duration > 0;
+  const ghostCycles: Array<{ start: number; duration: number; index: number }> = [];
+  if (looping) {
+    const maxGhostCycles = 256;
+    const firstGhostIndex = Math.max(1, Math.floor((viewStart - at) / duration));
+    for (let offset = 0; offset < maxGhostCycles; offset++) {
+      const index = firstGhostIndex + offset;
+      const start = at + duration * index;
+      if (start >= timelineDuration - 1e-6) break;
+      ghostCycles.push({
+        start,
+        duration: Math.min(duration, timelineDuration - start),
+        index,
+      });
+    }
+  }
+  // A single-track segmented bar draws its in and out parts at its ends; idle
+  // is what lies between.
+  const segmentParts = single && clip.segments ? segmentWidths(duration, clip.segments) : null;
+  // Boundary handles sit at each leg's right edge (the last one resizes the
+  // final leg — the end of the bar).
+  const boundaryOffsets: number[] = [];
+  if (steps) {
+    let cumulative = 0;
+    for (const step of steps) {
+      cumulative += step.duration;
+      boundaryOffsets.push(cumulative);
+    }
+  }
+
+  return (
+    <>
+      {ghostCycles.map((cycle) => {
+        const ghostWidth = Math.max(1, cycle.duration * pxPerSecond - 2);
+        return (
+          <div
+            key={`ghost:${cycle.index}`}
+            className="dialkit-timeline-clip-ghost"
+            data-steps={isSteps || undefined}
+            aria-hidden="true"
+            style={{
+              left: (cycle.start - viewStart) * pxPerSecond + 1,
+              width: ghostWidth,
+              background: clip.color,
+            }}
+          >
+            {steps?.map((step, stepIndex) => (
+              <span
+                key={step.key ?? `step:${stepIndex}`}
+                className="dialkit-timeline-clip-ghost-segment"
+                style={{ width: step.duration * pxPerSecond }}
+              />
+            ))}
+          </div>
+        );
+      })}
+      {tail > 0 && pxPerSecond > 0 && (
+        <ClipTail
+          id={timelineId}
+          at={at}
+          left={(at + duration - viewStart) * pxPerSecond - TAIL_TUCK_PX}
+          width={tail * pxPerSecond + TAIL_TUCK_PX}
+          lit={hovered || selected}
+        />
+      )}
+      <div
+        className="dialkit-timeline-clip"
+        data-hint={clip.hint}
+        data-steps={isSteps || undefined}
+        data-composite={composite || undefined}
+        data-selected={selected || undefined}
+        data-dragging={dragging || undefined}
+        data-segmented={segmentParts ? '' : undefined}
+        data-pinned={pinned || undefined}
+        data-lifted={lifted || undefined}
+        data-highlighted={highlighted || undefined}
+        style={{
+          // A single-track bar draws 1px short of its span on each side, so butted bars keep a hairline of lane between them.
+          left: (at - viewStart) * pxPerSecond + (single ? 1 : 0),
+          width: single ? Math.max(width - 2, 12) : width,
+          background: single ? undefined : composite ? `${clip.color}80` : clip.color,
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onLostPointerCapture={handlePointerCancel}
+        onPointerEnter={tail > 0 ? () => setHovered(true) : undefined}
+        onPointerLeave={tail > 0 ? () => setHovered(false) : undefined}
+      >
+        {composite ? (
+          <>{width > 56 && <span className="dialkit-timeline-clip-duration">{durationText}</span>}</>
+        ) : isSteps ? (
+          <>
+            {steps!.map((step) => {
+              const segmentWidth = step.duration * pxPerSecond;
+              return (
+                <div
+                  key={step.key ?? 'step'}
+                  className="dialkit-timeline-clip-segment"
+                  data-step={step.key ?? undefined}
+                  data-selected={selectedStepKey === step.key || undefined}
+                  style={{ width: segmentWidth }}
+                >
+                  {segmentWidth > 52 && (
+                    <span className="dialkit-timeline-clip-duration">{formatSeconds(step.duration)}</span>
+                  )}
+                </div>
+              );
+            })}
+            {steps!.map((step, index) =>
+              step.isPhysics ? null : (
+                <div
+                  key={`boundary:${step.key}`}
+                  className="dialkit-timeline-clip-handle"
+                  data-boundary={index}
+                  style={{ left: boundaryOffsets[index] * pxPerSecond - 4 }}
+                />
+              )
+            )}
+            {!steps![0].isPhysics && <div className="dialkit-timeline-clip-handle" data-edge="start" />}
+          </>
+        ) : (
+          <>
+            {single && <ClipFill id={timelineId} at={at} duration={duration} />}
+            {segmentParts && (
+              <>
+                <span className="dialkit-timeline-clip-seg" data-seg="in" style={{ width: segmentParts.in * pxPerSecond }} aria-hidden="true" />
+                <span className="dialkit-timeline-clip-seg" data-seg="out" style={{ width: segmentParts.out * pxPerSecond }} aria-hidden="true" />
+              </>
+            )}
+            {resizable && !pinned && <div className="dialkit-timeline-clip-handle" data-edge="start" />}
+            {single && <span className="dialkit-timeline-clip-name">{clip.label}</span>}
+            {width > 56 && <span className="dialkit-timeline-clip-duration">{durationText}</span>}
+            {resizable && <div className="dialkit-timeline-clip-handle" data-edge="end" />}
+            {highlighted && (
+              <svg className="dialkit-timeline-clip-ants" aria-hidden="true">
+                <rect rx="4.5" ry="4.5" />
+              </svg>
+            )}
+          </>
+        )}
+      </div>
+      {looping && (
+        <span className="dialkit-timeline-loop-infinity" aria-hidden="true">
+          ∞
+        </span>
+      )}
+    </>
+  );
+}

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { TimelineUiStore } from 'tweakers/timeline';
-  import { ICON_TIMELINE } from 'tweakers/icons';
+  import { TimelineUiStore } from 'dialkit/timeline';
+  import { ICON_TIMELINE } from '../../../icons';
 
   let visible = $state(TimelineUiStore.getVisible());
   $effect(() => TimelineUiStore.subscribe(() => {
@@ -10,11 +10,10 @@
 </script>
 
 <button
-  class="tweakers-toolbar-add tweakers-timeline-toolbar-toggle"
+  class="dialkit-toolbar-add dialkit-timeline-toolbar-toggle"
   data-active={visible || undefined}
   aria-pressed={visible}
   aria-label={label}
-  title={label}
   onclick={() => TimelineUiStore.toggle()}
 >
   <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">

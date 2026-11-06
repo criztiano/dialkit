@@ -1,0 +1,134 @@
+import { DialStore, flattenDialValueUpdates, isFolderMetaKey, isLeafConfigValue, resolveDialValues, unwrapVisibility } from 'dialkit/store';
+import type {
+  DialConfig,
+  DialKitPersistOptions,
+  DialKitValueUpdates,
+  DialValue,
+  ResolvedValues,
+  ShortcutConfig,
+} from 'dialkit/store';
+
+export interface CreateDialOptions {
+  id?: string;
+  defaultCollapsed?: boolean;
+  persist?: DialKitPersistOptions;
+  onAction?: (action: string) => void;
+  shortcuts?: Record<string, ShortcutConfig>;
+}
+
+export type DialKitValues<T> = T;
+
+export interface DialKitController<T extends DialConfig> {
+  values: DialKitValues<ResolvedValues<T>>;
+  setValue: (path: string, value: DialValue) => void;
+  setValues: (values: DialKitValueUpdates<T>) => void;
+  resetValues: () => void;
+  setOpen: (open: boolean) => void;
+  getOpen: () => boolean | undefined;
+  getValues: () => ResolvedValues<T>;
+}
+
+let dialKitInstance = 0;
+
+export function createDialKit<T extends DialConfig>(
+  name: string,
+  config: T,
+  options?: CreateDialOptions
+): DialKitValues<ResolvedValues<T>> {
+  return createDialKitController(name, config, options).values;
+}
+
+export function createDialKitController<T extends DialConfig>(
+  name: string,
+  config: T,
+  options?: CreateDialOptions
+): DialKitController<T> {
+  const hasStableId = options?.id !== undefined;
+  const panelId = options?.id ?? `${name}-${++dialKitInstance}`;
+  const resolve = () => resolveDialValues(config, DialStore.getValues(panelId));
+
+  let values = $state<ResolvedValues<T>>(resolve());
+
+  $effect(() => {
+    DialStore.registerPanel(panelId, name, config, options?.shortcuts, {
+      retainOnUnmount: hasStableId,
+      persist: options?.persist,
+      defaultCollapsed: options?.defaultCollapsed,
+    });
+    values = resolve();
+
+    const unsubValues = DialStore.subscribe(panelId, () => {
+      values = resolve();
+    });
+
+    const unsubActions = options?.onAction
+      ? DialStore.subscribeActions(panelId, options.onAction)
+      : undefined;
+
+    return () => {
+      unsubValues();
+      unsubActions?.();
+      DialStore.unregisterPanel(panelId);
+    };
+  });
+
+  return {
+    values: buildReactiveValues(config, () => values, '') as DialKitValues<ResolvedValues<T>>,
+    setOpen(open) { DialStore.setPanelOpen(panelId, open); },
+    getOpen() { return DialStore.getPanelOpen(panelId); },
+    setValue(path, value) {
+      DialStore.updateValue(panelId, path, value);
+    },
+    setValues(nextValues) {
+      DialStore.updateValues(panelId, flattenDialValueUpdates(config, nextValues));
+    },
+    resetValues() {
+      DialStore.resetValues(panelId);
+    },
+    getValues() {
+      return resolve();
+    },
+  };
+}
+
+function buildReactiveValues<T extends DialConfig>(
+  config: T,
+  getValues: () => ResolvedValues<T>,
+  prefix: string
+): DialKitValues<ResolvedValues<T>> {
+  const result: Record<string, unknown> = {};
+
+  for (const [key, rawValue] of Object.entries(config)) {
+    if (isFolderMetaKey(key)) continue;
+    const path = prefix ? `${prefix}.${key}` : key;
+    const configValue = unwrapVisibility(rawValue);
+
+    if (typeof configValue === 'object' && configValue !== null && !isLeafConfigValue(configValue)) {
+      const nested = buildReactiveValues(configValue as DialConfig, getValues, path);
+
+      Object.defineProperty(result, key, {
+        enumerable: true,
+        get() {
+          return nested;
+        },
+      });
+      continue;
+    }
+
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      get() {
+        return getPathValue(getValues(), path);
+      },
+    });
+  }
+
+  return result as DialKitValues<ResolvedValues<T>>;
+}
+
+function getPathValue(source: unknown, path: string): unknown {
+  return path.split('.').reduce<unknown>((value, segment) => {
+    if (typeof value !== 'object' || value === null) return undefined;
+    return (value as Record<string, unknown>)[segment];
+  }, source);
+}

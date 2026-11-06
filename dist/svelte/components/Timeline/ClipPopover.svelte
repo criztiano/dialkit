@@ -1,17 +1,18 @@
 <script lang="ts">
-  import { TweakStore } from 'tweakers/store';
-  import type { ControlMeta, TweakValue } from 'tweakers/store';
+  import { DialStore } from 'dialkit/store';
+  import type { ControlMeta, DialValue } from 'dialkit/store';
   import {
     TIMELINE_MIN_CLIP_DURATION,
     clamp,
     formatStepLabel,
     timelinePopoverDisplayValues,
-  } from 'tweakers/timeline';
-  import type { TimelineClipMeta } from 'tweakers/timeline';
-  import { findControl } from 'tweakers/shortcut-utils';
+  } from 'dialkit/timeline';
+  import type { TimelineClipMeta } from 'dialkit/timeline';
+  import { findControl } from '../../../shortcut-utils';
+  import { TIMELINE_HINTS } from '../../../hints';
   import Portal from '../../Portal.svelte';
   import ControlRenderer from '../ControlRenderer.svelte';
-  import type { TweakTheme } from '../TweakRoot.svelte';
+  import type { DialTheme } from '../DialRoot.svelte';
 
   const POPOVER_WIDTH = 280;
 
@@ -21,11 +22,13 @@
     anchor: { left: number; top: number; right: number; bottom: number; width: number; height: number };
   };
 
-  let { panelId, popover, values, theme, onClose } = $props<{
+  let { panelId, popover, values, theme, maxDuration, onClose } = $props<{
     panelId: string;
     popover: PopoverState;
-    values: Record<string, TweakValue>;
-    theme: TweakTheme;
+    values: Record<string, DialValue>;
+    theme: DialTheme;
+    /** On a single track a clip grows only up to the next one. */
+    maxDuration?: number;
     onClose: () => void;
   }>();
 
@@ -56,12 +59,20 @@
     const target = stepKey ? `${clip.key}.${stepKey}` : clip.key;
     const durationMeta = getControlAt(panelId, `${target}.duration`);
     const durationValue = durationMeta ? values[durationMeta.path] : undefined;
+    const durationMin = Math.max(TIMELINE_MIN_CLIP_DURATION, durationMeta?.min ?? 0);
+    const durationMax = maxDuration === undefined
+      ? durationMeta?.max
+      : Math.max(durationMin, Math.min(durationMeta?.max ?? maxDuration, maxDuration));
     const transitionDuration = durationMeta?.type === 'slider' && typeof durationValue === 'number'
       ? {
           value: durationValue,
-          onChange: (next: number) => TweakStore.updateValue(panelId, durationMeta.path, next),
-          min: Math.max(TIMELINE_MIN_CLIP_DURATION, durationMeta.min ?? 0),
-          max: durationMeta.max,
+          onChange: (next: number) => DialStore.updateValue(
+            panelId,
+            durationMeta.path,
+            durationMax === undefined ? next : Math.min(next, durationMax)
+          ),
+          min: durationMin,
+          max: durationMax,
           step: durationMeta.step,
         }
       : undefined;
@@ -108,7 +119,7 @@
     };
     measure();
     const observer = new ResizeObserver(measure);
-    observer.observe(element.querySelector('.tweakers-timeline-popover-body') ?? element);
+    observer.observe(element.querySelector('.dialkit-timeline-popover-body') ?? element);
     return () => observer.disconnect();
   });
 
@@ -117,7 +128,7 @@
     const updateViewport = () => { viewport = readViewport(); };
     const outside = (event: PointerEvent) => {
       const target = event.target as HTMLElement;
-      if (element?.contains(target) || target.closest?.('.tweakers-timeline-clip') || target.closest?.('.tweakers-timeline-label')) return;
+      if (element?.contains(target) || target.closest?.('.dialkit-timeline-clip') || target.closest?.('.dialkit-timeline-label')) return;
       onClose();
     };
     const keydown = (event: KeyboardEvent) => {
@@ -152,7 +163,7 @@
   }
 
   function getClipControls(panel: string, path: string, exclusions?: Set<string>): ControlMeta[] {
-    const currentPanel = TweakStore.getPanel(panel);
+    const currentPanel = DialStore.getPanel(panel);
     const folder = currentPanel ? findControl(currentPanel.controls, path) : null;
     if (!folder?.children) return [];
     return folder.children.filter((control) => {
@@ -162,17 +173,17 @@
   }
 
   function getControlAt(panel: string, path: string): ControlMeta | null {
-    const currentPanel = TweakStore.getPanel(panel);
+    const currentPanel = DialStore.getPanel(panel);
     return currentPanel ? findControl(currentPanel.controls, path) : null;
   }
 </script>
 
 {#if presentation.controls.length > 0}
   <Portal target="body">
-    <div class="tweakers-root" data-theme={theme}>
+    <div class="dialkit-root" data-theme={theme}>
       <div
         bind:this={element}
-        class="tweakers-timeline-popover"
+        class="dialkit-timeline-popover"
         data-placement={position.placeAbove ? 'above' : 'below'}
         style:left={`${position.left}px`}
         style:top={`${position.top}px`}
@@ -182,15 +193,15 @@
         role="dialog"
         aria-label={`Edit ${presentation.title}`}
       >
-        <div class="tweakers-timeline-popover-header">
-          <span class="tweakers-timeline-popover-title">{presentation.title}</span>
-          <button class="tweakers-timeline-popover-close" onclick={onClose} title="Close editor" aria-label="Close editor">
+        <div class="dialkit-timeline-popover-header">
+          <span class="dialkit-timeline-popover-title">{presentation.title}</span>
+          <button class="dialkit-timeline-popover-close" onclick={onClose} aria-label="Close editor" data-hint={TIMELINE_HINTS.closeEditor}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <path d="M6 6L18 18M18 6L6 18" />
             </svg>
           </button>
         </div>
-        <div class="tweakers-timeline-popover-body">
+        <div class="dialkit-timeline-popover-body">
           {#each presentation.controls as control (control.path)}
             <ControlRenderer
               {panelId}

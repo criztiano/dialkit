@@ -1,0 +1,154 @@
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { TimelineStore } from './store/TimelineStore';
+import { TimelineUiStore } from './store/TimelineUiStore';
+
+const meta = (id: string, duration = 2, loop = false, loopStart = 0) => ({
+  id,
+  name: id,
+  duration,
+  loop,
+  loopStart,
+  clips: [],
+});
+
+describe('TimelineStore', () => {
+  it('keeps the host highlight across meta updates until it is cleared', () => {
+    const id = 'store-highlight';
+    TimelineStore.register(meta(id), { autoplay: false });
+    let notified = 0;
+    const unsubscribe = TimelineStore.subscribe(id, () => notified++);
+    try {
+      assert.equal(TimelineStore.getTimeline(id)?.highlightedClip, null);
+      TimelineStore.setHighlight(id, 'b');
+      assert.equal(TimelineStore.getTimeline(id)?.highlightedClip, 'b');
+      assert.equal(notified, 1);
+      // The same key again changes nothing.
+      TimelineStore.setHighlight(id, 'b');
+      assert.equal(notified, 1);
+      // A rebuilt meta (an edit, a new clip list) keeps it.
+      TimelineStore.update(meta(id, 3));
+      assert.equal(TimelineStore.getTimeline(id)?.highlightedClip, 'b');
+      TimelineStore.setHighlight(id, null);
+      assert.equal(TimelineStore.getTimeline(id)?.highlightedClip, null);
+      // An unknown timeline is left alone.
+      TimelineStore.setHighlight('store-highlight-missing', 'a');
+      assert.equal(TimelineStore.getTimeline('store-highlight-missing'), undefined);
+    } finally {
+      unsubscribe();
+      TimelineStore.unregister(id);
+    }
+  });
+
+  it('ignores non-finite seeks and sanitizes invalid durations', () => {
+    const id = 'store-finite-values';
+    TimelineStore.register(meta(id), { autoplay: false });
+    TimelineStore.seek(id, 1.25);
+    assert.equal(TimelineStore.getTransport(id).time, 1.25);
+
+    TimelineStore.seek(id, Number.NaN);
+    assert.equal(TimelineStore.getTransport(id).time, 1.25);
+
+    TimelineStore.update(meta(id, Number.POSITIVE_INFINITY));
+    assert.deepEqual(TimelineStore.getTransport(id), {
+      time: 0,
+      playing: false,
+      duration: 0,
+      wraps: 0,
+    });
+    TimelineStore.unregister(id);
+  });
+
+  it('toggles looping and keeps the toggle across updates', () => {
+    const id = 'store-loop-toggle';
+    TimelineStore.register(meta(id, 2, true, 0.5), { autoplay: false });
+    TimelineStore.setLoop(id, false);
+    assert.equal(TimelineStore.getTimeline(id)?.loop, false);
+
+    // Edits rebuild the meta from the same options; the toggle stays.
+    TimelineStore.update(meta(id, 3, true, 0.5));
+    assert.equal(TimelineStore.getTimeline(id)?.loop, false);
+
+    // Back on, a `{ from }` loop wraps to the same start.
+    TimelineStore.setLoop(id, true);
+    assert.equal(TimelineStore.getTimeline(id)?.loop, true);
+    assert.equal(TimelineStore.getTimeline(id)?.loopStart, 0.5);
+
+    // A changed option replaces the toggle.
+    TimelineStore.setLoop(id, false);
+    TimelineStore.update(meta(id, 3, false));
+    TimelineStore.update(meta(id, 3, true));
+    assert.equal(TimelineStore.getTimeline(id)?.loop, true);
+    TimelineStore.unregister(id);
+  });
+
+  it('advances by wall time after a delayed animation frame', () => {
+    const id = 'store-wall-time';
+    const originalWindow = (globalThis as { window?: unknown }).window;
+    let frame: ((now: number) => void) | undefined;
+    (globalThis as { window?: unknown }).window = {
+      requestAnimationFrame(callback: (now: number) => void) {
+        frame = callback;
+        return 1;
+      },
+    };
+
+    try {
+      const before = performance.now();
+      TimelineStore.register(meta(id, 5), { autoplay: true });
+      assert.ok(frame, 'autoplay schedules a frame');
+      frame!(before + 1_500);
+      assert.ok(
+        TimelineStore.getTransport(id).time > 1.4,
+        `expected wall-clock progress, got ${TimelineStore.getTransport(id).time}`
+      );
+      TimelineStore.unregister(id);
+      frame!(before + 1_600);
+    } finally {
+      if (originalWindow === undefined) {
+        delete (globalThis as { window?: unknown }).window;
+      } else {
+        (globalThis as { window?: unknown }).window = originalWindow;
+      }
+    }
+  });
+});
+
+describe('TimelineUiStore', () => {
+  it('supports toolkit-driven uncontrolled visibility', () => {
+    const controller = Symbol('uncontrolled');
+    const changes: boolean[] = [];
+    const unregister = TimelineUiStore.registerController(controller, {
+      defaultVisible: false,
+      onVisibilityChange: (visible) => changes.push(visible),
+    });
+
+    assert.equal(TimelineUiStore.getVisible(), false);
+    TimelineUiStore.requestVisible(true);
+    assert.equal(TimelineUiStore.getVisible(), true);
+    assert.deepEqual(changes, [true]);
+    unregister();
+  });
+
+  it('requests rather than mutates controlled visibility', () => {
+    const controller = Symbol('controlled');
+    const changes: boolean[] = [];
+    const unregister = TimelineUiStore.registerController(controller, {
+      visible: true,
+      defaultVisible: true,
+      onVisibilityChange: (visible) => changes.push(visible),
+    });
+
+    TimelineUiStore.requestVisible(false);
+    assert.equal(TimelineUiStore.getVisible(), true);
+    assert.deepEqual(changes, [false]);
+
+    TimelineUiStore.updateController(controller, {
+      visible: false,
+      defaultVisible: true,
+      onVisibilityChange: (visible) => changes.push(visible),
+    });
+    assert.equal(TimelineUiStore.getVisible(), false);
+    unregister();
+  });
+});

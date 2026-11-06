@@ -1,0 +1,15 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #151515; color: #ededed; }
+body[data-theme="light"] { background: #f4f3f1; color: #222; }
+.lib-demo { min-height: 100vh; padding: 32px 48px; }
+.lib-demo-nav { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 550; }
+.lib-demo-nav span span { margin-left: 8px; color: #777; font-weight: 400; }
+.lib-demo-nav button, .lib-demo-buttons button { padding: 8px 12px; border: 1px solid var(--dial-border, #ffffff18); border-radius: 7px; background: var(--dial-surface, #ffffff06); color: inherit; font: inherit; font-size: 11px; cursor: pointer; }
+.lib-demo-layout { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 32px; padding: 64px 0; color: var(--dial-text-primary); }
+.lib-demo-card { display: flex; flex-direction: column; gap: 12px; width: 352px; padding: 16px; border: 1px solid var(--dial-border); border-radius: 14px; background: var(--dial-glass-bg); }
+.lib-demo-card h2 { margin: 0 0 4px; font-size: 15px; font-weight: 600; color: var(--dial-text-root); }
+.lib-demo-card p { margin: 0; font-size: 11px; line-height: 1.6; color: var(--dial-text-secondary); }
+.lib-demo-row { display: flex; background: var(--dial-surface); border-radius: var(--dial-radius); }
+.lib-demo-row .dialkit-segmented { flex: 1; }
+.lib-demo-row .dialkit-segmented-button { flex: 1; }
+.lib-demo-buttons { display: flex; flex-wrap: wrap; gap: 6px; }

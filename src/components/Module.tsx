@@ -1,5 +1,12 @@
-import { ReactNode } from 'react';
-import { Checkbox } from './Checkbox';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
+import { SegmentedControl } from './SegmentedControl';
+import { useHints } from '../hooks/useHints';
+
+const ENABLE_OPTIONS = [
+  { value: 'off' as const, label: 'Off' },
+  { value: 'on' as const, label: 'On' },
+];
 
 interface ModuleProps {
   title: string;
@@ -7,28 +14,98 @@ interface ModuleProps {
    *  off collapses the body away, on reveals it. */
   enabled: boolean;
   onEnabledChange: (enabled: boolean) => void;
-  children: ReactNode;
+  /** One line of help, shown while H is held over the header. */
+  hint?: string;
+  children?: ReactNode;
+}
+
+interface ModuleFolderProps extends ModuleProps {
+  /** Whether the body starts open while the module is on. */
+  defaultOpen?: boolean;
+}
+
+function ModuleHeader({ title, enabled, onEnabledChange, hint, onToggle }: Omit<ModuleProps, 'children'> & { onToggle?: () => void }) {
+  return (
+    <div
+      className="dialkit-module-header"
+      data-toggle={onToggle ? 'true' : undefined}
+      data-hint={hint}
+      onClick={onToggle}
+    >
+      <span className="dialkit-module-title">{title}</span>
+      {/* The switch sits inside the header, but a press on it must not also fold the body. */}
+      <div className="dialkit-module-switch" onClick={(e) => e.stopPropagation()}>
+        <SegmentedControl
+          options={ENABLE_OPTIONS}
+          value={enabled ? 'on' : 'off'}
+          onChange={(v) => onEnabledChange(v === 'on')}
+          label={title}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ModuleBody({ open, children }: { open: boolean; children: ReactNode }) {
+  // A folded body keeps its controls mounted; inert keeps Tab and screen readers out of them.
+  const ref = useRef<HTMLDivElement>(null);
+  const reduceMotion = useReducedMotion();
+  useLayoutEffect(() => { if (ref.current) ref.current.inert = !open; }, [open]);
+  // It folds on the folder's spring, so a module and a folder move alike.
+  return (
+    <motion.div
+      ref={ref}
+      className="dialkit-module-collapse"
+      data-open={String(open)}
+      initial={false}
+      animate={{ height: open ? 'auto' : 0 }}
+      transition={reduceMotion ? { duration: 0 } : { type: 'spring', visualDuration: 0.35, bounce: 0.1 }}
+    >
+      <div className="dialkit-module-inner">{children}</div>
+    </motion.div>
+  );
+}
+
+const isEmpty = (children: ReactNode) => children == null || (Array.isArray(children) && children.length === 0);
+
+/**
+ * A titled block of controls that turns on and off as a unit (a synth layer,
+ * an effect send, an optional feature). The header's Off/On switch is also
+ * the expand control: off folds the body away.
+ */
+export function Module({ title, enabled, onEnabledChange, hint, children }: ModuleProps) {
+  useHints(!!hint);
+  return (
+    <div className="dialkit-module" data-enabled={String(enabled)}>
+      <ModuleHeader title={title} enabled={enabled} onEnabledChange={onEnabledChange} hint={hint} />
+      {!isEmpty(children) && <ModuleBody open={enabled}>{children}</ModuleBody>}
+    </div>
+  );
 }
 
 /**
- * A titled module whose header carries an enable switch — for parameter
- * blocks that turn on/off as a unit (synth layers, effect sends, optional
- * feature groups). The switch doubles as the expand control: disabling
- * collapses the body away with a smooth height transition.
+ * A Module whose header also folds the body while the module is on, like a
+ * folder. Turning the module on always opens the body.
  */
-export function Module({ title, enabled, onEnabledChange, children }: ModuleProps) {
+export function ModuleFolder({ title, enabled, onEnabledChange, defaultOpen = true, hint, children }: ModuleFolderProps) {
+  useHints(!!hint);
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  // A module can be only its switch; then there is no body to fold.
+  const headerOnly = isEmpty(children);
+  const handleEnabledChange = (next: boolean) => {
+    onEnabledChange(next);
+    if (next) setIsOpen(true);
+  };
   return (
-    <div className="tweakers-module">
-      <div className="tweakers-module-header">
-        <Checkbox checked={enabled} onChange={onEnabledChange} label={title} />
-        <span className="tweakers-module-title">{title}</span>
-      </div>
-
-      <div className="tweakers-module-collapse" data-open={enabled}>
-        <div className="tweakers-module-collapse-clip">
-          <div className="tweakers-module-inner">{children}</div>
-        </div>
-      </div>
+    <div className="dialkit-module dialkit-module-folder" data-enabled={String(enabled)}>
+      <ModuleHeader
+        title={title}
+        enabled={enabled}
+        onEnabledChange={handleEnabledChange}
+        hint={hint}
+        onToggle={enabled && !headerOnly ? () => setIsOpen((open) => !open) : undefined}
+      />
+      {!headerOnly && <ModuleBody open={enabled && isOpen}>{children}</ModuleBody>}
     </div>
   );
 }

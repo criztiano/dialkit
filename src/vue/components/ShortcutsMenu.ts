@@ -1,5 +1,6 @@
-import { defineComponent, h, onUnmounted, ref, Teleport, type PropType } from 'vue';
-import { TweakStore, ShortcutConfig } from 'tweakers/store';
+import { observeDropdownKeyboard } from '../../dropdown-keyboard';
+import { defineComponent, h, watch, onMounted, onUnmounted, ref, Teleport, type PropType } from 'vue';
+import { DialStore, ShortcutConfig } from '../../store/DialStore';
 
 function formatShortcutKey(sc: ShortcutConfig): string {
   if (!sc.key) return '\u2014';
@@ -21,7 +22,7 @@ function formatInteraction(sc: ShortcutConfig): string {
 }
 
 export const ShortcutsMenu = defineComponent({
-  name: 'TweakersShortcutsMenu',
+  name: 'DialKitShortcutsMenu',
   props: {
     panelId: {
       type: String as PropType<string>,
@@ -30,6 +31,13 @@ export const ShortcutsMenu = defineComponent({
   },
   setup(props) {
     const isOpen = ref(false);
+    const currentPanel = ref(DialStore.getPanel(props.panelId));
+    let stopPanels: (() => void) | undefined;
+    onMounted(() => {
+      const update = () => { currentPanel.value = DialStore.getPanel(props.panelId); };
+      stopPanels = DialStore.subscribeGlobal(update);
+      update();
+    });
     const triggerRef = ref<HTMLButtonElement | null>(null);
     const dropdownRef = ref<HTMLDivElement | null>(null);
     const pos = ref({ top: 0, right: 0 });
@@ -50,6 +58,11 @@ export const ShortcutsMenu = defineComponent({
       if (isOpen.value) close();
       else open();
     };
+
+    watch(isOpen, (open, _, onCleanup) => {
+      if (!open) return;
+      onCleanup(observeDropdownKeyboard(triggerRef.value!, () => dropdownRef.value, close, 'help'));
+    });
 
     let mousedownHandler: ((e: MouseEvent) => void) | null = null;
 
@@ -73,32 +86,21 @@ export const ShortcutsMenu = defineComponent({
     };
 
     onUnmounted(() => {
+      stopPanels?.();
       removeOutsideClickListener();
     });
 
     return () => {
-      const panel = TweakStore.getPanel(props.panelId);
+      const panel = currentPanel.value;
       if (!panel) return null;
 
       const shortcuts = Object.entries(panel.shortcuts);
       if (shortcuts.length === 0) return null;
 
-      // Find control label
-      const findLabel = (controls: typeof panel.controls, path: string): string => {
-        for (const c of controls) {
-          if (c.path === path) return c.label;
-          if (c.type === 'folder' && c.children) {
-            const found = findLabel(c.children, path);
-            if (found) return found;
-          }
-        }
-        return path;
-      };
-
       const rows = shortcuts.map(([path, shortcut]) => ({
         path,
         shortcut,
-        label: findLabel(panel.controls, path),
+        label: DialStore.getControl(panel.id, path)?.label ?? path,
       }));
 
       // Manage outside click listener based on open state
@@ -111,9 +113,10 @@ export const ShortcutsMenu = defineComponent({
       return [
         h('button', {
           ref: triggerRef,
-          class: 'tweakers-shortcuts-trigger',
+          class: 'dialkit-shortcuts-trigger',
           onClick: toggle,
-          title: 'Keyboard shortcuts',
+          'aria-label': 'Keyboard shortcuts',
+          type: 'button', 'aria-haspopup': 'dialog', 'aria-expanded': isOpen.value,
         }, [
           h('svg', {
             viewBox: '0 0 24 24',
@@ -135,24 +138,24 @@ export const ShortcutsMenu = defineComponent({
           ? h(Teleport, { to: 'body' }, [
               h('div', {
                 ref: dropdownRef,
-                class: 'tweakers-root tweakers-shortcuts-dropdown',
+                class: 'dialkit-root dialkit-shortcuts-dropdown',
                 style: {
                   position: 'fixed',
                   top: `${pos.value.top}px`,
                   right: `${pos.value.right}px`,
                 },
               }, [
-                h('div', { class: 'tweakers-shortcuts-title' }, 'Keyboard Shortcuts'),
-                h('div', { class: 'tweakers-shortcuts-list' },
+                h('div', { class: 'dialkit-shortcuts-title' }, 'Keyboard Shortcuts'),
+                h('div', { class: 'dialkit-shortcuts-list' },
                   rows.map((row) =>
-                    h('div', { key: row.path, class: 'tweakers-shortcuts-row' }, [
-                      h('span', { class: 'tweakers-shortcuts-row-key' }, formatShortcutKey(row.shortcut)),
-                      h('span', { class: 'tweakers-shortcuts-row-label' }, row.label),
-                      h('span', { class: 'tweakers-shortcuts-row-mode' }, formatInteraction(row.shortcut)),
+                    h('div', { key: row.path, class: 'dialkit-shortcuts-row' }, [
+                      h('span', { class: 'dialkit-shortcuts-row-key' }, formatShortcutKey(row.shortcut)),
+                      h('span', { class: 'dialkit-shortcuts-row-label' }, row.label),
+                      h('span', { class: 'dialkit-shortcuts-row-mode' }, formatInteraction(row.shortcut)),
                     ])
                   )
                 ),
-                h('div', { class: 'tweakers-shortcuts-hint' }, 'See pill badges on controls for keys'),
+                h('div', { class: 'dialkit-shortcuts-hint' }, 'See pill badges on controls for keys'),
               ]),
             ])
           : null,
