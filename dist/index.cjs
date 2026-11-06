@@ -3184,7 +3184,7 @@ function useDialKitController(name, config, options) {
 }
 
 // src/components/DialRoot.tsx
-var import_react44 = require("react");
+var import_react45 = require("react");
 var import_react_dom3 = require("react-dom");
 
 // src/store/TimelineStore.ts
@@ -4393,8 +4393,8 @@ function Folder({ title, children, open, defaultOpen = true, isRoot = false, inl
 }
 
 // src/components/Panel.tsx
-var import_react40 = require("react");
-var import_react41 = require("motion/react");
+var import_react41 = require("react");
+var import_react42 = require("motion/react");
 
 // src/copy-instruction.ts
 function buildCopyInstruction(hookName, panelName, values) {
@@ -4428,8 +4428,8 @@ Apply these values as the new defaults in the ${hookName} call.`;
 }
 
 // src/components/ControlRenderer.tsx
-var import_react34 = require("react");
-var import_react35 = require("motion/react");
+var import_react35 = require("react");
+var import_react36 = require("motion/react");
 
 // src/control-presence.ts
 function mergeControls(rendered, controls) {
@@ -5236,23 +5236,36 @@ function AngleDial({
   const bearing = valueToBearing(value, min, max);
   const originBearing = valueToBearing(resolvedOrigin, min, max);
   const needle = (bearing - 90) * Math.PI / 180;
+  const scrub = (0, import_react10.useRef)(null);
   const applyFromPointer = (0, import_react10.useCallback)((clientX, clientY) => {
-    const svg2 = dialRef.current?.querySelector("svg");
-    if (!svg2) return;
-    const r = svg2.getBoundingClientRect();
-    const next = angleFromPointer(clientX - (r.left + r.width / 2), clientY - (r.top + r.height / 2), value, min, max, step, wraps);
+    let next;
+    if (scrub.current) {
+      const { x, value: start, width } = scrub.current;
+      next = nudgeAngle(start, (clientX - x) / width * (max - min) / (step || 1), min, max, step, wraps);
+    } else {
+      const svg2 = dialRef.current?.querySelector("svg");
+      if (!svg2) return;
+      const r = svg2.getBoundingClientRect();
+      next = angleFromPointer(clientX - (r.left + r.width / 2), clientY - (r.top + r.height / 2), value, min, max, step, wraps);
+    }
     if (next !== null && next !== value) onChange(next);
   }, [value, min, max, step, wraps, onChange]);
   const onPointerDown = (e) => {
     if (e.button !== 0) return;
     e.preventDefault();
+    dialRef.current?.focus({ preventScroll: true });
     setIsDragging(true);
-    applyFromPointer(e.clientX, e.clientY);
+    const onDial = dialRef.current?.contains(e.target);
+    scrub.current = onDial ? null : { x: e.clientX, value, width: e.currentTarget.getBoundingClientRect().width || 1 };
+    if (onDial) applyFromPointer(e.clientX, e.clientY);
   };
   (0, import_react10.useEffect)(() => {
     if (!isDragging) return;
     const move = (e) => applyFromPointer(e.clientX, e.clientY);
-    const up = () => setIsDragging(false);
+    const up = () => {
+      scrub.current = null;
+      setIsDragging(false);
+    };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
@@ -5273,44 +5286,52 @@ function AngleDial({
     else reset();
   };
   const text = angleText(value, min, max, step, unit, formatValue);
-  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "dialkit-angle", "data-dragging": isDragging || void 0, "data-hint": hint2, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "dialkit-slider-label", children: label }),
-    /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("span", { className: "dialkit-slider-value dialkit-angle-value", children: [
-      text.value,
-      text.unit && /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "dialkit-slider-unit", "data-spaced": isWordUnit(text.unit) || void 0, children: text.unit })
-    ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
-      "div",
-      {
-        ref: dialRef,
-        className: "dialkit-angle-dial",
-        role: "slider",
-        tabIndex: 0,
-        "aria-label": label,
-        "aria-valuemin": min,
-        "aria-valuemax": max,
-        "aria-valuenow": value,
-        "aria-valuetext": `${text.value}${text.unit ? ` ${text.unit}` : ""}`,
-        onPointerDown,
-        onKeyDown,
-        onDoubleClick: reset,
-        children: /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("svg", { viewBox: "-11 -11 22 22", "aria-hidden": "true", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("circle", { className: "dialkit-angle-face", cx: "0", cy: "0", r: RADIUS }),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("path", { className: "dialkit-angle-sweep", d: arcPath(originBearing, bearing, RADIUS) }),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
-            "line",
-            {
-              className: "dialkit-angle-needle",
-              x1: "0",
-              y1: "0",
-              x2: (RADIUS * Math.cos(needle)).toFixed(3),
-              y2: (RADIUS * Math.sin(needle)).toFixed(3)
-            }
-          )
-        ] })
-      }
-    )
-  ] });
+  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
+    "div",
+    {
+      className: "dialkit-angle",
+      "data-dragging": isDragging || void 0,
+      "data-hint": hint2,
+      onPointerDown,
+      onDoubleClick: reset,
+      children: [
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "dialkit-slider-label", children: label }),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("span", { className: "dialkit-slider-value dialkit-angle-value", children: [
+          text.value,
+          text.unit && /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "dialkit-slider-unit", "data-spaced": isWordUnit(text.unit) || void 0, children: text.unit })
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+          "div",
+          {
+            ref: dialRef,
+            className: "dialkit-angle-dial",
+            role: "slider",
+            tabIndex: 0,
+            "aria-label": label,
+            "aria-valuemin": min,
+            "aria-valuemax": max,
+            "aria-valuenow": value,
+            "aria-valuetext": `${text.value}${text.unit ? ` ${text.unit}` : ""}`,
+            onKeyDown,
+            children: /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("svg", { viewBox: "-11 -11 22 22", "aria-hidden": "true", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("circle", { className: "dialkit-angle-face", cx: "0", cy: "0", r: RADIUS }),
+              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("path", { className: "dialkit-angle-sweep", d: arcPath(originBearing, bearing, RADIUS) }),
+              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+                "line",
+                {
+                  className: "dialkit-angle-needle",
+                  x1: "0",
+                  y1: "0",
+                  x2: (RADIUS * Math.cos(needle)).toFixed(3),
+                  y2: (RADIUS * Math.sin(needle)).toFixed(3)
+                }
+              )
+            ] })
+          }
+        )
+      ]
+    }
+  );
 }
 
 // src/components/NumberControl.tsx
@@ -11942,21 +11963,51 @@ function LayerListControl(props) {
 }
 
 // src/components/ChipsControl.tsx
+var import_react29 = require("react");
 var import_jsx_runtime24 = require("react/jsx-runtime");
 var REMOVE_HINT = "Removes this choice.";
 function ChipsControl({ label, value, options, onChange, onRemove, hint: hint2 }) {
   useHints(!!hint2 || options.some((option) => option.removable));
+  const gridRef = (0, import_react29.useRef)(null);
+  const focusAfterRemove = (0, import_react29.useRef)(false);
+  const tabStop = options.some((option) => option.value === value) ? value : options[0]?.value;
+  (0, import_react29.useEffect)(() => {
+    if (!focusAfterRemove.current) return;
+    focusAfterRemove.current = false;
+    gridRef.current?.querySelector('.dialkit-chip-select[tabindex="0"]')?.focus({ preventScroll: true });
+  }, [options, value]);
+  const handleKeyDown = (e, index) => {
+    if (e.altKey || e.metaKey || e.ctrlKey) return;
+    const option = options[index];
+    if ((e.key === "Delete" || e.key === "Backspace") && option.removable) {
+      e.preventDefault();
+      e.stopPropagation();
+      focusAfterRemove.current = true;
+      onRemove(option.value);
+      return;
+    }
+    const next = optionKeyIndex(e.key, index, options.length, true);
+    if (next === void 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const chips = gridRef.current?.querySelectorAll(".dialkit-chip-select");
+    chips?.[next]?.focus({ preventScroll: true });
+    onChange(options[next].value);
+  };
   return /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "dialkit-chips", "data-hint": hint2, children: [
     label && /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "dialkit-chips-label", children: label }),
-    /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { className: "dialkit-chips-grid", role: "listbox", "aria-label": label, children: options.map((option) => /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "dialkit-chip", "data-active": String(option.value === value), "data-removable": option.removable ? "true" : void 0, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { ref: gridRef, className: "dialkit-chips-grid", role: "radiogroup", "aria-label": label, children: options.map((option, index) => /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "dialkit-chip", "data-active": String(option.value === value), "data-removable": option.removable ? "true" : void 0, children: [
       /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
         "button",
         {
           type: "button",
           className: "dialkit-chip-select",
-          role: "option",
-          "aria-selected": option.value === value,
+          role: "radio",
+          "aria-checked": option.value === value,
+          "aria-keyshortcuts": option.removable ? "Delete Backspace" : void 0,
+          tabIndex: option.value === tabStop ? 0 : -1,
           onClick: () => onChange(option.value),
+          onKeyDown: (e) => handleKeyDown(e, index),
           children: option.label
         }
       ),
@@ -11967,6 +12018,7 @@ function ChipsControl({ label, value, options, onChange, onRemove, hint: hint2 }
           className: "dialkit-chip-remove",
           "aria-label": `Remove ${option.label}`,
           "data-hint": REMOVE_HINT,
+          tabIndex: -1,
           onClick: () => onRemove(option.value),
           children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("path", { d: ICON_CLOSE }) })
         }
@@ -12030,12 +12082,12 @@ function SwatchControl({ label, value, options, onChange, hint: hint2 }) {
 }
 
 // src/components/FileControl.tsx
-var import_react29 = require("react");
+var import_react30 = require("react");
 var import_jsx_runtime27 = require("react/jsx-runtime");
 var CLEAR_HINT = "Clears the file.";
 function FileControl({ label, value, accept, multiple = false, onChange, onPick, hint: hint2 }) {
   useHints(!!hint2 || !!value);
-  const inputRef = (0, import_react29.useRef)(null);
+  const inputRef = (0, import_react30.useRef)(null);
   const handleChange = (e) => {
     const files = e.currentTarget.files;
     if (!files || files.length === 0) return;
@@ -12060,7 +12112,7 @@ function FileControl({ label, value, accept, multiple = false, onChange, onPick,
 }
 
 // src/components/ListControl.tsx
-var import_react30 = require("react");
+var import_react31 = require("react");
 var import_jsx_runtime28 = require("react/jsx-runtime");
 var LIST_HINTS = {
   drag: "Drag to change the order. Alt+Up and Alt+Down move the row.",
@@ -12091,18 +12143,18 @@ function FieldList({ fields, params, onChange }) {
 }
 function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, onEvent, hint: hint2 }) {
   useHints(true);
-  const idCounter = (0, import_react30.useRef)(0);
+  const idCounter = (0, import_react31.useRef)(0);
   const mkId = () => `row-${idCounter.current++}`;
-  const [ids, setIds] = (0, import_react30.useState)(() => value.map(mkId));
-  const [picking, setPicking] = (0, import_react30.useState)(false);
-  const [editing, setEditing] = (0, import_react30.useState)(null);
-  const armedRef = (0, import_react30.useRef)(null);
-  const [dragIndex, setDragIndex] = (0, import_react30.useState)(null);
-  const [over, setOver] = (0, import_react30.useState)(null);
+  const [ids, setIds] = (0, import_react31.useState)(() => value.map(mkId));
+  const [picking, setPicking] = (0, import_react31.useState)(false);
+  const [editing, setEditing] = (0, import_react31.useState)(null);
+  const armedRef = (0, import_react31.useRef)(null);
+  const [dragIndex, setDragIndex] = (0, import_react31.useState)(null);
+  const [over, setOver] = (0, import_react31.useState)(null);
   if (ids.length !== value.length) {
     setIds((cur) => value.map((_, i) => cur[i] ?? mkId()));
   }
-  (0, import_react30.useEffect)(() => {
+  (0, import_react31.useEffect)(() => {
     const disarm = () => {
       armedRef.current = null;
     };
@@ -12257,11 +12309,11 @@ function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, on
 }
 
 // src/hooks/useLiveConfig.ts
-var import_react31 = require("react");
+var import_react32 = require("react");
 function useLiveConfig(panelId, control, type) {
-  const subscribe2 = (0, import_react31.useCallback)((listener) => subscribeLiveConfigs(panelId, listener), [panelId]);
+  const subscribe2 = (0, import_react32.useCallback)((listener) => subscribeLiveConfigs(panelId, listener), [panelId]);
   const get = () => liveConfigOf(panelId, control, type);
-  return (0, import_react31.useSyncExternalStore)(subscribe2, get, get);
+  return (0, import_react32.useSyncExternalStore)(subscribe2, get, get);
 }
 
 // src/components/FilterControl.tsx
@@ -12306,21 +12358,21 @@ function FilterControl({ panelId, control, value, onChange }) {
 }
 
 // src/components/TransferCurve.tsx
-var import_react32 = require("react");
+var import_react33 = require("react");
 var import_jsx_runtime30 = require("react/jsx-runtime");
 var GRAB_PX = 9;
 var DROP_PX = 26;
 var NUDGE = 0.01;
 function TransferCurve({ label, value, onChange, height = 104, grid = 4, axisLabels, hint: hint2 }) {
   useHints(!!hint2);
-  const plotRef = (0, import_react32.useRef)(null);
-  const handleRefs = (0, import_react32.useRef)([]);
-  const [dragIndex, setDragIndex] = (0, import_react32.useState)(null);
-  const [dropping, setDropping] = (0, import_react32.useState)(false);
+  const plotRef = (0, import_react33.useRef)(null);
+  const handleRefs = (0, import_react33.useRef)([]);
+  const [dragIndex, setDragIndex] = (0, import_react33.useState)(null);
+  const [dropping, setDropping] = (0, import_react33.useState)(false);
   const points = normalizeTransfer(value).points;
   const plotHeight = Math.min(200, Math.max(64, height));
-  const path = (0, import_react32.useMemo)(() => transferPath(points), [points]);
-  const toCurve = (0, import_react32.useCallback)((clientX, clientY) => {
+  const path = (0, import_react33.useMemo)(() => transferPath(points), [points]);
+  const toCurve = (0, import_react33.useCallback)((clientX, clientY) => {
     const r = plotRef.current.getBoundingClientRect();
     return {
       x: (clientX - r.left) / r.width,
@@ -12344,7 +12396,7 @@ function TransferCurve({ label, value, onChange, height = 104, grid = 4, axisLab
     onChange({ points: next });
     if (index >= 0) setDragIndex(index);
   };
-  (0, import_react32.useEffect)(() => {
+  (0, import_react33.useEffect)(() => {
     if (dragIndex === null) return;
     const removable = dragIndex > 0 && dragIndex < points.length - 1;
     const move = (e) => {
@@ -12520,7 +12572,7 @@ function CurvePreview({ panelId, control }) {
 }
 
 // src/components/AnalyserRow.tsx
-var import_react33 = require("react");
+var import_react34 = require("react");
 
 // src/analyser.ts
 function byteFreqToUnit(v) {
@@ -12840,14 +12892,14 @@ var import_jsx_runtime32 = require("react/jsx-runtime");
 function AnalyserRow({ panelId, control }) {
   useHints(!!control.hint);
   const config = useLiveConfig(panelId, control, "analyser");
-  const plotRef = (0, import_react33.useRef)(null);
-  const canvasRef = (0, import_react33.useRef)(null);
-  const [width, setWidth] = (0, import_react33.useState)(0);
+  const plotRef = (0, import_react34.useRef)(null);
+  const canvasRef = (0, import_react34.useRef)(null);
+  const [width, setWidth] = (0, import_react34.useState)(0);
   const height = clampCurveHeight(config?.height ?? 56);
   const label = typeof config?.label === "string" ? config.label : control.label;
-  const latest = (0, import_react33.useRef)({ config, width, height });
+  const latest = (0, import_react34.useRef)({ config, width, height });
   latest.current = { config, width, height };
-  (0, import_react33.useEffect)(() => {
+  (0, import_react34.useEffect)(() => {
     const el = plotRef.current;
     if (!el) return;
     const measure = () => setWidth(Math.round(el.getBoundingClientRect().width));
@@ -12856,7 +12908,7 @@ function AnalyserRow({ panelId, control }) {
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
-  (0, import_react33.useEffect)(() => {
+  (0, import_react34.useEffect)(() => {
     if (!canvasRef.current) return;
     const engine = createAnalyserEngine(canvasRef.current, () => {
       const { config: config2, width: width2, height: height2 } = latest.current;
@@ -12887,9 +12939,9 @@ var import_jsx_runtime33 = require("react/jsx-runtime");
 var hiddenControl = { opacity: 0, height: 0, marginBottom: "calc(var(--dial-row-gap) * -1)", overflowY: "clip" };
 var shownControl = { opacity: 1, height: "auto", marginBottom: "calc(var(--dial-row-gap) * 0)", overflowY: "clip", transitionEnd: { overflowY: "visible" } };
 function AnimatedControls({ controls, children }) {
-  const [rows2, setRows] = (0, import_react34.useState)({ controls, rendered: controls });
-  const mounted = (0, import_react34.useRef)(false);
-  (0, import_react34.useEffect)(() => {
+  const [rows2, setRows] = (0, import_react35.useState)({ controls, rendered: controls });
+  const mounted = (0, import_react35.useRef)(false);
+  (0, import_react35.useEffect)(() => {
     mounted.current = true;
   }, []);
   if (rows2.controls !== controls) setRows({ controls, rendered: mergeControls(rows2.rendered, controls) });
@@ -12898,8 +12950,8 @@ function AnimatedControls({ controls, children }) {
     ...current2,
     rendered: current2.rendered.filter((control) => control.path !== path || current2.controls.some((shown) => shown.path === path))
   }));
-  return rows2.rendered.map((control) => /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(import_react35.AnimatePresence, { initial: mounted.current, onExitComplete: () => remove(control.path), children: present.has(control.path) && /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
-    import_react35.motion.div,
+  return rows2.rendered.map((control) => /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(import_react36.AnimatePresence, { initial: mounted.current, onExitComplete: () => remove(control.path), children: present.has(control.path) && /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+    import_react36.motion.div,
     {
       className: "dialkit-control-wrapper",
       initial: hiddenControl,
@@ -12915,7 +12967,7 @@ function loneTransition(rows2) {
   return rows2.length === 1 && rows2[0].type === "transition" ? rows2[0] : void 0;
 }
 function ControlRenderer({ panelId, controls, values, transitionDuration, physicsSettleCap, openFolder, onOpenFolderChange, animateControls = false }) {
-  const shortcutCtx = (0, import_react34.useContext)(ShortcutContext);
+  const shortcutCtx = (0, import_react35.useContext)(ShortcutContext);
   const resetProps = (control) => control.reset ? {
     changed: DialStore.isFolderChanged(panelId, control.path),
     onReset: () => DialStore.resetFolder(panelId, control.path)
@@ -13325,15 +13377,15 @@ function ControlRenderer({ panelId, controls, values, transitionDuration, physic
 }
 
 // src/components/Hint.tsx
-var import_react36 = require("react");
+var import_react37 = require("react");
 var import_jsx_runtime34 = require("react/jsx-runtime");
 var subscribe = (listener) => HintStore.subscribe(listener);
 var getTipSeen = () => HintStore.isTipSeen();
 var getServerTipSeen = () => true;
 var getKey = () => HintStore.getKey();
 function HintTip({ always = false }) {
-  const seen = (0, import_react36.useSyncExternalStore)(subscribe, getTipSeen, getServerTipSeen);
-  const key = (0, import_react36.useSyncExternalStore)(subscribe, getKey, getKey);
+  const seen = (0, import_react37.useSyncExternalStore)(subscribe, getTipSeen, getServerTipSeen);
+  const key = (0, import_react37.useSyncExternalStore)(subscribe, getKey, getKey);
   if (seen && !always) return null;
   return /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("p", { className: "dialkit-hint-tip", children: [
     "Hold ",
@@ -13506,23 +13558,23 @@ function observePresetMenu(getPopup, reorder) {
 }
 
 // src/components/PresetManager.tsx
-var import_react37 = require("react");
+var import_react38 = require("react");
 var import_react_dom2 = require("react-dom");
-var import_react38 = require("motion/react");
+var import_react39 = require("motion/react");
 var import_jsx_runtime35 = require("react/jsx-runtime");
 function PresetManager({ panelId, presets, activePresetId, onAdd, noun = "version" }) {
-  const [isOpen, setIsOpen] = (0, import_react37.useState)(false);
+  const [isOpen, setIsOpen] = (0, import_react38.useState)(false);
   const editable = DialStore.isPresetsEditable(panelId);
   const lockable = DialStore.isPresetsLockable(panelId);
   const hints = versionHints(noun, { editable, lockable });
   useHints(true);
-  const triggerRef = (0, import_react37.useRef)(null);
-  const dropdownRef = (0, import_react37.useRef)(null);
-  const [pos, setPos] = (0, import_react37.useState)({ top: 0, left: 0, width: 0, above: false });
-  const [editingId, setEditingId] = (0, import_react37.useState)(null);
+  const triggerRef = (0, import_react38.useRef)(null);
+  const dropdownRef = (0, import_react38.useRef)(null);
+  const [pos, setPos] = (0, import_react38.useState)({ top: 0, left: 0, width: 0, above: false });
+  const [editingId, setEditingId] = (0, import_react38.useState)(null);
   const resyncPresence = usePresenceResync();
   const activePreset = presets.find((p) => p.id === activePresetId);
-  const open = (0, import_react37.useCallback)(() => {
+  const open = (0, import_react38.useCallback)(() => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
       const above = opensAbove(rect, 8 + (presets.length + 1) * 36, window.innerHeight);
@@ -13531,12 +13583,12 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, noun = "versio
     setEditingId(null);
     setIsOpen(true);
   }, [presets.length]);
-  const close2 = (0, import_react37.useCallback)(() => setIsOpen(false), []);
-  const toggle = (0, import_react37.useCallback)(() => {
+  const close2 = (0, import_react38.useCallback)(() => setIsOpen(false), []);
+  const toggle = (0, import_react38.useCallback)(() => {
     if (isOpen) close2();
     else open();
   }, [isOpen, open, close2]);
-  (0, import_react37.useEffect)(() => {
+  (0, import_react38.useEffect)(() => {
     if (!isOpen) return;
     const handler = (e) => {
       const target = e.target;
@@ -13584,7 +13636,7 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, noun = "versio
         children: [
           /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("span", { className: "dialkit-preset-label", children: activePreset ? activePreset.name : DialStore.getBaseName(panelId) }),
           /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
-            import_react38.motion.svg,
+            import_react39.motion.svg,
             {
               className: "dialkit-select-chevron",
               viewBox: "0 0 24 24",
@@ -13602,8 +13654,8 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, noun = "versio
       }
     ),
     (0, import_react_dom2.createPortal)(
-      /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(import_react38.AnimatePresence, { onExitComplete: resyncPresence, children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)(
-        import_react38.motion.div,
+      /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(import_react39.AnimatePresence, { onExitComplete: resyncPresence, children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)(
+        import_react39.motion.div,
         {
           ref: dropdownRef,
           className: "dialkit-root dialkit-preset-dropdown",
@@ -13699,7 +13751,7 @@ function Icon({ paths }) {
 }
 
 // src/components/VersionGallery.tsx
-var import_react39 = require("react");
+var import_react40 = require("react");
 
 // src/versions/spring.ts
 function bakedSpring(easing, duration) {
@@ -14823,9 +14875,9 @@ function mountVersionGallery(host, initial) {
 // src/components/VersionGallery.tsx
 var import_jsx_runtime36 = require("react/jsx-runtime");
 function VersionGallery(props) {
-  const hostRef = (0, import_react39.useRef)(null);
-  const galleryRef = (0, import_react39.useRef)(null);
-  (0, import_react39.useLayoutEffect)(() => {
+  const hostRef = (0, import_react40.useRef)(null);
+  const galleryRef = (0, import_react40.useRef)(null);
+  (0, import_react40.useLayoutEffect)(() => {
     const gallery = mountVersionGallery(hostRef.current, props);
     galleryRef.current = gallery;
     return () => {
@@ -14833,7 +14885,7 @@ function VersionGallery(props) {
       galleryRef.current = null;
     };
   }, []);
-  (0, import_react39.useLayoutEffect)(() => {
+  (0, import_react40.useLayoutEffect)(() => {
     galleryRef.current?.update(props);
   }, [props.panelId, props.theme]);
   return /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("div", { ref: hostRef, className: "dialkit-versions-host" });
@@ -14842,26 +14894,26 @@ function VersionGallery(props) {
 // src/components/Panel.tsx
 var import_jsx_runtime37 = require("react/jsx-runtime");
 function Panel({ panel, defaultOpen = true, inline = false, accordion = false, openFolder, onOpenFolderChange, onOpenChange, variant = "root", toolbarExtra, versions = "thumbnails", theme, beside }) {
-  const [copied, setCopied] = (0, import_react40.useState)(false);
+  const [copied, setCopied] = (0, import_react41.useState)(false);
   useHints(true);
-  const copyTimeout = (0, import_react40.useRef)();
-  (0, import_react40.useEffect)(() => () => clearTimeout(copyTimeout.current), []);
-  const subscribe2 = (0, import_react40.useCallback)(
+  const copyTimeout = (0, import_react41.useRef)();
+  (0, import_react41.useEffect)(() => () => clearTimeout(copyTimeout.current), []);
+  const subscribe2 = (0, import_react41.useCallback)(
     (callback) => DialStore.subscribe(panel.id, callback),
     [panel.id]
   );
-  const getSnapshot = (0, import_react40.useCallback)(
+  const getSnapshot = (0, import_react41.useCallback)(
     () => DialStore.getValues(panel.id),
     [panel.id]
   );
-  const getOpenSnapshot = (0, import_react40.useCallback)(
+  const getOpenSnapshot = (0, import_react41.useCallback)(
     () => DialStore.getPanelOpen(panel.id),
     [panel.id]
   );
-  const values = (0, import_react40.useSyncExternalStore)(subscribe2, getSnapshot, getSnapshot);
-  const storeOpen = (0, import_react40.useSyncExternalStore)(subscribe2, getOpenSnapshot, getOpenSnapshot);
+  const values = (0, import_react41.useSyncExternalStore)(subscribe2, getSnapshot, getSnapshot);
+  const storeOpen = (0, import_react41.useSyncExternalStore)(subscribe2, getOpenSnapshot, getOpenSnapshot);
   const isOpen = storeOpen ?? defaultOpen;
-  (0, import_react40.useEffect)(() => {
+  (0, import_react41.useEffect)(() => {
     DialStore.initPanelOpen(panel.id, defaultOpen);
   }, [panel.id, defaultOpen]);
   const presets = DialStore.getPresets(panel.id);
@@ -14876,7 +14928,7 @@ function Panel({ panel, defaultOpen = true, inline = false, accordion = false, o
     clearTimeout(copyTimeout.current);
     copyTimeout.current = setTimeout(() => setCopied(false), 1500);
   };
-  const handleOpenChange = (0, import_react40.useCallback)((open) => {
+  const handleOpenChange = (0, import_react41.useCallback)((open) => {
     DialStore.setPanelOpen(panel.id, open);
     onOpenChange?.(open);
   }, [onOpenChange, panel.id]);
@@ -14906,7 +14958,7 @@ function Panel({ panel, defaultOpen = true, inline = false, accordion = false, o
       }
     ),
     /* @__PURE__ */ (0, import_jsx_runtime37.jsxs)(
-      import_react41.motion.button,
+      import_react42.motion.button,
       {
         className: "dialkit-toolbar-add dialkit-toolbar-primary",
         "data-wide": versions !== "menu" ? "true" : void 0,
@@ -14916,8 +14968,8 @@ function Panel({ panel, defaultOpen = true, inline = false, accordion = false, o
         whileTap: { scale: versions !== "menu" ? 0.98 : 0.9 },
         transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(import_react41.AnimatePresence, { initial: false, mode: "wait", children: copied ? /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
-            import_react41.motion.svg,
+          /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(import_react42.AnimatePresence, { initial: false, mode: "wait", children: copied ? /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
+            import_react42.motion.svg,
             {
               viewBox: "0 0 24 24",
               fill: "none",
@@ -14934,7 +14986,7 @@ function Panel({ panel, defaultOpen = true, inline = false, accordion = false, o
             },
             "check"
           ) : /* @__PURE__ */ (0, import_jsx_runtime37.jsxs)(
-            import_react41.motion.svg,
+            import_react42.motion.svg,
             {
               viewBox: "0 0 24 24",
               fill: "none",
@@ -14964,8 +15016,8 @@ function Panel({ panel, defaultOpen = true, inline = false, accordion = false, o
 }
 
 // src/components/Timeline/TimelineToggleButton.tsx
-var import_react42 = require("react");
-var import_react43 = require("motion/react");
+var import_react43 = require("react");
+var import_react44 = require("motion/react");
 
 // src/store/TimelineUiStore.ts
 var TimelineUiStoreClass = class {
@@ -15032,15 +15084,15 @@ var TimelineUiStore = /* @__PURE__ */ new TimelineUiStoreClass();
 // src/components/Timeline/TimelineToggleButton.tsx
 var import_jsx_runtime38 = require("react/jsx-runtime");
 function TimelineToggleButton() {
-  const subscribe2 = (0, import_react42.useCallback)(
+  const subscribe2 = (0, import_react43.useCallback)(
     (listener) => TimelineUiStore.subscribe(listener),
     []
   );
-  const getVisible = (0, import_react42.useCallback)(() => TimelineUiStore.getVisible(), []);
-  const visible = (0, import_react42.useSyncExternalStore)(subscribe2, getVisible, getVisible);
+  const getVisible = (0, import_react43.useCallback)(() => TimelineUiStore.getVisible(), []);
+  const visible = (0, import_react43.useSyncExternalStore)(subscribe2, getVisible, getVisible);
   const label = visible ? "Hide timeline" : "Show timeline";
   return /* @__PURE__ */ (0, import_jsx_runtime38.jsx)(
-    import_react43.motion.button,
+    import_react44.motion.button,
     {
       className: "dialkit-toolbar-add dialkit-timeline-toolbar-toggle",
       "data-active": visible || void 0,
@@ -15209,27 +15261,27 @@ function rootPanels() {
 }
 function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover", theme = "system", productionEnabled = isDevDefault, versions = "thumbnails", accordion = false, onOpenChange, include }) {
   if (!productionEnabled) return null;
-  const [allPanels, setPanels] = (0, import_react44.useState)([]);
-  const [timelineCount, setTimelineCount] = (0, import_react44.useState)(0);
-  const [mounted, setMounted] = (0, import_react44.useState)(false);
+  const [allPanels, setPanels] = (0, import_react45.useState)([]);
+  const [timelineCount, setTimelineCount] = (0, import_react45.useState)(0);
+  const [mounted, setMounted] = (0, import_react45.useState)(false);
   const inline = mode === "inline";
-  const [shellOpen, setShellOpen] = (0, import_react44.useState)(inline || defaultOpen);
-  const shellOpenRef = (0, import_react44.useRef)(shellOpen);
-  const [groupOpen, setGroupOpen] = (0, import_react44.useState)({});
-  const panelRef = (0, import_react44.useRef)(null);
-  const [dragOffset, setDragOffset] = (0, import_react44.useState)(null);
-  const [activePosition, setActivePosition] = (0, import_react44.useState)(position);
-  const lastDragOffset = (0, import_react44.useRef)(null);
-  const draggingRef = (0, import_react44.useRef)(false);
-  const dragStartRef = (0, import_react44.useRef)(null);
-  const didDragRef = (0, import_react44.useRef)(false);
-  const dragTargetRef = (0, import_react44.useRef)(null);
-  const panelOpenStatesRef = (0, import_react44.useRef)(/* @__PURE__ */ new Map());
-  const rootOpenRef = (0, import_react44.useRef)(null);
-  const [openFolders, setOpenFolders] = (0, import_react44.useState)({});
+  const [shellOpen, setShellOpen] = (0, import_react45.useState)(inline || defaultOpen);
+  const shellOpenRef = (0, import_react45.useRef)(shellOpen);
+  const [groupOpen, setGroupOpen] = (0, import_react45.useState)({});
+  const panelRef = (0, import_react45.useRef)(null);
+  const [dragOffset, setDragOffset] = (0, import_react45.useState)(null);
+  const [activePosition, setActivePosition] = (0, import_react45.useState)(position);
+  const lastDragOffset = (0, import_react45.useRef)(null);
+  const draggingRef = (0, import_react45.useRef)(false);
+  const dragStartRef = (0, import_react45.useRef)(null);
+  const didDragRef = (0, import_react45.useRef)(false);
+  const dragTargetRef = (0, import_react45.useRef)(null);
+  const panelOpenStatesRef = (0, import_react45.useRef)(/* @__PURE__ */ new Map());
+  const rootOpenRef = (0, import_react45.useRef)(null);
+  const [openFolders, setOpenFolders] = (0, import_react45.useState)({});
   const setOpenFolder = (id, path) => setOpenFolders((prev) => ({ ...prev, [id]: path }));
-  (0, import_react44.useEffect)(() => observePointerFocus(), []);
-  (0, import_react44.useEffect)(() => {
+  (0, import_react45.useEffect)(() => observePointerFocus(), []);
+  (0, import_react45.useEffect)(() => {
     setMounted(true);
     setPanels(rootPanels());
     setTimelineCount(TimelineStore.getTimelines().length);
@@ -15245,18 +15297,18 @@ function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover"
     };
   }, []);
   const includeKey = JSON.stringify(include ?? null);
-  const panels = (0, import_react44.useMemo)(() => filterRootPanels(allPanels, include), [allPanels, includeKey]);
-  const slots = (0, import_react44.useMemo)(() => layoutRootPanels(panels, { placeBeside: !inline }), [panels, inline]);
-  const ungroupedIds = (0, import_react44.useMemo)(() => panels.filter((panel) => !panel.group && !panel.beside).map((panel) => panel.id), [panels]);
-  const otherKeys = (0, import_react44.useMemo)(() => slots.flatMap(({ entry, beside }) => [
+  const panels = (0, import_react45.useMemo)(() => filterRootPanels(allPanels, include), [allPanels, includeKey]);
+  const slots = (0, import_react45.useMemo)(() => layoutRootPanels(panels, { placeBeside: !inline }), [panels, inline]);
+  const ungroupedIds = (0, import_react45.useMemo)(() => panels.filter((panel) => !panel.group && !panel.beside).map((panel) => panel.id), [panels]);
+  const otherKeys = (0, import_react45.useMemo)(() => slots.flatMap(({ entry, beside }) => [
     ...entry.kind === "group" ? [entry.key] : entry.kind === "panel" && entry.panel.beside ? [entry.key] : [],
     ...beside.map((panel) => panel.id)
   ]), [slots]);
   const mergedUngrouped = slots.some(({ entry }) => entry.kind === "shell");
-  (0, import_react44.useEffect)(() => {
+  (0, import_react45.useEffect)(() => {
     setOpenFolders((prev) => pruneOpenFolders(prev, allPanels.map((panel) => panel.id)));
   }, [allPanels]);
-  (0, import_react44.useEffect)(() => {
+  (0, import_react45.useEffect)(() => {
     const fallbackOpen = inline || defaultOpen;
     const nextStates = /* @__PURE__ */ new Map();
     for (const key of [...ungroupedIds, ...otherKeys]) {
@@ -15265,13 +15317,13 @@ function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover"
     panelOpenStatesRef.current = nextStates;
     rootOpenRef.current = Array.from(nextStates.values()).some(Boolean);
   }, [defaultOpen, inline, ungroupedIds, otherKeys]);
-  const anyShellOpen = (0, import_react44.useCallback)((ungroupedOpen) => {
+  const anyShellOpen = (0, import_react45.useCallback)((ungroupedOpen) => {
     const fallbackOpen = inline || defaultOpen;
     const stateOf = (key) => panelOpenStatesRef.current.get(key) ?? fallbackOpen;
     const ungrouped = ungroupedOpen ?? (mergedUngrouped ? shellOpenRef.current : ungroupedIds.some(stateOf));
     return ungrouped || otherKeys.some(stateOf);
   }, [defaultOpen, inline, mergedUngrouped, ungroupedIds, otherKeys]);
-  (0, import_react44.useEffect)(() => {
+  (0, import_react45.useEffect)(() => {
     if (!panelRef.current || inline) return;
     const observer = new MutationObserver(() => {
       const inners = panelRef.current?.querySelectorAll(".dialkit-panel-inner");
@@ -15297,7 +15349,7 @@ function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover"
     observer.observe(panelRef.current, { subtree: true, attributes: true, attributeFilter: ["data-collapsed"] });
     return () => observer.disconnect();
   }, [inline, dragOffset, position]);
-  const handlePointerDown = (0, import_react44.useCallback)((e) => {
+  const handlePointerDown = (0, import_react45.useCallback)((e) => {
     const panel = panelRef.current;
     const handle = getPanelDragHandle(e.target, panel);
     if (!panel || !handle) return;
@@ -15307,13 +15359,13 @@ function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover"
     draggingRef.current = true;
     capturePanelPointer(handle, e.pointerId);
   }, []);
-  const handlePointerMove = (0, import_react44.useCallback)((e) => {
+  const handlePointerMove = (0, import_react45.useCallback)((e) => {
     if (!draggingRef.current || !dragStartRef.current) return;
     if (!didDragRef.current && !hasPanelDragMoved(dragStartRef.current, e.clientX, e.clientY)) return;
     didDragRef.current = true;
     setDragOffset(getPanelDragOffset(dragStartRef.current, e.clientX, e.clientY));
   }, []);
-  const handlePointerUp = (0, import_react44.useCallback)((e) => {
+  const handlePointerUp = (0, import_react45.useCallback)((e) => {
     if (!draggingRef.current) return;
     draggingRef.current = false;
     dragStartRef.current = null;
@@ -15329,14 +15381,14 @@ function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover"
     }
     dragTargetRef.current = null;
   }, []);
-  const handlePanelOpenChange = (0, import_react44.useCallback)((key, open) => {
+  const handlePanelOpenChange = (0, import_react45.useCallback)((key, open) => {
     panelOpenStatesRef.current.set(key, open);
     const nextRootOpen = anyShellOpen();
     if (rootOpenRef.current === nextRootOpen) return;
     rootOpenRef.current = nextRootOpen;
     onOpenChange?.(nextRootOpen);
   }, [anyShellOpen, onOpenChange]);
-  const handleRootOpenChange = (0, import_react44.useCallback)((open) => {
+  const handleRootOpenChange = (0, import_react45.useCallback)((open) => {
     setShellOpen(open);
     shellOpenRef.current = open;
     const nextRootOpen = anyShellOpen(open);
@@ -15344,11 +15396,11 @@ function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover"
     rootOpenRef.current = nextRootOpen;
     onOpenChange?.(nextRootOpen);
   }, [anyShellOpen, onOpenChange]);
-  const handleGroupOpenChange = (0, import_react44.useCallback)((group, open) => {
+  const handleGroupOpenChange = (0, import_react45.useCallback)((group, open) => {
     setGroupOpen((prev) => prev[group] === open ? prev : { ...prev, [group]: open });
     handlePanelOpenChange(groupRootKey(group), open);
   }, [handlePanelOpenChange]);
-  (0, import_react44.useEffect)(() => DialStore.subscribePanelOpen((id, open) => {
+  (0, import_react45.useEffect)(() => DialStore.subscribePanelOpen((id, open) => {
     for (const { entry, beside } of slots) {
       if (beside.some((panel) => panel.id === id) || entry.kind === "panel" && entry.panel.id === id) {
         handlePanelOpenChange(id, open);
@@ -15471,7 +15523,7 @@ function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover"
 }
 
 // src/hooks/useDialTimeline.ts
-var import_react45 = require("react");
+var import_react46 = require("react");
 
 // src/timeline-core.ts
 var CLIP_VALUE_STEP = 0.01;
@@ -16494,7 +16546,7 @@ function buildTimelineValues(staticClips, transport, timelineDuration, loopStart
 // src/hooks/useDialTimeline.ts
 function useDialTimeline(name, config, options) {
   const serializedConfig = useSerialized(config);
-  const parsed = (0, import_react45.useMemo)(() => parseTimelineConfig(config), [serializedConfig]);
+  const parsed = (0, import_react46.useMemo)(() => parseTimelineConfig(config), [serializedConfig]);
   const { panelId, flatValues } = useDialStorePanel(name, parsed.dialConfig, {
     id: options?.id,
     persist: options?.persist,
@@ -16502,20 +16554,20 @@ function useDialTimeline(name, config, options) {
     presetsEditable: options?.presetsEditable,
     presetsLockable: options?.presetsLockable
   });
-  const staticTimeline = (0, import_react45.useMemo)(
+  const staticTimeline = (0, import_react46.useMemo)(
     () => computeStaticTimeline(parsed, flatValues),
     [parsed, flatValues]
   );
   const timelineDuration = staticTimeline.duration;
   const staticClips = staticTimeline.clips;
-  const parsedRef = (0, import_react45.useRef)(parsed);
+  const parsedRef = (0, import_react46.useRef)(parsed);
   parsedRef.current = parsed;
-  const optionsRef = (0, import_react45.useRef)(options);
+  const optionsRef = (0, import_react46.useRef)(options);
   optionsRef.current = options;
   const { enabled: loopEnabled, start: loopStart } = resolveTimelineLoop(options?.loop);
   const hasClipClick = typeof options?.onClipClick === "function";
-  const handleClipClick = (0, import_react45.useCallback)((key) => optionsRef.current?.onClipClick?.(key), []);
-  const buildMeta = (0, import_react45.useCallback)(
+  const handleClipClick = (0, import_react46.useCallback)((key) => optionsRef.current?.onClipClick?.(key), []);
+  const buildMeta = (0, import_react46.useCallback)(
     () => buildTimelineMeta(
       panelId,
       name,
@@ -16527,31 +16579,31 @@ function useDialTimeline(name, config, options) {
     ),
     [panelId, name, timelineDuration, loopEnabled, loopStart, options?.track, options?.pinStart, hasClipClick, handleClipClick]
   );
-  const buildMetaRef = (0, import_react45.useRef)(buildMeta);
+  const buildMetaRef = (0, import_react46.useRef)(buildMeta);
   buildMetaRef.current = buildMeta;
-  (0, import_react45.useEffect)(() => {
+  (0, import_react46.useEffect)(() => {
     TimelineStore.register(buildMetaRef.current(), { autoplay: optionsRef.current?.autoplay ?? true });
     return () => TimelineStore.unregister(panelId);
   }, [panelId, name]);
-  const mountedRef = (0, import_react45.useRef)(false);
-  (0, import_react45.useEffect)(() => {
+  const mountedRef = (0, import_react46.useRef)(false);
+  (0, import_react46.useEffect)(() => {
     if (!mountedRef.current) {
       mountedRef.current = true;
       return;
     }
     TimelineStore.update(buildMeta());
   }, [buildMeta, parsed]);
-  const subscribeTransport = (0, import_react45.useCallback)(
+  const subscribeTransport = (0, import_react46.useCallback)(
     (callback) => TimelineStore.subscribe(panelId, callback),
     [panelId]
   );
-  const getTransport = (0, import_react45.useCallback)(() => TimelineStore.getTransport(panelId), [panelId]);
-  const transport = (0, import_react45.useSyncExternalStore)(subscribeTransport, getTransport, getTransport);
-  const play = (0, import_react45.useCallback)(() => TimelineStore.play(panelId), [panelId]);
-  const pause = (0, import_react45.useCallback)(() => TimelineStore.pause(panelId), [panelId]);
-  const replay = (0, import_react45.useCallback)(() => TimelineStore.replay(panelId), [panelId]);
-  const seek = (0, import_react45.useCallback)((time) => TimelineStore.seek(panelId, time), [panelId]);
-  return (0, import_react45.useMemo)(
+  const getTransport = (0, import_react46.useCallback)(() => TimelineStore.getTransport(panelId), [panelId]);
+  const transport = (0, import_react46.useSyncExternalStore)(subscribeTransport, getTransport, getTransport);
+  const play = (0, import_react46.useCallback)(() => TimelineStore.play(panelId), [panelId]);
+  const pause = (0, import_react46.useCallback)(() => TimelineStore.pause(panelId), [panelId]);
+  const replay = (0, import_react46.useCallback)(() => TimelineStore.replay(panelId), [panelId]);
+  const seek = (0, import_react46.useCallback)((time) => TimelineStore.seek(panelId, time), [panelId]);
+  return (0, import_react46.useMemo)(
     () => buildTimelineValues(staticClips, transport, timelineDuration, loopStart, {
       play,
       pause,
@@ -16563,9 +16615,9 @@ function useDialTimeline(name, config, options) {
 }
 
 // src/components/Timeline/DialTimeline.tsx
-var import_react46 = require("react");
+var import_react47 = require("react");
 var import_react_dom4 = require("react-dom");
-var import_react47 = require("motion/react");
+var import_react48 = require("motion/react");
 var import_jsx_runtime40 = require("react/jsx-runtime");
 var DRAG_THRESHOLD_PX2 = 3;
 var LIFT_PX = 12;
@@ -16607,7 +16659,7 @@ var getTimelines = () => TimelineStore.getTimelines();
 var subscribeTimelineVisibility = (callback) => TimelineUiStore.subscribe(callback);
 var getTimelineVisibility = () => TimelineUiStore.getVisible();
 var EXPORT_HINT = "Exports the timeline.";
-var DialTimeline = (0, import_react46.memo)(function DialTimeline2({
+var DialTimeline = (0, import_react47.memo)(function DialTimeline2({
   theme = "system",
   defaultVisible = true,
   visible,
@@ -16637,30 +16689,30 @@ function DialTimelineDock({
   defaultOpen,
   onExport
 }) {
-  const [mounted, setMounted] = (0, import_react46.useState)(false);
+  const [mounted, setMounted] = (0, import_react47.useState)(false);
   useHints(true);
-  const [dockMaxHeight, setDockMaxHeight] = (0, import_react46.useState)(DEFAULT_DOCK_MAX_HEIGHT);
-  const visibilityControllerId = (0, import_react46.useRef)(/* @__PURE__ */ Symbol("dialkit-timeline-visibility"));
-  const dockRef = (0, import_react46.useRef)(null);
-  const resizeCleanupRef = (0, import_react46.useRef)(null);
-  (0, import_react46.useEffect)(() => TimelineUiStore.registerController(visibilityControllerId.current, {
+  const [dockMaxHeight, setDockMaxHeight] = (0, import_react47.useState)(DEFAULT_DOCK_MAX_HEIGHT);
+  const visibilityControllerId = (0, import_react47.useRef)(/* @__PURE__ */ Symbol("dialkit-timeline-visibility"));
+  const dockRef = (0, import_react47.useRef)(null);
+  const resizeCleanupRef = (0, import_react47.useRef)(null);
+  (0, import_react47.useEffect)(() => TimelineUiStore.registerController(visibilityControllerId.current, {
     visible,
     defaultVisible,
     onVisibilityChange
   }), []);
-  (0, import_react46.useEffect)(() => {
+  (0, import_react47.useEffect)(() => {
     TimelineUiStore.updateController(visibilityControllerId.current, {
       visible,
       defaultVisible,
       onVisibilityChange
     });
   }, [defaultVisible, onVisibilityChange, visible]);
-  (0, import_react46.useEffect)(() => {
+  (0, import_react47.useEffect)(() => {
     setMounted(true);
   }, []);
-  (0, import_react46.useEffect)(() => observePointerFocus(), []);
-  (0, import_react46.useEffect)(() => () => resizeCleanupRef.current?.(), []);
-  const handleResizePointerDown = (0, import_react46.useCallback)((e) => {
+  (0, import_react47.useEffect)(() => observePointerFocus(), []);
+  (0, import_react47.useEffect)(() => () => resizeCleanupRef.current?.(), []);
+  const handleResizePointerDown = (0, import_react47.useCallback)((e) => {
     const dock = dockRef.current;
     if (!dock) return;
     e.preventDefault();
@@ -16684,14 +16736,14 @@ function DialTimelineDock({
     window.addEventListener("pointercancel", finishResize);
     resizeCleanupRef.current = finishResize;
   }, []);
-  const timelines = (0, import_react46.useSyncExternalStore)(subscribeGlobalTimelines, getTimelines, getTimelines);
-  const dockVisible = (0, import_react46.useSyncExternalStore)(
+  const timelines = (0, import_react47.useSyncExternalStore)(subscribeGlobalTimelines, getTimelines, getTimelines);
+  const dockVisible = (0, import_react47.useSyncExternalStore)(
     subscribeTimelineVisibility,
     getTimelineVisibility,
     getTimelineVisibility
   );
   const hasTimelines = timelines.length > 0;
-  (0, import_react46.useEffect)(() => {
+  (0, import_react47.useEffect)(() => {
     const dock = dockRef.current;
     if (!dock || typeof ResizeObserver === "undefined") return;
     const root = document.documentElement;
@@ -16748,14 +16800,14 @@ function DialTimelineDock({
   );
 }
 function useTransportSubscribe(id) {
-  return (0, import_react46.useCallback)((callback) => TimelineStore.subscribe(id, callback), [id]);
+  return (0, import_react47.useCallback)((callback) => TimelineStore.subscribe(id, callback), [id]);
 }
 function PlayPauseButton({ id }) {
   const subscribe2 = useTransportSubscribe(id);
-  const getPlaying = (0, import_react46.useCallback)(() => TimelineStore.getTransport(id).playing, [id]);
-  const playing = (0, import_react46.useSyncExternalStore)(subscribe2, getPlaying, getPlaying);
+  const getPlaying = (0, import_react47.useCallback)(() => TimelineStore.getTransport(id).playing, [id]);
+  const playing = (0, import_react47.useSyncExternalStore)(subscribe2, getPlaying, getPlaying);
   return /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
-    import_react47.motion.button,
+    import_react48.motion.button,
     {
       className: "dialkit-toolbar-add",
       onClick: () => playing ? TimelineStore.pause(id) : TimelineStore.play(id),
@@ -16763,8 +16815,8 @@ function PlayPauseButton({ id }) {
       "data-hint": TIMELINE_HINTS.play,
       whileTap: { scale: 0.9 },
       transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-      children: /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(import_react47.AnimatePresence, { initial: false, mode: "wait", children: playing ? /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
-        import_react47.motion.svg,
+      children: /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(import_react48.AnimatePresence, { initial: false, mode: "wait", children: playing ? /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
+        import_react48.motion.svg,
         {
           viewBox: "0 0 24 24",
           fill: "none",
@@ -16778,7 +16830,7 @@ function PlayPauseButton({ id }) {
         },
         "pause"
       ) : /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
-        import_react47.motion.svg,
+        import_react48.motion.svg,
         {
           viewBox: "0 0 24 24",
           fill: "none",
@@ -16797,7 +16849,7 @@ function PlayPauseButton({ id }) {
 }
 function ReplayButton({ onReplay }) {
   return /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
-    import_react47.motion.button,
+    import_react48.motion.button,
     {
       className: "dialkit-toolbar-add",
       onClick: onReplay,
@@ -16811,7 +16863,7 @@ function ReplayButton({ onReplay }) {
 }
 function LoopButton({ id, loop }) {
   return /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
-    import_react47.motion.button,
+    import_react48.motion.button,
     {
       className: "dialkit-toolbar-add dialkit-timeline-toolbar-toggle dialkit-timeline-loop",
       "data-active": loop || void 0,
@@ -16827,17 +16879,17 @@ function LoopButton({ id, loop }) {
 }
 function ClipFill({ id, at, duration }) {
   const subscribe2 = useTransportSubscribe(id);
-  const getProgress = (0, import_react46.useCallback)(
+  const getProgress = (0, import_react47.useCallback)(
     () => timelineClipProgress(TimelineStore.getTransport(id).time, at, duration),
     [at, duration, id]
   );
-  const progress = (0, import_react46.useSyncExternalStore)(subscribe2, getProgress, getProgress);
+  const progress = (0, import_react47.useSyncExternalStore)(subscribe2, getProgress, getProgress);
   return /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "dialkit-timeline-clip-fill", style: { width: `${progress * 100}%` }, "aria-hidden": "true" });
 }
 function ClipTail({ id, at, left, width, lit }) {
   const subscribe2 = useTransportSubscribe(id);
-  const getPlayed = (0, import_react46.useCallback)(() => TimelineStore.getTransport(id).time >= at, [at, id]);
-  const played = (0, import_react46.useSyncExternalStore)(subscribe2, getPlayed, getPlayed);
+  const getPlayed = (0, import_react47.useCallback)(() => TimelineStore.getTransport(id).time >= at, [at, id]);
+  const played = (0, import_react47.useSyncExternalStore)(subscribe2, getPlayed, getPlayed);
   return /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "dialkit-timeline-clip-tail", "data-lit": lit || played || void 0, style: { left, width }, "aria-hidden": "true" });
 }
 function TimelinePlayheadFlag({
@@ -16851,11 +16903,11 @@ function TimelinePlayheadFlag({
   onResetView
 }) {
   const subscribe2 = useTransportSubscribe(id);
-  const getTime = (0, import_react46.useCallback)(() => TimelineStore.getTransport(id).time, [id]);
-  const time = (0, import_react46.useSyncExternalStore)(subscribe2, getTime, getTime);
-  const scrubRef = (0, import_react46.useRef)(null);
-  const cleanupScrubRef = (0, import_react46.useRef)(null);
-  const seekFromClientX = (0, import_react46.useCallback)((clientX) => {
+  const getTime = (0, import_react47.useCallback)(() => TimelineStore.getTransport(id).time, [id]);
+  const time = (0, import_react47.useSyncExternalStore)(subscribe2, getTime, getTime);
+  const scrubRef = (0, import_react47.useRef)(null);
+  const cleanupScrubRef = (0, import_react47.useRef)(null);
+  const seekFromClientX = (0, import_react47.useCallback)((clientX) => {
     const rect = scrubRef.current?.rect;
     const scrub = scrubRef.current;
     const contentWidth = rect?.width ?? 0;
@@ -16867,7 +16919,7 @@ function TimelinePlayheadFlag({
     );
     TimelineStore.seek(id, nextTime);
   }, [id]);
-  const handlePointerDown = (0, import_react46.useCallback)((e) => {
+  const handlePointerDown = (0, import_react47.useCallback)((e) => {
     const rect = rulerRef.current?.getBoundingClientRect();
     if (!rect) return;
     e.preventDefault();
@@ -16900,7 +16952,7 @@ function TimelinePlayheadFlag({
     window.addEventListener("pointercancel", finishWindowScrub);
     cleanupScrubRef.current = finishWindowScrub;
   }, [duration, id, onResetView, rulerRef, seekFromClientX, viewEnd, viewStart]);
-  (0, import_react46.useEffect)(() => () => cleanupScrubRef.current?.(), []);
+  (0, import_react47.useEffect)(() => () => cleanupScrubRef.current?.(), []);
   if (time < viewStart || time > viewEnd || laneWidth <= 0) return null;
   const x = clamp4(
     (time - viewStart) * pxPerSecond,
@@ -16945,17 +16997,17 @@ function TimelineOverview({
   onNavigate
 }) {
   const subscribe2 = useTransportSubscribe(id);
-  const getTime = (0, import_react46.useCallback)(() => TimelineStore.getTransport(id).time, [id]);
-  const time = (0, import_react46.useSyncExternalStore)(subscribe2, getTime, getTime);
-  const scrubRef = (0, import_react46.useRef)(null);
-  const seekFromClientX = (0, import_react46.useCallback)((clientX) => {
+  const getTime = (0, import_react47.useCallback)(() => TimelineStore.getTransport(id).time, [id]);
+  const time = (0, import_react47.useSyncExternalStore)(subscribe2, getTime, getTime);
+  const scrubRef = (0, import_react47.useRef)(null);
+  const seekFromClientX = (0, import_react47.useCallback)((clientX) => {
     const rect = scrubRef.current?.rect;
     if (!rect || rect.width <= 0 || duration <= 0) return;
     const nextTime = clamp4((clientX - rect.left) / rect.width * duration, 0, duration);
     TimelineStore.seek(id, nextTime);
     onNavigate(nextTime);
   }, [duration, id, onNavigate]);
-  const handlePointerDown = (0, import_react46.useCallback)((e) => {
+  const handlePointerDown = (0, import_react47.useCallback)((e) => {
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     scrubRef.current = {
@@ -16965,10 +17017,10 @@ function TimelineOverview({
     TimelineStore.pause(id);
     seekFromClientX(e.clientX);
   }, [id, seekFromClientX]);
-  const handlePointerMove = (0, import_react46.useCallback)((e) => {
+  const handlePointerMove = (0, import_react47.useCallback)((e) => {
     if (scrubRef.current) seekFromClientX(e.clientX);
   }, [seekFromClientX]);
-  const finishScrub = (0, import_react46.useCallback)(() => {
+  const finishScrub = (0, import_react47.useCallback)(() => {
     if (scrubRef.current?.wasPlaying) TimelineStore.play(id);
     scrubRef.current = null;
   }, [id]);
@@ -17008,37 +17060,37 @@ function formatRulerSeconds(time, step) {
   const decimals = Math.min(3, Math.max(1, Math.ceil(-Math.log10(step))));
   return `${time.toFixed(decimals)}s`;
 }
-var TimelineSection = (0, import_react46.memo)(function TimelineSection2({
+var TimelineSection = (0, import_react47.memo)(function TimelineSection2({
   meta,
   defaultOpen,
   theme,
   dockVisible,
   onExport
 }) {
-  const [open, setOpen] = (0, import_react46.useState)(defaultOpen);
-  const [copied, setCopied] = (0, import_react46.useState)(false);
-  const [popover, setPopover] = (0, import_react46.useState)(null);
-  const [selectedKeys, setSelectedKeys] = (0, import_react46.useState)(NO_SELECTION);
-  const selectedRef = (0, import_react46.useRef)(selectedKeys);
+  const [open, setOpen] = (0, import_react47.useState)(defaultOpen);
+  const [copied, setCopied] = (0, import_react47.useState)(false);
+  const [popover, setPopover] = (0, import_react47.useState)(null);
+  const [selectedKeys, setSelectedKeys] = (0, import_react47.useState)(NO_SELECTION);
+  const selectedRef = (0, import_react47.useRef)(selectedKeys);
   selectedRef.current = selectedKeys;
-  const [collapsedGroups, setCollapsedGroups] = (0, import_react46.useState)(() => /* @__PURE__ */ new Set());
-  const [expandedTracks, setExpandedTracks] = (0, import_react46.useState)(() => /* @__PURE__ */ new Set());
-  const [zoom, setZoom] = (0, import_react46.useState)(1);
-  const [viewStart, setViewStart] = (0, import_react46.useState)(0);
-  const [foldSettled, setFoldSettled] = (0, import_react46.useState)(false);
+  const [collapsedGroups, setCollapsedGroups] = (0, import_react47.useState)(() => /* @__PURE__ */ new Set());
+  const [expandedTracks, setExpandedTracks] = (0, import_react47.useState)(() => /* @__PURE__ */ new Set());
+  const [zoom, setZoom] = (0, import_react47.useState)(1);
+  const [viewStart, setViewStart] = (0, import_react47.useState)(0);
+  const [foldSettled, setFoldSettled] = (0, import_react47.useState)(false);
   if (!open && foldSettled) setFoldSettled(false);
-  const subscribeValues = (0, import_react46.useCallback)(
+  const subscribeValues = (0, import_react47.useCallback)(
     (callback) => DialStore.subscribe(meta.id, callback),
     [meta.id]
   );
-  const getValues = (0, import_react46.useCallback)(() => DialStore.getValues(meta.id), [meta.id]);
-  const values = (0, import_react46.useSyncExternalStore)(subscribeValues, getValues, getValues);
+  const getValues = (0, import_react47.useCallback)(() => DialStore.getValues(meta.id), [meta.id]);
+  const values = (0, import_react47.useSyncExternalStore)(subscribeValues, getValues, getValues);
   const presets = DialStore.getPresets(meta.id);
   const activePresetId = DialStore.getActivePresetId(meta.id);
-  const laneAreaRef = (0, import_react46.useRef)(null);
-  const horizontalScrollRef = (0, import_react46.useRef)(null);
-  const [laneWidth, setLaneWidth] = (0, import_react46.useState)(0);
-  (0, import_react46.useLayoutEffect)(() => {
+  const laneAreaRef = (0, import_react47.useRef)(null);
+  const horizontalScrollRef = (0, import_react47.useRef)(null);
+  const [laneWidth, setLaneWidth] = (0, import_react47.useState)(0);
+  (0, import_react47.useLayoutEffect)(() => {
     if (!open) return;
     const ruler = laneAreaRef.current;
     if (!ruler) return;
@@ -17056,13 +17108,13 @@ var TimelineSection = (0, import_react46.memo)(function TimelineSection2({
   const pxPerSecond = visibleDuration > 0 && laneWidth > 0 ? laneWidth / visibleDuration : 0;
   const millisecondReadableZoom = laneWidth > 0 && meta.duration > 0 ? MAJOR_TICK_TARGET_PX * meta.duration / (MILLISECOND_STEP * 10 * laneWidth) : MIN_TIMELINE_MAX_ZOOM;
   const maxZoom = Math.max(MIN_TIMELINE_MAX_ZOOM, millisecondReadableZoom);
-  (0, import_react46.useEffect)(() => {
+  (0, import_react47.useEffect)(() => {
     setZoom((current2) => clamp4(current2, 1, maxZoom));
   }, [maxZoom]);
-  (0, import_react46.useEffect)(() => {
+  (0, import_react47.useEffect)(() => {
     setViewStart((current2) => clampViewStart(current2, meta.duration, meta.duration / zoom));
   }, [meta.duration, zoom]);
-  (0, import_react46.useLayoutEffect)(() => {
+  (0, import_react47.useLayoutEffect)(() => {
     const scroller = horizontalScrollRef.current;
     if (!scroller || pxPerSecond <= 0) return;
     const nextScrollLeft = safeViewStart * pxPerSecond;
@@ -17070,23 +17122,23 @@ var TimelineSection = (0, import_react46.memo)(function TimelineSection2({
       scroller.scrollLeft = nextScrollLeft;
     }
   }, [open, pxPerSecond, safeViewStart]);
-  (0, import_react46.useEffect)(() => {
+  (0, import_react47.useEffect)(() => {
     if (!dockVisible) setPopover(null);
   }, [dockVisible]);
-  const centerViewAt = (0, import_react46.useCallback)((time) => {
+  const centerViewAt = (0, import_react47.useCallback)((time) => {
     if (zoom <= 1 || meta.duration <= 0) return;
     const windowDuration = meta.duration / zoom;
     setViewStart(clampViewStart(time - windowDuration / 2, meta.duration, windowDuration));
   }, [meta.duration, zoom]);
-  const resetView = (0, import_react46.useCallback)(() => {
+  const resetView = (0, import_react47.useCallback)(() => {
     setZoom(1);
     setViewStart(0);
   }, []);
-  const handleReplay = (0, import_react46.useCallback)(() => {
+  const handleReplay = (0, import_react47.useCallback)(() => {
     setViewStart(0);
     TimelineStore.replay(meta.id);
   }, [meta.id]);
-  const handleHorizontalScroll = (0, import_react46.useCallback)((e) => {
+  const handleHorizontalScroll = (0, import_react47.useCallback)((e) => {
     if (pxPerSecond <= 0) return;
     setViewStart(clampViewStart(
       e.currentTarget.scrollLeft / pxPerSecond,
@@ -17094,13 +17146,13 @@ var TimelineSection = (0, import_react46.memo)(function TimelineSection2({
       visibleDuration
     ));
   }, [meta.duration, pxPerSecond, visibleDuration]);
-  const applyAnchoredZoom = (0, import_react46.useCallback)((nextZoom, anchorRatio, anchorTime) => {
+  const applyAnchoredZoom = (0, import_react47.useCallback)((nextZoom, anchorRatio, anchorTime) => {
     const nextVisibleDuration = meta.duration / nextZoom;
     setZoom(nextZoom);
     setViewStart(clampViewStart(anchorTime - anchorRatio * nextVisibleDuration, meta.duration, nextVisibleDuration));
   }, [meta.duration]);
-  const bodyRef = (0, import_react46.useRef)(null);
-  const wheelRef = (0, import_react46.useRef)(() => {
+  const bodyRef = (0, import_react47.useRef)(null);
+  const wheelRef = (0, import_react47.useRef)(() => {
   });
   wheelRef.current = (e) => {
     if (e.altKey) {
@@ -17126,16 +17178,16 @@ var TimelineSection = (0, import_react46.memo)(function TimelineSection2({
     e.preventDefault();
     scroller.scrollLeft += horizontalDelta;
   };
-  (0, import_react46.useEffect)(() => {
+  (0, import_react47.useEffect)(() => {
     const body = bodyRef.current;
     if (!open || !body) return;
     const onWheel = (e) => wheelRef.current(e);
     body.addEventListener("wheel", onWheel, { passive: false });
     return () => body.removeEventListener("wheel", onWheel);
   }, [open]);
-  const zoomDragRef = (0, import_react46.useRef)(null);
-  const rulerScrubRef = (0, import_react46.useRef)(null);
-  const seekRulerFromClientX = (0, import_react46.useCallback)((clientX) => {
+  const zoomDragRef = (0, import_react47.useRef)(null);
+  const rulerScrubRef = (0, import_react47.useRef)(null);
+  const seekRulerFromClientX = (0, import_react47.useCallback)((clientX) => {
     const scrub = rulerScrubRef.current;
     const contentWidth = scrub?.rect.width ?? 0;
     if (!scrub || contentWidth <= 0) return;
@@ -17148,7 +17200,7 @@ var TimelineSection = (0, import_react46.memo)(function TimelineSection2({
       )
     );
   }, [meta.id]);
-  const handleRulerPointerDown = (0, import_react46.useCallback)((e) => {
+  const handleRulerPointerDown = (0, import_react47.useCallback)((e) => {
     e.preventDefault();
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
@@ -17182,7 +17234,7 @@ var TimelineSection = (0, import_react46.memo)(function TimelineSection2({
       moved: false
     };
   }, [meta.duration, meta.id, safeViewStart, seekRulerFromClientX, visibleDuration, zoom]);
-  const handleRulerPointerMove = (0, import_react46.useCallback)((e) => {
+  const handleRulerPointerMove = (0, import_react47.useCallback)((e) => {
     if (rulerScrubRef.current) {
       seekRulerFromClientX(e.clientX);
       return;
@@ -17198,18 +17250,18 @@ var TimelineSection = (0, import_react46.memo)(function TimelineSection2({
       drag.anchorTime
     );
   }, [applyAnchoredZoom, maxZoom, meta.duration, seekRulerFromClientX]);
-  const handleRulerPointerUp = (0, import_react46.useCallback)(() => {
+  const handleRulerPointerUp = (0, import_react47.useCallback)(() => {
     if (rulerScrubRef.current?.wasPlaying) TimelineStore.play(meta.id);
     rulerScrubRef.current = null;
     zoomDragRef.current = null;
   }, [meta.id]);
-  const handleRulerPointerCancel = (0, import_react46.useCallback)(() => {
+  const handleRulerPointerCancel = (0, import_react47.useCallback)(() => {
     if (rulerScrubRef.current?.wasPlaying) TimelineStore.play(meta.id);
     rulerScrubRef.current = null;
     zoomDragRef.current = null;
   }, [meta.id]);
-  const trackScrubRef = (0, import_react46.useRef)(null);
-  const seekTrackFromClientX = (0, import_react46.useCallback)((clientX) => {
+  const trackScrubRef = (0, import_react47.useRef)(null);
+  const seekTrackFromClientX = (0, import_react47.useCallback)((clientX) => {
     const scrub = trackScrubRef.current;
     const contentWidth = scrub?.rect.width ?? 0;
     if (!scrub || contentWidth <= 0) return;
@@ -17220,7 +17272,7 @@ var TimelineSection = (0, import_react46.memo)(function TimelineSection2({
     );
     TimelineStore.seek(meta.id, nextTime);
   }, [meta.id]);
-  const handleTrackPointerDown = (0, import_react46.useCallback)((e) => {
+  const handleTrackPointerDown = (0, import_react47.useCallback)((e) => {
     const target = e.target;
     if (target.closest(".dialkit-timeline-label, button")) return;
     if (target.closest(".dialkit-timeline-scroll-row")) return;
@@ -17245,35 +17297,35 @@ var TimelineSection = (0, import_react46.memo)(function TimelineSection2({
     TimelineStore.pause(meta.id);
     seekTrackFromClientX(e.clientX);
   }, [meta.duration, meta.id, safeViewStart, seekTrackFromClientX, visibleDuration]);
-  const handleTrackPointerMove = (0, import_react46.useCallback)((e) => {
+  const handleTrackPointerMove = (0, import_react47.useCallback)((e) => {
     if (trackScrubRef.current) seekTrackFromClientX(e.clientX);
   }, [seekTrackFromClientX]);
-  const finishTrackScrub = (0, import_react46.useCallback)(() => {
+  const finishTrackScrub = (0, import_react47.useCallback)(() => {
     if (trackScrubRef.current?.wasPlaying) TimelineStore.play(meta.id);
     trackScrubRef.current = null;
   }, [meta.id]);
-  const handleCopy = (0, import_react46.useCallback)(() => {
+  const handleCopy = (0, import_react47.useCallback)(() => {
     const normalized = normalizeTimelineValuesForCopy(DialStore.getValues(meta.id), meta.clips);
     navigator.clipboard.writeText(buildCopyInstruction("useDialTimeline", meta.name, normalized));
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }, [meta.clips, meta.id, meta.name]);
-  const closePopover = (0, import_react46.useCallback)(() => setPopover(null), []);
+  const closePopover = (0, import_react47.useCallback)(() => setPopover(null), []);
   const popoverPanel = popover?.clip.panel;
-  (0, import_react46.useEffect)(() => {
+  (0, import_react47.useEffect)(() => {
     if (!popoverPanel) return;
     DialStore.setPanelInPopover(popoverPanel, true);
     return () => DialStore.setPanelInPopover(popoverPanel, false);
   }, [popoverPanel]);
-  const shownPanelRef = (0, import_react46.useRef)(void 0);
-  (0, import_react46.useEffect)(() => {
+  const shownPanelRef = (0, import_react47.useRef)(void 0);
+  (0, import_react47.useEffect)(() => {
     const previous = shownPanelRef.current;
     shownPanelRef.current = popoverPanel;
     if (!previous || previous === popoverPanel) return;
     const shown = DialStore.getPanels("panel").find((panel) => panel.name === previous);
     if (shown && "onClose" in shown && typeof shown.onClose === "function") shown.onClose();
   }, [popoverPanel]);
-  const openClipPopover = (0, import_react46.useCallback)(
+  const openClipPopover = (0, import_react47.useCallback)(
     (clip, rect, stepKey) => {
       const targetPath = stepKey ? `${clip.key}.${stepKey}` : clip.key;
       const exclude = stepKey ? void 0 : clipPopoverExclusions(clip);
@@ -17295,7 +17347,7 @@ var TimelineSection = (0, import_react46.memo)(function TimelineSection2({
     },
     [meta.id]
   );
-  const toggleTracks = (0, import_react46.useCallback)((clipKey) => {
+  const toggleTracks = (0, import_react47.useCallback)((clipKey) => {
     setExpandedTracks((prev) => {
       const next = new Set(prev);
       if (next.has(clipKey)) next.delete(clipKey);
@@ -17304,7 +17356,7 @@ var TimelineSection = (0, import_react46.memo)(function TimelineSection2({
     });
   }, []);
   const onClipClick = meta.onClipClick;
-  const handleBarClick = (0, import_react46.useCallback)(
+  const handleBarClick = (0, import_react47.useCallback)(
     (clip, rect, stepKey) => {
       onClipClick?.(clip.key);
       if (!stepKey && clip.tracks?.length) {
@@ -17316,7 +17368,7 @@ var TimelineSection = (0, import_react46.memo)(function TimelineSection2({
     [onClipClick, openClipPopover, toggleTracks]
   );
   const singleTrack = meta.track === "single";
-  const getDragBounds = (0, import_react46.useCallback)((clipKey) => {
+  const getDragBounds = (0, import_react47.useCallback)((clipKey) => {
     const transport = TimelineStore.getTransport(meta.id);
     return timelineClipDragBounds(
       timelineClipSpans(DialStore.getValues(meta.id), meta.clips, meta.duration),
@@ -17325,7 +17377,7 @@ var TimelineSection = (0, import_react46.memo)(function TimelineSection2({
       { singleTrack, playhead: transport.playing ? void 0 : transport.time }
     );
   }, [meta.clips, meta.duration, meta.id, singleTrack]);
-  (0, import_react46.useEffect)(() => {
+  (0, import_react47.useEffect)(() => {
     if (!singleTrack) return;
     const onPointerDown = (e) => {
       const target = e.target;
@@ -17335,7 +17387,7 @@ var TimelineSection = (0, import_react46.memo)(function TimelineSection2({
     document.addEventListener("pointerdown", onPointerDown, true);
     return () => document.removeEventListener("pointerdown", onPointerDown, true);
   }, [singleTrack]);
-  const blockRef = (0, import_react46.useRef)(null);
+  const blockRef = (0, import_react47.useRef)(null);
   const pressClip = (key, press) => {
     const next = pressTimelineSelection(selectedRef.current, key, press);
     if (next !== selectedRef.current) {
@@ -17368,8 +17420,8 @@ var TimelineSection = (0, import_react46.memo)(function TimelineSection2({
     DialStore.updateValues(meta.id, writes);
     return true;
   };
-  const [reorderCue, setReorderCue] = (0, import_react46.useState)(null);
-  const reorderRef = (0, import_react46.useRef)(null);
+  const [reorderCue, setReorderCue] = (0, import_react47.useState)(null);
+  const reorderRef = (0, import_react47.useRef)(null);
   const liftClip = (clip) => {
     const block = blockRef.current?.key === clip.key ? blockRef.current : null;
     if (block) {
@@ -17406,7 +17458,7 @@ var TimelineSection = (0, import_react46.memo)(function TimelineSection2({
     }
     DialStore.updateValues(meta.id, writes);
   };
-  const toggleGroup = (0, import_react46.useCallback)((group) => {
+  const toggleGroup = (0, import_react47.useCallback)((group) => {
     setCollapsedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(group)) next.delete(group);
@@ -17638,7 +17690,7 @@ var TimelineSection = (0, import_react46.memo)(function TimelineSection2({
               }
             ),
             /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
-              import_react47.motion.button,
+              import_react48.motion.button,
               {
                 className: "dialkit-toolbar-add",
                 onClick: handleCopy,
@@ -17646,8 +17698,8 @@ var TimelineSection = (0, import_react46.memo)(function TimelineSection2({
                 "data-hint": TIMELINE_HINTS.copy,
                 whileTap: { scale: 0.9 },
                 transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-                children: /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(import_react47.AnimatePresence, { initial: false, mode: "wait", children: copied ? /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
-                  import_react47.motion.svg,
+                children: /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(import_react48.AnimatePresence, { initial: false, mode: "wait", children: copied ? /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
+                  import_react48.motion.svg,
                   {
                     viewBox: "0 0 24 24",
                     fill: "none",
@@ -17665,7 +17717,7 @@ var TimelineSection = (0, import_react46.memo)(function TimelineSection2({
                   },
                   "check"
                 ) : /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)(
-                  import_react47.motion.svg,
+                  import_react48.motion.svg,
                   {
                     viewBox: "0 0 24 24",
                     fill: "none",
@@ -17685,7 +17737,7 @@ var TimelineSection = (0, import_react46.memo)(function TimelineSection2({
               }
             ),
             onExport && /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)(
-              import_react47.motion.button,
+              import_react48.motion.button,
               {
                 className: "dialkit-toolbar-add dialkit-timeline-export",
                 onClick: onExport,
@@ -17717,8 +17769,8 @@ var TimelineSection = (0, import_react46.memo)(function TimelineSection2({
             )
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(import_react47.AnimatePresence, { initial: false, children: open && /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
-          import_react47.motion.div,
+        /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(import_react48.AnimatePresence, { initial: false, children: open && /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
+          import_react48.motion.div,
           {
             className: "dialkit-timeline-fold",
             initial: { height: 0, overflow: "clip" },
@@ -17820,17 +17872,17 @@ function ClipPopover({
   physicsSettleCap,
   onClose
 }) {
-  const ref = (0, import_react46.useRef)(null);
-  const [naturalHeight, setNaturalHeight] = (0, import_react46.useState)(0);
-  const [viewport, setViewport] = (0, import_react46.useState)(() => ({
+  const ref = (0, import_react47.useRef)(null);
+  const [naturalHeight, setNaturalHeight] = (0, import_react47.useState)(0);
+  const [viewport, setViewport] = (0, import_react47.useState)(() => ({
     width: window.visualViewport?.width ?? window.innerWidth,
     height: window.visualViewport?.height ?? window.innerHeight,
     offsetLeft: window.visualViewport?.offsetLeft ?? 0,
     offsetTop: window.visualViewport?.offsetTop ?? 0
   }));
-  const hostPanels = (0, import_react46.useSyncExternalStore)(subscribePanels, readPanels, readPanels);
+  const hostPanels = (0, import_react47.useSyncExternalStore)(subscribePanels, readPanels, readPanels);
   const hostPanel = popover.clip.panel ? hostPanels.find((panel) => panel.name === popover.clip.panel) : void 0;
-  (0, import_react46.useLayoutEffect)(() => {
+  (0, import_react47.useLayoutEffect)(() => {
     const element11 = ref.current;
     if (!element11) return;
     const measure = () => setNaturalHeight(element11.scrollHeight + 2);
@@ -17840,7 +17892,7 @@ function ClipPopover({
     observer.observe(body ?? element11);
     return () => observer.disconnect();
   }, [popover.clip.key, popover.stepKey, hostPanel?.id]);
-  (0, import_react46.useEffect)(() => {
+  (0, import_react47.useEffect)(() => {
     const updateViewport = () => setViewport({
       width: window.visualViewport?.width ?? window.innerWidth,
       height: window.visualViewport?.height ?? window.innerHeight,
@@ -17856,7 +17908,7 @@ function ClipPopover({
       window.visualViewport?.removeEventListener("scroll", updateViewport);
     };
   }, []);
-  (0, import_react46.useEffect)(() => {
+  (0, import_react47.useEffect)(() => {
     const handlePointerDown = (e) => {
       const target = e.target;
       if (target.closest?.("[data-timeline-popover]")) return;
@@ -17975,12 +18027,12 @@ function ClipPopover({
 var subscribePanels = (listener) => DialStore.subscribeGlobal(listener);
 var readPanels = () => DialStore.getPanels("panel");
 function PopoverPanelControls({ panelId }) {
-  const subscribe2 = (0, import_react46.useCallback)((listener) => DialStore.subscribe(panelId, listener), [panelId]);
-  const readPanel = (0, import_react46.useCallback)(() => DialStore.getPanel(panelId), [panelId]);
-  const readValues = (0, import_react46.useCallback)(() => DialStore.getValues(panelId), [panelId]);
-  const panel = (0, import_react46.useSyncExternalStore)(subscribe2, readPanel, readPanel);
-  const values = (0, import_react46.useSyncExternalStore)(subscribe2, readValues, readValues);
-  const [openFolder, setOpenFolder] = (0, import_react46.useState)(void 0);
+  const subscribe2 = (0, import_react47.useCallback)((listener) => DialStore.subscribe(panelId, listener), [panelId]);
+  const readPanel = (0, import_react47.useCallback)(() => DialStore.getPanel(panelId), [panelId]);
+  const readValues = (0, import_react47.useCallback)(() => DialStore.getValues(panelId), [panelId]);
+  const panel = (0, import_react47.useSyncExternalStore)(subscribe2, readPanel, readPanel);
+  const values = (0, import_react47.useSyncExternalStore)(subscribe2, readValues, readValues);
+  const [openFolder, setOpenFolder] = (0, import_react47.useState)(void 0);
   if (!panel) return null;
   const accordion = isAccordionPanel(panel, false);
   return /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
@@ -18050,12 +18102,12 @@ function TimelineClip({
   onClick,
   onDrag
 }) {
-  const dragRef = (0, import_react46.useRef)(null);
-  const [dragging, setDragging] = (0, import_react46.useState)(false);
-  const [hovered, setHovered] = (0, import_react46.useState)(false);
+  const dragRef = (0, import_react47.useRef)(null);
+  const [dragging, setDragging] = (0, import_react47.useState)(false);
+  const [hovered, setHovered] = (0, import_react47.useState)(false);
   const isSteps = Boolean(steps?.length);
   const tail = single ? clip.tail ?? 0 : 0;
-  const handlePointerDown = (0, import_react46.useCallback)(
+  const handlePointerDown = (0, import_react47.useCallback)(
     (e) => {
       if (e.shiftKey && !onPress) return;
       e.stopPropagation();
@@ -18092,7 +18144,7 @@ function TimelineClip({
     },
     [at, clip.key, duration, fixedDuration, getDragBounds, onPress, pinned, steps]
   );
-  const handlePointerMove = (0, import_react46.useCallback)(
+  const handlePointerMove = (0, import_react47.useCallback)(
     (e) => {
       const drag = dragRef.current;
       if (!drag || pxPerSecond <= 0 || drag.locked) return;
@@ -18168,7 +18220,7 @@ function TimelineClip({
     },
     [baseAt, clip, delayMode, onBlockMove, onDrag, onLift, onReorderHover, pxPerSecond, steps, tail, timelineId, timelineDuration]
   );
-  const handlePointerUp = (0, import_react46.useCallback)(
+  const handlePointerUp = (0, import_react47.useCallback)(
     (e) => {
       const drag = dragRef.current;
       dragRef.current = null;
@@ -18185,7 +18237,7 @@ function TimelineClip({
     },
     [clip, onClick, onReorderDrop]
   );
-  const handlePointerCancel = (0, import_react46.useCallback)(() => {
+  const handlePointerCancel = (0, import_react47.useCallback)(() => {
     const drag = dragRef.current;
     dragRef.current = null;
     setDragging(false);
@@ -18341,19 +18393,19 @@ function ButtonGroup({ buttons }) {
 }
 
 // src/components/Section.tsx
-var import_react48 = require("react");
+var import_react49 = require("react");
 var import_jsx_runtime42 = require("react/jsx-runtime");
 var EMPTY = Object.freeze({});
 var noSubscription = () => () => {
 };
 var noValues = () => EMPTY;
 function usePanelValues(panelId) {
-  const subscribe2 = (0, import_react48.useCallback)(
+  const subscribe2 = (0, import_react49.useCallback)(
     (callback) => DialStore.subscribe(panelId, callback),
     [panelId]
   );
-  const getValues = (0, import_react48.useCallback)(() => DialStore.getValues(panelId), [panelId]);
-  return (0, import_react48.useSyncExternalStore)(
+  const getValues = (0, import_react49.useCallback)(() => DialStore.getValues(panelId), [panelId]);
+  return (0, import_react49.useSyncExternalStore)(
     panelId === void 0 ? noSubscription : subscribe2,
     panelId === void 0 ? noValues : getValues,
     panelId === void 0 ? noValues : getValues
@@ -18450,9 +18502,9 @@ function paintBackgroundPreview(canvas, value) {
 }
 
 // src/components/ShortcutsMenu.tsx
-var import_react49 = require("react");
+var import_react50 = require("react");
 var import_react_dom5 = require("react-dom");
-var import_react50 = require("motion/react");
+var import_react51 = require("motion/react");
 var import_jsx_runtime43 = require("react/jsx-runtime");
 function formatShortcutKey(sc) {
   if (!sc.key) return "\u2014";
@@ -18473,31 +18525,31 @@ function formatInteraction(sc) {
   }
 }
 function ShortcutsMenu({ panelId }) {
-  const [isOpen, setIsOpen] = (0, import_react49.useState)(false);
+  const [isOpen, setIsOpen] = (0, import_react50.useState)(false);
   const resyncPresence = usePresenceResync();
-  const [panel, setPanel] = (0, import_react49.useState)(() => DialStore.getPanel(panelId));
-  (0, import_react49.useEffect)(() => {
+  const [panel, setPanel] = (0, import_react50.useState)(() => DialStore.getPanel(panelId));
+  (0, import_react50.useEffect)(() => {
     const update = () => setPanel(DialStore.getPanel(panelId));
     const stop2 = DialStore.subscribeGlobal(update);
     update();
     return stop2;
   }, [panelId]);
-  const triggerRef = (0, import_react49.useRef)(null);
-  const dropdownRef = (0, import_react49.useRef)(null);
-  const [pos, setPos] = (0, import_react49.useState)({ top: 0, right: 0 });
-  const open = (0, import_react49.useCallback)(() => {
+  const triggerRef = (0, import_react50.useRef)(null);
+  const dropdownRef = (0, import_react50.useRef)(null);
+  const [pos, setPos] = (0, import_react50.useState)({ top: 0, right: 0 });
+  const open = (0, import_react50.useCallback)(() => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
       setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
     }
     setIsOpen(true);
   }, []);
-  const close2 = (0, import_react49.useCallback)(() => setIsOpen(false), []);
-  const toggle = (0, import_react49.useCallback)(() => {
+  const close2 = (0, import_react50.useCallback)(() => setIsOpen(false), []);
+  const toggle = (0, import_react50.useCallback)(() => {
     if (isOpen) close2();
     else open();
   }, [isOpen, open, close2]);
-  (0, import_react49.useEffect)(() => {
+  (0, import_react50.useEffect)(() => {
     if (!isOpen) return;
     const handler = (e) => {
       const target = e.target;
@@ -18521,7 +18573,7 @@ function ShortcutsMenu({ panelId }) {
   }));
   return /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)(import_jsx_runtime43.Fragment, { children: [
     /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(
-      import_react50.motion.button,
+      import_react51.motion.button,
       {
         ref: triggerRef,
         className: "dialkit-shortcuts-trigger",
@@ -18543,8 +18595,8 @@ function ShortcutsMenu({ panelId }) {
       }
     ),
     (0, import_react_dom5.createPortal)(
-      /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(import_react50.AnimatePresence, { onExitComplete: resyncPresence, children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)(
-        import_react50.motion.div,
+      /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(import_react51.AnimatePresence, { onExitComplete: resyncPresence, children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)(
+        import_react51.motion.div,
         {
           ref: dropdownRef,
           className: "dialkit-root dialkit-shortcuts-dropdown",
@@ -18570,7 +18622,7 @@ function ShortcutsMenu({ panelId }) {
 }
 
 // src/components/Module.tsx
-var import_react51 = require("react");
+var import_react52 = require("react");
 var import_jsx_runtime44 = require("react/jsx-runtime");
 var ENABLE_OPTIONS = [
   { value: "off", label: "Off" },
@@ -18600,8 +18652,8 @@ function ModuleHeader({ title, enabled, onEnabledChange, hint: hint2, onToggle }
   );
 }
 function ModuleBody({ open, children }) {
-  const ref = (0, import_react51.useRef)(null);
-  (0, import_react51.useLayoutEffect)(() => {
+  const ref = (0, import_react52.useRef)(null);
+  (0, import_react52.useLayoutEffect)(() => {
     if (ref.current) ref.current.inert = !open;
   }, [open]);
   return /* @__PURE__ */ (0, import_jsx_runtime44.jsx)("div", { ref, className: "dialkit-module-collapse", "data-open": String(open), children: /* @__PURE__ */ (0, import_jsx_runtime44.jsx)("div", { className: "dialkit-module-collapse-clip", children: /* @__PURE__ */ (0, import_jsx_runtime44.jsx)("div", { className: "dialkit-module-inner", children }) }) });
@@ -18616,7 +18668,7 @@ function Module({ title, enabled, onEnabledChange, hint: hint2, children }) {
 }
 function ModuleFolder({ title, enabled, onEnabledChange, defaultOpen = true, hint: hint2, children }) {
   useHints(!!hint2);
-  const [isOpen, setIsOpen] = (0, import_react51.useState)(defaultOpen);
+  const [isOpen, setIsOpen] = (0, import_react52.useState)(defaultOpen);
   const headerOnly = isEmpty(children);
   const handleEnabledChange = (next) => {
     onEnabledChange(next);
@@ -18638,7 +18690,7 @@ function ModuleFolder({ title, enabled, onEnabledChange, defaultOpen = true, hin
 }
 
 // src/components/CurveComposer.tsx
-var import_react52 = require("react");
+var import_react53 = require("react");
 
 // src/curve-composer-core.ts
 var CURVE_CYCLE = ["linear", "easeIn", "easeOut", "easeInOut", "spring"];
@@ -19202,6 +19254,14 @@ function defaultComposition() {
 
 // src/components/CurveComposer.tsx
 var import_jsx_runtime45 = require("react/jsx-runtime");
+var TYPE_NAMES = {
+  linear: "Linear",
+  easeIn: "Ease in",
+  easeOut: "Ease out",
+  easeInOut: "Ease in-out",
+  spring: "Spring"
+};
+var DIVIDER_KEY_STEP = 0.01;
 function CurveComposer({
   segments,
   driver = null,
@@ -19227,25 +19287,34 @@ function CurveComposer({
   useHints(!!hint2);
   const layout = composerLayout(width, height, driver != null);
   const { W, totalH, mainRect, driverRect } = layout;
-  const composition = (0, import_react52.useMemo)(
+  const composition = (0, import_react53.useMemo)(
     () => ({ segments, driver, direction, gap }),
     [segments, driver, direction, gap]
   );
-  const samplers = (0, import_react52.useMemo)(() => buildSamplers(composition), [composition]);
-  const liveRef = (0, import_react52.useRef)({ composition, samplers, getPhase, phase, mode, triggerSteps });
+  const samplers = (0, import_react53.useMemo)(() => buildSamplers(composition), [composition]);
+  const liveRef = (0, import_react53.useRef)({ composition, samplers, getPhase, phase, mode, triggerSteps });
   liveRef.current = { composition, samplers, getPhase, phase, mode, triggerSteps };
-  const onTriggerRef = (0, import_react52.useRef)(onTrigger);
+  const onTriggerRef = (0, import_react53.useRef)(onTrigger);
   onTriggerRef.current = onTrigger;
-  const svgRef = (0, import_react52.useRef)(null);
-  const seriesPlayheadRef = (0, import_react52.useRef)(null);
-  const seriesDotRef = (0, import_react52.useRef)(null);
-  const driverPlayheadRef = (0, import_react52.useRef)(null);
-  const prevTrigValue = (0, import_react52.useRef)(Number.NaN);
-  const [drag, setDrag] = (0, import_react52.useState)(null);
-  const [hover, setHover] = (0, import_react52.useState)(null);
-  const dragRef = (0, import_react52.useRef)(null);
+  const svgRef = (0, import_react53.useRef)(null);
+  const seriesPlayheadRef = (0, import_react53.useRef)(null);
+  const seriesDotRef = (0, import_react53.useRef)(null);
+  const driverPlayheadRef = (0, import_react53.useRef)(null);
+  const prevTrigValue = (0, import_react53.useRef)(Number.NaN);
+  const [drag, setDrag] = (0, import_react53.useState)(null);
+  const [hover, setHover] = (0, import_react53.useState)(null);
+  const dragRef = (0, import_react53.useRef)(null);
   dragRef.current = drag;
-  (0, import_react52.useEffect)(() => {
+  const [focusedDivider, setFocusedDivider] = (0, import_react53.useState)(null);
+  const keysRef = (0, import_react53.useRef)(null);
+  const focusAfterRemove = (0, import_react53.useRef)(null);
+  (0, import_react53.useEffect)(() => {
+    const index = focusAfterRemove.current;
+    if (index === null) return;
+    focusAfterRemove.current = null;
+    keysRef.current?.querySelectorAll(".dialkit-composer-segment-key")[index]?.focus({ preventScroll: true });
+  }, [segments]);
+  (0, import_react53.useEffect)(() => {
     let raf = 0;
     prevTrigValue.current = Number.NaN;
     const tick = () => {
@@ -19387,6 +19456,40 @@ function CurveComposer({
     if (driverRect && py >= driverRect.y) return;
     onSegmentsChange?.(splitSegment(composition, segmentIndexAt(xN, segments, gap)).segments);
   };
+  const onSegmentKeyDown = (e, index) => {
+    if (e.altKey || e.metaKey || e.ctrlKey) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      e.stopPropagation();
+      onSegmentsChange?.(cycleSegmentType(composition, index).segments);
+    } else if ((e.key === "Delete" || e.key === "Backspace") && segments.length > 1) {
+      e.preventDefault();
+      e.stopPropagation();
+      focusAfterRemove.current = Math.min(index, segments.length - 2);
+      onSegmentsChange?.(removeSegment(composition, index).segments);
+    }
+  };
+  const onDividerKeyDown = (e, index) => {
+    if (e.altKey || e.metaKey || e.ctrlKey) return;
+    const dir = e.key === "ArrowRight" || e.key === "ArrowUp" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowDown" ? -1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onSegmentsChange?.(redistributeWeight(composition, index, dir * DIVIDER_KEY_STEP * (e.shiftKey ? 10 : 1)).segments);
+  };
+  const onDriverKeyDown = (e) => {
+    if (e.altKey || e.metaKey || e.ctrlKey || e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    e.stopPropagation();
+    const next = cycleDriverType(composition);
+    if (next.driver) onDriverChange?.(next.driver);
+  };
+  const toBox = (x, w, rect) => ({
+    left: `${x / W * 100}%`,
+    width: `${w / W * 100}%`,
+    top: `${rect.y / totalH * 100}%`,
+    height: `${rect.h / totalH * 100}%`
+  });
   const activeKind = drag?.kind ?? hover?.kind;
   const cursor = activeKind === "boundary" ? "ew-resize" : activeKind === "segment" || activeKind === "driver" ? "move" : activeKind === "select" || activeKind === "header" ? "pointer" : "default";
   const interior = boundaries(segments, gap);
@@ -19407,99 +19510,151 @@ function CurveComposer({
     const d = diagonalLine(rect, span, W);
     return /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("line", { className: "dialkit-composer-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 }, key);
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "dialkit-composer", style: { width: W }, "data-hint": hint2, children: /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)(
-    "svg",
-    {
-      ref: svgRef,
-      className: "dialkit-composer-svg",
-      viewBox: `0 0 ${W} ${totalH}`,
-      width: W,
-      height: totalH,
-      style: { width: W, height: totalH, cursor, color: curveColor },
-      onPointerDown,
-      onPointerMove,
-      onPointerUp,
-      onPointerCancel,
-      onPointerLeave: () => !dragRef.current && setHover(null),
-      onDoubleClick,
-      children: [
-        renderLaneBg(mainRect, "main-bg"),
-        renderLaneGrid(mainRect),
-        selectedIndex != null && selectedIndex >= 0 && selectedIndex < segments.length && (() => {
-          const span = segmentSpan(segments, selectedIndex, gap);
-          return /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
-            "rect",
+  return /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)("div", { className: "dialkit-composer", style: { width: W }, "data-hint": hint2, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)(
+      "svg",
+      {
+        ref: svgRef,
+        className: "dialkit-composer-svg",
+        viewBox: `0 0 ${W} ${totalH}`,
+        width: W,
+        height: totalH,
+        style: { width: W, height: totalH, cursor, color: curveColor },
+        onPointerDown,
+        onPointerMove,
+        onPointerUp,
+        onPointerCancel,
+        onPointerLeave: () => !dragRef.current && setHover(null),
+        onDoubleClick,
+        children: [
+          renderLaneBg(mainRect, "main-bg"),
+          renderLaneGrid(mainRect),
+          selectedIndex != null && selectedIndex >= 0 && selectedIndex < segments.length && (() => {
+            const span = segmentSpan(segments, selectedIndex, gap);
+            return /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+              "rect",
+              {
+                className: "dialkit-composer-seg-selected",
+                x: span[0] * W,
+                y: mainRect.y,
+                width: (span[1] - span[0]) * W,
+                height: mainRect.h,
+                rx: 8
+              }
+            );
+          })(),
+          hover?.kind === "segment" && !drag && (() => {
+            const span = segmentSpan(segments, hover.index, gap);
+            return /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+              "rect",
+              {
+                className: "dialkit-composer-seg-hover",
+                x: span[0] * W,
+                y: mainRect.y,
+                width: (span[1] - span[0]) * W,
+                height: mainRect.h,
+                rx: 8
+              }
+            );
+          })(),
+          segments.map((seg, i) => {
+            const span = segmentSpan(segments, i, gap);
+            return /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)("g", { children: [
+              diagonal(mainRect, span, `diag-${i}`),
+              /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("path", { className: "dialkit-composer-curve", d: curvePath(seg, mainRect, span, W) }),
+              /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("text", { className: "dialkit-composer-label", x: (span[0] + span[1]) * 0.5 * W, y: mainRect.y + 13, children: seg.type })
+            ] }, `seg-${i}`);
+          }),
+          gap > 0 && timelineSlots(segments, gap).filter((slot) => slot.kind === "gap" && slot.b > slot.a).map((slot) => /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+            "path",
             {
-              className: "dialkit-composer-seg-selected",
-              x: span[0] * W,
-              y: mainRect.y,
-              width: (span[1] - span[0]) * W,
-              height: mainRect.h,
-              rx: 8
-            }
-          );
-        })(),
-        hover?.kind === "segment" && !drag && (() => {
-          const span = segmentSpan(segments, hover.index, gap);
-          return /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
-            "rect",
+              className: "dialkit-composer-connector",
+              d: connectorPath(slot, samplers, segments.length, mainRect, W)
+            },
+            `conn-${slot.index}`
+          )),
+          interior.map((bx, i) => /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+            "line",
             {
-              className: "dialkit-composer-seg-hover",
-              x: span[0] * W,
-              y: mainRect.y,
-              width: (span[1] - span[0]) * W,
-              height: mainRect.h,
-              rx: 8
-            }
-          );
-        })(),
-        segments.map((seg, i) => {
-          const span = segmentSpan(segments, i, gap);
-          return /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)("g", { children: [
-            diagonal(mainRect, span, `diag-${i}`),
-            /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("path", { className: "dialkit-composer-curve", d: curvePath(seg, mainRect, span, W) }),
-            /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("text", { className: "dialkit-composer-label", x: (span[0] + span[1]) * 0.5 * W, y: mainRect.y + 13, children: seg.type })
-          ] }, `seg-${i}`);
-        }),
-        gap > 0 && timelineSlots(segments, gap).filter((slot) => slot.kind === "gap" && slot.b > slot.a).map((slot) => /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
-          "path",
-          {
-            className: "dialkit-composer-connector",
-            d: connectorPath(slot, samplers, segments.length, mainRect, W)
-          },
-          `conn-${slot.index}`
-        )),
-        interior.map((bx, i) => /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
-          "line",
-          {
-            className: "dialkit-composer-boundary",
-            "data-active": String(
-              hover?.kind === "boundary" && hover.index === i || drag?.kind === "boundary" && drag.index === i
-            ),
-            x1: bx * W,
-            y1: mainRect.y,
-            x2: bx * W,
-            y2: mainRect.y + mainRect.h
-          },
-          `b-${i}`
-        )),
-        /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("line", { ref: seriesPlayheadRef, className: "dialkit-composer-playhead", x1: 0, y1: mainRect.y, x2: 0, y2: mainRect.y + mainRect.h, style: { stroke: playheadColor } }),
-        /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("circle", { ref: seriesDotRef, className: "dialkit-composer-dot", cx: 0, cy: mapY(mainRect, 0), r: 3, style: { fill: playheadColor } }),
-        driverRect && /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)(import_jsx_runtime45.Fragment, { children: [
-          renderLaneBg(driverRect, "driver-bg"),
-          renderLaneGrid(driverRect),
-          hover?.kind === "driver" && !drag && /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("rect", { className: "dialkit-composer-seg-hover", x: 0, y: driverRect.y, width: W, height: driverRect.h, rx: 8 }),
-          diagonal(driverRect, [0, 1], "driver-diag"),
-          /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("path", { className: "dialkit-composer-curve dialkit-composer-curve-driver", d: curvePath(driver, driverRect, [0, 1], W) }),
-          /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)("text", { className: "dialkit-composer-label", x: W * 0.5, y: driverRect.y + 13, children: [
-            "driver \xB7 ",
-            driver.type
-          ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("line", { ref: driverPlayheadRef, className: "dialkit-composer-playhead", x1: 0, y1: driverRect.y, x2: 0, y2: driverRect.y + driverRect.h, style: { stroke: playheadColor } })
-        ] })
-      ]
-    }
-  ) });
+              className: "dialkit-composer-boundary",
+              "data-active": String(
+                hover?.kind === "boundary" && hover.index === i || drag?.kind === "boundary" && drag.index === i || focusedDivider === i
+              ),
+              x1: bx * W,
+              y1: mainRect.y,
+              x2: bx * W,
+              y2: mainRect.y + mainRect.h
+            },
+            `b-${i}`
+          )),
+          /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("line", { ref: seriesPlayheadRef, className: "dialkit-composer-playhead", x1: 0, y1: mainRect.y, x2: 0, y2: mainRect.y + mainRect.h, style: { stroke: playheadColor } }),
+          /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("circle", { ref: seriesDotRef, className: "dialkit-composer-dot", cx: 0, cy: mapY(mainRect, 0), r: 3, style: { fill: playheadColor } }),
+          driverRect && /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)(import_jsx_runtime45.Fragment, { children: [
+            renderLaneBg(driverRect, "driver-bg"),
+            renderLaneGrid(driverRect),
+            hover?.kind === "driver" && !drag && /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("rect", { className: "dialkit-composer-seg-hover", x: 0, y: driverRect.y, width: W, height: driverRect.h, rx: 8 }),
+            diagonal(driverRect, [0, 1], "driver-diag"),
+            /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("path", { className: "dialkit-composer-curve dialkit-composer-curve-driver", d: curvePath(driver, driverRect, [0, 1], W) }),
+            /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)("text", { className: "dialkit-composer-label", x: W * 0.5, y: driverRect.y + 13, children: [
+              "driver \xB7 ",
+              driver.type
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("line", { ref: driverPlayheadRef, className: "dialkit-composer-playhead", x1: 0, y1: driverRect.y, x2: 0, y2: driverRect.y + driverRect.h, style: { stroke: playheadColor } })
+          ] })
+        ]
+      }
+    ),
+    /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)("div", { ref: keysRef, className: "dialkit-composer-keys", children: [
+      segments.map((seg, i) => {
+        const span = segmentSpan(segments, i, gap);
+        const name = `${TYPE_NAMES[seg.type] ?? seg.type} segment, ${i + 1} of ${segments.length}`;
+        return [
+          /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+            "button",
+            {
+              type: "button",
+              className: "dialkit-composer-key dialkit-composer-segment-key",
+              style: toBox(span[0] * W, (span[1] - span[0]) * W, mainRect),
+              "aria-label": name,
+              "aria-keyshortcuts": segments.length > 1 ? "Enter Space Delete" : "Enter Space",
+              onKeyDown: (e) => onSegmentKeyDown(e, i)
+            },
+            `seg-key-${i}`
+          ),
+          i < interior.length && /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+            "div",
+            {
+              className: "dialkit-composer-key dialkit-composer-divider-key",
+              role: "slider",
+              tabIndex: 0,
+              "aria-label": `Divider ${i + 1}`,
+              "aria-orientation": "horizontal",
+              "aria-valuemin": 0,
+              "aria-valuemax": 100,
+              "aria-valuenow": Math.round(interior[i] * 100),
+              "aria-valuetext": `${Math.round(interior[i] * 100)}%`,
+              style: { ...toBox(interior[i] * W, 0, mainRect), width: void 0 },
+              onKeyDown: (e) => onDividerKeyDown(e, i),
+              onFocus: () => setFocusedDivider(i),
+              onBlur: () => setFocusedDivider(null)
+            },
+            `divider-key-${i}`
+          )
+        ];
+      }),
+      driverRect && driver && /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+        "button",
+        {
+          type: "button",
+          className: "dialkit-composer-key dialkit-composer-segment-key dialkit-composer-driver-key",
+          style: toBox(0, W, driverRect),
+          "aria-label": `Driver, ${TYPE_NAMES[driver.type] ?? driver.type}`,
+          "aria-keyshortcuts": "Enter Space",
+          onKeyDown: onDriverKeyDown
+        }
+      )
+    ] })
+  ] });
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {

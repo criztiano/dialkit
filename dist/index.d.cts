@@ -1854,7 +1854,8 @@ interface AngleDialProps {
 /**
  * A slider drawn as a rotary needle, for values whose two ends are the same
  * place: a heading, a hue, a tilt. The needle follows the pointer like a
- * compass, and on a wrapping range a drag past the top keeps turning.
+ * compass, and on a wrapping range a drag past the top keeps turning. A drag
+ * elsewhere on the row scrubs it like a slider.
  * Arrows step (Shift ten), and Home or a double-click returns to the origin.
  */
 declare function AngleDial({ label, value, onChange, min, max, step, unit, formatValue, origin, wrap, hint, }: AngleDialProps): react_jsx_runtime.JSX.Element;
@@ -2166,7 +2167,11 @@ interface ChipsControlProps {
     onRemove: (value: string) => void;
     hint?: string;
 }
-/** One of a set of chips that wrap onto more lines. A removable chip has a remove button. */
+/**
+ * One of a set of chips that wrap onto more lines. The chips are one tab stop:
+ * arrows move and pick, like a segmented control. A removable chip has a remove
+ * button, and Delete or Backspace removes the focused chip.
+ */
 declare function ChipsControl({ label, value, options, onChange, onRemove, hint }: ChipsControlProps): react_jsx_runtime.JSX.Element;
 
 interface MultiSelectControlProps {
