@@ -3,6 +3,7 @@ import { useHints } from '../hooks/useHints';
 import {
   CurveComposition,
   CurveSegment,
+  CurveType,
   CurveDriver,
   DriverDirection,
   Rect,
@@ -13,6 +14,7 @@ import {
   splitSegment,
   cycleSegmentType,
   redistributeWeight,
+  removeSegment,
   cycleDriverType,
   readComposition,
   triggersCrossed,
@@ -90,6 +92,17 @@ export interface CurveComposerProps {
   hint?: string;
 }
 
+const TYPE_NAMES: Record<CurveType, string> = {
+  linear: 'Linear',
+  easeIn: 'Ease in',
+  easeOut: 'Ease out',
+  easeInOut: 'Ease in-out',
+  spring: 'Spring',
+};
+
+/** A divider's arrow moves it this share of the series; Shift moves ten times as far. */
+const DIVIDER_KEY_STEP = 0.01;
+
 // A drag in progress, captured against the composition state at press time so live
 // commits compute from a stable baseline rather than compounding.
 type Drag =
@@ -147,6 +160,17 @@ export function CurveComposer({
   const [hover, setHover] = useState<{ kind: 'boundary' | 'segment' | 'driver' | 'header'; index: number } | null>(null);
   const dragRef = useRef<Drag | null>(null);
   dragRef.current = drag;
+  const [focusedDivider, setFocusedDivider] = useState<number | null>(null);
+  const keysRef = useRef<HTMLDivElement>(null);
+  // After a segment is removed from the keyboard, focus goes to the segment in its place.
+  const focusAfterRemove = useRef<number | null>(null);
+
+  useEffect(() => {
+    const index = focusAfterRemove.current;
+    if (index === null) return;
+    focusAfterRemove.current = null;
+    keysRef.current?.querySelectorAll<HTMLElement>('.dialkit-composer-segment-key')[index]?.focus({ preventScroll: true });
+  }, [segments]);
 
   // --- playhead loop (direct DOM writes, so the parent does not re-render each frame) ---
   useEffect(() => {
@@ -324,6 +348,46 @@ export function CurveComposer({
     onSegmentsChange?.(splitSegment(composition, segmentIndexAt(xN, segments, gap)).segments);
   };
 
+  // --- keyboard: each segment is a button, each divider a slider, over the drawing ---
+
+  const onSegmentKeyDown = (e: React.KeyboardEvent, index: number) => {
+    if (e.altKey || e.metaKey || e.ctrlKey) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      onSegmentsChange?.(cycleSegmentType(composition, index).segments);
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && segments.length > 1) {
+      e.preventDefault();
+      e.stopPropagation();
+      focusAfterRemove.current = Math.min(index, segments.length - 2);
+      onSegmentsChange?.(removeSegment(composition, index).segments);
+    }
+  };
+
+  const onDividerKeyDown = (e: React.KeyboardEvent, index: number) => {
+    if (e.altKey || e.metaKey || e.ctrlKey) return;
+    const dir = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onSegmentsChange?.(redistributeWeight(composition, index, dir * DIVIDER_KEY_STEP * (e.shiftKey ? 10 : 1)).segments);
+  };
+
+  const onDriverKeyDown = (e: React.KeyboardEvent) => {
+    if (e.altKey || e.metaKey || e.ctrlKey || (e.key !== 'Enter' && e.key !== ' ')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const next = cycleDriverType(composition);
+    if (next.driver) onDriverChange?.(next.driver);
+  };
+
+  const toBox = (x: number, w: number, rect: Rect) => ({
+    left: `${(x / W) * 100}%`,
+    width: `${(w / W) * 100}%`,
+    top: `${(rect.y / totalH) * 100}%`,
+    height: `${(rect.h / totalH) * 100}%`,
+  });
+
   const activeKind = drag?.kind ?? hover?.kind;
   const cursor =
     activeKind === 'boundary'
@@ -446,7 +510,7 @@ export function CurveComposer({
             key={`b-${i}`}
             className="dialkit-composer-boundary"
             data-active={String(
-              hover?.kind === 'boundary' && hover.index === i || (drag?.kind === 'boundary' && drag.index === i)
+              hover?.kind === 'boundary' && hover.index === i || (drag?.kind === 'boundary' && drag.index === i) || focusedDivider === i
             )}
             x1={bx * W}
             y1={mainRect.y}
@@ -476,6 +540,51 @@ export function CurveComposer({
           </>
         )}
       </svg>
+      <div ref={keysRef} className="dialkit-composer-keys">
+        {segments.map((seg, i) => {
+          const span = segmentSpan(segments, i, gap);
+          const name = `${TYPE_NAMES[seg.type] ?? seg.type} segment, ${i + 1} of ${segments.length}`;
+          return [
+            <button
+              key={`seg-key-${i}`}
+              type="button"
+              className="dialkit-composer-key dialkit-composer-segment-key"
+              style={toBox(span[0] * W, (span[1] - span[0]) * W, mainRect)}
+              aria-label={name}
+              aria-keyshortcuts={segments.length > 1 ? 'Enter Space Delete' : 'Enter Space'}
+              onKeyDown={(e) => onSegmentKeyDown(e, i)}
+            />,
+            i < interior.length && (
+              <div
+                key={`divider-key-${i}`}
+                className="dialkit-composer-key dialkit-composer-divider-key"
+                role="slider"
+                tabIndex={0}
+                aria-label={`Divider ${i + 1}`}
+                aria-orientation="horizontal"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(interior[i] * 100)}
+                aria-valuetext={`${Math.round(interior[i] * 100)}%`}
+                style={{ ...toBox(interior[i] * W, 0, mainRect), width: undefined }}
+                onKeyDown={(e) => onDividerKeyDown(e, i)}
+                onFocus={() => setFocusedDivider(i)}
+                onBlur={() => setFocusedDivider(null)}
+              />
+            ),
+          ];
+        })}
+        {driverRect && driver && (
+          <button
+            type="button"
+            className="dialkit-composer-key dialkit-composer-segment-key dialkit-composer-driver-key"
+            style={toBox(0, W, driverRect)}
+            aria-label={`Driver, ${TYPE_NAMES[driver.type] ?? driver.type}`}
+            aria-keyshortcuts="Enter Space"
+            onKeyDown={onDriverKeyDown}
+          />
+        )}
+      </div>
     </div>
   );
 }

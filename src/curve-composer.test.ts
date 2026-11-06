@@ -186,4 +186,52 @@ describe('library components', () => {
     assert.deepEqual([value.props.children].flat().filter(Boolean), ['120 ms!']);
     act(() => renderer.unmount());
   });
+
+  it('works from the keyboard: Enter cycles a segment, Delete removes it, arrows move a divider', () => {
+    const comp = defaultComposition();
+    let segments = comp.segments;
+    let driverType: string | undefined;
+    const withDriver = addDriver(comp);
+    let renderer!: ReturnType<typeof create>;
+    const render = () => createElement(CurveComposer, {
+      segments,
+      driver: withDriver.driver,
+      width: 200,
+      height: 100,
+      onSegmentsChange: (next) => { segments = next; },
+      onDriverChange: (next) => { driverType = next.type; },
+    });
+    act(() => { renderer = create(render()); });
+    const keyEvent = (key: string, shiftKey = false) => ({ key, shiftKey, altKey: false, metaKey: false, ctrlKey: false, preventDefault() {}, stopPropagation() {} });
+    const segmentKeys = () => renderer.root.findAll((n) => n.type === 'button' && String(n.props.className ?? '').includes('dialkit-composer-segment-key') && !String(n.props.className).includes('driver'));
+    const divider = () => renderer.root.find((n) => n.props.role === 'slider');
+
+    assert.equal(segmentKeys().length, 2);
+    assert.equal(divider().props.tabIndex, 0);
+    assert.equal(divider().props['aria-valuenow'], 50);
+
+    const firstType = segments[0].type;
+    act(() => segmentKeys()[0].props.onKeyDown(keyEvent('Enter')));
+    assert.notEqual(segments[0].type, firstType);
+
+    act(() => divider().props.onKeyDown(keyEvent('ArrowRight')));
+    act(() => renderer.update(render()));
+    assert.equal(divider().props['aria-valuenow'], 51);
+    act(() => divider().props.onKeyDown(keyEvent('ArrowLeft', true)));
+    act(() => renderer.update(render()));
+    assert.equal(divider().props['aria-valuenow'], 41);
+
+    const driverKey = renderer.root.find((n) => String(n.props.className ?? '').includes('dialkit-composer-driver-key'));
+    act(() => driverKey.props.onKeyDown(keyEvent(' ')));
+    assert.ok(driverType && driverType !== withDriver.driver!.type);
+
+    act(() => segmentKeys()[1].props.onKeyDown(keyEvent('Delete')));
+    act(() => renderer.update(render()));
+    assert.equal(segments.length, 1);
+    assert.equal(segmentKeys().length, 1);
+    // The last segment stays.
+    act(() => segmentKeys()[0].props.onKeyDown(keyEvent('Delete')));
+    assert.equal(segments.length, 1);
+    act(() => renderer.unmount());
+  });
 });

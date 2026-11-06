@@ -25,7 +25,8 @@ const RADIUS = 8;
 /**
  * A slider drawn as a rotary needle, for values whose two ends are the same
  * place: a heading, a hue, a tilt. The needle follows the pointer like a
- * compass, and on a wrapping range a drag past the top keeps turning.
+ * compass, and on a wrapping range a drag past the top keeps turning. A drag
+ * elsewhere on the row scrubs it like a slider.
  * Arrows step (Shift ten), and Home or a double-click returns to the origin.
  */
 export function AngleDial({
@@ -42,26 +43,39 @@ export function AngleDial({
   const originBearing = valueToBearing(resolvedOrigin, min, max);
   const needle = ((bearing - 90) * Math.PI) / 180;
 
+  // A press on the dial turns the needle like a compass; a press elsewhere on the
+  // row scrubs it like a slider, the row's width a full sweep.
+  const scrub = useRef<{ x: number; value: number; width: number } | null>(null);
+
   const applyFromPointer = useCallback((clientX: number, clientY: number) => {
-    const svg = dialRef.current?.querySelector('svg');
-    if (!svg) return;
-    const r = svg.getBoundingClientRect();
-    const next = angleFromPointer(clientX - (r.left + r.width / 2), clientY - (r.top + r.height / 2), value, min, max, step, wraps);
+    let next: number | null;
+    if (scrub.current) {
+      const { x, value: start, width } = scrub.current;
+      next = nudgeAngle(start, ((clientX - x) / width) * (max - min) / (step || 1), min, max, step, wraps);
+    } else {
+      const svg = dialRef.current?.querySelector('svg');
+      if (!svg) return;
+      const r = svg.getBoundingClientRect();
+      next = angleFromPointer(clientX - (r.left + r.width / 2), clientY - (r.top + r.height / 2), value, min, max, step, wraps);
+    }
     if (next !== null && next !== value) onChange(next);
   }, [value, min, max, step, wraps, onChange]);
 
-  const onPointerDown = (e: React.PointerEvent) => {
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     e.preventDefault();
+    dialRef.current?.focus({ preventScroll: true });
     setIsDragging(true);
-    applyFromPointer(e.clientX, e.clientY);
+    const onDial = dialRef.current?.contains(e.target as Node);
+    scrub.current = onDial ? null : { x: e.clientX, value, width: e.currentTarget.getBoundingClientRect().width || 1 };
+    if (onDial) applyFromPointer(e.clientX, e.clientY);
   };
 
-  // The window follows the drag, so it keeps turning off the dial.
+  // The window follows the drag, so it keeps turning off the row.
   useEffect(() => {
     if (!isDragging) return;
     const move = (e: PointerEvent) => applyFromPointer(e.clientX, e.clientY);
-    const up = () => setIsDragging(false);
+    const up = () => { scrub.current = null; setIsDragging(false); };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
@@ -88,7 +102,13 @@ export function AngleDial({
   const text = angleText(value, min, max, step, unit, formatValue);
 
   return (
-    <div className="dialkit-angle" data-dragging={isDragging || undefined} data-hint={hint}>
+    <div
+      className="dialkit-angle"
+      data-dragging={isDragging || undefined}
+      data-hint={hint}
+      onPointerDown={onPointerDown}
+      onDoubleClick={reset}
+    >
       <span className="dialkit-slider-label">{label}</span>
       <span className="dialkit-slider-value dialkit-angle-value">
         {text.value}
@@ -104,9 +124,7 @@ export function AngleDial({
         aria-valuemax={max}
         aria-valuenow={value}
         aria-valuetext={`${text.value}${text.unit ? ` ${text.unit}` : ''}`}
-        onPointerDown={onPointerDown}
         onKeyDown={onKeyDown}
-        onDoubleClick={reset}
       >
         <svg viewBox="-11 -11 22 22" aria-hidden="true">
           <circle className="dialkit-angle-face" cx="0" cy="0" r={RADIUS} />

@@ -1,3 +1,5 @@
+import { createElement } from 'react';
+import { act, create } from 'react-test-renderer';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
@@ -12,6 +14,7 @@ import {
   type DialEvent,
 } from './choice';
 import { DialStore, resolveDialValues, type DialConfig } from './store/DialStore';
+import { ChipsControl } from './components/ChipsControl';
 
 describe('multiselect values', () => {
   const options = normalizeMultiSelectOptions(['a', { value: 'b', label: 'B', tag: 'cloud' }, 'c']);
@@ -124,5 +127,38 @@ describe('choice controls in the store', () => {
       DialStore.emitEvent(id, 'look.chips', { kind: 'remove', value: 'late' });
       assert.deepEqual(heard, [['look.chips', { kind: 'remove', value: 'mine' }]]);
     } finally { DialStore.unregisterPanel(id); }
+  });
+});
+
+describe('chips keyboard', () => {
+  it('is one tab stop: arrows pick the next chip, Delete removes a removable chip', () => {
+    let value = 'warm';
+    const removed: string[] = [];
+    const options = [{ value: 'warm', label: 'Warm' }, { value: 'cool', label: 'Cool' }, { value: 'mine', label: 'Mine', removable: true }];
+    let renderer!: ReturnType<typeof create>;
+    const render = () => createElement(ChipsControl, { label: 'Look', value, options, onChange: (next: string) => { value = next; }, onRemove: (next: string) => { removed.push(next); } });
+    act(() => { renderer = create(render()); });
+    const keyEvent = (key: string) => ({ key, altKey: false, metaKey: false, ctrlKey: false, preventDefault() {}, stopPropagation() {} });
+    const radios = () => renderer.root.findAll((n) => n.type === 'button' && n.props.role === 'radio');
+
+    assert.equal(renderer.root.find((n) => n.props.role === 'radiogroup').props['aria-label'], 'Look');
+    assert.deepEqual(radios().map((r) => r.props.tabIndex), [0, -1, -1]);
+    assert.equal(renderer.root.find((n) => n.props.className === 'dialkit-chip-remove').props.tabIndex, -1);
+
+    act(() => radios()[0].props.onKeyDown(keyEvent('ArrowRight')));
+    assert.equal(value, 'cool');
+    act(() => renderer.update(render()));
+    assert.deepEqual(radios().map((r) => r.props.tabIndex), [-1, 0, -1]);
+    assert.deepEqual(radios().map((r) => r.props['aria-checked']), [false, true, false]);
+
+    act(() => radios()[1].props.onKeyDown(keyEvent('ArrowLeft')));
+    act(() => radios()[0].props.onKeyDown(keyEvent('ArrowLeft')));
+    assert.equal(value, 'mine', 'arrows wrap round');
+
+    act(() => radios()[0].props.onKeyDown(keyEvent('Delete')));
+    assert.deepEqual(removed, [], 'a chip that is not removable stays');
+    act(() => radios()[2].props.onKeyDown(keyEvent('Backspace')));
+    assert.deepEqual(removed, ['mine']);
+    act(() => renderer.unmount());
   });
 });
